@@ -255,6 +255,13 @@ The post-CapCut openability gate must also verify:
 - Template-backed drafts retain `subdraft`, `Resources/combination`, 10 total
   tracks, 4 text tracks, template-frame media, and master-derived draft
   materials unless a new template version was explicitly approved
+- Every source-video segment must keep mandatory media enhancement settings:
+  `QualityEnhance=HD`, `smart_color_adjust=30-50`, `clear=30-50`,
+  `sharpen=30-50`, and `particle=5-30` visible-slider value. Adjacent
+  source-video segments must differ by at least `5` points for
+  `smart_color_adjust`, `clear`, and `sharpen`.
+- Any draft with active audio must have CapCut loudness normalize enabled at
+  `-14 LUFS`.
 - if placeholder audio paths remain, the report says `portable_bundle=false`
   and does not claim Mac/Windows/Claude/Hermes portability
 

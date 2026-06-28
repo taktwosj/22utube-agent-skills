@@ -3515,14 +3515,16 @@ Rules:
 
 Apply these defaults to every source-video segment when the CapCut draft JSON supports the fields. If a reference draft has the user's chosen filters/styles, copy those effect templates and randomize from that approved set.
 
-- Quality enhancement: use `HD` as the default, not `UHD`, unless the user explicitly requests UHD.
-- Auto adjust / `smart_color_adjust`: enable per video segment.
-  - front half of the video segments: random `50-65`
-  - back half of the video segments: random `66-80`
-- Clear / `clear` / `선명하게`: random `40-70` per split video segment.
-- Sharpen / `sharpen` / `선명도`: random `40-70` per split video segment.
+- Quality enhancement / `QualityEnhance`: mandatory `HD` for every source-video material, not `UHD`, unless the user explicitly requests UHD.
+- Audio loudness normalize: mandatory `ON` at `-14 LUFS` for any draft with active source/TTS/audio.
+- Auto adjust / `smart_color_adjust`: mandatory `ON`; random `30-50` per split source-video segment.
+- Clear / `clear` / `선명하게`: random `30-50` per split source-video segment.
+- Sharpen / `sharpen` / `선명도`: random `30-50` per split source-video segment.
+- Particle / `particle` / `입자`: random `5-30` per split source-video segment. CapCut may serialize visible `30` as an internal value near `0.0495`; preserve the visible-slider intent.
+- Adjacent source-video segments must differ by at least `5` points for `smart_color_adjust`, `clear`, and `sharpen`.
 - Filter: apply exactly one approved filter per split video segment. Randomize from the user-selected filter set in the reference/current draft, such as `매트 파우더`, `허니 피치`, `옵티클리어` when those are the selected filters.
-- Avoid duplicate adjustment effects of the same type on one segment. Each video segment should have at most one `smart_color_adjust`, one `clear`, one `sharpen`, and one `filter` effect.
+- Avoid duplicate adjustment effects of the same type on one segment. Each video segment should have at most one `smart_color_adjust`, one `clear`, one `sharpen`, one `particle`, and one `filter` effect.
+- Missing `QualityEnhance HD`, loudness normalize `ON`, `smart_color_adjust`, `clear`, `sharpen`, `particle`, or the adjacent-difference rule is a CapCut harness `FAIL`, not a warning.
 - Use seeded randomness based on `{draft_name}:rule-name` so repeated rebuilds are reproducible enough to debug.
 - Save the chosen values in `adjust_random_report.json` or `status.json`.
 - If applying these by direct JSON patch after a draft was created, back up `draft_content.json` first.

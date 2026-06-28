@@ -187,6 +187,15 @@ Any one of these fails or blocks the job:
 - bottom text count is greater than 0
 - TTS requested but split audio missing
 - `spoken_scene` source audio covered by TTS
+- source-video material missing `QualityEnhance` `HD`
+- active audio exists but CapCut loudness normalize is not enabled at `-14 LUFS`
+- source-video segment missing mandatory `smart_color_adjust`, `clear`,
+  `sharpen`, or `particle`
+- source-video segment `smart_color_adjust`, `clear`, or `sharpen` is outside
+  `30-50`
+- source-video segment `particle` is outside visible-slider `5-30`
+- adjacent source-video segments do not differ by at least `5` points for
+  `smart_color_adjust`, `clear`, and `sharpen`
 - final report exists but draft validation does not
 - final report after CapCut creation is missing the required CapCut 검수 summary
   with draft path, selected template, openability gate, media-link gate,

@@ -13,6 +13,24 @@
   "shared_referenced_cache_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data/Cache",
   "marahagi_sfx_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/marahagi_sfx",
   "principle": "CapCut sample project is the template authority; job JSON is replacement values only.",
+  "mandatory_media_settings": {
+    "quality_enhance": "HD",
+    "audio_loudness_normalize": {
+      "enabled": true,
+      "target_loudness_lufs": -14
+    },
+    "per_source_video_segment": {
+      "smart_color_adjust": [30, 50],
+      "clear": [30, 50],
+      "sharpen": [30, 50],
+      "particle": [5, 30]
+    },
+    "adjacent_segment_min_diff": {
+      "smart_color_adjust": 5,
+      "clear": 5,
+      "sharpen": 5
+    }
+  },
   "templates": [
     {
       "id": "black_template_v1",

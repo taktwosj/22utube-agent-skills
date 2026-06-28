@@ -36,6 +36,17 @@ ALLOWED_NON_SOURCE_ASSETS = {
     "still",
     "generated",
 }
+VIDEO_SOURCE_EXTENSIONS = {".mp4", ".mov", ".m4v", ".avi", ".mkv", ".webm"}
+MANDATORY_EFFECT_RANGES = {
+    "smart_color_adjust": (0.30, 0.50),
+    "clear": (0.30, 0.50),
+    "sharpen": (0.30, 0.50),
+    "particle": (0.05, 0.30),
+}
+PARTICLE_CAPCUT_ENCODED_RANGE = (0.008, 0.0505)
+MANDATORY_ADJACENT_DIFF_EFFECTS = ("smart_color_adjust", "clear", "sharpen")
+MANDATORY_ADJACENT_VALUE_DIFF = 0.05
+MANDATORY_LOUDNESS_TARGET = -14.0
 SEMANTIC_VIDEO_TRACK_CONTRACT = "caption_video_plus_situation_speaker_video"
 ALLOWED_SEMANTIC_VIDEO_TRACKS = {
     "caption_video",
@@ -925,6 +936,177 @@ def material_path_values(draft: dict[str, Any]) -> list[str]:
     return values
 
 
+def normalize_capcut_percent_value(raw: Any) -> float | None:
+    if not isinstance(raw, (int, float)):
+        return None
+    value = float(raw)
+    if 1.0 < value <= 100.0:
+        return value / 100.0
+    return value
+
+
+def material_path_or_name(material: dict[str, Any]) -> str:
+    return str(
+        material.get("path")
+        or material.get("material_name")
+        or material.get("name")
+        or ""
+    )
+
+
+def is_source_video_material(material: dict[str, Any]) -> bool:
+    material_type = str(material.get("type") or "").lower()
+    if material_type == "photo":
+        return False
+    path = material_path_or_name(material).lower().replace("\\", "/")
+    return material_type == "video" or Path(path).suffix.lower() in VIDEO_SOURCE_EXTENSIONS
+
+
+def video_material_has_quality_hd(material: dict[str, Any]) -> bool:
+    algorithm = material.get("video_algorithm") or {}
+    quality = algorithm.get("quality_enhance")
+    if not isinstance(quality, dict):
+        return False
+    level = quality.get("level")
+    if isinstance(level, str):
+        if level.strip().upper() != "HD":
+            return False
+    elif level not in (0, 0.0):
+        return False
+    algorithms = algorithm.get("algorithms") or []
+    return any(
+        isinstance(item, dict)
+        and str(item.get("type") or "").lower() == "qualityenhance"
+        for item in algorithms
+    )
+
+
+def enabled_loudness_normalize_present(materials: dict[str, Any]) -> bool:
+    for item in materials.get("loudnesses") or []:
+        if not isinstance(item, dict) or item.get("enable") is not True:
+            continue
+        target = item.get("target_loudness")
+        if isinstance(target, (int, float)) and abs(float(target) - MANDATORY_LOUDNESS_TARGET) <= 0.2:
+            return True
+    return False
+
+
+def draft_has_active_audio(draft: dict[str, Any], video_materials: dict[str, dict[str, Any]]) -> bool:
+    for track in draft.get("tracks") or []:
+        track_type = str(track.get("type") or track.get("track_type") or "").lower()
+        if track_type == "audio" and track.get("segments"):
+            return True
+        if track_type != "video":
+            continue
+        for segment in track.get("segments") or []:
+            material = video_materials.get(segment.get("material_id")) or {}
+            if material.get("has_audio") is True and float(segment.get("volume", 1.0) or 0.0) > 0.01:
+                return True
+    return False
+
+
+def segment_effect_values(
+    segment: dict[str, Any],
+    effect_materials: dict[str, dict[str, Any]],
+) -> dict[str, float]:
+    values: dict[str, float] = {}
+    for ref in segment.get("extra_material_refs") or []:
+        effect = effect_materials.get(ref)
+        if not effect:
+            continue
+        effect_type = str(effect.get("type") or effect.get("name") or "").strip().lower()
+        if effect_type not in MANDATORY_EFFECT_RANGES:
+            continue
+        value = normalize_capcut_percent_value(effect.get("value"))
+        if value is not None:
+            values[effect_type] = value
+    return values
+
+
+def mandatory_effect_value_in_range(effect_type: str, value: float) -> bool:
+    minimum, maximum = MANDATORY_EFFECT_RANGES[effect_type]
+    if minimum <= value <= maximum:
+        return True
+    if effect_type == "particle":
+        encoded_minimum, encoded_maximum = PARTICLE_CAPCUT_ENCODED_RANGE
+        return encoded_minimum <= value <= encoded_maximum
+    return False
+
+
+def validate_mandatory_capcut_media_settings(draft: dict[str, Any]) -> dict[str, Any]:
+    materials = draft.get("materials") or {}
+    video_materials = {
+        item.get("id"): item
+        for item in materials.get("videos", []) or []
+        if isinstance(item, dict) and item.get("id")
+    }
+    effect_materials = {
+        item.get("id"): item
+        for item in materials.get("effects", []) or []
+        if isinstance(item, dict) and item.get("id")
+    }
+
+    source_segments: list[tuple[dict[str, Any], dict[str, Any]]] = []
+    for track in draft.get("tracks") or []:
+        if str(track.get("type") or track.get("track_type") or "").lower() != "video":
+            continue
+        for segment in track.get("segments") or []:
+            if not isinstance(segment, dict):
+                continue
+            material = video_materials.get(segment.get("material_id"))
+            if material and is_source_video_material(material):
+                source_segments.append((segment, material))
+
+    if not source_segments:
+        raise GateFail("mandatory CapCut media settings require at least one source video segment")
+
+    if draft_has_active_audio(draft, video_materials) and not enabled_loudness_normalize_present(materials):
+        raise GateFail("CapCut audio loudness normalize must be ON at -14 LUFS")
+
+    per_segment_values: list[dict[str, float]] = []
+    for index, (segment, material) in enumerate(source_segments):
+        if not video_material_has_quality_hd(material):
+            raise GateFail(f"source video segment {index} must use QualityEnhance HD")
+        values = segment_effect_values(segment, effect_materials)
+        if segment.get("enable_smart_color_adjust") is not True:
+            raise GateFail(f"source video segment {index} must enable smart_color_adjust")
+        for effect_type, (minimum, maximum) in MANDATORY_EFFECT_RANGES.items():
+            if effect_type not in values:
+                raise GateFail(f"source video segment {index} missing mandatory {effect_type} effect")
+            value = values[effect_type]
+            if not mandatory_effect_value_in_range(effect_type, value):
+                raise GateFail(
+                    f"source video segment {index} {effect_type} must be "
+                    f"{minimum * 100:.0f}-{maximum * 100:.0f}, got {value * 100:.1f}"
+                )
+        per_segment_values.append(values)
+
+    if len(per_segment_values) > 1:
+        for index in range(1, len(per_segment_values)):
+            previous = per_segment_values[index - 1]
+            current = per_segment_values[index]
+            for effect_type in MANDATORY_ADJACENT_DIFF_EFFECTS:
+                if abs(current[effect_type] - previous[effect_type]) < MANDATORY_ADJACENT_VALUE_DIFF:
+                    raise GateFail(
+                        f"{effect_type} values for adjacent source video segments must differ by at least 5"
+                    )
+
+    return {
+        "mandatory_capcut_media_settings_status": "PASS",
+        "mandatory_capcut_source_video_segment_count": len(source_segments),
+        "mandatory_capcut_quality_enhance": "HD",
+        "mandatory_capcut_loudness_normalize": "ON_-14_LUFS",
+        "mandatory_capcut_effect_ranges": {
+            key: [int(minimum * 100), int(maximum * 100)]
+            for key, (minimum, maximum) in MANDATORY_EFFECT_RANGES.items()
+        },
+        "mandatory_capcut_particle_encoded_range": [
+            round(PARTICLE_CAPCUT_ENCODED_RANGE[0], 4),
+            round(PARTICLE_CAPCUT_ENCODED_RANGE[1], 4),
+        ],
+    }
+
+
 def validate_catcup_template_master_actual(
     root: Path,
     sources: list[dict[str, Any]],
@@ -1794,6 +1976,7 @@ def validate_scenario_post_gate(
         pre_gate_result,
         clip_assignments,
     )
+    mandatory_media_settings_result = validate_mandatory_capcut_media_settings(draft)
     sfx_timeline, sfx_media_bin = validate_manifest_sfx_media_bin(
         timeline_manifest,
         pre_gate_result,
@@ -1823,6 +2006,7 @@ def validate_scenario_post_gate(
         "sfx_timeline_count": len(sfx_timeline),
         "sfx_media_bin_count": len(sfx_media_bin),
         "original_source_media": original_source_media,
+        **mandatory_media_settings_result,
         **video_track_contract_result,
         **zero_start_result,
         **audio_normalization_result,

@@ -57,6 +57,10 @@ production.
     The internal `test.mp4` is placeholder media and must be replaced with the
     job source. Do not use the `-fixed` draft and do not create a fake JSON from
     `source.mp4 + PNG + text`.
+15b. Every source-video segment must carry mandatory CapCut media settings:
+    `QualityEnhance=HD`, loudness normalize `ON_-14_LUFS` when active audio
+    exists, `smart_color_adjust/clear/sharpen=30-50`, `particle=5-30`, and at
+    least `5` points of adjacent-segment difference for smart/clear/sharpen.
 16. Create CapCut draft files.
 17. Create `capcut/normalized_draft.json`.
 18. Re-read the actual registered draft `draft_content.json`.
