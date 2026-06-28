@@ -38,25 +38,6 @@ watch
 skil-down
 ```
 
-HyperFrames/video composition support skills:
-
-```text
-animejs
-contribute-catalog
-css-animations
-gsap
-hyperframes
-hyperframes-cli
-hyperframes-media
-hyperframes-registry
-lottie
-remotion-to-hyperframes
-tailwind
-three
-waapi
-website-to-hyperframes
-```
-
 `manifests/skill-set.json` is the authoritative install list.
 
 ## First Install

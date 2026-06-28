@@ -13,4 +13,6 @@ Migration flow:
 
 Do not edit runtime folders directly after migration.
 
-Current managed set includes the core Shorts/longform stack, conditional support skills for Gemini remake intake, comment-card/reple formats, common 22utube rules, Korean history Shorts, Korean humanization, video watching/transcript intake, and the HyperFrames/video-composition support stack.
+Current managed set includes the core Shorts/longform stack, conditional support skills for Gemini remake intake, comment-card/reple formats, common 22utube rules, Korean history Shorts, Korean humanization, and video watching/transcript intake.
+
+HyperFrames/video-composition helper skills are intentionally not part of this v1 managed set unless the operator explicitly re-adds that route later.

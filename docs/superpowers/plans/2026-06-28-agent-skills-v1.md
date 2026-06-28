@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the local `22utube-agent-skills` Git repo and install/update/verify scripts for Codex, Claude, and Hermes, covering the active 22utube agent stack plus HyperFrames/video-production support skills.
+**Goal:** Build the local `22utube-agent-skills` Git repo and install/update/verify scripts for Codex, Claude, and Hermes, covering the active 22utube agent stack used by the current Shorts/longform production workflow.
 
 **Architecture:** `skills/` is the only editable source. `install` copies enabled skills to target runtimes and writes managed markers. `update` performs a dirty-check, optional fast-forward pull, install, and verify. `verify` enforces repo and target rules.
 
