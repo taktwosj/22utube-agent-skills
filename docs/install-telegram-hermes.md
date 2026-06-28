@@ -30,11 +30,18 @@ TELEGRAM_BOT_TOKEN
 Recommended:
 
 ```text
-TELEGRAM_ALLOWED_CHAT_IDS
 HONCHO_API_KEY
 ```
 
 Reports must say only `set` or `unset`; never print secret values.
+
+For Telegram group/supergroup whitelisting, use local Hermes config:
+
+```text
+telegram.allowed_chats
+```
+
+DM chat IDs and channel names may appear in `channel_directory.json`; reports should summarize only counts or state, not print private chat identifiers.
 
 ## Allowed Commands
 

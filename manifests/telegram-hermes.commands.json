@@ -5,8 +5,10 @@
     "TELEGRAM_BOT_TOKEN"
   ],
   "recommended_env": [
-    "TELEGRAM_ALLOWED_CHAT_IDS",
     "HONCHO_API_KEY"
+  ],
+  "recommended_local_config": [
+    "telegram.allowed_chats for group/supergroup whitelisting"
   ],
   "allowed_commands": [
     {
