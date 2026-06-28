@@ -36,8 +36,8 @@ from pathlib import Path
 
 repo_root = Path(sys.argv[1]).resolve()
 target_arg = sys.argv[2]
-errors: list[str] = []
-warnings: list[str] = []
+errors = []
+warnings = []
 
 def fail(message: str) -> None:
     errors.append(message)
@@ -75,7 +75,7 @@ def expand_managed_path(value: str) -> Path:
 def target_root(config: dict) -> Path:
     return expand_managed_path(config["path"])
 
-def selected_targets() -> list[str]:
+def selected_targets():
     if target_arg == "all":
         return ["codex", "claude", "hermes"]
     if target_arg == "repo":
@@ -127,7 +127,7 @@ def directory_hash(path: Path, exclude_file_name: str = "") -> str:
         rows.append(f"{relative}\t{file_hash}")
     return hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest().upper()
 
-def forbidden_patterns() -> list[str]:
+def forbidden_patterns():
     return [
         "C:" + "\\Users\\",
         "C:" + "/" + "Users/",

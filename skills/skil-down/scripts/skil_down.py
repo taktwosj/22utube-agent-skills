@@ -13,6 +13,7 @@ import urllib.request
 import zipfile
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional, Set
 
 
 IGNORE_PATTERNS = (".git", "__pycache__", ".DS_Store")
@@ -30,11 +31,11 @@ def has_skill_md(path: Path) -> bool:
     return path.is_dir() and (path / "SKILL.md").is_file()
 
 
-def discover_skill_dirs(source_root: Path) -> list[Path]:
+def discover_skill_dirs(source_root: Path) -> List[Path]:
     if has_skill_md(source_root):
         return [source_root]
 
-    skills: list[Path] = []
+    skills: List[Path] = []
     if not source_root.is_dir():
         return skills
 
@@ -50,9 +51,9 @@ def looks_like_source_root(path: Path) -> bool:
     return bool(discover_skill_dirs(path))
 
 
-def unique_paths(paths: list[Path]) -> list[Path]:
-    seen: set[str] = set()
-    unique: list[Path] = []
+def unique_paths(paths: List[Path]) -> List[Path]:
+    seen: Set[str] = set()
+    unique: List[Path] = []
     for path in paths:
         key = str(path)
         if key in seen:
@@ -62,8 +63,8 @@ def unique_paths(paths: list[Path]) -> list[Path]:
     return unique
 
 
-def candidate_source_paths() -> list[Path]:
-    candidates: list[Path] = []
+def candidate_source_paths() -> List[Path]:
+    candidates: List[Path] = []
 
     env_source = os.environ.get("CODEX_SKILLS_SOURCE")
     if env_source:
@@ -108,7 +109,7 @@ def candidate_source_paths() -> list[Path]:
     return unique_paths(candidates)
 
 
-def find_default_source() -> Path | None:
+def find_default_source() -> Optional[Path]:
     for candidate in candidate_source_paths():
         try:
             if looks_like_source_root(candidate):
@@ -130,7 +131,7 @@ def find_skill_root(extracted_root: Path) -> Path:
     raise SystemExit(f"ERROR no SKILL.md folders found in extracted source: {extracted_root}")
 
 
-def materialize_source(source: str | None, temp_root: Path) -> Path:
+def materialize_source(source: Optional[str], temp_root: Path) -> Path:
     if not source:
         found = find_default_source()
         if found:
@@ -195,8 +196,8 @@ def backup_destination(backup_root: Path, skill_name: str, stamp: str) -> Path:
         index += 1
 
 
-def parse_selected_skills(values: list[str]) -> set[str]:
-    selected: set[str] = set()
+def parse_selected_skills(values: List[str]) -> Set[str]:
+    selected: Set[str] = set()
     for value in values:
         for item in value.split(","):
             item = item.strip()
@@ -208,7 +209,7 @@ def parse_selected_skills(values: list[str]) -> set[str]:
 def sync_skills(
     source_root: Path,
     target_root: Path,
-    selected: set[str],
+    selected: Set[str],
     dry_run: bool,
     list_only: bool,
 ) -> int:
@@ -240,8 +241,8 @@ def sync_skills(
         backup_root.mkdir(parents=True, exist_ok=True)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    synced: list[str] = []
-    backups: list[str] = []
+    synced: List[str] = []
+    backups: List[str] = []
 
     for skill_dir in skill_dirs:
         destination = target_root / skill_dir.name
@@ -306,7 +307,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     selected = parse_selected_skills(args.skill)
     target_root = expand_path(args.target) if args.target else default_target_root()

@@ -176,7 +176,7 @@ def write_marker(config: dict, destination: Path, skill_name: str, target_name: 
     marker_path.write_text(json.dumps(marker, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"MARKER {marker_path}")
 
-def prune_target(config: dict, expected_names: set[str], stamp: str) -> None:
+def prune_target(config: dict, expected_names, stamp: str) -> None:
     root = target_root(config)
     scan_root = root / config["default_category"] if config.get("layout") == "category" else root
     if not scan_root.exists():
