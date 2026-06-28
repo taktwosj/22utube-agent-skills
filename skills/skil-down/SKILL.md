@@ -12,7 +12,8 @@ Use this skill to install or refresh 22utube/11utube agent skills from the Git s
 - Source of truth: `$HOME/agent-skills/skills`
 - Codex runtime target: `$HOME/.codex/skills`
 - Claude runtime target: `$HOME/.claude/skills`
-- Hermes runtime target: `$HOME/.hermes/skills/22utube`
+- Hermes runtime target on Windows: `%LOCALAPPDATA%\Hermes\skills\22utube`
+- Hermes runtime target on macOS/default Unix: `$HOME/.hermes/skills/22utube`
 - Backup targets: the target-specific backup folders from `manifests/targets.json`
 - Only sync folders that contain `SKILL.md`
 - Do not edit runtime folders directly. Edit `$HOME/agent-skills/skills/<skill>` and run install/update/verify.
@@ -41,7 +42,7 @@ If an operational document shows `py -3`, use `python3` on the Mac mini. If it s
 If the Mac mini does not have this skill yet, clone the Git repo and run the repo installer:
 
 ```bash
-git clone <private-repo-url> "$HOME/agent-skills"
+git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
 bash "$HOME/agent-skills/scripts/install.sh" --target all
 bash "$HOME/agent-skills/scripts/verify.sh" --target all
 ```

@@ -1,7 +1,7 @@
 # macOS Install
 
 ```bash
-git clone <private-repo-url> "$HOME/agent-skills"
+git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
 bash "$HOME/agent-skills/scripts/install.sh" --target all
 bash "$HOME/agent-skills/scripts/verify.sh" --target all
 ```

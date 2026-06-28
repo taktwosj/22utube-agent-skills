@@ -128,6 +128,7 @@ function Test-ForbiddenContent([string]$RepoRoot, [string]$RelativeRoot, [bool]$
   $files = Get-ChildItem -LiteralPath $root -File -Recurse -Force
   foreach ($file in $files) {
     $text = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName -ErrorAction SilentlyContinue
+    if ($null -eq $text) { $text = "" }
     foreach ($pattern in $patterns) {
       if ($text.Contains($pattern)) {
         $rel = Get-RelativePath $RepoRoot $file.FullName

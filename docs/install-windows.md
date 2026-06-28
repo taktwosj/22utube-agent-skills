@@ -1,7 +1,7 @@
 # Windows Install
 
 ```powershell
-git clone <private-repo-url> "$HOME\agent-skills"
+git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\install.ps1" -Target all
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target all
 ```

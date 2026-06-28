@@ -1,6 +1,6 @@
 # 22utube Agent Skills
 
-Git source of truth for 22utube/11utube agent skills.
+Git source of truth for 22utube/11utube agent and video-production skills.
 
 ## Roles
 
@@ -38,12 +38,33 @@ watch
 skil-down
 ```
 
+HyperFrames/video composition support skills:
+
+```text
+animejs
+contribute-catalog
+css-animations
+gsap
+hyperframes
+hyperframes-cli
+hyperframes-media
+hyperframes-registry
+lottie
+remotion-to-hyperframes
+tailwind
+three
+waapi
+website-to-hyperframes
+```
+
+`manifests/skill-set.json` is the authoritative install list.
+
 ## First Install
 
 Windows:
 
 ```powershell
-git clone <private-repo-url> "$HOME\agent-skills"
+git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\install.ps1" -Target all
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target all
 ```
@@ -51,7 +72,7 @@ powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1"
 macOS:
 
 ```bash
-git clone <private-repo-url> "$HOME/agent-skills"
+git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
 bash "$HOME/agent-skills/scripts/install.sh" --target all
 bash "$HOME/agent-skills/scripts/verify.sh" --target all
 ```
