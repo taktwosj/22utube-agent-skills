@@ -7,7 +7,7 @@ Git source of truth for 22utube/11utube agent skills.
 - Git repo: official skill source under `skills/<skill>`.
 - Codex runtime: copy installed to `$HOME/.codex/skills`.
 - Claude runtime: copy installed to `$HOME/.claude/skills`.
-- Hermes runtime: copy installed to `$HOME/.hermes/skills/22utube`.
+- Hermes runtime: copy installed to `%LOCALAPPDATA%/Hermes/skills/22utube` on Windows and `$HOME/.hermes/skills/22utube` on macOS/default Unix hosts.
 - OneDrive: production data only, including video sources, evidence, renders, CapCut drafts, and upload copy.
 
 Runtime folders are install targets, not edit targets. Edit skills in this repo, then run install/update/verify.
@@ -64,3 +64,7 @@ bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
 - Prune removes only folders with a managed marker file.
 - Existing runtime folders are backed up before overwrite.
 - `verify` failure makes update fail.
+
+## Telegram Hermes
+
+Telegram-Hermes integration is an allowlisted command bridge. Bot tokens, chat IDs, and auth files stay outside Git. See `docs/install-telegram-hermes.md` and `manifests/telegram-hermes.commands.json`.

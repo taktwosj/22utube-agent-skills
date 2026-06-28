@@ -14,9 +14,11 @@
     },
     "hermes": {
       "path": "$HOME/.hermes/skills",
+      "windows_path": "$LOCALAPPDATA/Hermes/skills",
       "layout": "category",
       "default_category": "22utube",
       "backup_path": "$HOME/.hermes/skills_backups",
+      "windows_backup_path": "$LOCALAPPDATA/Hermes/skills_backups",
       "state_file": ".22utube-managed-hermes.json"
     }
   }

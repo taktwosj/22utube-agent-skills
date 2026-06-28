@@ -12,12 +12,40 @@ function Get-RepoRoot {
   return (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 }
 
+function Test-IsWindowsHost {
+  return [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+}
+
 function Expand-ManagedPath([string]$PathValue) {
+  if ($PathValue.StartsWith('$LOCALAPPDATA')) {
+    if (-not $env:LOCALAPPDATA) { throw "LOCALAPPDATA is not set for path: $PathValue" }
+    $suffix = $PathValue.Substring(13).TrimStart('/', '\')
+    return [System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA $suffix))
+  }
+  if ($PathValue.StartsWith('$HERMES_HOME')) {
+    if (-not $env:HERMES_HOME) { throw "HERMES_HOME is not set for path: $PathValue" }
+    $suffix = $PathValue.Substring(12).TrimStart('/', '\')
+    return [System.IO.Path]::GetFullPath((Join-Path $env:HERMES_HOME $suffix))
+  }
   if ($PathValue.StartsWith('$HOME')) {
     $suffix = $PathValue.Substring(5).TrimStart('/', '\')
     return [System.IO.Path]::GetFullPath((Join-Path $HOME $suffix))
   }
   return [System.IO.Path]::GetFullPath($PathValue)
+}
+
+function Get-TargetRoot($TargetConfig) {
+  if ((Test-IsWindowsHost) -and $TargetConfig.windows_path) {
+    return Expand-ManagedPath $TargetConfig.windows_path
+  }
+  return Expand-ManagedPath $TargetConfig.path
+}
+
+function Get-BackupRoot($TargetConfig) {
+  if ((Test-IsWindowsHost) -and $TargetConfig.windows_backup_path) {
+    return Expand-ManagedPath $TargetConfig.windows_backup_path
+  }
+  return Expand-ManagedPath $TargetConfig.backup_path
 }
 
 function Read-JsonFile([string]$Path) {
@@ -54,8 +82,9 @@ function Get-EnabledSkills($SkillSet, [string[]]$OnlyNames) {
   return $skills
 }
 
-function Get-DirectoryHash([string]$Path) {
+function Get-DirectoryHash([string]$Path, [string]$ExcludeFileName = "") {
   $files = Get-ChildItem -LiteralPath $Path -File -Recurse -Force |
+    Where-Object { -not $ExcludeFileName -or $_.Name -ne $ExcludeFileName } |
     Sort-Object FullName
   $lines = New-Object System.Collections.Generic.List[string]
   foreach ($file in $files) {
@@ -78,7 +107,7 @@ function Get-SourceCommit([string]$RepoRoot) {
 }
 
 function Get-TargetSkillPath($TargetConfig, [string]$SkillName) {
-  $root = Expand-ManagedPath $TargetConfig.path
+  $root = Get-TargetRoot $TargetConfig
   if ($TargetConfig.layout -eq "category") {
     return Join-Path (Join-Path $root $TargetConfig.default_category) $SkillName
   }
@@ -127,7 +156,7 @@ function Write-ManagedMarker($TargetConfig, [string]$DestinationPath, [string]$R
 }
 
 function Invoke-Prune($TargetConfig, [string]$TargetName, $ExpectedSkills, [string]$Stamp, [switch]$DryRun) {
-  $root = Expand-ManagedPath $TargetConfig.path
+  $root = Get-TargetRoot $TargetConfig
   $scanRoot = $root
   if ($TargetConfig.layout -eq "category") {
     $scanRoot = Join-Path $root $TargetConfig.default_category
@@ -136,7 +165,7 @@ function Invoke-Prune($TargetConfig, [string]$TargetName, $ExpectedSkills, [stri
 
   $expected = @{}
   foreach ($name in $ExpectedSkills) { $expected[$name] = $true }
-  $backupRoot = Expand-ManagedPath $TargetConfig.backup_path
+  $backupRoot = Get-BackupRoot $TargetConfig
   $markerName = $TargetConfig.state_file
 
   foreach ($dir in Get-ChildItem -LiteralPath $scanRoot -Directory -Force) {
@@ -176,7 +205,7 @@ foreach ($targetName in $selectedTargets) {
       throw "Missing source skill: $($skill.name)"
     }
     $destinationPath = Get-TargetSkillPath $targetConfig $skill.name
-    $backupRoot = Expand-ManagedPath $targetConfig.backup_path
+    $backupRoot = Get-BackupRoot $targetConfig
     $sourceHash = Get-DirectoryHash $sourcePath
 
     Backup-Existing $destinationPath $backupRoot $skill.name $stamp -DryRun:$DryRun

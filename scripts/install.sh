@@ -81,10 +81,28 @@ if only:
         raise SystemExit(f"Unknown or disabled skill in --only: {', '.join(missing)}")
 
 def expand_managed_path(value: str) -> Path:
+    if value.startswith("$HERMES_HOME"):
+        hermes_home = os.environ.get("HERMES_HOME")
+        if not hermes_home:
+            raise SystemExit(f"HERMES_HOME is not set for path: {value}")
+        suffix = value[12:].lstrip("/\\")
+        return (Path(hermes_home) / suffix).resolve()
+    if value.startswith("$LOCALAPPDATA"):
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if not local_app_data:
+            raise SystemExit(f"LOCALAPPDATA is not set for path: {value}")
+        suffix = value[13:].lstrip("/\\")
+        return (Path(local_app_data) / suffix).resolve()
     if value.startswith("$HOME"):
         suffix = value[5:].lstrip("/\\")
         return (Path.home() / suffix).resolve()
     return Path(value).expanduser().resolve()
+
+def target_root(config: dict) -> Path:
+    return expand_managed_path(config["path"])
+
+def resolve_backup_root(config: dict) -> Path:
+    return expand_managed_path(config["backup_path"])
 
 def source_commit() -> str:
     try:
@@ -98,16 +116,18 @@ def source_commit() -> str:
     except Exception:
         return "uncommitted"
 
-def directory_hash(path: Path) -> str:
+def directory_hash(path: Path, exclude_file_name: str = "") -> str:
     rows = []
     for file_path in sorted(p for p in path.rglob("*") if p.is_file()):
+        if exclude_file_name and file_path.name == exclude_file_name:
+            continue
         relative = file_path.relative_to(path).as_posix()
         file_hash = hashlib.sha256(file_path.read_bytes()).hexdigest().upper()
         rows.append(f"{relative}\t{file_hash}")
     return hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest().upper()
 
 def target_skill_path(config: dict, skill_name: str) -> Path:
-    root = expand_managed_path(config["path"])
+    root = target_root(config)
     if config.get("layout") == "category":
         return root / config["default_category"] / skill_name
     return root / skill_name
@@ -148,11 +168,11 @@ def write_marker(config: dict, destination: Path, skill_name: str, target_name: 
     print(f"MARKER {marker_path}")
 
 def prune_target(config: dict, expected_names: set[str], stamp: str) -> None:
-    root = expand_managed_path(config["path"])
+    root = target_root(config)
     scan_root = root / config["default_category"] if config.get("layout") == "category" else root
     if not scan_root.exists():
         return
-    backup_root = expand_managed_path(config["backup_path"])
+    backup_root = resolve_backup_root(config)
     marker_name = config["state_file"]
     for child in sorted(p for p in scan_root.iterdir() if p.is_dir()):
         if child.name in expected_names:
@@ -180,9 +200,9 @@ for target_name in selected_targets:
         if not (source / "SKILL.md").exists():
             raise SystemExit(f"Missing source skill: {skill['name']}")
         destination = target_skill_path(config, skill["name"])
-        backup_root = expand_managed_path(config["backup_path"])
+        target_backup_root = resolve_backup_root(config)
         src_hash = directory_hash(source)
-        backup_existing(destination, backup_root, skill["name"], stamp)
+        backup_existing(destination, target_backup_root, skill["name"], stamp)
         copy_skill(source, destination)
         write_marker(config, destination, skill["name"], target_name, commit, src_hash)
     if prune:

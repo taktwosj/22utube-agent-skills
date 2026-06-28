@@ -55,10 +55,25 @@ def read_json(path: Path):
         return None
 
 def expand_managed_path(value: str) -> Path:
+    if value.startswith("$HERMES_HOME"):
+        hermes_home = os.environ.get("HERMES_HOME")
+        if not hermes_home:
+            raise SystemExit(f"HERMES_HOME is not set for path: {value}")
+        suffix = value[12:].lstrip("/\\")
+        return (Path(hermes_home) / suffix).resolve()
+    if value.startswith("$LOCALAPPDATA"):
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if not local_app_data:
+            raise SystemExit(f"LOCALAPPDATA is not set for path: {value}")
+        suffix = value[13:].lstrip("/\\")
+        return (Path(local_app_data) / suffix).resolve()
     if value.startswith("$HOME"):
         suffix = value[5:].lstrip("/\\")
         return (Path.home() / suffix).resolve()
     return Path(value).expanduser().resolve()
+
+def target_root(config: dict) -> Path:
+    return expand_managed_path(config["path"])
 
 def selected_targets() -> list[str]:
     if target_arg == "all":
@@ -79,9 +94,11 @@ def frontmatter(skill_file: Path):
             data[m.group(1)] = m.group(2).strip().strip('"')
     return data
 
-def directory_hash(path: Path) -> str:
+def directory_hash(path: Path, exclude_file_name: str = "") -> str:
     rows = []
     for file_path in sorted(p for p in path.rglob("*") if p.is_file()):
+        if exclude_file_name and file_path.name == exclude_file_name:
+            continue
         relative = file_path.relative_to(path).as_posix()
         file_hash = hashlib.sha256(file_path.read_bytes()).hexdigest().upper()
         rows.append(f"{relative}\t{file_hash}")
@@ -169,7 +186,7 @@ def test_repo(skill_set: dict, targets: dict) -> None:
                 warn(f"absolute path example in README.md pattern={pattern}")
 
 def target_skill_path(config: dict, skill_name: str) -> Path:
-    root = expand_managed_path(config["path"])
+    root = target_root(config)
     if config.get("layout") == "category":
         return root / config["default_category"] / skill_name
     return root / skill_name
@@ -179,7 +196,7 @@ def test_target(skill_set: dict, targets: dict, target_name: str) -> None:
     if not config:
         fail(f"missing target config: {target_name}")
         return
-    root = expand_managed_path(config["path"])
+    root = target_root(config)
     if not root.exists():
         fail(f"missing target root: {target_name} path={root}")
         return
@@ -202,7 +219,12 @@ def test_target(skill_set: dict, targets: dict, target_name: str) -> None:
             if marker.get("target") != target_name:
                 fail(f"marker target mismatch target={target_name} skill={skill['name']}")
         source_hash = directory_hash(repo_root / "skills" / skill["name"])
-        print(f"SHA256 target={target_name} skill={skill['name']} source={source_hash}")
+        target_hash = directory_hash(dest, config["state_file"])
+        if source_hash != target_hash:
+            fail(f"target hash mismatch target={target_name} skill={skill['name']} source={source_hash} target={target_hash}")
+        if marker and marker.get("source_sha256") != source_hash:
+            fail(f"marker source_sha256 mismatch target={target_name} skill={skill['name']}")
+        print(f"SHA256 target={target_name} skill={skill['name']} source={source_hash} target={target_hash}")
 
 skill_set = read_json(repo_root / "manifests" / "skill-set.json")
 targets_file = read_json(repo_root / "manifests" / "targets.json")

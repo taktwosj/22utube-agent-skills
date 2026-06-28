@@ -1,0 +1,51 @@
+{
+  "integration": "telegram-hermes",
+  "secrets_policy": "no secrets in git",
+  "required_secret_env": [
+    "TELEGRAM_BOT_TOKEN"
+  ],
+  "recommended_env": [
+    "TELEGRAM_ALLOWED_CHAT_IDS",
+    "HONCHO_API_KEY"
+  ],
+  "allowed_commands": [
+    {
+      "command": "/skill_status",
+      "action": "report git commit, repo verify status, and installed target marker status",
+      "shell": false
+    },
+    {
+      "command": "/skill_update",
+      "action": "run update dry-run first, then require explicit operator confirmation before real update",
+      "shell": false
+    },
+    {
+      "command": "/skill_verify",
+      "action": "run verify for repo and selected installed targets",
+      "shell": false
+    },
+    {
+      "command": "/hermes_status",
+      "action": "report Hermes config presence and secret keys as set or unset only",
+      "shell": false
+    },
+    {
+      "command": "/doctor",
+      "action": "run non-secret diagnostics for git, repo path, Python, PowerShell, and target roots",
+      "shell": false
+    },
+    {
+      "command": "/job_11short",
+      "action": "enqueue a 11short URL or work order for the local agent; do not bypass source evidence gates",
+      "shell": false
+    }
+  ],
+  "blocked_commands": [
+    "arbitrary shell",
+    "token echo",
+    "secret print",
+    "delete unmanaged files",
+    "prune without managed marker"
+  ],
+  "default_repo_path": "$HOME/agent-skills"
+}

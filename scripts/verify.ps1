@@ -30,12 +30,33 @@ function Read-JsonFile([string]$Path) {
   }
 }
 
+function Test-IsWindowsHost {
+  return [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+}
+
 function Expand-ManagedPath([string]$PathValue) {
+  if ($PathValue.StartsWith('$LOCALAPPDATA')) {
+    if (-not $env:LOCALAPPDATA) { throw "LOCALAPPDATA is not set for path: $PathValue" }
+    $suffix = $PathValue.Substring(13).TrimStart('/', '\')
+    return [System.IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA $suffix))
+  }
+  if ($PathValue.StartsWith('$HERMES_HOME')) {
+    if (-not $env:HERMES_HOME) { throw "HERMES_HOME is not set for path: $PathValue" }
+    $suffix = $PathValue.Substring(12).TrimStart('/', '\')
+    return [System.IO.Path]::GetFullPath((Join-Path $env:HERMES_HOME $suffix))
+  }
   if ($PathValue.StartsWith('$HOME')) {
     $suffix = $PathValue.Substring(5).TrimStart('/', '\')
     return [System.IO.Path]::GetFullPath((Join-Path $HOME $suffix))
   }
   return [System.IO.Path]::GetFullPath($PathValue)
+}
+
+function Get-TargetRoot($TargetConfig) {
+  if ((Test-IsWindowsHost) -and $TargetConfig.windows_path) {
+    return Expand-ManagedPath $TargetConfig.windows_path
+  }
+  return Expand-ManagedPath $TargetConfig.path
 }
 
 function Get-RelativePath([string]$BasePath, [string]$FullPath) {
@@ -65,8 +86,9 @@ function Get-Frontmatter([string]$SkillFile) {
   return $map
 }
 
-function Get-DirectoryHash([string]$Path) {
+function Get-DirectoryHash([string]$Path, [string]$ExcludeFileName = "") {
   $files = Get-ChildItem -LiteralPath $Path -File -Recurse -Force |
+    Where-Object { -not $ExcludeFileName -or $_.Name -ne $ExcludeFileName } |
     Sort-Object FullName
   $lines = New-Object System.Collections.Generic.List[string]
   foreach ($file in $files) {
@@ -177,7 +199,7 @@ function Test-Repo($RepoRoot, $SkillSet, $Targets) {
 }
 
 function Get-TargetSkillPath($TargetConfig, [string]$SkillName) {
-  $root = Expand-ManagedPath $TargetConfig.path
+  $root = Get-TargetRoot $TargetConfig
   if ($TargetConfig.layout -eq "category") {
     return Join-Path (Join-Path $root $TargetConfig.default_category) $SkillName
   }
@@ -190,7 +212,7 @@ function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName) {
     Add-Error "missing target config: $TargetName"
     return
   }
-  $root = Expand-ManagedPath $targetConfig.path
+  $root = Get-TargetRoot $targetConfig
   if (-not (Test-Path -LiteralPath $root)) {
     Add-Error "missing target root: $TargetName path=$root"
     return
@@ -213,8 +235,16 @@ function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName) {
       if ($marker.skill -ne $skill.name) { Add-Error "marker skill mismatch target=$TargetName skill=$($skill.name)" }
       if ($marker.target -ne $TargetName) { Add-Error "marker target mismatch target=$TargetName skill=$($skill.name)" }
     }
-    $sourceHash = Get-DirectoryHash (Join-Path (Join-Path $RepoRoot "skills") $skill.name)
-    Write-Output "SHA256 target=$TargetName skill=$($skill.name) source=$sourceHash"
+    $sourcePath = Join-Path (Join-Path $RepoRoot "skills") $skill.name
+    $sourceHash = Get-DirectoryHash $sourcePath
+    $targetHash = Get-DirectoryHash $dest $targetConfig.state_file
+    if ($sourceHash -ne $targetHash) {
+      Add-Error "target hash mismatch target=$TargetName skill=$($skill.name) source=$sourceHash target=$targetHash"
+    }
+    if ($marker -and $marker.source_sha256 -ne $sourceHash) {
+      Add-Error "marker source_sha256 mismatch target=$TargetName skill=$($skill.name)"
+    }
+    Write-Output "SHA256 target=$TargetName skill=$($skill.name) source=$sourceHash target=$targetHash"
   }
 }
 
