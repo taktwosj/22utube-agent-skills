@@ -1,0 +1,55 @@
+.DS_Store
+Thumbs.db
+
+# Python / JS
+__pycache__/
+*.pyc
+node_modules/
+
+# Logs / temp
+*.log
+*.tmp
+*.bak
+
+# Env / secrets
+.env
+.env.*
+*.key
+*token*
+*cookie*
+*session*
+*secret*
+*credential*
+
+# Production media
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.wav
+*.mp3
+*.m4a
+*.aac
+
+# Archives / heavy bundles
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+
+# Backups / runtime garbage
+_backup*/
+*_backup*/
+backup/
+backups/
+skills_backups/
+
+# Production folders
+render/
+renders/
+exports/
+evidence/
+drafts/
+uploads/
+capcut/

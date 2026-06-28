@@ -1,0 +1,4 @@
+interface:
+  display_name: "00 Tikitaka"
+  short_description: "Gemini 원자료와 댓글로 쇼츠 후크를 고르고 OneDrive 000short 입력 패키지를 만듭니다."
+  default_prompt: "Use $00-tikitaka to analyze Gemini v2.1 raw Shorts JSON plus top comments, treat Gemini as first-pass source notes, verify source_audio_mode before using quoted dialogue, guide hook-first Tikitaka script decisions, and create a OneDrive tikitaka_production_input handoff package with final_script_ko.txt, status.json, a local Windows 000short-production-agent instruction prompt, and a final script copy block when production input files are requested."

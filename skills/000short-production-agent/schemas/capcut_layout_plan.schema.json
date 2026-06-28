@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "11short capcut_layout_plan",
+  "type": "object",
+  "required": ["top_text", "middle_text", "bottom_text", "video_tracks", "audio_plan"],
+  "properties": {
+    "top_text": { "type": "object" },
+    "middle_text": { "type": "array" },
+    "bottom_text": {
+      "description": "Current 11short must keep this empty or absent in normalized form.",
+      "type": "array",
+      "maxItems": 0
+    },
+    "video_tracks": { "type": "array" },
+    "audio_plan": { "type": "array" }
+  }
+}

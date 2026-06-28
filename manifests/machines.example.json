@@ -1,0 +1,22 @@
+{
+  "machines": [
+    {
+      "name": "home-windows",
+      "os": "windows",
+      "checkout": "$HOME/agent-skills",
+      "targets": ["codex", "claude", "hermes"]
+    },
+    {
+      "name": "office-windows",
+      "os": "windows",
+      "checkout": "$HOME/agent-skills",
+      "targets": ["codex", "claude", "hermes"]
+    },
+    {
+      "name": "mac-mini",
+      "os": "macos",
+      "checkout": "$HOME/agent-skills",
+      "targets": ["codex", "claude", "hermes"]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Script Writer"
+  short_description: "YouTube retention and memory-anchor script gate"
+  default_prompt: "Use $00script-writer to design viewer retention, memory anchors, hooks, evidence, YouTube policy risk, and script QA. For 11short work, load the local style_bank final_script corpus, choose 3-5 genre-matched style_sample_lines, and run the anti-AI style gate before script lock, SRT, CapCut text, upload text, or visible-final wording. Run the YouTube Policy Gate before drafting, after draft, before metadata, and before final PASS. Default writer mode, Shorts, midform, and longform use a random 5-persona gate with 3 of 5 required to pass; use the 10-persona gate only when the user explicitly asks for a full review. For 11short remake work, require audio-off comprehension and real sub-agent review when available before final captions or overlays."

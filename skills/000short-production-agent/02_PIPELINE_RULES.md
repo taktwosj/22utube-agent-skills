@@ -1,0 +1,318 @@
+# 02_PIPELINE_RULES
+
+## Current Pipeline
+
+1. Confirm `input/video_url.txt`.
+2. Save user Gemini/VLM/GPT content as `input/analysis_hint_raw.txt`.
+3. Download or locate `source/source.mp4`; for YouTube sources, prefer
+   FHD/1080-first source media when available (`1920x1080` landscape or
+   `1080x1920` vertical Shorts) using a `width<=1920 AND height<=1920`
+   yt-dlp cap.
+4. Create `source/ffprobe_report.json`.
+5. Extract frames and contact sheet.
+6. Run PySceneDetect and write `evidence/scene_segments.json`.
+7. Run Whisper or faster-whisper and write `evidence/whisper_segments.json`.
+8. Run PaddleOCR first. If it fails, run EasyOCR fallback and record the fallback
+   in `evidence/ocr_segments.json`.
+9. Run audio VAD and write `evidence/audio_vad_segments.json`.
+10. Create `evidence/source_evidence.json`.
+11. Compare `analysis_hint` with source evidence and write
+    `evidence/crosscheck_report.json`.
+12. If user or story mentions specific speech, write
+    `evidence/target_phrase_check.json`.
+13. Create `decisions/segment_decision_table.json`.
+14. If Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N,
+    or benchmark-remake strategy applies, create
+    `decisions/shorts_academy_gate.json`.
+15. Create `decisions/capcut_layout_plan.json`.
+16. Create CapCut draft files.
+17. Normalize the draft to `capcut/normalized_draft.json`.
+18. Run harness validation.
+19. Create `reports/evidence_pack.json`.
+20. Create `reports/final_report.md`.
+
+## Input URL Rule
+
+If `input/video_url.txt` is missing or empty, stop with:
+
+```json
+{
+  "status": "BLOCKED",
+  "reason": "video_url_missing",
+  "SCRIPT_LOCK": "NO",
+  "upload_ready": "NO"
+}
+```
+
+## Analysis Hint Rule
+
+Gemini JSON, VLM analysis, and user-provided rough analysis can be used only for:
+
+- expected story structure
+- expected timeline
+- expected preserved speech
+- expected on-screen text
+- expected emotion peak
+- expected remake point
+
+They cannot be used as evidence for:
+
+- STT complete
+- OCR complete
+- source analysis complete
+- CapCut PASS
+- SCRIPT_LOCK
+- upload_ready
+
+## Shorts Academy Production Gate
+
+Run this gate when the job enters production from `00-tikitaka`,
+`00script-writer`, or user wording such as 쇼츠학개론, 마라하기 공식, 한계선,
+돈통/에셋, 결, 가단야, 우라까이, 일치율 0%, 벤치영상, 채널기획, ranking/TOP-N,
+benchmark remake, or channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/
+랭킹/유머/군림보.
+
+Read `references/shorts-academy.md` before segment decisions, render plan,
+SRT/layout, CapCut draft creation, harness, or final report.
+
+Required output:
+
+```json
+{
+  "shorts_academy_reference_applied": true,
+  "shorts_academy_gate": "PASS|WAIT|REWRITE_REQUIRED|N/A",
+  "shorts_academy_gate_reason": "...",
+  "channel_ceiling_checked": true,
+  "ceiling_status": "checked|not_applicable",
+  "asset_bank_basis": "...",
+  "channel_texture_basis": "...",
+  "benchmark_message": "...",
+  "source_region": "domestic_korea|overseas|mixed_global|unknown",
+  "emotion_intent": "감동|정보|웃음|충격|분노|국뽕|공감|사이다|호기심|스포츠감탄|실용|미담|unknown",
+  "channel_family": "...",
+  "content_mode": "...",
+  "source_surface": "cctv|sports_game|broadcast_variety|drama_movie|game_screen|animation_3d|recipe_process|lifehack_process|photo_tts_explainer|interview_speech|speech_award|pet_moment|rescue_incident|other",
+  "composite_label": "...",
+  "layer_mix_decision_required": true,
+  "caption_layer_mix": {
+    "alias": "source_layer_mix",
+    "tts_density": "none|sparse|balanced|heavy",
+    "quoted_speech_density": "none|low|medium|high",
+    "situation_caption_density": "low|medium|high",
+    "source_audio_priority": "keep|duck|replace|unknown",
+    "tts_role": "...",
+    "quoted_speech_role": "...",
+    "situation_caption_role": "...",
+    "layer_mix_basis": "source_script_analysis|direct_source_evidence|user_sample_script",
+    "do_not_invent_quotes": true
+  },
+  "verified_source_speech_present": false,
+  "original_dialogue_reuse_policy": "maximize_verified_original_dialogue",
+  "creative_additions_use_tts_or_situation_only": true,
+  "source_word_synonym_rewrite_status": "PASS",
+  "source_word_synonym_rewrite_policy": "rewrite source/benchmark wording with different Korean synonyms and sentence rhythm except verified quotes, names, numbers, or unavoidable nouns",
+  "urakkai_required": true,
+  "same_flow_allowed": false,
+  "flow_urakkai_plan": {
+    "original_flow": "...",
+    "new_flow": "...",
+    "changed_hook_entry": "...",
+    "changed_tension_point": "...",
+    "changed_payoff_recovery": "..."
+  },
+  "gadanya_check": {
+    "guideline": "...",
+    "word_rewrite": "...",
+    "yaburi_comment_pressure": "..."
+  },
+  "similarity_break_plan": {
+    "keyword": "...",
+    "audio_timing": "...",
+    "pixel_frame": "..."
+  },
+  "catcup_reference_layout_required": true,
+  "catcup_reference_layout_profile": "broadcast_accident_instagram_media_v1",
+  "catcup_reference_project": "260620-잊을수없는-방송사고-인스타미디어",
+  "catcup_text_role_order_top_to_bottom": [
+    "top_title_1",
+    "top_title_2",
+    "tts",
+    "source_speech_1",
+    "source_speech_2",
+    "situation_emotion"
+  ],
+  "capcut_t_track_contract": {
+    "T1": "소제목1",
+    "T2": "소제목2",
+    "T3": "TTS / 나레이션 자막",
+    "T4": "화자발언1",
+    "T5": "화자발언2",
+    "T6": "현장상황 / 행동 / 감정설명",
+    "A9": "원본음성 / BGM / 랭킹 기본 배경음",
+    "A10": "TTS / 효과음 / 나의 사전 설정 효과음"
+  },
+  "catcup_text_role_rows": [
+    {"role": "top_title_1", "active": true, "planned_track_id": "T1"},
+    {"role": "top_title_2", "active": true, "planned_track_id": "T2"},
+    {"role": "tts", "active": true, "planned_track_id": "T3"},
+    {"role": "source_speech_1", "active": false, "planned_track_id": "T4"},
+    {"role": "source_speech_2", "active": false, "planned_track_id": "T5"},
+    {"role": "situation_emotion", "active": true, "planned_track_id": "T6"}
+  ],
+  "ranking_order_gate": {
+    "required_for_ranking_top_n": true,
+    "structure_remix_required": true,
+    "source_order_allowed": false,
+    "implemented_order": ["..."],
+    "ranking_middle_preset_required": true,
+    "ranking_middle_preset_name": "랭킹중간",
+    "ranking_middle_preset_insertions": ["between_rank_items"],
+    "ranking_transition_precision_required": true,
+    "ranking_transition_probe_step_sec": "0.2-0.4",
+    "ranking_transition_boundaries_file": "source_scene_transitions_precision.json"
+  }
+}
+```
+
+If channel/category planning is outside the job, use
+`shorts_academy_gate=N/A` only with a concrete reason. For ranking/TOP-N,
+`N/A` is not allowed for the structure remix fields. Ranking/TOP-N also requires
+the `랭킹중간` CapCut preset/template between rank/item sections and a
+transition-boundary precision pass around each rank/item change. If the source
+scan starts at 1-second buckets, each bucket containing a rank transition must
+be rescanned at `0.2` to `0.4` second intervals or by frame difference and
+recorded in `source_scene_transitions_precision.json`.
+
+All applicable remake jobs require `urakkai_required=true` and
+`same_flow_allowed=false`. Ranking/TOP-N must change the literal order. Other
+content modes may preserve unavoidable factual/source chronology only when the
+functional viewing flow is changed through hook entry, tension placement,
+reaction timing, caption interpretation, cut emphasis, or payoff recovery.
+
+For current CatCup/11short projects, use
+`broadcast_accident_instagram_media_v1` from the local reference draft:
+
+```text
+$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\260620-잊을수없는-방송사고-인스타미디어
+```
+
+The hard check is the role-separated placement in `catcup_text_role_rows`, not
+the presence of SFX, BGM, transition effects, or decorative animation. Effects
+are optional unless the user explicitly requests them. The post-CapCut gate must
+read the actual registered draft `draft_content.json` through
+`capcut_draft_content_path` or the draft path and verify the active rows.
+
+Original dialogue and creative additions:
+
+- If verified source/original dialogue exists, set
+  `verified_source_speech_present=true` and keep the corresponding
+  `source_speech_1` row active.
+- Use original dialogue as much as possible, but mark it as verified source
+  speech. Do not invent new quoted speech.
+- Added creative lines must be plain TTS/narration or `(상황설명)/(감정설명)` only.
+- Source/benchmark wording outside verified quotes must pass
+  `source_word_synonym_rewrite_status=PASS`: use different Korean words,
+  synonyms, reordered sentence rhythm, and different caption phrasing except for
+  names, numbers, and unavoidable nouns.
+
+Layer mix is not optional. Decide whether the script is mostly TTS, mostly
+verified source speech, or mostly `(상황설명)` from the source surface. For
+example, `군림보` means `photo_tts_explainer` with heavy continuous TTS over
+photos/images; sports games may use commentator/player quotes; CCTV usually
+uses high situation captions and restrained TTS with no invented speech.
+
+Missing or weak gate evidence blocks CapCut/final PASS with:
+
+```json
+{
+  "status": "REWRITE_REQUIRED",
+  "reason": "shorts_academy_gate_missing_or_incomplete"
+}
+```
+
+## STT Status Values
+
+Use exactly one:
+
+```json
+{
+  "stt_status": "RAN_WITH_RESULT|RAN_EMPTY|AUDIO_ABSENT|FAILED|NOT_RUN"
+}
+```
+
+`FAILED` and `NOT_RUN` fail. `RAN_EMPTY` and `AUDIO_ABSENT` can pass only when
+execution evidence and reason are recorded.
+
+## OCR Status Values
+
+Use exactly one:
+
+```json
+{
+  "ocr_status": "RAN_WITH_RESULT|RAN_EMPTY|NO_ONSCREEN_TEXT|FAILED|NOT_RUN"
+}
+```
+
+`FAILED` and `NOT_RUN` fail. `RAN_EMPTY` and `NO_ONSCREEN_TEXT` can pass only
+when execution evidence and reason are recorded.
+
+## OCR Engine Rule
+
+PaddleOCR is primary. EasyOCR is fallback.
+
+If EasyOCR is used, record:
+
+```json
+{
+  "ocr_engine_primary": "PaddleOCR",
+  "ocr_engine_used": "EasyOCR",
+  "engine_fallback": true,
+  "fallback_reason": "..."
+}
+```
+
+Never claim PaddleOCR ran when it did not.
+
+## Target Phrase Check
+
+When the user mentions a phrase such as `테슬라야`, `존중해`, `뭐 이런`, or a
+script depends on a source phrase, create `evidence/target_phrase_check.json`.
+
+Timestamp-free phrases are not verified source speech.
+
+Required fields per detected phrase:
+
+- `phrase`
+- `found`
+- `start`
+- `end`
+- `matched_text`
+- `speaker`
+- `source`
+- `confidence`
+- `is_verified_source_speech`
+
+## Segment Decision Table
+
+`decisions/segment_decision_table.json` is required before CapCut.
+
+Each segment must include:
+
+- `segment_id`
+- `start`
+- `end`
+- `scene_ids`
+- `visual_summary_ko`
+- `whisper_text`
+- `voice_present`
+- `ocr_texts`
+- `audio_type`
+- `segment_type`
+- `story_function`
+- `audio_action`
+- `text_action`
+- `capcut_text_layer`
+- `capcut_audio_layer`
+- `decision_reason`
+- `evidence_refs`
+- `uncertainty`

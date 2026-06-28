@@ -1,0 +1,23 @@
+{
+  "targets": {
+    "codex": {
+      "path": "$HOME/.codex/skills",
+      "layout": "flat",
+      "backup_path": "$HOME/.codex/skills_backups",
+      "state_file": ".22utube-managed-codex.json"
+    },
+    "claude": {
+      "path": "$HOME/.claude/skills",
+      "layout": "flat",
+      "backup_path": "$HOME/.claude/skills_backups",
+      "state_file": ".22utube-managed-claude.json"
+    },
+    "hermes": {
+      "path": "$HOME/.hermes/skills",
+      "layout": "category",
+      "default_category": "22utube",
+      "backup_path": "$HOME/.hermes/skills_backups",
+      "state_file": ".22utube-managed-hermes.json"
+    }
+  }
+}

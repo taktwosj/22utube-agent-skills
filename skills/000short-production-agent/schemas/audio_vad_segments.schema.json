@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "11short audio_vad_segments",
+  "type": "object",
+  "required": ["audio_vad_status", "segments"],
+  "properties": {
+    "audio_vad_status": { "enum": ["PASS", "FAIL", "NOT_RUN"] },
+    "segments": { "type": "array" }
+  }
+}

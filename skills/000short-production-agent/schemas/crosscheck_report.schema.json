@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "11short crosscheck_report",
+  "type": "object",
+  "required": ["analysis_hint_saved", "hint_vs_evidence_compared", "mismatches_recorded"],
+  "properties": {
+    "analysis_hint_saved": { "type": "boolean" },
+    "hint_vs_evidence_compared": { "type": "boolean" },
+    "mismatches_recorded": { "type": "boolean" },
+    "supported": { "type": "array" },
+    "contradicted": { "type": "array" },
+    "uncertain": { "type": "array" },
+    "needs_manual_review": { "type": "array" }
+  }
+}

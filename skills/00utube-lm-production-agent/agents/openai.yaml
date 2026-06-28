@@ -1,0 +1,7 @@
+interface:
+  display_name: "00utube LM Production Agent"
+  short_description: "Landscape midform/longform 22utube production with Image2, TTS, CapCut, SRT QA"
+  default_prompt: "Use $00utube-lm-production-agent to continue a 22utube landscape midform or longform episode through Image2 cuts, TTS/SRT sync, CapCut draft, render, ffprobe, and frame QA."
+
+policy:
+  allow_implicit_invocation: true

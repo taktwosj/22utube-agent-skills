@@ -1,0 +1,7 @@
+interface:
+  display_name: "Skil Down"
+  short_description: "Sync shared Codex skills to this machine."
+  default_prompt: "Use $skil-down to install or update shared 22utube Codex skills on this machine."
+
+policy:
+  allow_implicit_invocation: true
