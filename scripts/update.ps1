@@ -3,6 +3,7 @@ param(
   [string]$Target = "all",
   [string[]]$Only = @(),
   [switch]$Prune,
+  [switch]$Strict,
   [switch]$DryRun
 )
 
@@ -10,6 +11,9 @@ $ErrorActionPreference = "Stop"
 
 if ($Only.Count -gt 0 -and $Prune) {
   throw "-Only and -Prune cannot be used together."
+}
+if ($Only.Count -gt 0 -and $Strict) {
+  throw "-Only and -Strict cannot be used together."
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -35,6 +39,7 @@ $verify = Join-Path $PSScriptRoot "verify.ps1"
 $installArgs = @("-ExecutionPolicy", "Bypass", "-File", $install, "-Target", $Target)
 if ($Only.Count -gt 0) { $installArgs += "-Only"; $installArgs += $Only }
 if ($Prune) { $installArgs += "-Prune" }
+if ($Strict) { $installArgs += "-Strict" }
 if ($DryRun) { $installArgs += "-DryRun" }
 
 powershell @installArgs

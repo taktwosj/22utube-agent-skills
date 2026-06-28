@@ -72,6 +72,25 @@ macOS:
 bash "$HOME/agent-skills/scripts/update.sh" --target all --prune
 ```
 
+## Strict Claude Match
+
+Claude CLI should not keep old 22utube production skills beside the Git-managed
+set. Use strict mode to make Claude's runtime match `manifests/skill-set.json`
+exactly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target claude -Prune -Strict
+powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
+```
+
+```bash
+bash "$HOME/agent-skills/scripts/update.sh" --target claude --prune --strict
+bash "$HOME/agent-skills/scripts/verify.sh" --target claude --strict
+```
+
+Strict mode moves unmanaged skill folders with `SKILL.md` into the configured
+backup folder as `DISABLED_<skill>_<timestamp>`. It does not delete them.
+
 Use dry-run before prune:
 
 ```powershell
@@ -89,7 +108,9 @@ bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
 - `git pull` uses `--ff-only`.
 - Automatic stash is not supported.
 - `--only` and `--prune` cannot be combined.
+- `--only` and strict mode cannot be combined.
 - Prune removes only folders with a managed marker file.
+- Strict mode disables any unmanaged skill folder under the selected target.
 - Existing runtime folders are backed up before overwrite.
 - `verify` failure makes update fail.
 

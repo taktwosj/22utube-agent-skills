@@ -3,6 +3,7 @@ param(
   [string]$Target = "all",
   [string[]]$Only = @(),
   [switch]$Prune,
+  [switch]$Strict,
   [switch]$DryRun
 )
 
@@ -188,8 +189,37 @@ function Invoke-Prune($TargetConfig, [string]$TargetName, $ExpectedSkills, [stri
   }
 }
 
+function Invoke-StrictDisable($TargetConfig, [string]$TargetName, $ExpectedSkills, [string]$Stamp, [switch]$DryRun) {
+  $root = Get-TargetRoot $TargetConfig
+  $scanRoot = $root
+  if ($TargetConfig.layout -eq "category") {
+    $scanRoot = Join-Path $root $TargetConfig.default_category
+  }
+  if (-not (Test-Path -LiteralPath $scanRoot)) { return }
+
+  $expected = @{}
+  foreach ($name in $ExpectedSkills) { $expected[$name] = $true }
+  $backupRoot = Get-BackupRoot $TargetConfig
+
+  foreach ($dir in Get-ChildItem -LiteralPath $scanRoot -Directory -Force) {
+    if ($expected.ContainsKey($dir.Name)) { continue }
+    if (-not (Test-Path -LiteralPath (Join-Path $dir.FullName "SKILL.md"))) { continue }
+    $backup = Join-Path $backupRoot ("DISABLED_{0}_{1}" -f $dir.Name, $Stamp)
+    if ($DryRun) {
+      Write-Output "DRYRUN STRICT_DISABLE $($dir.FullName) -> $backup"
+      continue
+    }
+    New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+    Move-Item -LiteralPath $dir.FullName -Destination $backup
+    Write-Output "STRICT_DISABLED $($dir.FullName) -> $backup"
+  }
+}
+
 if ($Only.Count -gt 0 -and $Prune) {
   throw "-Only and -Prune cannot be used together."
+}
+if ($Only.Count -gt 0 -and $Strict) {
+  throw "-Only and -Strict cannot be used together."
 }
 
 $repoRoot = Get-RepoRoot
@@ -219,6 +249,9 @@ foreach ($targetName in $selectedTargets) {
   }
   if ($Prune) {
     Invoke-Prune $targetConfig $targetName @($targetSkills | ForEach-Object { $_.name }) $stamp -DryRun:$DryRun
+  }
+  if ($Strict) {
+    Invoke-StrictDisable $targetConfig $targetName @($targetSkills | ForEach-Object { $_.name }) $stamp -DryRun:$DryRun
   }
 }
 

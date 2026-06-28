@@ -3,6 +3,7 @@ set -euo pipefail
 
 TARGET="all"
 PRUNE="0"
+STRICT="0"
 DRY_RUN="0"
 ONLY=()
 
@@ -20,6 +21,10 @@ while [ "$#" -gt 0 ]; do
       PRUNE="1"
       shift
       ;;
+    --strict)
+      STRICT="1"
+      shift
+      ;;
     --dry-run)
       DRY_RUN="1"
       shift
@@ -33,6 +38,10 @@ done
 
 if [ "$PRUNE" = "1" ] && [ "${#ONLY[@]}" -gt 0 ]; then
   echo "--only and --prune cannot be used together." >&2
+  exit 2
+fi
+if [ "$STRICT" = "1" ] && [ "${#ONLY[@]}" -gt 0 ]; then
+  echo "--only and --strict cannot be used together." >&2
   exit 2
 fi
 
@@ -62,6 +71,9 @@ if [ "${#ONLY[@]}" -gt 0 ]; then
 fi
 if [ "$PRUNE" = "1" ]; then
   INSTALL_ARGS+=(--prune)
+fi
+if [ "$STRICT" = "1" ]; then
+  INSTALL_ARGS+=(--strict)
 fi
 if [ "$DRY_RUN" = "1" ]; then
   INSTALL_ARGS+=(--dry-run)

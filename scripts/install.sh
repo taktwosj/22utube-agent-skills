@@ -3,6 +3,7 @@ set -euo pipefail
 
 TARGET="all"
 PRUNE="0"
+STRICT="0"
 DRY_RUN="0"
 ONLY=()
 
@@ -18,6 +19,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --prune)
       PRUNE="1"
+      shift
+      ;;
+    --strict)
+      STRICT="1"
       shift
       ;;
     --dry-run)
@@ -43,11 +48,15 @@ if [ "$PRUNE" = "1" ] && [ "${#ONLY[@]}" -gt 0 ]; then
   echo "--only and --prune cannot be used together." >&2
   exit 2
 fi
+if [ "$STRICT" = "1" ] && [ "${#ONLY[@]}" -gt 0 ]; then
+  echo "--only and --strict cannot be used together." >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-python3 - "$REPO_ROOT" "$TARGET" "$PRUNE" "$DRY_RUN" "${ONLY[@]}" <<'PY'
+python3 - "$REPO_ROOT" "$TARGET" "$PRUNE" "$STRICT" "$DRY_RUN" "${ONLY[@]}" <<'PY'
 import datetime
 import hashlib
 import json
@@ -60,8 +69,9 @@ from pathlib import Path
 repo_root = Path(sys.argv[1]).resolve()
 target_arg = sys.argv[2]
 prune = sys.argv[3] == "1"
-dry_run = sys.argv[4] == "1"
-only = sys.argv[5:]
+strict = sys.argv[4] == "1"
+dry_run = sys.argv[5] == "1"
+only = sys.argv[6:]
 
 skill_set = json.loads((repo_root / "manifests" / "skill-set.json").read_text(encoding="utf-8"))
 targets = json.loads((repo_root / "manifests" / "targets.json").read_text(encoding="utf-8"))["targets"]
@@ -196,6 +206,25 @@ def prune_target(config: dict, expected_names, stamp: str) -> None:
         shutil.move(str(child), str(backup))
         print(f"PRUNED {child} -> {backup}")
 
+def strict_disable_target(config: dict, expected_names, stamp: str) -> None:
+    root = target_root(config)
+    scan_root = root / config["default_category"] if config.get("layout") == "category" else root
+    if not scan_root.exists():
+        return
+    backup_root = resolve_backup_root(config)
+    for child in sorted(p for p in scan_root.iterdir() if p.is_dir()):
+        if child.name in expected_names:
+            continue
+        if not (child / "SKILL.md").exists():
+            continue
+        backup = backup_root / f"DISABLED_{child.name}_{stamp}"
+        if dry_run:
+            print(f"DRYRUN STRICT_DISABLE {child} -> {backup}")
+            continue
+        backup_root.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(child), str(backup))
+        print(f"STRICT_DISABLED {child} -> {backup}")
+
 stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 commit = source_commit()
 
@@ -216,6 +245,8 @@ for target_name in selected_targets:
         write_marker(config, destination, skill["name"], target_name, commit, src_hash)
     if prune:
         prune_target(config, {s["name"] for s in target_skills}, stamp)
+    if strict:
+        strict_disable_target(config, {s["name"] for s in target_skills}, stamp)
 
 print(f"DONE install target={target_arg} dry_run={dry_run}")
 PY

@@ -13,6 +13,13 @@ bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
 bash "$HOME/agent-skills/scripts/update.sh" --target all --prune
 ```
 
+Claude exact match:
+
+```bash
+bash "$HOME/agent-skills/scripts/update.sh" --target claude --prune --strict
+bash "$HOME/agent-skills/scripts/verify.sh" --target claude --strict
+```
+
 Single-skill update:
 
 ```bash

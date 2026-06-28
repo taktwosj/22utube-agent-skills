@@ -13,6 +13,13 @@ powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1"
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target all -Prune
 ```
 
+Claude exact match:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target claude -Prune -Strict
+powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
+```
+
 Single-skill update:
 
 ```powershell

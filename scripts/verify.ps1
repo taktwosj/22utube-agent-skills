@@ -1,6 +1,7 @@
 param(
   [ValidateSet("repo", "all", "codex", "claude", "hermes")]
-  [string]$Target = "repo"
+  [string]$Target = "repo",
+  [switch]$Strict
 )
 
 $ErrorActionPreference = "Stop"
@@ -263,6 +264,28 @@ function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName, [strin
   }
 }
 
+function Test-StrictTarget($SkillSet, $Targets, [string]$TargetName) {
+  $targetConfig = $Targets.targets.$TargetName
+  if (-not $targetConfig) { return }
+  $root = Get-TargetRoot $targetConfig
+  $scanRoot = $root
+  if ($targetConfig.layout -eq "category") {
+    $scanRoot = Join-Path $root $targetConfig.default_category
+  }
+  if (-not (Test-Path -LiteralPath $scanRoot)) { return }
+
+  $expected = @{}
+  foreach ($skill in @($SkillSet.skills | Where-Object { $_.enabled -eq $true -and $_.targets -contains $TargetName })) {
+    $expected[$skill.name] = $true
+  }
+  foreach ($dir in Get-ChildItem -LiteralPath $scanRoot -Directory -Force) {
+    if ($expected.ContainsKey($dir.Name)) { continue }
+    if (Test-Path -LiteralPath (Join-Path $dir.FullName "SKILL.md")) {
+      Add-Error "strict unmanaged skill target=$TargetName skill=$($dir.Name)"
+    }
+  }
+}
+
 $repoRoot = Get-RepoRoot
 $skillSet = Read-JsonFile (Join-Path $repoRoot "manifests/skill-set.json")
 $targets = Read-JsonFile (Join-Path $repoRoot "manifests/targets.json")
@@ -271,6 +294,9 @@ $sourceCommit = Get-SourceCommit $repoRoot
 Test-Repo $repoRoot $skillSet $targets
 foreach ($targetName in Get-SelectedTargets $Target) {
   Test-Target $repoRoot $skillSet $targets $targetName $sourceCommit
+  if ($Strict) {
+    Test-StrictTarget $skillSet $targets $targetName
+  }
 }
 
 if ($script:Errors.Count -gt 0) {

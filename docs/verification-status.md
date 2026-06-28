@@ -17,6 +17,7 @@ git -C "$HOME\agent-skills" status --short --branch
 git -C "$HOME\agent-skills" rev-parse --short HEAD
 git -C "$HOME\agent-skills" rev-parse --short origin/main
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target all
+powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\telegram-hermes-doctor.ps1"
 ```
 
@@ -25,6 +26,7 @@ Expected minimum result:
 ```text
 HEAD matches origin/main
 VERIFY PASS warnings=0
+Claude strict verify has no unmanaged skills
 telegram_gateway_state=connected
 TELEGRAM_BOT_TOKEN=set
 HONCHO_API_KEY=set
@@ -62,6 +64,7 @@ mini has actually installed the latest skill set. On the Mac mini, run:
 git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
 bash "$HOME/agent-skills/scripts/install.sh" --target all
 bash "$HOME/agent-skills/scripts/verify.sh" --target all
+bash "$HOME/agent-skills/scripts/verify.sh" --target claude --strict
 bash "$HOME/agent-skills/scripts/telegram-hermes-doctor.sh"
 ```
 
@@ -72,6 +75,7 @@ cd "$HOME/agent-skills"
 git pull --ff-only
 bash scripts/update.sh --target all --prune
 bash scripts/verify.sh --target all
+bash scripts/verify.sh --target claude --strict
 bash scripts/telegram-hermes-doctor.sh
 ```
 
@@ -81,6 +85,7 @@ Minimum live PASS:
 VERIFY PASS warnings=0
 Codex target under $HOME/.codex/skills has managed markers
 Claude target under $HOME/.claude/skills has managed markers
+Claude strict target has no unmanaged SKILL.md folders
 Hermes target under $HOME/.hermes/skills/22utube has managed markers
 Telegram-Hermes doctor prints no secrets
 ```

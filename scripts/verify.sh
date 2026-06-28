@@ -2,12 +2,17 @@
 set -euo pipefail
 
 TARGET="repo"
+STRICT="0"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --target)
       TARGET="$2"
       shift 2
+      ;;
+    --strict)
+      STRICT="1"
+      shift
       ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -27,7 +32,7 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-python3 - "$REPO_ROOT" "$TARGET" <<'PY'
+python3 - "$REPO_ROOT" "$TARGET" "$STRICT" <<'PY'
 import hashlib
 import json
 import re
@@ -36,6 +41,7 @@ from pathlib import Path
 
 repo_root = Path(sys.argv[1]).resolve()
 target_arg = sys.argv[2]
+strict_arg = sys.argv[3] == "1"
 errors = []
 warnings = []
 
@@ -251,6 +257,25 @@ def test_target(skill_set: dict, targets: dict, target_name: str, source_commit_
             fail(f"marker source_sha256 mismatch target={target_name} skill={skill['name']}")
         print(f"SHA256 target={target_name} skill={skill['name']} source={source_hash} target={target_hash}")
 
+def test_strict_target(skill_set: dict, targets: dict, target_name: str) -> None:
+    config = targets.get(target_name)
+    if not config:
+        return
+    root = target_root(config)
+    scan_root = root / config["default_category"] if config.get("layout") == "category" else root
+    if not scan_root.exists():
+        return
+    expected = {
+        s["name"]
+        for s in skill_set["skills"]
+        if s.get("enabled") is True and target_name in s["targets"]
+    }
+    for child in sorted(p for p in scan_root.iterdir() if p.is_dir()):
+        if child.name in expected:
+            continue
+        if (child / "SKILL.md").exists():
+            fail(f"strict unmanaged skill target={target_name} skill={child.name}")
+
 skill_set = read_json(repo_root / "manifests" / "skill-set.json")
 targets_file = read_json(repo_root / "manifests" / "targets.json")
 targets = targets_file["targets"] if targets_file else {}
@@ -260,6 +285,8 @@ if skill_set:
     test_repo(skill_set, targets)
     for target_name in selected_targets():
         test_target(skill_set, targets, target_name, source_commit_value)
+        if strict_arg:
+            test_strict_target(skill_set, targets, target_name)
 
 if errors:
     print(f"VERIFY FAIL errors={len(errors)} warnings={len(warnings)}")
