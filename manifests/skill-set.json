@@ -47,6 +47,42 @@
       "enabled": true
     },
     {
+      "name": "11short-gemini-remake-factory",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "11short-reple-agent",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "22utube-production-agent",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "josun-historychoon-production-agent",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "humanize-korean",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "watch",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
       "name": "skil-down",
       "category": "22utube",
       "targets": ["codex", "claude", "hermes"],

@@ -82,6 +82,29 @@ def selected_targets() -> list[str]:
         return []
     return [target_arg]
 
+def source_commit() -> str:
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        value = result.stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if status:
+            value = f"{value}-dirty"
+        return value
+    except Exception:
+        return "uncommitted"
+
 def frontmatter(skill_file: Path):
     text = skill_file.read_text(encoding="utf-8")
     match = re.match(r"(?s)^---\r?\n(.*?)\r?\n---", text)
@@ -191,7 +214,7 @@ def target_skill_path(config: dict, skill_name: str) -> Path:
         return root / config["default_category"] / skill_name
     return root / skill_name
 
-def test_target(skill_set: dict, targets: dict, target_name: str) -> None:
+def test_target(skill_set: dict, targets: dict, target_name: str, source_commit_value: str) -> None:
     config = targets.get(target_name)
     if not config:
         fail(f"missing target config: {target_name}")
@@ -218,6 +241,8 @@ def test_target(skill_set: dict, targets: dict, target_name: str) -> None:
                 fail(f"marker skill mismatch target={target_name} skill={skill['name']}")
             if marker.get("target") != target_name:
                 fail(f"marker target mismatch target={target_name} skill={skill['name']}")
+            if marker.get("source_commit") != source_commit_value:
+                fail(f"marker source_commit mismatch target={target_name} skill={skill['name']} marker={marker.get('source_commit')} source={source_commit_value}")
         source_hash = directory_hash(repo_root / "skills" / skill["name"])
         target_hash = directory_hash(dest, config["state_file"])
         if source_hash != target_hash:
@@ -231,9 +256,10 @@ targets_file = read_json(repo_root / "manifests" / "targets.json")
 targets = targets_file["targets"] if targets_file else {}
 
 if skill_set:
+    source_commit_value = source_commit()
     test_repo(skill_set, targets)
     for target_name in selected_targets():
-        test_target(skill_set, targets, target_name)
+        test_target(skill_set, targets, target_name, source_commit_value)
 
 if errors:
     print(f"VERIFY FAIL errors={len(errors)} warnings={len(warnings)}")

@@ -73,6 +73,19 @@ function Get-SelectedTargets([string]$SelectedTarget) {
   return @($SelectedTarget)
 }
 
+function Get-SourceCommit([string]$RepoRoot) {
+  try {
+    $commit = git -C $RepoRoot rev-parse --short HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $commit) {
+      $value = $commit.Trim()
+      $status = git -C $RepoRoot status --porcelain 2>$null
+      if ($status) { $value = "$value-dirty" }
+      return $value
+    }
+  } catch {}
+  return "uncommitted"
+}
+
 function Get-Frontmatter([string]$SkillFile) {
   $text = Get-Content -Raw -Encoding UTF8 -LiteralPath $SkillFile
   $match = [regex]::Match($text, "(?s)^---\r?\n(.*?)\r?\n---")
@@ -206,7 +219,7 @@ function Get-TargetSkillPath($TargetConfig, [string]$SkillName) {
   return Join-Path $root $SkillName
 }
 
-function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName) {
+function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName, [string]$SourceCommit) {
   $targetConfig = $Targets.targets.$TargetName
   if (-not $targetConfig) {
     Add-Error "missing target config: $TargetName"
@@ -234,6 +247,7 @@ function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName) {
       if ($marker.repo -ne $SkillSet.repo_name) { Add-Error "marker repo mismatch target=$TargetName skill=$($skill.name)" }
       if ($marker.skill -ne $skill.name) { Add-Error "marker skill mismatch target=$TargetName skill=$($skill.name)" }
       if ($marker.target -ne $TargetName) { Add-Error "marker target mismatch target=$TargetName skill=$($skill.name)" }
+      if ($marker.source_commit -ne $SourceCommit) { Add-Error "marker source_commit mismatch target=$TargetName skill=$($skill.name) marker=$($marker.source_commit) source=$SourceCommit" }
     }
     $sourcePath = Join-Path (Join-Path $RepoRoot "skills") $skill.name
     $sourceHash = Get-DirectoryHash $sourcePath
@@ -251,10 +265,11 @@ function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName) {
 $repoRoot = Get-RepoRoot
 $skillSet = Read-JsonFile (Join-Path $repoRoot "manifests/skill-set.json")
 $targets = Read-JsonFile (Join-Path $repoRoot "manifests/targets.json")
+$sourceCommit = Get-SourceCommit $repoRoot
 
 Test-Repo $repoRoot $skillSet $targets
 foreach ($targetName in Get-SelectedTargets $Target) {
-  Test-Target $repoRoot $skillSet $targets $targetName
+  Test-Target $repoRoot $skillSet $targets $targetName $sourceCommit
 }
 
 if ($script:Errors.Count -gt 0) {

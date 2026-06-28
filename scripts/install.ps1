@@ -101,7 +101,12 @@ function Get-DirectoryHash([string]$Path, [string]$ExcludeFileName = "") {
 function Get-SourceCommit([string]$RepoRoot) {
   try {
     $commit = git -C $RepoRoot rev-parse --short HEAD 2>$null
-    if ($LASTEXITCODE -eq 0 -and $commit) { return $commit.Trim() }
+    if ($LASTEXITCODE -eq 0 -and $commit) {
+      $value = $commit.Trim()
+      $status = git -C $RepoRoot status --porcelain 2>$null
+      if ($status) { $value = "$value-dirty" }
+      return $value
+    }
   } catch {}
   return "uncommitted"
 }

@@ -112,7 +112,16 @@ def source_commit() -> str:
             capture_output=True,
             text=True,
         )
-        return result.stdout.strip()
+        value = result.stdout.strip()
+        status = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if status:
+            value = f"{value}-dirty"
+        return value
     except Exception:
         return "uncommitted"
 

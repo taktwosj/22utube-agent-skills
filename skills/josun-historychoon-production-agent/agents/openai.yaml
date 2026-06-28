@@ -1,0 +1,6 @@
+interface:
+  display_name: "역사춘 제작 에이전트"
+  short_description: "조선·한국사 쇼츠 제목, 썸네일, 45~58초 대본 패키지"
+  default_prompt: "Use $josun-historychoon-production-agent to create a 역사춘 Korean history Shorts package with title candidates, thumbnails, 45-58s script, upload description, hashtags, and QC."
+policy:
+  allow_implicit_invocation: true

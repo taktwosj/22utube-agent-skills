@@ -12,3 +12,5 @@ Migration flow:
 6. Run target verification.
 
 Do not edit runtime folders directly after migration.
+
+Current managed set includes the core Shorts/longform stack plus conditional support skills for Gemini remake intake, comment-card/reple formats, common 22utube rules, Korean history Shorts, Korean humanization, and video watching/transcript intake.
