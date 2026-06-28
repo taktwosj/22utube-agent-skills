@@ -131,8 +131,8 @@ Required output:
     "pixel_frame": "..."
   },
   "catcup_reference_layout_required": true,
-  "catcup_reference_layout_profile": "broadcast_accident_instagram_media_v1",
-  "catcup_reference_project": "260620-잊을수없는-방송사고-인스타미디어",
+  "catcup_reference_layout_profile": "black_template_master_v1 or insta_white_template_master_v1",
+  "catcup_reference_project": "black or insta white",
   "catcup_text_role_order_top_to_bottom": [
     "top_title_1",
     "top_title_2",
@@ -189,12 +189,17 @@ content modes may preserve unavoidable factual/source chronology only when the
 functional viewing flow is changed through hook entry, tension placement,
 reaction timing, caption interpretation, cut emphasis, or payoff recovery.
 
-For current CatCup/11short projects, use
-`broadcast_accident_instagram_media_v1` from the local reference draft:
+For current CatCup/11short template-backed projects, use one of the two local
+default sample projects:
 
 ```text
-$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\260620-잊을수없는-방송사고-인스타미디어
+$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\black
+$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\260625-ig-contortion-top3-urakkai-instagram-tts
 ```
+
+The second folder displays in CapCut as `insta white`. Both sample projects use
+test media internally; generated drafts must replace that media with the job
+source while preserving the sample project structure.
 
 The hard check is the role-separated placement in `catcup_text_role_rows`, not
 the presence of SFX, BGM, transition effects, or decorative animation. Effects

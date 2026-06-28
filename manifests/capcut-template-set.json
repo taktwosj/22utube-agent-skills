@@ -2,39 +2,30 @@
   "version": "2026.06.28",
   "source_of_truth": "git_manifest",
   "template_binary_storage": "onedrive_template_bundle",
+  "principle": "CapCut sample project is the template authority; job JSON is replacement values only.",
   "templates": [
     {
-      "id": "instagram_card_v1",
+      "id": "black_template_v1",
       "aliases": [
-        "인스타템플릿",
-        "인스타 템플릿",
-        "instagram_reels"
+        "black",
+        "\ube14\ub799\uae30\ubcf8",
+        "\ube14\ub799\ud15c\ud50c\ub9bf",
+        "black_template"
       ],
-      "layout": "instagram_card",
-      "catcup_reference_layout_profile": "ig_contortion_top3_instagram_tts_template_master_v1",
-      "master_draft_name": "260625-ig-contortion-top3-urakkai-instagram-tts",
-      "rejected_draft_names": [
-        "260625-ig-contortion-top3-urakkai-instagram-tts-fixed"
-      ],
-      "onedrive_bundle_hint": "${UTUBE_ROOT}/11short/capcut_templates/instagram_card_v1/260625-ig-contortion-top3-urakkai-instagram-tts",
+      "layout": "black_band",
+      "catcup_reference_layout_profile": "black_template_master_v1",
+      "master_draft_name": "black",
+      "master_draft_folder_name": "black",
+      "onedrive_bundle_hint": "${UTUBE_ROOT}/11short/capcut_templates/black_template_v1/black",
       "local_capcut_draft_roots": {
         "windows": "%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft",
         "macos": "~/Movies/CapCut/User Data/Projects/com.lveditor.draft"
       },
       "job_json_role": "replacement_values_only",
-      "job_json_allowed_fields": [
-        "template_id",
-        "output_draft_name",
-        "source_video",
-        "top_text",
-        "middle_text_tracks",
-        "tts_audio",
-        "source_audio",
-        "portable_bundle"
-      ],
       "creation_mode": "copy_template_master_then_replace_values",
-      "track_count": 12,
-      "text_track_count": 6,
+      "track_count": 10,
+      "text_track_count": 4,
+      "test_media_policy": "test.mp4 is placeholder media and must be replaced in generated drafts",
       "required": {
         "draft_content_json": true,
         "draft_meta_info_json": true,
@@ -42,7 +33,57 @@
         "subdraft": true,
         "resources_combination": true,
         "materials_drafts": true,
-        "template_frame": true,
+        "template_frame": "black.png",
+        "source_placeholder_or_source_video": true,
+        "generated_draft_source_video_replaced": true
+      },
+      "portable_bundle": {
+        "placeholder_prefix": "##_draftpath_placeholder",
+        "claim_requires_no_placeholder_paths": true
+      },
+      "forbidden": {
+        "generate_new_capcut_json_from_settings": true,
+        "fake_source_png_text_stack": true,
+        "visible_placeholder_texts": [
+          "Default",
+          "T1",
+          "T2"
+        ]
+      }
+    },
+    {
+      "id": "insta_white_template_v1",
+      "aliases": [
+        "insta white",
+        "\uc778\uc2a4\ud0c0\ud15c\ud50c\ub9bf",
+        "\uc778\uc2a4\ud0c0 \ud15c\ud50c\ub9bf",
+        "instagram_reels"
+      ],
+      "layout": "instagram_white",
+      "catcup_reference_layout_profile": "insta_white_template_master_v1",
+      "master_draft_name": "insta white",
+      "master_draft_folder_name": "260625-ig-contortion-top3-urakkai-instagram-tts",
+      "rejected_draft_names": [
+        "260625-ig-contortion-top3-urakkai-instagram-tts-fixed"
+      ],
+      "onedrive_bundle_hint": "${UTUBE_ROOT}/11short/capcut_templates/insta_white_template_v1/insta white",
+      "local_capcut_draft_roots": {
+        "windows": "%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft",
+        "macos": "~/Movies/CapCut/User Data/Projects/com.lveditor.draft"
+      },
+      "job_json_role": "replacement_values_only",
+      "creation_mode": "copy_template_master_then_replace_values",
+      "track_count": 10,
+      "text_track_count": 4,
+      "test_media_policy": "test.mp4 is placeholder media and must be replaced in generated drafts",
+      "required": {
+        "draft_content_json": true,
+        "draft_meta_info_json": true,
+        "draft_virtual_store_json": true,
+        "subdraft": true,
+        "resources_combination": true,
+        "materials_drafts": true,
+        "template_frame": "insta white..png",
         "source_placeholder_or_source_video": true,
         "generated_draft_source_video_replaced": true
       },

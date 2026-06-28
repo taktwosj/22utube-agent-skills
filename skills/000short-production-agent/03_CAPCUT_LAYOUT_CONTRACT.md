@@ -69,13 +69,16 @@ Rules:
 
 ## Instagram Template Master - 2026-06-28
 
-Official Instagram/Reels template master:
+Official CatCup template masters:
 
 ```text
-260625-ig-contortion-top3-urakkai-instagram-tts
+black
+insta white
 ```
 
-Use this master as the current `인스타템플릿` basis. Do not use
+Use these two CapCut sample projects as current defaults.
+`insta white` is the display name of local draft folder
+`260625-ig-contortion-top3-urakkai-instagram-tts`. Do not use
 `260625-ig-contortion-top3-urakkai-instagram-tts-fixed`; it contains
 `Default`/`T1`/`T2` placeholders and an invalid 98-second stale template tail.
 
@@ -88,8 +91,10 @@ Required creation mode:
   rows, and the existing track/z-order structure.
 - Replace only current job media and content: `source.mp4`, visible text,
   timing, and job-specific TTS/audio assets.
-- Keep the 12-track master structure and 6 editable text tracks unless the user
+- Keep the 10-track master structure and 4 editable text tracks unless the user
   explicitly approves a new template version.
+- Treat the internal `test.mp4` in both default projects as placeholder media.
+  Generated work must replace it with the job source video.
 - Do not rebuild Instagram drafts by creating a new JSON with only
   `source.mp4 + PNG frame + text`. That is a fake lookalike draft and fails the
   template gate.
@@ -240,12 +245,15 @@ The post-CapCut openability gate must also verify:
 - no video, audio, or media item was accidentally written into a text track
 - draft duration and media duration are plausible against ffprobe/source
 - Instagram/Reels drafts record
-  `catcup_reference_layout_profile=ig_contortion_top3_instagram_tts_template_master_v1`
-  and `catcup_reference_project=260625-ig-contortion-top3-urakkai-instagram-tts`
+  `catcup_reference_layout_profile=insta_white_template_master_v1`
+  and `catcup_reference_project=insta white`
+- Black-template drafts record
+  `catcup_reference_layout_profile=black_template_master_v1`
+  and `catcup_reference_project=black`
 - Instagram/Reels drafts are not based on the `-fixed` draft and contain no
   visible `Default`, `T1`, or `T2` placeholder text
-- Instagram/Reels drafts retain `subdraft`, `Resources/combination`, 12 total
-  tracks, 6 text tracks, template-frame media, and master-derived draft
+- Template-backed drafts retain `subdraft`, `Resources/combination`, 10 total
+  tracks, 4 text tracks, template-frame media, and master-derived draft
   materials unless a new template version was explicitly approved
 - if placeholder audio paths remain, the report says `portable_bundle=false`
   and does not claim Mac/Windows/Claude/Hermes portability

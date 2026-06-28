@@ -355,8 +355,19 @@ TRACK_ROLE_ALIASES = {
     "emotion_video": "situation_speaker_video",
     "speaker_video": "situation_speaker_video",
 }
-CATCUP_REFERENCE_LAYOUT_PROFILE = "ig_contortion_top3_instagram_tts_template_master_v1"
-CATCUP_REFERENCE_PROJECT = "260625-ig-contortion-top3-urakkai-instagram-tts"
+CATCUP_TEMPLATE_MASTERS = {
+    "insta_white_template_master_v1": {
+        "reference_project": "insta white",
+        "accepted_reference_projects": {
+            "insta white",
+            "260625-ig-contortion-top3-urakkai-instagram-tts",
+        },
+    },
+    "black_template_master_v1": {
+        "reference_project": "black",
+        "accepted_reference_projects": {"black"},
+    },
+}
 CATCUP_LAYOUT_REQUIRED_KEYS = (
     "catcup_reference_layout_required",
     "catcup_broadcast_reference_layout_required",
@@ -372,6 +383,7 @@ CATCUP_REFERENCE_PROJECT_KEYS = (
     "catcup_reference_draft_name",
     "reference_capcut_project",
     "instagram_template_master_draft_name",
+    "black_template_master_draft_name",
 )
 CATCUP_TEXT_ROLE_ROWS_KEYS = (
     "catcup_text_role_rows",
@@ -766,17 +778,18 @@ def validate_catcup_reference_layout_gate(
         raise GateFail("catcup_reference_layout_required must be true")
 
     profile = str(first_status_value(sources, CATCUP_LAYOUT_PROFILE_KEYS) or "").strip()
-    if profile != CATCUP_REFERENCE_LAYOUT_PROFILE:
+    template = CATCUP_TEMPLATE_MASTERS.get(profile)
+    if template is None:
         raise GateFail(
-            "catcup_reference_layout_profile must be "
-            f"{CATCUP_REFERENCE_LAYOUT_PROFILE}"
+            "catcup_reference_layout_profile must be one of "
+            f"{sorted(CATCUP_TEMPLATE_MASTERS)}"
         )
 
     reference_project = str(first_status_value(sources, CATCUP_REFERENCE_PROJECT_KEYS) or "").strip()
-    if reference_project != CATCUP_REFERENCE_PROJECT:
+    if reference_project not in template["accepted_reference_projects"]:
         raise GateFail(
             "catcup_reference_project must be "
-            f"{CATCUP_REFERENCE_PROJECT}"
+            f"{template['reference_project']}"
         )
 
     rows = source_list_value(sources, CATCUP_TEXT_ROLE_ROWS_KEYS)
@@ -839,8 +852,8 @@ def validate_catcup_reference_layout_gate(
 
     return {
         "catcup_reference_layout_required": True,
-        "catcup_reference_layout_profile": CATCUP_REFERENCE_LAYOUT_PROFILE,
-        "catcup_reference_project": CATCUP_REFERENCE_PROJECT,
+        "catcup_reference_layout_profile": profile,
+        "catcup_reference_project": template["reference_project"],
         "catcup_text_role_order_top_to_bottom": ordered_active,
         "catcup_active_text_role_count": len(active_roles),
         "catcup_text_role_rows": rows,

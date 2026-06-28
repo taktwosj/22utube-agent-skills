@@ -85,8 +85,11 @@ Any one of these fails or blocks the job:
 - Instagram/Reels target silently used legacy `인스타기본` as the production base without
   an explicit user request; current default route is `인스타템플릿` or an explicit blocker
 - Instagram/Reels target does not record
-  `catcup_reference_layout_profile=ig_contortion_top3_instagram_tts_template_master_v1`
-  and `catcup_reference_project=260625-ig-contortion-top3-urakkai-instagram-tts`
+  `catcup_reference_layout_profile=insta_white_template_master_v1`
+  and `catcup_reference_project=insta white`
+- Black-template target does not record
+  `catcup_reference_layout_profile=black_template_master_v1`
+  and `catcup_reference_project=black`
 - Instagram/Reels target uses
   `260625-ig-contortion-top3-urakkai-instagram-tts-fixed` or any draft name
   containing `-fixed` as the basis
@@ -94,7 +97,7 @@ Any one of these fails or blocks the job:
   `source.mp4 + PNG frame + text` instead of copying the template master draft
   folder and preserving `subdraft`, `Resources/combination`, preset audio
   placeholder relationships, sticker/effect rows, and track/z-order structure
-- Instagram/Reels actual draft is missing 12 total tracks, 6 editable text
+- Template-backed actual draft is missing 10 total tracks, 4 editable text
   tracks, `materials.drafts`, `subdraft`, template-frame media, or
   `Resources/combination`, unless a new template version was explicitly approved
 - Instagram/Reels actual draft contains visible `Default`, `T1`, or `T2`
@@ -151,8 +154,8 @@ Any one of these fails or blocks the job:
 - `capcut_timeline_manifest.middle_text_track_order_top_to_bottom` is missing or not
   `["tts","source_speech","situation_emotion"]`
 - actual `draft_content.json` T-track order changed after audio insertion, or audio/video/material segments were written into T1~T6 text tracks
-- applicable `catcup_reference_layout_profile` is missing or not
-  `ig_contortion_top3_instagram_tts_template_master_v1`
+- applicable `catcup_reference_layout_profile` is missing or not one of
+  `insta_white_template_master_v1` or `black_template_master_v1`
 - applicable `catcup_text_role_rows` is missing active role-separated rows for
   `top_title_1`/T1, `top_title_2`/T2, `tts`/T3, and
   `situation_emotion`/T6

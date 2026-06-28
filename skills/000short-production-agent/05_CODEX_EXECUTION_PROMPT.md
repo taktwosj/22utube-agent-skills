@@ -14,9 +14,9 @@ production.
    draft validation.
 6. Do not hide failed validation.
 7. Do not report completion without `reports/evidence_pack.json`.
-8. Current Instagram/Reels CatCup placement must follow
-   `ig_contortion_top3_instagram_tts_template_master_v1` from
-   `260625-ig-contortion-top3-urakkai-instagram-tts`.
+8. Current CatCup template placement must follow one of the two defaults:
+   `black_template_master_v1` from `black`, or
+   `insta_white_template_master_v1` from `insta white`.
 9. Effects, SFX, BGM, transitions, and decorative text animation are optional.
    Do not fail a draft because those are absent unless the user explicitly asked
    for them.
@@ -50,11 +50,12 @@ production.
     `catcup_reference_layout_profile`, `catcup_text_role_order_top_to_bottom`,
     `catcup_text_role_rows`, `creative_additions_use_tts_or_situation_only`,
     `source_word_synonym_rewrite_status`, and `capcut_draft_content_path`.
-15. For Instagram/Reels, copy the full
-    `260625-ig-contortion-top3-urakkai-instagram-tts` CapCut draft folder, keep
+15. For template-backed drafts, copy the full `black` or `insta white` CapCut
+    sample project first, keep
     `subdraft`, `Resources/combination`, preset audio placeholders, sticker/effect
     rows, and track/z-order structure, then replace only source/text/timing/audio.
-    Do not use the `-fixed` draft and do not create a fake JSON from
+    The internal `test.mp4` is placeholder media and must be replaced with the
+    job source. Do not use the `-fixed` draft and do not create a fake JSON from
     `source.mp4 + PNG + text`.
 16. Create CapCut draft files.
 17. Create `capcut/normalized_draft.json`.
@@ -118,7 +119,7 @@ upload_ready_reason:
 - Never claim PaddleOCR ran if only EasyOCR ran.
 - Never treat `final_report.md` as CapCut validation.
 - Never set `upload_ready=YES` before user approval and source/remake risk check.
-- Never use `260625-ig-contortion-top3-urakkai-instagram-tts-fixed` as an
-  Instagram template basis.
+- Never use `260625-ig-contortion-top3-urakkai-instagram-tts-fixed` as a
+  template basis.
 - Never claim Instagram/Reels cross-machine portability while
   `##_draftpath_placeholder_##` paths remain without a verified resource bundle.
