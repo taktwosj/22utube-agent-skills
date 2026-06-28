@@ -355,8 +355,8 @@ TRACK_ROLE_ALIASES = {
     "emotion_video": "situation_speaker_video",
     "speaker_video": "situation_speaker_video",
 }
-CATCUP_REFERENCE_LAYOUT_PROFILE = "broadcast_accident_instagram_media_v1"
-CATCUP_REFERENCE_PROJECT = "260620-잊을수없는-방송사고-인스타미디어"
+CATCUP_REFERENCE_LAYOUT_PROFILE = "ig_contortion_top3_instagram_tts_template_master_v1"
+CATCUP_REFERENCE_PROJECT = "260625-ig-contortion-top3-urakkai-instagram-tts"
 CATCUP_LAYOUT_REQUIRED_KEYS = (
     "catcup_reference_layout_required",
     "catcup_broadcast_reference_layout_required",
@@ -371,6 +371,7 @@ CATCUP_REFERENCE_PROJECT_KEYS = (
     "catcup_reference_project",
     "catcup_reference_draft_name",
     "reference_capcut_project",
+    "instagram_template_master_draft_name",
 )
 CATCUP_TEXT_ROLE_ROWS_KEYS = (
     "catcup_text_role_rows",
@@ -772,7 +773,7 @@ def validate_catcup_reference_layout_gate(
         )
 
     reference_project = str(first_status_value(sources, CATCUP_REFERENCE_PROJECT_KEYS) or "").strip()
-    if reference_project and reference_project != CATCUP_REFERENCE_PROJECT:
+    if reference_project != CATCUP_REFERENCE_PROJECT:
         raise GateFail(
             "catcup_reference_project must be "
             f"{CATCUP_REFERENCE_PROJECT}"

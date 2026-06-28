@@ -54,7 +54,7 @@ Rules:
 - For every active text role, preserve the template material/segment style and layout fields by default. Only the text content and timing may change unless the user explicitly asks for a style change.
 - The post-CapCut gate must compare role rows against the selected template or approved reference for at least: font family/id, font size, fill color, outline/stroke, background or box style, transform/scale, x/y position, alignment, opacity, animation/effect references, and full-duration top-title timing where applicable.
 - Any unapproved font, color, position, animation, grouping, or row-role change is a hard layout failure.
-- If a template contains placeholder video, audio, nested draft, subdraft, or stale metadata, remove it before adding current media. If it cannot be removed safely, report `WAIT_TEMPLATE_CLEANUP`.
+- Remove stale placeholder source media that is not part of the selected template master. Preserve required template master structures such as `subdraft`, `Resources/combination`, `materials.drafts`, sticker/effect rows, and preset audio placeholder relationships. If placeholder audio paths remain, report `portable_bundle=false` until the resource bundle is verified.
 
 ## Instagram Template Style Baseline
 
@@ -66,6 +66,37 @@ Rules:
 - `T3`: TTS/narration caption, green-family or template-defined TTS style, black outline/stroke when template uses it.
 - `T4/T5`: speaker-separated verified source speech only, color-separated by speaker when template provides it.
 - `T6`: parenthesized situation/action/emotion caption.
+
+## Instagram Template Master - 2026-06-28
+
+Official Instagram/Reels template master:
+
+```text
+260625-ig-contortion-top3-urakkai-instagram-tts
+```
+
+Use this master as the current `인스타템플릿` basis. Do not use
+`260625-ig-contortion-top3-urakkai-instagram-tts-fixed`; it contains
+`Default`/`T1`/`T2` placeholders and an invalid 98-second stale template tail.
+
+Required creation mode:
+
+- Copy the whole CapCut draft folder from the template master first.
+- Preserve `draft_content.json`, `draft_info.json` when present,
+  `draft_meta_info.json`, `draft_virtual_store.json`, `subdraft`,
+  `Resources/combination`, preset audio placeholder relationships, sticker/effect
+  rows, and the existing track/z-order structure.
+- Replace only current job media and content: `source.mp4`, visible text,
+  timing, and job-specific TTS/audio assets.
+- Keep the 12-track master structure and 6 editable text tracks unless the user
+  explicitly approves a new template version.
+- Do not rebuild Instagram drafts by creating a new JSON with only
+  `source.mp4 + PNG frame + text`. That is a fake lookalike draft and fails the
+  template gate.
+- If `##_draftpath_placeholder_##` audio paths remain, report
+  `portable_bundle=false` until `Resources/combination` and all dependent
+  resources are bundled and verified. Do not claim cross-machine portability
+  while placeholder audio paths are unresolved.
 
 ## Black Template Style Baseline
 
@@ -208,5 +239,15 @@ The post-CapCut openability gate must also verify:
 - audio/BGM/TTS/SFX exist only on A-tracks, not on T-tracks
 - no video, audio, or media item was accidentally written into a text track
 - draft duration and media duration are plausible against ffprobe/source
+- Instagram/Reels drafts record
+  `catcup_reference_layout_profile=ig_contortion_top3_instagram_tts_template_master_v1`
+  and `catcup_reference_project=260625-ig-contortion-top3-urakkai-instagram-tts`
+- Instagram/Reels drafts are not based on the `-fixed` draft and contain no
+  visible `Default`, `T1`, or `T2` placeholder text
+- Instagram/Reels drafts retain `subdraft`, `Resources/combination`, 12 total
+  tracks, 6 text tracks, template-frame media, and master-derived draft
+  materials unless a new template version was explicitly approved
+- if placeholder audio paths remain, the report says `portable_bundle=false`
+  and does not claim Mac/Windows/Claude/Hermes portability
 
 If any openability check fails, report the draft as `FAIL_OPENABILITY` or `WAIT_REPAIR`; do not give only the CapCut name as if the project is ready.

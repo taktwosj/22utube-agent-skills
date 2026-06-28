@@ -84,6 +84,24 @@ Any one of these fails or blocks the job:
   report says so
 - Instagram/Reels target silently used legacy `인스타기본` as the production base without
   an explicit user request; current default route is `인스타템플릿` or an explicit blocker
+- Instagram/Reels target does not record
+  `catcup_reference_layout_profile=ig_contortion_top3_instagram_tts_template_master_v1`
+  and `catcup_reference_project=260625-ig-contortion-top3-urakkai-instagram-tts`
+- Instagram/Reels target uses
+  `260625-ig-contortion-top3-urakkai-instagram-tts-fixed` or any draft name
+  containing `-fixed` as the basis
+- Instagram/Reels target was built as a fake lookalike from only
+  `source.mp4 + PNG frame + text` instead of copying the template master draft
+  folder and preserving `subdraft`, `Resources/combination`, preset audio
+  placeholder relationships, sticker/effect rows, and track/z-order structure
+- Instagram/Reels actual draft is missing 12 total tracks, 6 editable text
+  tracks, `materials.drafts`, `subdraft`, template-frame media, or
+  `Resources/combination`, unless a new template version was explicitly approved
+- Instagram/Reels actual draft contains visible `Default`, `T1`, or `T2`
+  placeholder text
+- Instagram/Reels actual draft leaves `##_draftpath_placeholder_##` media paths
+  while claiming `portable_bundle=true`, cross-machine portability, or
+  Mac/Windows/Claude/Hermes install portability
 - selected template was recreated manually instead of cloned/derived from the
   actual local CapCut preset/reference draft
 - active text role font, color, size, transform, position, alignment,
@@ -92,8 +110,10 @@ Any one of these fails or blocks the job:
 - caption text overflows the safe frame, runs outside the visible area, overlaps
   incoherently with another required text row, or is unreadable at the selected
   font size
-- selected-template placeholder video/audio/nested draft/subdraft/stale metadata
-  remains on the active timeline or can break draft opening
+- stale placeholder source video/audio/nested draft metadata remains on the
+  active timeline or can break draft opening; required template-master
+  `subdraft`, `Resources/combination`, `materials.drafts`, and preset audio
+  placeholder relationships are preserved instead of deleted
 - segment missing `segment_type`
 - segment missing `audio_action`
 - segment missing `evidence_refs`
@@ -132,7 +152,7 @@ Any one of these fails or blocks the job:
   `["tts","source_speech","situation_emotion"]`
 - actual `draft_content.json` T-track order changed after audio insertion, or audio/video/material segments were written into T1~T6 text tracks
 - applicable `catcup_reference_layout_profile` is missing or not
-  `broadcast_accident_instagram_media_v1`
+  `ig_contortion_top3_instagram_tts_template_master_v1`
 - applicable `catcup_text_role_rows` is missing active role-separated rows for
   `top_title_1`/T1, `top_title_2`/T2, `tts`/T3, and
   `situation_emotion`/T6

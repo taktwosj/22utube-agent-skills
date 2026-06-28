@@ -39,6 +39,9 @@ skil-down
 ```
 
 `manifests/skill-set.json` is the authoritative install list.
+`manifests/capcut-template-set.json` records CapCut template identities and
+verification requirements. The CapCut draft bundles themselves stay in
+OneDrive/CapCut storage, not in Git.
 
 ## First Install
 

@@ -196,12 +196,18 @@ TRACK_ROLE_ALIASES = {
     "emotion_video": "situation_speaker_video",
     "speaker_video": "situation_speaker_video",
 }
-CATCUP_REFERENCE_LAYOUT_PROFILE = "broadcast_accident_instagram_media_v1"
-CATCUP_REFERENCE_PROJECT = "260620-잊을수없는-방송사고-인스타미디어"
+CATCUP_REFERENCE_LAYOUT_PROFILE = "ig_contortion_top3_instagram_tts_template_master_v1"
+CATCUP_REFERENCE_PROJECT = "260625-ig-contortion-top3-urakkai-instagram-tts"
 CATCUP_LAYOUT_PROFILE_KEYS = (
     "catcup_reference_layout_profile",
     "catcup_layout_profile",
     "catcup_text_template_profile",
+)
+CATCUP_REFERENCE_PROJECT_KEYS = (
+    "catcup_reference_project",
+    "catcup_reference_draft_name",
+    "reference_capcut_project",
+    "instagram_template_master_draft_name",
 )
 CATCUP_TEXT_ROLE_ROWS_KEYS = (
     "catcup_text_role_rows",
@@ -846,6 +852,151 @@ def draft_track_texts(draft: dict[str, Any], track_id: str) -> list[str]:
     return texts
 
 
+def all_visible_text_values(draft: dict[str, Any]) -> list[str]:
+    text_map = material_text_map(draft)
+    values: list[str] = []
+    for track in draft.get("tracks", []) or []:
+        if not isinstance(track, dict):
+            continue
+        track_type = str(track.get("type") or track.get("track_type") or "").lower()
+        if track_type != "text":
+            continue
+        for segment in track.get("segments", []) or []:
+            if not isinstance(segment, dict):
+                continue
+            material_id = segment.get("material_id") or segment.get("materialId")
+            if material_id in text_map:
+                values.append(text_map[material_id])
+    return values
+
+
+def draft_folder_for_template_check(
+    root: Path,
+    sources: list[dict[str, Any]],
+    draft_path: str,
+) -> Path:
+    candidates: list[Path] = []
+    if draft_path:
+        raw = as_path(root, draft_path)
+        candidates.append(raw if raw.is_dir() else raw.parent)
+    raw_content_path = first_value_any(sources, CATCUP_DRAFT_CONTENT_KEYS)
+    if raw_content_path:
+        raw = as_path(root, str(raw_content_path))
+        candidates.append(raw.parent if raw.name == "draft_content.json" else raw)
+
+    for candidate in candidates:
+        if (candidate / "draft_content.json").exists():
+            return candidate
+    raise GateFail("Instagram template master check requires the actual registered CapCut draft folder")
+
+
+def material_path_values(draft: dict[str, Any]) -> list[str]:
+    materials = draft.get("materials") or {}
+    values: list[str] = []
+    for collection_name in ("videos", "audios", "images", "stickers"):
+        for material in materials.get(collection_name, []) or []:
+            if not isinstance(material, dict):
+                continue
+            path = material.get("path")
+            if isinstance(path, str) and path:
+                values.append(path)
+    return values
+
+
+def validate_instagram_template_master_actual(
+    root: Path,
+    sources: list[dict[str, Any]],
+    draft: dict[str, Any],
+    draft_path: str,
+) -> dict[str, Any]:
+    draft_dir = draft_folder_for_template_check(root, sources, draft_path)
+    if draft_dir.name.endswith("-fixed") or "-fixed" in draft_dir.name:
+        raise GateFail("Instagram template basis must not be the -fixed draft")
+
+    for filename in ("draft_content.json", "draft_meta_info.json", "draft_virtual_store.json"):
+        load_json(draft_dir / filename)
+
+    resources_combination = draft_dir / "Resources" / "combination"
+    if not (draft_dir / "subdraft").exists():
+        raise GateFail("Instagram template master draft must preserve subdraft")
+    if not resources_combination.exists() or not any(resources_combination.iterdir()):
+        raise GateFail("Instagram template master draft must preserve Resources/combination")
+
+    tracks = draft.get("tracks", []) or []
+    text_track_count = sum(
+        1
+        for track in tracks
+        if isinstance(track, dict)
+        and str(track.get("type") or track.get("track_type") or "").lower() == "text"
+    )
+    if len(tracks) != 12:
+        raise GateFail("Instagram template master draft must keep the 12-track structure")
+    if text_track_count != 6:
+        raise GateFail("Instagram template master draft must keep 6 editable text tracks")
+
+    materials = draft.get("materials") or {}
+    if not materials.get("drafts"):
+        raise GateFail("Instagram template master draft must preserve materials.drafts")
+
+    placeholder_texts = {"Default", "T1", "T2"}
+    visible_placeholders = [
+        text for text in all_visible_text_values(draft)
+        if text.strip() in placeholder_texts
+    ]
+    if visible_placeholders:
+        raise GateFail(
+            "Instagram template draft contains visible placeholder text: "
+            + ", ".join(sorted(set(visible_placeholders)))
+        )
+
+    video_materials = [
+        material for material in materials.get("videos", []) or []
+        if isinstance(material, dict)
+    ]
+    has_template_frame = any(
+        "transparent_center" in str(material.get("path") or material.get("material_name") or material.get("name") or "").lower()
+        or "frame" in str(material.get("path") or material.get("material_name") or material.get("name") or "").lower()
+        or "insta" in str(material.get("path") or material.get("material_name") or material.get("name") or "").lower()
+        or str(material.get("type") or "").lower() == "photo"
+        for material in video_materials
+    )
+    if not has_template_frame:
+        raise GateFail("Instagram template draft must keep the template frame media")
+
+    has_source_mp4 = False
+    for material in video_materials:
+        path = str(material.get("path") or "")
+        name = str(material.get("material_name") or material.get("name") or "")
+        if path.lower().replace("\\", "/").endswith("source.mp4") or name == "source.mp4":
+            if path and not path.startswith("##_draftpath_placeholder"):
+                if not Path(path).exists():
+                    raise GateFail(f"Instagram source.mp4 material path is missing: {path}")
+            has_source_mp4 = True
+
+    placeholder_paths = [
+        path for path in material_path_values(draft)
+        if path.startswith("##_draftpath_placeholder")
+    ]
+    portable_flag = first_value_any(sources, ("portable_bundle", "capcut_portable_bundle", "cross_machine_portable"))
+    if placeholder_paths and truthy(portable_flag):
+        raise GateFail("Instagram draft cannot claim portable_bundle=true while placeholder media paths remain")
+
+    return {
+        "instagram_template_master_status": "PASS",
+        "instagram_template_master_draft_name": CATCUP_REFERENCE_PROJECT,
+        "instagram_template_master_actual_draft_dir": str(draft_dir),
+        "instagram_template_track_count": len(tracks),
+        "instagram_template_text_track_count": text_track_count,
+        "instagram_template_material_drafts_count": len(materials.get("drafts") or []),
+        "instagram_template_subdraft": True,
+        "instagram_template_resources_combination": True,
+        "instagram_template_frame": True,
+        "instagram_source_mp4_material_present": has_source_mp4,
+        "portable_bundle": not bool(placeholder_paths),
+        "placeholder_media_path_count": len(placeholder_paths),
+    }
+
+
 def is_situation_emotion_text(text: str) -> bool:
     value = text.strip()
     compact = "".join(value.split())
@@ -898,6 +1049,13 @@ def validate_catcup_reference_layout_actual(
         raise GateFail(
             "timeline manifest catcup_reference_layout_profile must be "
             f"{CATCUP_REFERENCE_LAYOUT_PROFILE}"
+        )
+
+    reference_project = str(first_value_any(sources, CATCUP_REFERENCE_PROJECT_KEYS) or "").strip()
+    if reference_project != CATCUP_REFERENCE_PROJECT:
+        raise GateFail(
+            "timeline manifest catcup_reference_project must be "
+            f"{CATCUP_REFERENCE_PROJECT}"
         )
 
     rows = first_list_any(sources, CATCUP_TEXT_ROLE_ROWS_KEYS)
@@ -968,6 +1126,13 @@ def validate_catcup_reference_layout_actual(
     if [idx for _, idx in draft_text_track_positions] != sorted(idx for _, idx in draft_text_track_positions):
         raise GateFail("actual draft_content.json T-track order changed after audio insertion")
 
+    instagram_template_result = validate_instagram_template_master_actual(
+        root,
+        sources,
+        draft,
+        draft_path,
+    )
+
     return {
         "catcup_reference_layout_status": "PASS",
         "catcup_reference_layout_profile": CATCUP_REFERENCE_LAYOUT_PROFILE,
@@ -975,6 +1140,7 @@ def validate_catcup_reference_layout_actual(
         "catcup_active_text_role_count": len(active_roles),
         "catcup_active_text_roles": active_roles,
         "catcup_active_track_ids": active_track_ids,
+        **instagram_template_result,
         **script_rewrite_result,
     }
 

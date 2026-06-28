@@ -14,8 +14,9 @@ production.
    draft validation.
 6. Do not hide failed validation.
 7. Do not report completion without `reports/evidence_pack.json`.
-8. Current CatCup placement must follow `broadcast_accident_instagram_media_v1`
-   from `260620-잊을수없는-방송사고-인스타미디어`.
+8. Current Instagram/Reels CatCup placement must follow
+   `ig_contortion_top3_instagram_tts_template_master_v1` from
+   `260625-ig-contortion-top3-urakkai-instagram-tts`.
 9. Effects, SFX, BGM, transitions, and decorative text animation are optional.
    Do not fail a draft because those are absent unless the user explicitly asked
    for them.
@@ -49,12 +50,18 @@ production.
     `catcup_reference_layout_profile`, `catcup_text_role_order_top_to_bottom`,
     `catcup_text_role_rows`, `creative_additions_use_tts_or_situation_only`,
     `source_word_synonym_rewrite_status`, and `capcut_draft_content_path`.
-15. Create CapCut draft files.
-16. Create `capcut/normalized_draft.json`.
-17. Re-read the actual registered draft `draft_content.json`.
-18. Create `reports/validation_report.json`.
-19. Create `reports/evidence_pack.json`.
-20. Create `reports/final_report.md`.
+15. For Instagram/Reels, copy the full
+    `260625-ig-contortion-top3-urakkai-instagram-tts` CapCut draft folder, keep
+    `subdraft`, `Resources/combination`, preset audio placeholders, sticker/effect
+    rows, and track/z-order structure, then replace only source/text/timing/audio.
+    Do not use the `-fixed` draft and do not create a fake JSON from
+    `source.mp4 + PNG + text`.
+16. Create CapCut draft files.
+17. Create `capcut/normalized_draft.json`.
+18. Re-read the actual registered draft `draft_content.json`.
+19. Create `reports/validation_report.json`.
+20. Create `reports/evidence_pack.json`.
+21. Create `reports/final_report.md`.
 
 ## Completion Report Format
 
@@ -76,6 +83,9 @@ production.
 13. draft_content.json:
 14. normalized_draft.json:
 15. catcup_reference_layout_profile:
+15a. catcup_reference_project:
+15b. instagram_template_master_copy:
+15c. portable_bundle:
 16. catcup_text_role_rows:
 17. actual draft_content role check:
 18. top_title_1/top_title_2 full duration:
@@ -108,3 +118,7 @@ upload_ready_reason:
 - Never claim PaddleOCR ran if only EasyOCR ran.
 - Never treat `final_report.md` as CapCut validation.
 - Never set `upload_ready=YES` before user approval and source/remake risk check.
+- Never use `260625-ig-contortion-top3-urakkai-instagram-tts-fixed` as an
+  Instagram template basis.
+- Never claim Instagram/Reels cross-machine portability while
+  `##_draftpath_placeholder_##` paths remain without a verified resource bundle.
