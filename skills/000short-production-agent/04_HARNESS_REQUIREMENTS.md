@@ -77,8 +77,8 @@ Any one of these fails or blocks the job:
   boundaries in `source_scene_transitions_precision.json`
 - CapCut draft was created from generic wording without a recorded
   user-selected template or template-selection gate result
-- normal/general Shorts target is not cloned or derived from `일반템플릿`, unless
-  the user explicitly selected another template and the report records it
+- normal/general Shorts target is not routed to one of the official manifest
+  defaults, `black` or `insta white`
 - Instagram/Reels target is not cloned or derived from `인스타템플릿` /
   `인스타 템플릿`, unless the user explicitly requested the legacy route and the
   report says so

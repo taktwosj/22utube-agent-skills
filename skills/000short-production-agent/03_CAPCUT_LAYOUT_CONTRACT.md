@@ -10,11 +10,12 @@ This contract separates the script-writing role from the CapCut production role:
 
 ## Template Selection Gate
 
-- Generic 11short/쇼츠공장 production has no silent format default. If the user has not named a CapCut preset/template, ask before creating a draft.
+- Generic 11short/쇼츠공장 production has no third silent format default. The
+  current official presets are the two defaults in
+  `manifests/capcut-template-set.json`.
 - Current named presets:
-  - `일반템플릿`: normal/general YouTube Shorts draft base.
-  - `인스타템플릿`: Instagram/Reels draft base. If the actual local CapCut draft folder is named `인스타 템플릿`, treat that as the same required preset.
-  - `블랙템플릿`: black-band layout draft base.
+  - `black` / `블랙기본` / `블랙템플릿`: black-band layout draft base.
+  - `insta white` / `인스타템플릿` / `인스타 템플릿`: Instagram/Reels draft base.
 - Future presets such as `정치템플릿` may be added. If the user names a new template, use that exact user-selected template and record it in the manifest.
 - Do not recreate a selected template manually from the old normal fallback. A draft that was not based on the selected preset fails the template gate.
 - `인스타기본` is legacy/reference-only. Current factory routing uses `인스타템플릿` unless the user explicitly names a different real CapCut template.
@@ -22,7 +23,8 @@ This contract separates the script-writing role from the CapCut production role:
 ## CapCut T-track Contract
 
 `T1/T2/T3` are not work-stage names. They are the internal CapCut text-track order.
-Keep this order in every selected template (`일반템플릿`, `인스타템플릿`, `블랙템플릿`, or a future user-named template):
+Keep this order in every selected template (`black`, `insta white`, or a future
+user-named template):
 
 ```text
 T1 = 소제목1
@@ -133,18 +135,18 @@ Use this JSON shape for FFmpeg workers:
 
 ```json
 {
-  "target": "instagram_or_black_or_general",
+  "target": "instagram_or_black",
   "canvas": { "width": 1080, "height": 1920, "fps": 30 },
   "template": {
     "name": "인스타템플릿",
     "mode": "ffmpeg_render_match"
   },
   "tracks": [
-    { "id": "T1", "role": "subtitle_1" },
-    { "id": "T2", "role": "subtitle_2" },
-    { "id": "T3", "role": "tts_caption" },
-    { "id": "T4", "role": "verified_speaker_1" },
-    { "id": "T5", "role": "verified_speaker_2" },
+    { "id": "T1", "role": "top_title_1" },
+    { "id": "T2", "role": "top_title_2" },
+    { "id": "T3", "role": "tts" },
+    { "id": "T4", "role": "source_speech_1" },
+    { "id": "T5", "role": "source_speech_2" },
     { "id": "T6", "role": "situation_emotion" },
     { "id": "V7", "role": "template_background_or_transition" },
     { "id": "V8", "role": "source_clip" },

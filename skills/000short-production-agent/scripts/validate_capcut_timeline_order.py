@@ -47,6 +47,7 @@ PARTICLE_CAPCUT_ENCODED_RANGE = (0.008, 0.0505)
 MANDATORY_ADJACENT_DIFF_EFFECTS = ("smart_color_adjust", "clear", "sharpen")
 MANDATORY_ADJACENT_VALUE_DIFF = 0.05
 MANDATORY_LOUDNESS_TARGET = -14.0
+MOJIBAKE_PATTERNS = ("????", "\ufffd")
 SEMANTIC_VIDEO_TRACK_CONTRACT = "caption_video_plus_situation_speaker_video"
 ALLOWED_SEMANTIC_VIDEO_TRACKS = {
     "caption_video",
@@ -858,6 +859,24 @@ def material_text_map(draft: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+def validate_korean_text_fast_gate(draft: dict[str, Any]) -> dict[str, Any]:
+    hits: list[str] = []
+    for text_id, text in material_text_map(draft).items():
+        if any(pattern in text for pattern in MOJIBAKE_PATTERNS):
+            hits.append(str(text_id))
+
+    if hits:
+        sample = ", ".join(hits[:5])
+        raise GateFail(
+            "KOREAN_TEXT_FAST_GATE failed: draft_content.json text scan found "
+            f"mojibake in text material(s): {sample}"
+        )
+    return {
+        "korean_text_fast_gate": "PASS",
+        "mojibake_pattern_fail": "PASS",
+    }
+
+
 def draft_track_info(draft: dict[str, Any], track_id: str) -> tuple[int, dict[str, Any]]:
     for idx, track in enumerate(draft.get("tracks", []) or []):
         if not isinstance(track, dict):
@@ -1297,6 +1316,7 @@ def validate_catcup_reference_layout_actual(
         declared_order = []
 
     draft = load_draft_content_for_catcup(root, timeline_manifest, contract, draft_path)
+    korean_text_result = validate_korean_text_fast_gate(draft)
     active_roles: list[str] = []
     active_track_ids: dict[str, str] = {}
     for idx, row in enumerate(rows):
@@ -1371,6 +1391,7 @@ def validate_catcup_reference_layout_actual(
         "catcup_active_track_ids": active_track_ids,
         **template_master_result,
         **script_rewrite_result,
+        **korean_text_result,
     }
 
 

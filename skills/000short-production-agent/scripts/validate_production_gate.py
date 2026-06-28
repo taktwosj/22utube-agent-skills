@@ -142,6 +142,8 @@ ELEVENLABS_DIALOGUE_PATH_KEYS = (
     "scribe_json_path",
 )
 FINAL_REPORT_STATUS_KEYS = (
+    "pre_capcut_script_package_status",
+    "script_package_status",
     "final_report_status",
     "script_report_status",
     "report_before_capcut_status",
@@ -2502,16 +2504,11 @@ def validate_report_first_voice_gate(
     if dialogue_report is None:
         raise GateFail("source_dialogue_analysis_path file missing")
 
-    final_report_before_capcut = truthy(
-        first_status_value(sources, ("final_report_before_capcut", "report_first_before_capcut"))
-    )
-    if not final_report_before_capcut:
-        raise GateFail("final_report_before_capcut must be true")
-    final_report_status = str(
+    pre_capcut_script_package_status = str(
         first_status_value(sources, FINAL_REPORT_STATUS_KEYS) or ""
     ).strip().upper()
-    if final_report_status not in {"PASS", "DELIVERED", "USER_REVIEWED_OR_DELIVERED"}:
-        raise GateFail("final_report_status must be DELIVERED/PASS before CapCut")
+    if pre_capcut_script_package_status not in {"PASS", "DELIVERED", "USER_REVIEWED_OR_DELIVERED"}:
+        raise GateFail("pre_capcut_script_package_status must be DELIVERED/PASS before CapCut")
 
     required_raw = first_status_value(sources, USER_SRT_AUDIO_REQUIRED_KEYS)
     user_srt_audio_required = True if required_raw is None else truthy(required_raw)
@@ -2527,7 +2524,7 @@ def validate_report_first_voice_gate(
             "elevenlabs_dialogue_analysis_status": dialogue_status,
             "source_dialogue_analysis_provider": provider,
             "source_dialogue_analysis_path": str(dialogue_report),
-            "final_report_status": final_report_status,
+            "pre_capcut_script_package_status": pre_capcut_script_package_status,
             "user_srt_audio_gate_status": package_status,
             "requires_user_srt_audio_before_capcut": False,
         }
@@ -2550,7 +2547,7 @@ def validate_report_first_voice_gate(
         "elevenlabs_dialogue_analysis_status": dialogue_status,
         "source_dialogue_analysis_provider": provider,
         "source_dialogue_analysis_path": str(dialogue_report),
-        "final_report_status": final_report_status,
+        "pre_capcut_script_package_status": pre_capcut_script_package_status,
         "user_srt_audio_gate_status": package_status,
         "requires_user_srt_audio_before_capcut": True,
         "user_srt_audio_package_path": str(package_path) if package_path else "",

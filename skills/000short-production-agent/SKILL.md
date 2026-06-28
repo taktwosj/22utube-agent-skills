@@ -662,7 +662,12 @@ When the source video is short, especially under 30 seconds, do not expand produ
 Rules:
 
 - If `source_evidence`, Gemini intake/crosscheck, and `watch/direct-frame` already passed, do not rerun or re-investigate those stages unless the user explicitly asks for re-analysis.
-- If `script_lock_status` is not `SCRIPT_LOCK`, the only next task is script lock recovery. Do not inspect CapCut templates, create CapCut builders, generate layout files, or run harnesses before the lock is restored.
+- For `FINAL_LOCK` or Tikitaka-handoff final production, if
+  `script_lock_status` is not `SCRIPT_LOCK`, the only next task is script lock
+  recovery. In default `DRAFT_FAST`, missing `SCRIPT_LOCK` blocks only
+  `SCRIPT_LOCK`, production `PASS`, `FINAL`, and `upload_ready` claims; it does
+  not block a `WORKING_DRAFT_CREATED` CapCut review draft from current supplied
+  text.
 - If the user explicitly requires Supertone/Daniel TTS or any generated voice, do not switch to `source_audio_only`, silent, or no-TTS CapCut mode. Generate/verify the requested voice first, then build CapCut.
 - If the user names a reference project or draft, use only that reference for layout/audio-track extraction unless it is missing or unreadable. Do not compare many old projects by default.
 - Prefer existing factory scripts in this order:
@@ -895,7 +900,9 @@ Legacy sequence:
    - `( ... )` = screen composition, visual state, emotion/reaction, or non-spoken cue.
    - `" ... "` = verified original speaker dialogue/source speech only.
    - plain text = the user's TTS/script line candidate.
-6. Produce the final report/script package for the user. Do not create SRT, generated voice, or CapCut yet.
+6. Produce `pre_capcut_script_package.md` for the user. Do not call it
+   `reports/final_report.md`; the final report is reserved for post-CapCut
+   validation.
 7. Ask the user to create and provide the SRT/audio/ZIP package from the report.
 8. Only after that package is present and verified, create/register the CapCut draft.
 
@@ -909,8 +916,7 @@ Mandatory records before `production_gate_result.json` can PASS:
   "elevenlabs_dialogue_analysis_status": "PASS|NO_DIALOGUE",
   "source_dialogue_analysis_provider": "ElevenLabs Scribe",
   "source_dialogue_analysis_path": "source_dialogue_elevenlabs.json",
-  "final_report_before_capcut": true,
-  "final_report_status": "USER_REVIEWED_OR_DELIVERED",
+  "pre_capcut_script_package_status": "USER_REVIEWED_OR_DELIVERED",
   "requires_user_srt_audio_before_capcut": true,
   "user_srt_audio_gate_status": "RECEIVED|PASS",
   "user_srt_path": "voice_body_split.srt",
@@ -1168,7 +1174,7 @@ user-facing report shape:
 CapCut 검수
 draft_name: {exact_registered_capcut_draft_name}
 draft_path: {absolute local CapCut draft folder}
-selected_template: {일반템플릿 / 인스타템플릿 / 블랙템플릿 / user-selected template}
+selected_template: {black / insta white / user-selected manifest template}
 openability_gate: PASS / FAIL / WAIT
 media_link_gate: PASS / FAIL / WAIT
 style_preservation_gate: PASS / FAIL / WAIT
@@ -1208,7 +1214,7 @@ harness: analysis={PASS/FAIL/WAIT}, assets={PASS/FAIL/WAIT}, capcut={PASS/FAIL/W
 {TTS/voice line 2 only}
 {TTS/voice line 3 only}
 
-캣컵 복사하기
+캣컵복사하기
 {exact_registered_capcut_draft_name}
 ```
 
@@ -1219,10 +1225,10 @@ Rules:
   required gate is `FAIL` or `WAIT`, state the blocker above the copy-ready
   report and do not describe the project as usable, completed, PASS, or
   upload-ready.
-- `캣컵 복사하기` must contain the exact registered CapCut draft name when a draft exists, and the draft name must be inside a Markdown fenced `text` code block so the user can copy it.
-- If the CapCut draft is blocked or not created yet, state the blocker above the report and still put the planned draft name under `캣컵 복사하기`.
-- `중단 TTS 글자만 복사` must come immediately after the timed `중단` block and before `캣컵 복사하기`.
-- The final user-facing report must not append platform copy blocks after `캣컵 복사하기` unless the user explicitly asks for platform-specific upload copy.
+- `캣컵복사하기` must contain the exact registered CapCut draft name when a draft exists, and the draft name must be inside a Markdown fenced `text` code block so the user can copy it.
+- If the CapCut draft is blocked or not created yet, state the blocker above the report and still put the planned draft name under `캣컵복사하기`.
+- `중단 TTS 글자만 복사` must come immediately after the timed `중단` block and before `캣컵복사하기`.
+- The final user-facing report must not append platform copy blocks after `캣컵복사하기` unless the user explicitly asks for platform-specific upload copy.
 - The actual Markdown shape for the two final copy blocks is:
 
 ````text
@@ -1233,7 +1239,7 @@ Rules:
 {TTS/voice line 3 only}
 ```
 
-캣컵 복사하기
+캣컵복사하기
 ```text
 {exact_registered_capcut_draft_name}
 ```
@@ -1280,13 +1286,20 @@ Routing rules:
 - `watch` is mandatory for URL, local video, uploaded video, source-analysis review, and Gemini JSON correction requests. Download or locate the source first, then run or inspect watch/direct-frame output before accepting the timeline.
 - Gemini is an assistant for raw OCR, speech, and situation extraction. Gemini output alone is never final authority for timestamps, event order, coverage, or CapCut timing.
 - If `watch` cannot run, mark `watch=BLOCKED` in the routing board, explain the blocker, and do not call the analysis final.
-- `00script-writer` is mandatory before finalizing top title, hook placement, Korean captions, OCR-cover overlays, voice/display text, SRT, upload title, or any script-like visible text.
-- The writer pass must visibly check hook strength, first 3-5 second hold, memory anchor, YouTube policy risk, audio-off comprehension, and the random 5-persona readability/retention gate.
-- For 11short production, the script/writer gate threshold is 4 of 5 PASS. Do not create screen timing, SRT files, layout files, voice files, or CapCut drafts from a script with fewer than 4 approvals.
+- `00script-writer` is mandatory before `FINAL_LOCK` finalizes top title, hook
+  placement, Korean captions, OCR-cover overlays, voice/display text, SRT,
+  upload title, or any script-like visible text. `DRAFT_FAST` may use current
+  supplied text for a review draft, but must not claim `SCRIPT_LOCK`.
+- The writer pass must visibly check hook strength, first 3-5 second hold,
+  memory anchor, YouTube policy risk, audio-off comprehension, and the random
+  5-persona readability/retention gate when `FINAL_LOCK` is requested.
+- For `FINAL_LOCK`, the script/writer gate threshold is 4 of 5 PASS. In
+  `DRAFT_FAST`, fewer approvals block only final/upload claims, not
+  `WORKING_DRAFT_CREATED`.
 - The writer pass must output a copy-ready `final_script_ko` package whenever it analyzes or rewrites a Short's text. Analysis-only requests may skip production files, but must still print the final script unless the user explicitly asks for situation explanation only.
 - Do not mark `complete`, `PASS`, `final`, `ready`, or `upload_ready` until every routed skill and required harness gate is PASS, or explicitly `SKIP(reason)` for a question-only task with no production output.
 
-Locked execution order for production requests:
+Locked execution order for `FINAL_LOCK` production requests:
 
 1. Resolve and show `[11short Routing]` with the mandatory channel/template proposal.
 2. Intake/download source and preserve source audio when required.
@@ -1303,7 +1316,7 @@ Locked execution order for production requests:
 13. Run `shorts_remake_harness.py --stage assets`.
 14. Build `render_plan_pre_capcut.json` and complete `production_gate_contract.json`.
 15. Run `scripts/validate_production_gate.py` and save `production_gate_result.json`.
-16. Build/register CapCut draft only when `production_gate_result.json` is `PASS`.
+16. Build/register final CapCut draft only when `production_gate_result.json` is `PASS`.
 17. Build `capcut_timeline_manifest.json` from the created draft/timeline.
 18. Run `scripts/validate_capcut_timeline_order.py` and save `post_capcut_timeline_gate_result.json`.
 19. Run `shorts_remake_harness.py --stage capcut` and `--stage all`, then visual check.
@@ -1367,10 +1380,12 @@ For every 11short remake production task, keep a visible checkpoint log in chat 
 - [ ] 최종 원본대비변경보고서 작성
 ```
 
-Pre-CapCut production gate:
+Pre-CapCut production gate (`FINAL_LOCK` only):
 
 - Use bundled script: `scripts/validate_production_gate.py`.
-- Run it immediately before any CapCut draft creation.
+- Run it immediately before final/upload CapCut draft creation. `DRAFT_FAST`
+  review drafts do not run this gate unless the user explicitly requests
+  `FINAL_LOCK`.
 - Save output to `{work}\production_gate_result.json`.
 - If the script exits non-zero or `status` is not `PASS`, set CapCut creation to `BLOCKED` and do not call any CapCut factory.
 - Never trust `production_allowed` from an input contract. `production_allowed=true` may appear only in `production_gate_result.json` created by the validator.
@@ -1434,8 +1449,10 @@ create_capcut_draft(
 
 Final status rules:
 
-- `production_gate_result.json PASS` permits CapCut creation only.
-- `post_capcut_timeline_gate_result.json PASS` plus `capcut/all harness PASS` permits `upload_ready=true`.
+- `production_gate_result.json PASS` permits final CapCut creation only.
+- `post_capcut_timeline_gate_result.json PASS` plus `capcut/all harness PASS`
+  permits `technical_ready=true`; `upload_ready=YES` still requires user
+  approval and source/remake rights-risk confirmation.
 - Harness PASS is necessary but not sufficient when either production gate is missing.
 - Human-written words such as `SCRIPT_LOCK`, `PASS`, or `upload_ready` are not evidence.
 
@@ -1489,10 +1506,14 @@ Default URL deliverable:
 - Create normalized `analysis.json`.
 - Create `status.json`.
 - Create `onscreen_ko.srt` and `onscreen_layout.json` when the production flow uses captions or overlays. Create `guide_ko.srt` only as a clearly marked compatibility artifact when an older helper requires it.
-- Create `render_plan_pre_capcut.json`, `production_gate_contract.json`, and `production_gate_result.json`.
+- For `FINAL_LOCK`, create `render_plan_pre_capcut.json`,
+  `production_gate_contract.json`, and `production_gate_result.json`.
 - Build/register a visible local CapCut draft/project file.
-- Create `capcut_timeline_manifest.json` and `post_capcut_timeline_gate_result.json`.
-- Run `shorts_remake_harness.py --stage analysis`, `--stage assets`, `--stage capcut`, and `--stage all`.
+- For `FINAL_LOCK`, create `capcut_timeline_manifest.json` and
+  `post_capcut_timeline_gate_result.json`.
+- For `FINAL_LOCK`, run `shorts_remake_harness.py --stage analysis`,
+  `--stage assets`, `--stage capcut`, and `--stage all`. `DRAFT_FAST` runs only
+  the fast checks listed in the mode gate.
 - Report the CapCut draft name/path, original-to-remake changes, production gate state, post timeline gate state, and actual PASS/FAIL state.
 
 Stopping after download, Gemini JSON, frame analysis, watch notes, or `analysis_candidate_direct.json` is not acceptable for a URL production request. Those are intermediate states only.
@@ -1520,8 +1541,12 @@ Run this order:
    - `1. 인스타`
    - `2. 기본`
 6. If the user chooses `1. 인스타`, set `target format: instagram_reels` and follow `11short/INSTAGRAM_LAYOUT_CONTRACT.md`.
-7. If the user chooses `2. 기본`, use the CapCut preset/template `일반템플릿` and follow the normal 11short layout.
-8. Current template gate: when the user says only `만들어`, `프로젝트까지`, `쇼츠공장 돌려`, or otherwise asks for generic 11short production without naming a template, ask which CapCut preset/template to use before creating the draft. Offer `일반템플릿`, `인스타템플릿`, or a user-named future template such as `정치템플릿`. Do not assume Instagram.
+7. If the user chooses `2. 기본`, route to the current manifest defaults:
+   `black` unless channel routing or the user chooses `insta white`.
+8. Current template gate: when the user says only `만들어`, `프로젝트까지`,
+   `쇼츠공장 돌려`, or otherwise asks for generic 11short production without
+   naming a template, use the mandatory channel/template routing result. If
+   routing cannot decide, ask between only `black` and `insta white`.
 8. Run final intake verification before production:
    - source video is present or the source blocker is explicit
    - Gemini raw is treated as observation only, not final authority
@@ -2192,7 +2217,12 @@ Use this mapping:
 
 Rules:
 
-- `final_script_ko.txt` must be locked before timing files are created. If `SCRIPT_LOCK` evidence is missing, stop at `WAIT - agent result missing` or `SCRIPT_REWRITE`; do not create production files.
+- For `FINAL_LOCK`, `final_script_ko.txt` must be locked before timing files
+  are created. If `SCRIPT_LOCK` evidence is missing, stop at
+  `WAIT - agent result missing` or `SCRIPT_REWRITE`; do not create final
+  production files. `DRAFT_FAST` may create review-only timing/layout/draft
+  files from supplied current text and must report `WORKING_DRAFT_CREATED`, not
+  `SCRIPT_LOCK`.
 - Required Tikitaka evidence: `writer_persona_generation_complete=true`, `chief_editor_integration_complete=true`, `final_persona_recheck_complete=true`, `writer_persona_gate_complete=true`, `script_lock_status=SCRIPT_LOCK`, `production_gate_contract.json` exists, `script_lock.json` exists, `writer_persona_pass_count>=4`, and `writer_persona_hard_veto=false`.
 - Screen timing is a production placement layer derived by `000short-production-agent` from the locked script and verified source video. Do not let auto SRT generation rewrite the Tikitaka script or decide the story structure.
 - `중단` must follow the bracket reaction caption system: `( ... )` is the creative emotion/situation/reaction zone, `" ... "` is source-speech truth, and plain text is only for very short labels.
@@ -3770,7 +3800,7 @@ Legacy minimum upload package fields:
 
 ### Final Middle TTS Copy And CapCut Name Order
 
-Always put the copyable TTS/voice text immediately after the timed `중단` block. The `캣컵 복사하기` block comes after `중단 TTS 글자만 복사` and closes the copy-ready report.
+Always put the copyable TTS/voice text immediately after the timed `중단` block. The `캣컵복사하기` block comes after `중단 TTS 글자만 복사` and closes the copy-ready report.
 
 Use this exact Korean label and fenced text block:
 
@@ -3781,7 +3811,7 @@ Use this exact Korean label and fenced text block:
 {voice line 2}
 {voice line 3}
 
-캣컵 복사하기
+캣컵복사하기
 {draft_name}
 ```
 
@@ -3837,7 +3867,7 @@ tag1,tag2,tag3,
 중단 TTS 글자만 복사
 ...
 
-캣컵 복사하기
+캣컵복사하기
 {draft_name}
 ```
 
@@ -3859,9 +3889,9 @@ Rules:
 - Use `테그`, not `쉼표테그`, in the copy-ready report.
 - `상단` must be the exact CapCut top fixed title.
 - `중단` must include timed middle captions only. Do not add `하단`.
-- `중단 TTS 글자만 복사` must come immediately after `중단` and before `캣컵 복사하기`.
-- `캣컵 복사하기` must contain the exact registered CapCut `draft_name` inside a Markdown fenced `text` code block when a draft exists; if not created yet, use the planned draft name and clearly state the blocker above the copy block.
-- Do not append platform copy blocks or evidence blocks after `캣컵 복사하기` unless the user explicitly asks for them.
+- `중단 TTS 글자만 복사` must come immediately after `중단` and before `캣컵복사하기`.
+- `캣컵복사하기` must contain the exact registered CapCut `draft_name` inside a Markdown fenced `text` code block when a draft exists; if not created yet, use the planned draft name and clearly state the blocker above the copy block.
+- Do not append platform copy blocks or evidence blocks after `캣컵복사하기` unless the user explicitly asks for them.
 - `중단 TTS 글자만 복사` must include only timed `중단` lines that should be spoken by TTS/voice, without timestamps.
 - Exclude visual-only parenthesized situation/effect/emotion captions such as `(퍽)` or `(뭐지..??)` unless the user explicitly asks to voice them.
 - Include plain TTS/narration middle lines by default. Include quoted speaker/source lines only when that line is explicitly intended for generated TTS/voice.
@@ -3970,16 +4000,153 @@ This dedicated Shorts skill must also obey the shared `22utube-production-agent`
 - Do not block 11short only because 0shrt-only files such as `image2_manifest.json`, `job_state.json`, `evidence_pack.json`, or `final_report.md` are missing.
 - Every YouTube production status report must start with the compact `[ 진행판 ]` board: n8n execution, harness validation, current blocker, and next action.
 - The visible TODO/status report must include the full `A. n8n 실행` / `B. 하네스 검증` board from `22utube-production-agent`; do not replace it with prose-only status.
-- Template gate for generic 11short/쇼츠공장 production: do not ask a generic template question when the mandatory channel/template routing has already produced a default. Use the routed template unless the user explicitly overrides it. If routing is missing or ambiguous enough to change the template, ask before creating a draft: `블랙기본`, `인스타템플릿`, `일반템플릿`, or another user-named template such as `정치템플릿`.
+- Template gate for generic 11short/쇼츠공장 production: do not ask a generic
+  template question when the mandatory channel/template routing has already
+  produced a default. Use the routed template unless the user explicitly
+  overrides it. Current official template defaults are only `black`/`블랙기본`
+  and `insta white`/`인스타템플릿`; there is no separate official
+  third/basic template base unless the operator adds it to
+  `manifests/capcut-template-set.json`.
 - **DRAFT_FAST / FINAL_LOCK mode gate**: every 11short factory run is `DRAFT_FAST` by default. The user must explicitly say `FINAL_LOCK`, `최종 업로드용`, `업로드 준비`, or equivalent to switch to `FINAL_LOCK`.
   - `DRAFT_FAST` (default): CapCut 초안 생성 후 DRAFT_FAST 체크만 한다. 템플릿 복사 확인, placeholder 영상 제거, 실제 source video 연결, `랭킹중간` 또는 지정 separator 삽입(랭킹/순서형), 0.2~0.4초 정밀 컷, 하단/bottom-caption 금지, `상단 + timed 중단` 구조 준수를 검증한다. `SCRIPT_LOCK`, `production PASS`, `upload_ready`를 쓰지 않는다. 5-persona reader gate, full writer harness, YouTube policy full gate를 강제하지 않는다.
-  - `FINAL_LOCK` (user must explicitly request): 전체 Writer Harness Checklist, 5-persona reader gate, YouTube policy gate, SCRIPT_LOCK, `production_gate_result.json` PASS, `post_capcut_timeline_gate_result.json` PASS, capcut/all harness PASS, upload_ready 검수를 실행한다. `SCRIPT_LOCK`, `production PASS`, `upload_ready`는 FINAL_LOCK일 때만 쓴다.
+- `FINAL_LOCK` (user must explicitly request): 전체 Writer Harness Checklist, 5-persona reader gate, YouTube policy gate, SCRIPT_LOCK, `production_gate_result.json` PASS, `post_capcut_timeline_gate_result.json` PASS, capcut/all harness PASS, upload_ready 검수를 실행한다. `SCRIPT_LOCK`, `production PASS`, `upload_ready`는 FINAL_LOCK일 때만 쓴다.
+- Any older gate that requires `SCRIPT_LOCK`, 5-persona approval,
+  `production_gate_result.json`, `post_capcut_timeline_gate_result.json`,
+  `--stage all`, or upload text is `FINAL_LOCK only` unless this section says it
+  is part of the DRAFT_FAST fast-check list.
+- **DRAFT_FAST_COST_BUDGET**: DRAFT_FAST is a fast draft-production mode, not a
+  full upload-production mode. Expected effort split is
+  `skill_rule_check=5-10%`, `input_srt_tts=15-25%`,
+  `capcut_create_rebuild=35-45%`, `korean_repair=0-5%`, and
+  `final_verify_report=10-15%`. If skill/rule checking exceeds 10% or Korean
+  repair exceeds 5%, stop and report the exact blocker instead of continuing to
+  browse rules or manually repair mojibake.
+- **KOREAN_TEXT_FAST_GATE**: Korean text corruption is a preflight failure, not
+  a normal work stage. Use `NO_INLINE_KOREAN_IN_SHELL`: do not embed Korean
+  final captions, SRT, or CapCut text directly inside PowerShell one-liners,
+  shell heredocs, or inline Python strings. Write Korean through UTF-8 files
+  such as `final_script_ko.txt`, `onscreen_ko.srt`, `scenario.json`,
+  `tts_lines.txt`, or `guide_ko.srt` and read those files from builders.
+- **MOJIBAKE_PATTERN_FAIL**: before draft creation and after draft creation,
+  scan all Korean text artifacts and the actual registered `draft_content.json`
+  text scan. The `draft_content.json text scan` must look at the text material
+  values actually registered in the CapCut draft, not only generated SRT or
+  manifest files. Scan for `????`, `���`, replacement character `�`, broken common Korean
+  labels, or mojibake patterns. Any hit is DRAFT_FAST `FAIL_KOREAN_TEXT_GATE`;
+  fix the input file or builder encoding, then regenerate. Do not spend a late
+  20-30% "Korean repair" stage manually editing generated JSON.
+- DRAFT_FAST may run only the fast production checks needed for a reviewable
+  CapCut draft: template-copy basis, placeholder media removal, real source
+  link, T1-T6 role order, bottom-layer ban, mandatory CapCut media settings,
+  Korean text gate, media path/openability, and visual preview sanity. Move
+  full writer/persona, full policy, upload text, `SCRIPT_LOCK`, production
+  `PASS`, and `upload_ready` to FINAL_LOCK unless the user explicitly requests
+  final upload readiness.
+- **DRAFT_FAST_WORKING_DRAFT_CREATED**: a successful DRAFT_FAST outcome is a
+  reviewable CapCut draft state, not final production completion. Use
+  `WORKING_DRAFT_CREATED` or `DRAFT`; never use `FINAL`, `production PASS`, or
+  `upload_ready` for this state.
+
+## 11short Factory Report Contract
+
+Every 11short response after a draft attempt must use one of these two report
+shapes. Do not invent a third shape.
+
+### DRAFT_FAST report shape
+
+```text
+[DRAFT_FAST 쇼츠공장 보고]
+상태: DRAFT / FAIL / WAIT
+모드: DRAFT_FAST
+템플릿:
+CapCut draft:
+draft path:
+source:
+
+빠른 검증:
+- template_copy:
+- source_replaced:
+- T1_T6_role_order:
+- bottom_layer_forbidden:
+- mandatory_capcut_media_settings:
+- KOREAN_TEXT_FAST_GATE:
+- media_link_gate:
+- openability_gate:
+- visual_preview:
+
+시간/작업비율:
+- skill_rule_check:
+- input_srt_tts:
+- capcut_create_rebuild:
+- korean_repair:
+- final_verify_report:
+
+BLOCKERS:
+- ...
+
+NEXT:
+- ...
+```
+
+Rules:
+
+- DRAFT_FAST report must not say `SCRIPT_LOCK`, `production PASS`,
+  `upload_ready`, or `FINAL` unless FINAL_LOCK was explicitly requested.
+- If the draft exists, end with `CAPCUT_COPY_BLOCK_LAST`.
+- If no draft exists, report the planned draft name and the blocker.
+
+### FINAL_LOCK final report shape
+
+```text
+[FINAL_LOCK 최종 보고]
+상태: PASS / FAIL / WAIT
+모드: FINAL_LOCK
+source evidence:
+script lock:
+writer/humanize:
+policy/safety:
+production gate:
+CapCut post gate:
+harness:
+visual QA:
+upload_ready:
+
+COPY_READY_OUTPUT_BLOCK
+제목
+내용
+출처:{url}
+태그
+상단
+중단
+중단 TTS 글자만 복사
+
+CAPCUT_COPY_BLOCK_LAST
+캣컵복사하기
+{draft_name}
+```
+
+Rules:
+
+- `COPY_READY_OUTPUT_BLOCK` is required only for completed FINAL_LOCK or when
+  the user explicitly asks for upload/copy text.
+- `CAPCUT_COPY_BLOCK_LAST` means the final visible block in the reply is the
+  CapCut project name only. Do not place evidence, paths, warnings, or extra
+  upload copy after it.
+- Final report wording is never validation authority. Validation authority is
+  the actual gate files, actual `draft_content.json`, and harness output.
 - **CapCut T-track contract**: `T1/T2/T3`는 작업 단계명이 아니라 CapCut 내부 텍스트 트랙 순서다. `T1=소제목1`, `T2=소제목2`, `T3=TTS/나레이션 자막`, `T4=화자발언1(검증된 " "만)`, `T5=화자발언2(검증된 " "만)`, `T6=(현장상황/행동/감정설명)` 순서를 유지한다.
   - `V7=템플릿 배경/랭킹중간/전환용 클립`, `V8=실제 영상 짜집은 source clip`을 기본 영상 역할로 쓴다.
   - `A9=원본음성/BGM/랭킹 기본 배경음`, `A10=TTS/효과음/나의 사전 설정 효과음`을 기본 오디오 역할로 쓴다.
   - 오디오/TTS/BGM/SFX 삽입은 A트랙에만 추가한다. 오디오 삽입 때문에 기존 `T1~T6` 텍스트 트랙 순서/역할/세그먼트를 바꾸면 `FAIL`.
   - 오디오 삽입 후 반드시 실제 `draft_content.json`에서 track order와 track type을 재검사한다. T트랙에 오디오/비디오 segment가 들어가거나 A트랙에 text segment가 들어가면 `FAIL`.
-- Template routing: user-explicit wording still wins. If the user says `인스타`, `인스타용`, `인스타로 만들어`, or `릴스`, clone/use `인스타템플릿`. If the user says `블랙`, `블랙기본`, `블랙템플릿`, or black-band layout wording, clone/use `블랙기본` unless the operator has explicitly mapped the local base name to `블랙템플릿`. If the user says `일반`, `기본`, `유튜브`, or normal Shorts wording, clone/use `일반템플릿`. If the user only says `만들어`, `프로젝트까지`, `쇼츠공장 돌려`, `가자`, or similar generic wording, use the mandatory routing proposal as the default template; ask only when the routing gate cannot decide.
+- Template routing: user-explicit wording still wins. If the user says `인스타`,
+  `인스타용`, `인스타로 만들어`, or `릴스`, clone/use `인스타템플릿` /
+  `insta white`. If the user says `블랙`, `블랙기본`, `블랙템플릿`, or
+  black-band layout wording, clone/use `블랙기본` / `black` unless the operator
+  has explicitly mapped the local base name to `블랙템플릿`. If the user says
+  `일반`, `기본`, `유튜브`, or normal Shorts wording, use the mandatory routing
+  proposal. If routing still cannot decide, ask between only `black` and
+  `insta white`.
 - CapCut draft creation means template-copy + `draft_content.json` media/text replacement. FFmpeg cannot create editable CapCut `T1~T6` tracks; FFmpeg is only allowed for `ffmpeg_render_match` final MP4 preview/render that visually matches the selected template.
 - Instagram/Reels requests must read and follow `$env:UTUBE_ROOT/11short/INSTAGRAM_LAYOUT_CONTRACT.md` when that contract is explicitly selected, but the production base for current factory work is `인스타템플릿` unless the user names another actual CapCut template. Keep the selected template's saved font, color, position, animation refs, BGM, SFX, and safe-area layout by default.
 - Template selection means one of the two defaults in `manifests/capcut-template-set.json`: `black` or `insta white`. Settings JSON is a replacement-value list only; never build a lookalike project from `source.mp4 + PNG + text`.
@@ -3988,10 +4155,14 @@ This dedicated Shorts skill must also obey the shared `22utube-production-agent`
 - `260625-ig-contortion-top3-urakkai-instagram-tts-fixed` is forbidden as a base. A draft with `Default`, `T1`, or `T2` visible placeholder text or a stale 98-second tail is FAIL.
 - `T6` situation captions may overlap `T3`, `T4`, or `T5` when they explain the same screen moment. `T4/T5` are for verified source speech only. Invented or creative lines must go to `T3` or `T6`, never to `T4/T5`.
 - The video material inside a selected template may be placeholder media. After cloning the template, replace placeholder source video/audio with real job media while preserving template structure, `subdraft`, `Resources/combination`, and `materials.drafts`.
-- General/basic Shorts production must clone or derive from the CapCut preset/template `일반템플릿`. A generic draft built from the old normal fallback without the selected preset fails the template gate.
+- General/basic Shorts production has no separate official template in the
+  current manifest. It must route to either `black` or `insta white`; a generic
+  blank/old normal fallback fails the template gate.
 - Black-template production must clone or derive from `블랙기본`, keep the top/bottom black bands, place `T1/T2` as white bold top-band text, and keep timed body captions inside the video-safe area. If the local CapCut base is still named `블랙템플릿`, use it only after an explicit operator alias mapping and record that alias in the status/report.
 - FFmpeg render-match jobs must use the same common role contract (`T1~T6`, `V7/V8`, `A9/A10`) and must output 1080x1920, 30fps, h264+aac, source audio preserved unless explicitly muted by the plan, no visible timecodes, no bottom-caption layer, and no unverified quoted speech.
-- General/basic Shorts production must clone or derive from the CapCut preset/template `일반템플릿`. A generic draft built from the old normal 3-text fallback without the selected preset fails the template gate.
+- General/basic Shorts production has no separate official template in the
+  current manifest. It must route to either `black` or `insta white`; a generic
+  blank/old normal 3-text fallback fails the template gate.
 - The OneDrive Instagram setup folder must contain the form image, top-left cat video, and bottom-right animal image together. If another PC cannot resolve Korean asset names, use the ASCII aliases in the same folder: `instagram_form_pixel_frame.png`, `instagram_cat_top_left.mp4`, and `instagram_animals_lower_right.png`.
 - Instagram-only production from a new source: if the user asks from the beginning to make only an Instagram/Reels version, still run normal 11short source intake, Gemini/source analysis when needed, `analysis.json`, SRT, OCR layout, source-original-audio extraction, BGM decision, and `analysis/assets` gates. Do not create the normal YouTube 3-text CapCut master unless the user also asks for it. Create the first visible CapCut draft directly from `인스타템플릿` as `{episode_id}-인스타` or the requested Instagram draft name unless the user explicitly asks for a legacy shell.
 - For Instagram-only production, set `target=instagram_reels`, `instagram_status=created`, `youtube_master_draft_created=false`, `instagram_draft_name`, `instagram_draft_dir`, and `instagram_original_audio_track=true`. Mark normal 11short `capcut/all` harness as `N/A - instagram custom layout`, keep n8n as `WAIT - local run; n8n webhook not invoked` when not invoked, and run the Instagram-specific JSON/audio/layer/ffprobe/frame QA.
