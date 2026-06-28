@@ -112,6 +112,11 @@ bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
 - Existing runtime folders are backed up before overwrite.
 - `verify` failure makes update fail.
 
+## Verification Status
+
+See `docs/verification-status.md` for the current evidence checklist and the
+minimum live check required on another Windows PC or the Mac mini.
+
 ## Telegram Hermes
 
 Telegram-Hermes integration is an allowlisted command bridge. Bot tokens, chat IDs, and auth files stay outside Git. See `docs/install-telegram-hermes.md` and `manifests/telegram-hermes.commands.json`.
