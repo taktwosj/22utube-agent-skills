@@ -416,7 +416,7 @@ Hard rules:
 - Job/settings JSON may contain only replacement values such as template id, output draft name, source video, visible text, and audio. It must never generate a new `draft_content.json` structure from scratch.
 - Current CatCup template defaults are `black` with `catcup_reference_layout_profile="black_template_master_v1"` and `insta white` with `catcup_reference_layout_profile="insta_white_template_master_v1"`. `insta white` is the display name of the local draft folder `260625-ig-contortion-top3-urakkai-instagram-tts`.
 - For either default, copy the whole draft folder first, preserve `subdraft`, `Resources/combination`, preset audio placeholder relationships, sticker/effect rows, track count, and z-order, then replace only source/text/timing/audio values. The internal `test.mp4` is template placeholder media and must be replaced in generated drafts.
-- The shared template/preset asset bundle lives at `${env:UTUBE_ROOT}\22factory_20260628\00_asset_tools`. Before claiming another Windows/macOS machine is synced, run that folder's `sync_capcut_asset_tools.ps1` or `sync_capcut_asset_tools.sh` and verify the local `Presets`, referenced `Cache`, and the two template master drafts are present.
+- The shared template/preset asset bundle lives at `${env:UTUBE_ROOT}\22factory_20260628\00_asset_tools\first`. Before claiming another Windows/macOS machine is synced, run `${env:UTUBE_ROOT}\22factory_20260628\00_asset_tools\sync_capcut_asset_tools.ps1` or `sync_capcut_asset_tools.sh` and verify the local `Presets`, referenced `Cache`, and the two template master drafts are present.
 - Do not use `260625-ig-contortion-top3-urakkai-instagram-tts-fixed`; any `Default`, `T1`, or `T2` visible placeholder text in the active draft is FAIL.
 - If `##_draftpath_placeholder_##` media paths remain, report `portable_bundle=false`; do not claim Mac/Windows/Claude/Hermes portability until the full resource bundle is verified.
 - Current CatCup drafts must set `catcup_track_contract_version="shorts_internal_project_template_v1"`, `catcup_text_tracks=["T1","T2","T3","T4","T5","T6"]`, `catcup_media_tracks=["V7","V8","A9","A10"]`, and `bottom_layer_forbidden=true`.
@@ -1756,14 +1756,14 @@ Do not treat unreadable Korean as acceptable terminal display noise. First re-re
 The reusable 11short SFX library is:
 
 ```text
-${env:UTUBE_ROOT}\22factory_20260628\00_asset_tools\marahagi_sfx
+${env:UTUBE_ROOT}\22factory_20260628\00_asset_tools\first\marahagi_sfx
 ```
 
 Use it when the user asks for effect sounds, comedic beats, punch hits, transitions, surprise sounds, water/liquid sounds, UI alerts, or when Tikitaka provides optional SFX cue notes.
 
 Rules:
 
-- Treat the OneDrive `22factory_20260628\00_asset_tools\marahagi_sfx` folder as the shared source for reusable Marahagi/Shorts Academy SFX files.
+- Treat the OneDrive `22factory_20260628\00_asset_tools\first\marahagi_sfx` folder as the shared source for reusable Marahagi/Shorts Academy SFX files.
 - Do not edit CapCut's global sound-effect database. Register selected SFX inside the local CapCut draft as separate audio materials/tracks.
 - When SFX is used, also add the selected SFX files to the local CapCut project's media/material bin whenever the draft schema allows it, so the user can reuse them manually from the media panel.
 - Record selected SFX as both:

@@ -3,14 +3,15 @@
   "source_of_truth": "git_manifest",
   "template_binary_storage": "onedrive_22factory_asset_tools_bundle",
   "asset_tools_root_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools",
-  "portable_user_data_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/capcut_portable/User Data",
+  "asset_tools_bundle_name": "first",
+  "portable_user_data_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data",
   "sync_scripts": {
     "windows": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/sync_capcut_asset_tools.ps1",
     "macos": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/sync_capcut_asset_tools.sh"
   },
-  "shared_presets_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/capcut_portable/User Data/Presets",
-  "shared_referenced_cache_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/capcut_portable/User Data/Cache",
-  "marahagi_sfx_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/marahagi_sfx",
+  "shared_presets_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data/Presets",
+  "shared_referenced_cache_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data/Cache",
+  "marahagi_sfx_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/marahagi_sfx",
   "principle": "CapCut sample project is the template authority; job JSON is replacement values only.",
   "templates": [
     {
@@ -25,7 +26,7 @@
       "catcup_reference_layout_profile": "black_template_master_v1",
       "master_draft_name": "black",
       "master_draft_folder_name": "black",
-      "onedrive_bundle_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/capcut_portable/User Data/Projects/com.lveditor.draft/black",
+      "onedrive_bundle_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data/Projects/com.lveditor.draft/black",
       "local_capcut_draft_roots": {
         "windows": "%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft",
         "macos": "~/Movies/CapCut/User Data/Projects/com.lveditor.draft"
@@ -75,7 +76,7 @@
       "rejected_draft_names": [
         "260625-ig-contortion-top3-urakkai-instagram-tts-fixed"
       ],
-      "onedrive_bundle_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/capcut_portable/User Data/Projects/com.lveditor.draft/260625-ig-contortion-top3-urakkai-instagram-tts",
+      "onedrive_bundle_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data/Projects/com.lveditor.draft/260625-ig-contortion-top3-urakkai-instagram-tts",
       "local_capcut_draft_roots": {
         "windows": "%LOCALAPPDATA%/CapCut/User Data/Projects/com.lveditor.draft",
         "macos": "~/Movies/CapCut/User Data/Projects/com.lveditor.draft"
