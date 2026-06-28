@@ -35,6 +35,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 python3 - "$REPO_ROOT" "$TARGET" "$STRICT" <<'PY'
 import hashlib
 import json
+import os
 import re
 import sys
 from pathlib import Path

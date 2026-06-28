@@ -48,7 +48,9 @@ if ($LASTEXITCODE -ne 0) { throw "install failed" }
 if ($DryRun) {
   Write-Output "DRYRUN skip target verify"
 } else {
-  powershell -ExecutionPolicy Bypass -File $verify -Target $Target
+  $verifyArgs = @("-ExecutionPolicy", "Bypass", "-File", $verify, "-Target", $Target)
+  if ($Strict) { $verifyArgs += "-Strict" }
+  powershell @verifyArgs
   if ($LASTEXITCODE -ne 0) { throw "verify failed" }
 }
 

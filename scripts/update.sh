@@ -84,7 +84,11 @@ bash "$SCRIPT_DIR/install.sh" "${INSTALL_ARGS[@]}"
 if [ "$DRY_RUN" = "1" ]; then
   echo "DRYRUN skip target verify"
 else
-  bash "$SCRIPT_DIR/verify.sh" --target "$TARGET"
+  VERIFY_ARGS=(--target "$TARGET")
+  if [ "$STRICT" = "1" ]; then
+    VERIFY_ARGS+=(--strict)
+  fi
+  bash "$SCRIPT_DIR/verify.sh" "${VERIFY_ARGS[@]}"
 fi
 
 echo "DONE update target=$TARGET dry_run=$DRY_RUN"

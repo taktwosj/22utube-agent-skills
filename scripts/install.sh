@@ -56,7 +56,14 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-python3 - "$REPO_ROOT" "$TARGET" "$PRUNE" "$STRICT" "$DRY_RUN" "${ONLY[@]}" <<'PY'
+PYTHON_ARGS=("$REPO_ROOT" "$TARGET" "$PRUNE" "$STRICT" "$DRY_RUN")
+if [ "${#ONLY[@]}" -gt 0 ]; then
+  for skill in "${ONLY[@]}"; do
+    PYTHON_ARGS+=("$skill")
+  done
+fi
+
+python3 - "${PYTHON_ARGS[@]}" <<'PY'
 import datetime
 import hashlib
 import json
