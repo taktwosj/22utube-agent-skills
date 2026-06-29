@@ -1,13 +1,14 @@
 ---
 name: watch
 description: Watch a video (URL or local path). Downloads with yt-dlp, extracts auto-scaled frames with ffmpeg, pulls the transcript from captions (or Whisper API fallback), and hands the result to Claude so it can answer questions about what's in the video.
-argument-hint: "<video-url-or-path> [question]"
 allowed-tools: Bash, Read, AskUserQuestion
-homepage: https://github.com/bradautomates/claude-video
-repository: https://github.com/bradautomates/claude-video
-author: bradautomates
 license: MIT
-user-invocable: true
+metadata:
+  argument-hint: "<video-url-or-path> [question]"
+  homepage: https://github.com/bradautomates/claude-video
+  repository: https://github.com/bradautomates/claude-video
+  author: bradautomates
+  user-invocable: true
 ---
 
 # /watch — Claude watches a video

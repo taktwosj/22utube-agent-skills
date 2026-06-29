@@ -1,7 +1,0 @@
-interface:
-  display_name: "0쇼츠 역사춘제작 에이전트"
-  short_description: "역사춘 한국사 쇼츠 제작, Image2, 춘식이 TTS, 업로드 설명, CapCut 프로젝트 등록"
-  default_prompt: "Use $0shrt-korea-production-agent as the 0쇼츠 역사춘제작 에이전트 to produce or fix a Korean history Shorts episode with official GPT Image2, body-only Chunsik audio, Joseon-history BGM at -26.1 dB, bottom 2-line captions, no typewriter SFX, no purple middle overlay, the required 한국사 upload description structure, active CapCut emotion_pack effects including opt-in text impact presets, scattered wind overlays, verdict stamps/SFX when appropriate, and mandatory n8n_capcut_draft.py + validate_episode_harness.py CapCut generation. Never create placeholder/profile-shell CapCut drafts unless explicitly requested as TEST_ONLY."
-
-policy:
-  allow_implicit_invocation: true

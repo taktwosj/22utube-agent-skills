@@ -29,25 +29,7 @@
       "enabled": true
     },
     {
-      "name": "00utube-lm-production-agent",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "0shrt-korea-production-agent",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
       "name": "111-politics-longform",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "11short-gemini-remake-factory",
       "category": "22utube",
       "targets": ["codex", "claude", "hermes"],
       "enabled": true

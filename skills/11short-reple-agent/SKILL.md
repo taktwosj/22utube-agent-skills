@@ -5,6 +5,26 @@ description: Use when 11utube/11short work asks for 리플, 댓글, 댓글창, r
 
 # 11short Reple Agent
 
+## 22factory Active Root Override - 2026-06-29
+
+For current 22utube work on this machine, read
+`${env:WORKSPACE_ROOT}\22factory_20260628\AGENTS.md` before applying older
+11utube/11short paths in this skill.
+
+- New reple/comment-card Shorts work folders go under
+  `${env:WORKSPACE_ROOT}\22factory_20260628\01_shorts_factory\episodes\SH_YYYYMMDD_slug`.
+- Reple visual assets selected for a new episode should be recorded under that
+  episode's `40_assets_used` folder or manifest. Reusable templates and shared
+  assets belong under
+  `${env:WORKSPACE_ROOT}\22factory_20260628\00_asset_tools`.
+- Legacy `11short/assets/...` files may be read as references when no factory
+  copy exists, but they are not the active output root.
+- The editable CapCut draft still lives in the local CapCut project directory;
+  OneDrive stores only project names, local paths, manifests, snapshots,
+  reports, and upload/final packages.
+- If this skill conflicts with the factory `AGENTS.md`, the factory
+  `AGENTS.md` wins for new production and asset placement.
+
 This skill extends `11short-production-agent` for 11short remake videos whose visible lower caption must be a YouTube-style reply/comment image instead of the standard yellow bottom caption.
 
 ## Priority

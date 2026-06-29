@@ -1,4 +1,0 @@
-interface:
-  display_name: "11short Gemini Remake Factory"
-  short_description: "Gemini analysis to CapCut-ready 11short remake workflow with OneDrive handoff support"
-  default_prompt: "Use this skill to analyze a YouTube Shorts URL with Gemini/AI Studio, normalize the result, generate 11short assets, create a CapCut draft, and run all harness gates. Do not use Supertone/TTS unless the user explicitly requests voice generation. For cross-machine work, create or consume OneDrive 11short_handoff packages with handoff_manifest locks instead of copying live CapCut draft folders."

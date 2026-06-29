@@ -15,9 +15,9 @@ description: Dedicated workflow for 역사춘 Korean/Joseon history Shorts packa
 → 3텍스트 구조 설계 → 설명란/해시태그/고지문 생성 → 업로드용 패키지 완성
 ```
 
-실제 이미지·TTS·CapCut·BGM 제작까지 진행하면 `0shrt-korea-production-agent` 규칙도 함께 적용한다. 이 스킬은 역사춘의 기획·제목·썸네일·대본·업로드 패키지를 전담하고, 0쇼츠 스킬은 GPT Image2, 음성, CapCut, 하네스 검수를 전담한다.
+이 스킬은 역사춘의 기획·제목·썸네일·대본·업로드 패키지를 전담한다. 실제 이미지·TTS·CapCut·BGM 제작은 현재 활성 Shorts production 라인으로 별도 라우팅될 때만 진행한다.
 
-역사춘 제작에서 감정선 기반 CapCut 효과가 필요하면 `0shrt-korea-production-agent/references/capcut_emotion_effects.md`를 적용한다.
+역사춘 제작에서 감정선 기반 CapCut 효과가 필요하면 현재 활성 Shorts/CapCut 제작 스킬의 효과 규칙을 따른다.
 
 대본 초안 작성 후 최종 대본을 확정하기 전에는 `00script-writer/references/parallel-persona-gate.md`의 10페르소나 병렬 검수를 반드시 노출한다. 진행판과 요약표를 사용자에게 보여주고, `REWRITE_REQUIRED` 또는 `REPLAN`이면 수정 전에는 최종 대본으로 부르지 않는다.
 

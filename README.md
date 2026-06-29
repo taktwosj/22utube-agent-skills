@@ -21,15 +21,12 @@ Core production skills:
 00-tikitaka
 000short-production-agent
 00script-writer
-00utube-lm-production-agent
-0shrt-korea-production-agent
 111-politics-longform
 ```
 
 Conditional and support production skills:
 
 ```text
-11short-gemini-remake-factory
 11short-reple-agent
 22utube-production-agent
 josun-historychoon-production-agent

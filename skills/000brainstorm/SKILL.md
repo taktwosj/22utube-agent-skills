@@ -7,6 +7,19 @@ description: Use first when the user says $000brainstorm, $brainstorm, brainstor
 
 This skill is a mandatory pre-work intent gate. It does not replace production skills. It runs first, then the selected production skill runs second.
 
+## 22factory Active Root Override - 2026-06-29
+
+For current 22utube work, check
+`${env:WORKSPACE_ROOT}\22factory_20260628\AGENTS.md` before applying
+older 11utube/11short paths from skills or memory.
+
+- `22factory_20260628` is the active OneDrive production root for new work.
+- New Shorts episodes go under `22factory_20260628\01_shorts_factory\episodes\SH_YYYYMMDD_slug`.
+- Shared music, BGM, SFX, images, fonts, templates, and production tools go under `22factory_20260628\00_asset_tools`.
+- `{UTUBE_ROOT}` / `11utube` paths are legacy reference storage unless the user explicitly asks to inspect or repair legacy work there.
+- GitHub is the source of truth for skill source; do not put skill source or installed runtime skills in the factory root.
+- If this file, another skill, memory, or an older report conflicts with the factory AGENTS file, the factory AGENTS file wins for new production and asset placement.
+
 ## Current 11short Factory Override - 2026-06-13
 
 For current 11short/쇼츠공장 work, this skill is only the intake and routing gate.

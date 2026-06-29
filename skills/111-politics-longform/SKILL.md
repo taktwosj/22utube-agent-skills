@@ -1,9 +1,33 @@
 ---
 name: 111-politics-longform
-description: Use when the user says 111정치롱폼, 정치롱폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to make/update a Korean political longform CapCut draft, T1 chapter text, YouTube upload package, channel profile, keywords, or thumbnail hooks for a 민주진영 political commentary channel.
+description: Use when the user says 111정치롱폼, 정치롱폼, 정치롱폼1단계, 정치롱폼2단계, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to make/update a Korean political longform source-download package, CapCut draft, T1 chapter text, YouTube upload package, channel profile, keywords, or thumbnail hooks for a 민주진영 political commentary channel.
 ---
 
 # 111 Politics Longform
+
+## 22factory Active Root Override - 2026-06-29
+
+For new political longform work, read:
+
+```text
+${env:WORKSPACE_ROOT}\22factory_20260628\AGENTS.md
+```
+
+New political longform episode outputs and source-evidence files must be created
+under:
+
+```text
+22factory_20260628\02_politics_longform\episodes\PL_YYYYMMDD_slug
+```
+
+Legacy `22utube\11utube\yellow\episodes` folders are read-only reference or
+explicit repair targets unless the user asks for legacy work. Shared yellow
+assets may still be read from `$env:UTUBE_ROOT\yellow\assets\...`. The editable
+CapCut draft remains under the local `com.lveditor.draft` directory; OneDrive
+stores metadata, manifests, snapshots, reports, exports, and upload packages.
+
+Skill sync surfaces: runtime `C:\Users\arajun\.codex\skills\111-politics-longform`;
+shared source `C:\Users\arajun\OneDrive\22utube\codex_skills_source\111-politics-longform`. Ignore old `11utube\codex_skills_source` or `skills_sync` paths unless present.
 
 ## Core Rule
 
@@ -34,34 +58,57 @@ other source, use the real source channel and date from `source_manifest.json`,
 different base template or promotes another political longform draft, use that
 base and preserve the same source-label rules.
 
-## Entry Modes
+## Execution Stages
 
-Recognize two entry modes, but keep the finishing process identical:
+Use the same factory episode folder for both stages:
+`22factory_20260628\02_politics_longform\episodes\PL_YYYYMMDD_slug`.
 
-```text
-1. Codex-build mode: Codex starts from topic/source URLs and builds the source
-   package, roughcut, T1, CapCut draft, harness evidence, and upload package.
-2. External-rough finishing mode: Claude, GLM, or another agent provides a
-   rough package, handoff, roughcut, source labels, T1 draft, or topic flow.
-   Treat that package as input to verify and finish, not as already-final work.
-```
+`정치롱폼1단계` / `politics-longform-stage1` means source intake through video download only. It may find topics, source URLs, candidate ranges, and rough flow, but it must stop before speech-boundary lock, locked clips, CapCut, export, or upload-ready claims.
 
-In Codex-build mode, Codex owns source discovery from approved reference
-channels, transcript/range verification, source downloading, clip ordering,
-roughcut creation, CapCut draft creation, T1, source labels, thumbnail prompt,
-and upload package.
+Stage 1 required outputs: `episode_manifest.json`,
+`00_source\source_manifest.json`, `00_source\{video_id}\source_full.mp4`,
+candidate `10_analysis\roughcut_edl.json`, candidate
+`10_analysis\source_labels.json`, `10_analysis\topic_flow.json` using
+`A > B > C`, optional `20_script\lower_t1_draft.json`,
+`90_reports\stage1_handoff_to_codex.md`, and `90_reports\stage1_status.json`
+with `PASS_SOURCE_DOWNLOADED` or `WAIT_DOWNLOAD`.
 
-In external-rough finishing mode, Claude/GLM may do the first pass: issue scan,
-candidate videos, timestamp ranges, rough chapter flow, and first-cut notes.
-Codex still owns final verification and production: re-check sources, use only
-approved reference channels when the user says so, rebuild or normalize clips,
-set the final order, patch the CapCut JSON mirrors, verify audio/video, and
-produce the final upload package.
+If download is blocked, Stage 1 must output exact source URLs, desired formats,
+and `WAIT_DOWNLOAD`; do not fabricate local media.
 
-In both modes, final work means the same checklist: read the source package,
-verify source identity, split visible source labels by transition, insert or
-repair lower T1, preserve the topic-flow strap, patch root and `Timelines/*`
-CapCut JSON mirrors, run the harness gates, and prepare the upload package.
+`정치롱폼2단계` / `politics-longform-stage2` means Codex finalization. It reads
+Stage 1, verifies source identity, creates `speech_boundary_lock.json`,
+`roughcut_edl_locked.json`, `source_labels_locked.json`, cuts `*_locked.mp4`,
+copies YP007, patches root and `Timelines/*` CapCut JSON mirrors, validates,
+then prepares upload text and thumbnail hooks.
+
+Stage 2 input gate: if `source_full.mp4` is missing for any used source, return to Stage 1. Never build final CapCut from Stage 1 rough media or candidate EDL.
+
+Claude/GLM/other agents may produce Stage 1. Codex owns Stage 2 unless the user
+explicitly says otherwise.
+
+## Hard Gates Before CapCut
+
+Speech boundary lock: treat `roughcut_edl.json`, `source_labels.json`, and
+downloaded `SEG*.mp4` files as candidate-only. Do not create or patch a final
+CapCut draft if `cut_fix: pending`, `speech_boundary_adjust`, download notes,
+missing `speech_boundary_lock.json`, missing `roughcut_edl_locked.json`, missing
+`source_labels_locked.json`, missing locked clips, or missing ffprobe PASS
+evidence remains. Required order: verify transcript/SRT -> write
+`10_analysis\speech_boundary_lock.json` with rough/locked start/end and reason
+-> cut locked clips -> build CapCut only from locked EDL/media. If only rough
+clips exist, report `WAIT`.
+
+YP007 flow strap style lock: `flow_strap` is not controlled by font size alone.
+Locate it by role (`track.name == "flow_strap"` or reference text), not hard-coded
+index. Clone the YP007 text clip/material style, transform, scale, size, font,
+stroke/background, render order, and full text-box geometry; change only visible
+text, per-segment range, and active-topic color. Verify active topic is yellow
+and inactive topics are de-emphasized for every segment.
+
+Open CapCut safety: if CapCut is open or background processes remain, do not
+overwrite an existing target draft folder. Build a clean new project name or
+wait for full close/restart, then patch root and `Timelines/*` mirrors.
 
 ## Default CapCut Base Priority
 
@@ -177,7 +224,8 @@ Use them as examples of density and format, not as content for a new video.
 
 1. Resolve the episode and CapCut draft.
    - CapCut root usually lives under `%LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft`.
-   - For source evidence, prefer the episode folder under `22utube\11utube\yellow\episodes\...`.
+   - For new source evidence, prefer the factory episode folder under `22factory_20260628\02_politics_longform\episodes\PL_YYYYMMDD_slug`.
+   - Use `22utube\11utube\yellow\episodes\...` only as legacy reference or explicit repair target.
    - For external-rough finishing mode, first read `handoff_to_codex.md`, `source_manifest.json`, `source_labels.json`, `edit\roughcut_edl.json`, `text\lower_t1_draft.json`, `decisions\topic_flow.json`, `upload_description_draft.md`, and `report.md` when present.
    - Also read `edit\segment_markers_hq.srt`, `source\M1\source.ko.srt`, `analysis\srt_items.json`, `upload_description.md`, and existing CapCut draft metadata when present.
 
@@ -301,6 +349,9 @@ filter values: `크림`, `배경 터치업`, and `보정` are each 0.30-0.55, ne
 quality enhancement: every main video material preserves `QualityEnhance`
 auto/edit effects: smart_color_adjust, sharpen, clear, and particle values are 0.30-0.50 per clip
 loudness normalize: every main video segment references an enabled loudness material
+speech boundary lock: `speech_boundary_lock.json`, `roughcut_edl_locked.json`, and `source_labels_locked.json` exist and every final segment uses locked media
+flow strap style: t3/flow_strap clones YP007 text-box geometry, transform, scale, font, stroke/background, and render order; not just font size
+open CapCut safety: existing target draft was not overwritten while CapCut was open
 first_start: 0.00
 last_end: roughcut end
 gap_count: 0 unless intentionally sparse
