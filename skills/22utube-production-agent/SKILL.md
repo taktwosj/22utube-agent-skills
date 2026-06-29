@@ -130,7 +130,7 @@ For work inside:
 run the story harness at the end of each stage:
 
 ```bash
-python ${env:WORKSPACE_ROOT}/11utube/story/scripts/harness_validate.py {episode_dir} --stage {stage}
+python "$UTUBE_ROOT/story/scripts/harness_validate.py" {episode_dir} --stage {stage}
 ```
 
 `stage = script | audio | prompts | capcut | all`
