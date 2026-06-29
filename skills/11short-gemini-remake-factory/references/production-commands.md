@@ -48,7 +48,7 @@ ffmpeg -y -hide_banner -loglevel error -i "$work\source.mp4" -vf "fps=1,scale=16
 Use the canonical CapCut remake system prompt, then paste the generated `gemini_request.md` into Gemini/Google AI Studio with URL context enabled.
 
 ```powershell
-py -3 "$env:SHORT_ROOT\skills_sync\11short-gemini-remake-factory\scripts\build_gemini_request.py" --url "{url}" --out "$work\gemini_request.md"
+py -3 "$HOME\agent-skills\skills\11short-gemini-remake-factory\scripts\build_gemini_request.py" --url "{url}" --out "$work\gemini_request.md"
 ```
 
 ## Extract Original Audio

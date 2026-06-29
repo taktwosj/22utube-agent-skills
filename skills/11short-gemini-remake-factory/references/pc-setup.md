@@ -18,18 +18,23 @@ $env:UTUBE_ROOT = "$env:WORKSPACE_ROOT\11utube"
 $env:SHORT_ROOT = "$env:UTUBE_ROOT\11short"
 ```
 
-## Install Skill From OneDrive
+## Install Skills From Git
 
-Copy this skill into Codex skills:
+Skills are installed from the Git source of truth. Do not use OneDrive skill
+source or mirror folders.
 
 ```powershell
-$skillSrc = "$env:SHORT_ROOT\skills_sync\11short-gemini-remake-factory"
-$skillDst = "$env:USERPROFILE\.codex\skills\11short-gemini-remake-factory"
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.codex\skills" | Out-Null
-Copy-Item -Recurse -Force -LiteralPath $skillSrc -Destination $skillDst
+if (-not (Test-Path "$HOME\agent-skills\.git")) {
+  git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
+}
+
+cd "$HOME\agent-skills"
+git pull --ff-only
+powershell -ExecutionPolicy Bypass -File scripts\update.ps1 -Target all -Strict
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target all -Strict
 ```
 
-Restart Codex after copying.
+Restart Codex after installing or updating.
 
 ## Required Local Tools
 
@@ -84,5 +89,5 @@ Gemini 분석부터 CapCut 초안 생성, analysis/assets/capcut/all 하네스 P
 If skill chips are not available, use plain text:
 
 ```text
-Use 11short-gemini-remake-factory from OneDrive. Run Brainstorm first, use Gemini/AI Studio URL context, then make the full 11short CapCut draft and stop on any harness FAIL.
+Use the Git-installed 11short-gemini-remake-factory skill. Keep production handoff files in OneDrive, run Brainstorm first, use Gemini/AI Studio URL context, then make the full 11short CapCut draft and stop on any harness FAIL.
 ```

@@ -979,7 +979,7 @@ Evidence mode note:
 The recommended local wrapper is:
 
 ```powershell
-py -3 {UTUBE_ROOT}\codex_skills_source\00-tikitaka\scripts\tikitaka_harness_runner.py {work_dir} --job-id {job_id}
+py -3 $HOME\agent-skills\skills\00-tikitaka\scripts\tikitaka_harness_runner.py {work_dir} --job-id {job_id}
 ```
 
 The wrapper reads the available evidence, writes `job_state.json`, `validation_report.json`, `evidence_pack.json`, and `visual_gate.md`, and fails closed when anything is missing. Generated files with `FAILED`, `MISSING`, `NOT_RUN`, or `UNVERIFIED` statuses do not permit final reporting.

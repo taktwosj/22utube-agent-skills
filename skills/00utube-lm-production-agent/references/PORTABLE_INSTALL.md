@@ -1,31 +1,31 @@
 # Portable Install
 
-The OneDrive source copy is:
+The source of truth is the Git repo:
 
 ```text
-{OneDrive}\22utube\codex_skills\00utube-lm-production-agent
+$HOME\agent-skills\skills\00utube-lm-production-agent
 ```
 
-Each Windows PC needs a local Codex skill install at:
+Each Windows PC needs local runtime installs under:
 
 ```text
-%USERPROFILE%\.codex\skills\00utube-lm-production-agent
+%USERPROFILE%\.codex\skills
 ```
 
 Run from PowerShell:
 
 ```powershell
-$installer = @(
-  "$env:OneDrive\22utube\codex_skills\00utube-lm-production-agent\scripts\install_local.ps1",
-  "$env:OneDriveCommercial\22utube\codex_skills\00utube-lm-production-agent\scripts\install_local.ps1",
-  "$env:USERPROFILE\OneDrive\22utube\codex_skills\00utube-lm-production-agent\scripts\install_local.ps1"
-) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-
-if (-not $installer) { throw "install_local.ps1 not found in OneDrive 22utube" }
-powershell -ExecutionPolicy Bypass -File $installer
+if (-not (Test-Path "$HOME\agent-skills\.git")) {
+  git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
+}
+cd "$HOME\agent-skills"
+git pull --ff-only
+powershell -ExecutionPolicy Bypass -File scripts\update.ps1 -Target all -Strict
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target all -Strict
 ```
 
-If none of those paths exists, replace the OneDrive path with the actual synced OneDrive path for that PC.
+Do not use OneDrive skill source or mirror folders. OneDrive remains for
+production files and handoff packages only.
 
 For office/Windows client PCs, the production console and n8n server are the Mac mini by default. Use the Mac mini Tailscale IP, not the current PC's Tailscale IP:
 

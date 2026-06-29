@@ -32,8 +32,19 @@ Common source locations:
 ```text
 Windows: $HOME\agent-skills\skills
 macOS / Mac mini: $HOME/agent-skills/skills
-Legacy OneDrive cache: $env:UTUBE_ROOT\codex_skills_source
 ```
+
+Forbidden legacy source/mirror folders:
+
+```text
+FORBIDDEN: $env:UTUBE_ROOT\codex_skills_source
+FORBIDDEN: $env:SHORT_ROOT\skills_sync
+FORBIDDEN: {WORKSPACE_ROOT}\codex_skills
+```
+
+Do not use, recreate, sync from, or copy to those folders. If another PC still
+has them, delete them after confirming they are not local runtime folders.
+Local runtime folders such as `$HOME\.codex\skills` stay installed from Git.
 
 If an operational document shows `py -3`, use `python3` on the Mac mini. If it shows `python3`, use `py -3` on this Windows PC.
 

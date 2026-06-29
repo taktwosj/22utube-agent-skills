@@ -542,8 +542,9 @@ tools are mentioned during 11short production.
 - Do not install or use `agentmemory` or another extra memory layer for 11short
   operating rules unless the user explicitly requests it for the current
   machine. The active durable authorities are local skills, shared
-  `codex_skills_source`, Codex memories when available, and any user-approved
-  Honcho/Hermes rule store. Avoid split-brain memory.
+  `$HOME/agent-skills/skills`, installed runtime skills, Codex memories when
+  available, and any user-approved Honcho/Hermes rule store. Avoid split-brain
+  memory.
 - Honcho/Paperclip setup, if requested, must never print API keys or tokens.
   Check only set/unset/length status, back up existing Codex/Claude/Hermes
   config first, and exclude secrets, cookies, sessions, and personal/customer
@@ -2750,7 +2751,7 @@ When Gemini-first execution is actually needed, do not wait for a later script. 
 
 1. Create the work folder under `${env:UTUBE_ROOT}\11short\000short-production-agent\episodes\{date-videoid-or-profile}`.
 2. Download or otherwise save the real source as `{work}\source.mp4`; if direct download is blocked, still run Gemini with URL context first and record the blocker in `{work}\status.json`.
-3. Open Gemini / Google AI Studio visibly and paste `${env:UTUBE_ROOT}\11short\skills_sync\11short-gemini-remake-factory\references\gemini-capcut-remake-system-prompt.md` plus the user's URL. Build `{work}\gemini_request.md` with `${env:UTUBE_ROOT}\11short\skills_sync\11short-gemini-remake-factory\scripts\build_gemini_request.py` when available. Fall back to `${env:UTUBE_ROOT}\11short\GEMINI_SHORTS_ANALYSIS_PROMPT.md` only if the synced prompt is missing.
+3. Open Gemini / Google AI Studio visibly and paste the Git skill prompt at `$HOME\agent-skills\skills\11short-gemini-remake-factory\references\gemini-capcut-remake-system-prompt.md` plus the user's URL. Build `{work}\gemini_request.md` with `$HOME\agent-skills\skills\11short-gemini-remake-factory\scripts\build_gemini_request.py` when available. Fall back to `${env:UTUBE_ROOT}\11short\GEMINI_SHORTS_ANALYSIS_PROMPT.md` only if the Git repo prompt is missing.
 4. Enable URL context/Grounding when available. If URL context is weak or Gemini cannot inspect the video accurately, upload `{work}\source.mp4` manually in the same AI Studio chat.
 5. Save the submitted prompt to `{work}\gemini_request.md`, copy Gemini's answer as text, save it to `{work}\aistudio_clipboard.txt`, extract JSON to `{work}\analysis_raw_gemini.json`, normalize it to `{work}\analysis.json`, then run the `analysis` harness. Preserve useful Gemini raw fields, especially v2.1 source/audio/category/timeline fields, in `analysis.json` or `status.json` before production.
 6. Run the master cross-check when the user needs a long-form written analysis, when the source is complex, or before producing assets/CapCut: paste `${env:UTUBE_ROOT}\11short\GEMINI_YOUTUBE_MASTER_ANALYSIS_PROMPT.md` with the same URL/source, save the submitted prompt to `{work}\gemini_master_request.md`, save the response to `{work}\aistudio_master_clipboard.md`, and save the useful output as `{work}\analysis_master_gemini.md` or `{work}\analysis_master_gemini.json`.
@@ -2976,7 +2977,7 @@ Stop asking and proceed when the user says `그만`, `됐어`, `다음`, `바로
 
 ## Gemini Master Cross-Check Rule
 
-`skills_sync\11short-gemini-remake-factory\references\gemini-capcut-remake-system-prompt.md` is the primary 11short CapCut JSON analyzer. `GEMINI_SHORTS_ANALYSIS_PROMPT.md` is fallback only. `GEMINI_YOUTUBE_MASTER_ANALYSIS_PROMPT.md` is the reference analyzer for long writing, factual integrity, mode detection, target persona, safety, research angles, and script direction.
+`$HOME\agent-skills\skills\11short-gemini-remake-factory\references\gemini-capcut-remake-system-prompt.md` is the primary 11short CapCut JSON analyzer. `GEMINI_SHORTS_ANALYSIS_PROMPT.md` is fallback only. `GEMINI_YOUTUBE_MASTER_ANALYSIS_PROMPT.md` is the reference analyzer for long writing, factual integrity, mode detection, target persona, safety, research angles, and script direction.
 
 Use the master analyzer whenever:
 

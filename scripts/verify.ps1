@@ -162,6 +162,52 @@ function Test-ForbiddenNames([string]$RepoRoot) {
   }
 }
 
+function Test-IsAllowedSkillMirrorReference([string]$RelativePath, [string]$Line) {
+  $rel = $RelativePath.Replace('\', '/')
+  if ($rel.StartsWith("skills/00-tikitaka/reports/")) { return $true }
+  if ($rel.StartsWith("docs/superpowers/")) { return $true }
+  if ($rel -eq "scripts/verify.sh" -or $rel -eq "scripts/verify.ps1") { return $true }
+  if ($rel -eq "skills/skil-down/scripts/skil_down.py") {
+    return $Line.Contains("FORBIDDEN_SOURCE_PARTS")
+  }
+  if ($rel -eq "skills/skil-down/SKILL.md") {
+    return $Line.Contains("FORBIDDEN:") -or $Line.Contains("Forbidden legacy source/mirror folders")
+  }
+  return $false
+}
+
+function Test-ForbiddenSkillMirrorReferences([string]$RepoRoot) {
+  $tokens = @("codex_skills_source", "skills_sync", "codex_skills")
+  $files = @()
+  foreach ($relativeRoot in @("scripts", "skills", "docs")) {
+    $root = Join-Path $RepoRoot $relativeRoot
+    if (-not (Test-Path -LiteralPath $root)) { continue }
+    $files += @(Get-ChildItem -LiteralPath $root -File -Recurse -Force)
+  }
+  $readme = Join-Path $RepoRoot "README.md"
+  if (Test-Path -LiteralPath $readme) {
+    $files += @(Get-Item -LiteralPath $readme)
+  }
+  foreach ($file in $files) {
+    $rel = Get-RelativePath $RepoRoot $file.FullName
+    $lines = Get-Content -Encoding UTF8 -LiteralPath $file.FullName -ErrorAction SilentlyContinue
+    if ($null -eq $lines) { continue }
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      $line = [string]$lines[$i]
+      $matched = $false
+      foreach ($token in $tokens) {
+        if ($line.Contains($token)) {
+          $matched = $true
+          break
+        }
+      }
+      if (-not $matched) { continue }
+      if (Test-IsAllowedSkillMirrorReference $rel $line) { continue }
+      Add-Error "forbidden OneDrive skill mirror reference in $($rel.Replace('\', '/')):$($i + 1)"
+    }
+  }
+}
+
 function Test-Repo($RepoRoot, $SkillSet, $Targets) {
   if (-not $SkillSet) { return }
   if ($SkillSet.repo_name -ne "22utube-agent-skills") {
@@ -195,6 +241,7 @@ function Test-Repo($RepoRoot, $SkillSet, $Targets) {
     }
   }
   Test-ForbiddenNames $RepoRoot
+  Test-ForbiddenSkillMirrorReferences $RepoRoot
   Test-ForbiddenContent $RepoRoot "scripts" $true
   Test-ForbiddenContent $RepoRoot "skills" $true
   Test-ForbiddenContent $RepoRoot "docs" $false

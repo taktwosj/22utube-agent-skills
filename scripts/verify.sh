@@ -178,6 +178,46 @@ def test_forbidden_names() -> None:
             if secret_re.search(item.name):
                 fail(f"secret-like file name: {rel}")
 
+def is_allowed_skill_mirror_reference(rel: str, line: str) -> bool:
+    if rel.startswith("skills/00-tikitaka/reports/"):
+        return True
+    if rel.startswith("docs/superpowers/"):
+        return True
+    if rel in {"scripts/verify.sh", "scripts/verify.ps1"}:
+        return True
+    if rel == "skills/skil-down/scripts/skil_down.py":
+        return "FORBIDDEN_SOURCE_PARTS" in line
+    if rel == "skills/skil-down/SKILL.md":
+        return "FORBIDDEN:" in line or "Forbidden legacy source/mirror folders" in line
+    return False
+
+def test_forbidden_skill_mirror_references() -> None:
+    forbidden_tokens = ("codex_skills_source", "skills_sync", "codex_skills")
+    scan_roots = ["scripts", "skills", "docs"]
+    candidate_files = []
+    for relative_root in scan_roots:
+        root = repo_root / relative_root
+        if not root.exists():
+            continue
+        candidate_files.extend(sorted(p for p in root.rglob("*") if p.is_file()))
+    readme = repo_root / "README.md"
+    if readme.exists():
+        candidate_files.append(readme)
+    for file_path in candidate_files:
+        if ".git" in file_path.parts or "__pycache__" in file_path.parts:
+            continue
+        try:
+            lines = file_path.read_text(encoding="utf-8").splitlines()
+        except UnicodeDecodeError:
+            continue
+        rel = file_path.relative_to(repo_root).as_posix()
+        for line_number, line in enumerate(lines, start=1):
+            if not any(token in line for token in forbidden_tokens):
+                continue
+            if is_allowed_skill_mirror_reference(rel, line):
+                continue
+            fail(f"forbidden OneDrive skill mirror reference in {rel}:{line_number}")
+
 def test_repo(skill_set: dict, targets: dict) -> None:
     if skill_set.get("repo_name") != "22utube-agent-skills":
         fail("repo_name must be 22utube-agent-skills")
@@ -205,6 +245,7 @@ def test_repo(skill_set: dict, targets: dict) -> None:
         if count != 1:
             fail(f"nested or missing SKILL.md count={count} skill={skill['name']}")
     test_forbidden_names()
+    test_forbidden_skill_mirror_references()
     test_forbidden_content("scripts", True)
     test_forbidden_content("skills", True)
     test_forbidden_content("docs", False)

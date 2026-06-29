@@ -412,16 +412,22 @@ Common harness caveat: if `channel_episode_harness.py` misroutes a `tech/episode
 
 ## Portable Use On Another PC
 
-The distributable copy of this skill should live in:
+The distributable copy of this skill lives in the Git source of truth:
 
 ```text
-{OneDrive}\22utube\codex_skills\00utube-lm-production-agent
+$HOME\agent-skills\skills\00utube-lm-production-agent
 ```
 
-Install it on each PC by copying that folder to:
+Install or update it on each PC through the repo installer:
 
-```text
-%USERPROFILE%\.codex\skills\00utube-lm-production-agent
+```powershell
+if (-not (Test-Path "$HOME\agent-skills\.git")) {
+  git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
+}
+cd "$HOME\agent-skills"
+git pull --ff-only
+powershell -ExecutionPolicy Bypass -File scripts\update.ps1 -Target all -Strict
 ```
 
-The bundled `scripts/install_local.ps1` performs that copy for the current Windows user.
+Do not use OneDrive skill source or mirror folders. Local runtime folders are
+copy-only targets installed from Git.

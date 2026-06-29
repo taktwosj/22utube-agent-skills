@@ -1,13 +1,13 @@
 ---
 name: 11short-gemini-remake-factory
-description: Portable 11utube/11short YouTube Shorts remake workflow from Brainstorm and Gemini/Google AI Studio source analysis through normalized analysis.json, Korean captions, optional generated voice only when explicitly requested, CapCut draft creation, and shorts_remake_harness analysis/assets/capcut/all gates. Use when the user gives a YouTube Shorts URL and asks for Gemini analysis, 쇼츠 리메이크, 11short production, CapCut draft, OCR overlays, Korean captions, or wants the same production process on another PC from OneDrive.
+description: Portable 11utube/11short YouTube Shorts remake workflow from Brainstorm and Gemini/Google AI Studio source analysis through normalized analysis.json, Korean captions, optional generated voice only when explicitly requested, CapCut draft creation, and shorts_remake_harness analysis/assets/capcut/all gates. Use when the user gives a YouTube Shorts URL and asks for Gemini analysis, 쇼츠 리메이크, 11short production, CapCut draft, OCR overlays, Korean captions, or wants the same production process on another PC using OneDrive handoff packages.
 ---
 
 # 11short Gemini Remake Factory
 
 Use this skill to produce a complete 11short remake package from a YouTube Shorts URL. The required done state is a visible local CapCut draft plus PASS reports for `analysis`, `assets`, `capcut`, and final `all`.
 
-This skill is portable. Resolve paths from OneDrive and environment variables; do not hardcode a Windows user name.
+This skill is portable. Resolve production and handoff paths from OneDrive and environment variables; install the skill itself from Git and do not hardcode a Windows user name.
 
 ## 11short Voice Policy
 
