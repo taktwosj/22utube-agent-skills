@@ -255,6 +255,33 @@ Use them as examples of density and format, not as content for a new video.
    - A separate audio track is allowed only when the user explicitly asks for
      narration, BGM, TTS, or detached audio repair.
 
+### Supertone TTS / Narration Exception
+
+Political longform normally preserves source speech, not generated narration.
+If the user explicitly asks for TTS, narration audio, voice generation, or a
+separate voice track, use the shared Supertone route:
+
+```powershell
+py -3.14 "${env:WORKSPACE_ROOT}\22factory_20260628\00_asset_tools\tools\make_supertone_tts.py" "<대본 텍스트>" "<출력파일.wav>"
+```
+
+Rules:
+
+- Read only `SUPERTONE_API_KEY`, `SUPERTONE_VOICE_ID`, `SUPERTONE_PITCH`,
+  `SUPERTONE_SPEED`, and `SUPERTONE_MODEL`; never paste, print, store, or
+  serialize the API key.
+- On `home_windows`, User-scope Supertone variables may exist even if the
+  current Codex process environment is stale. The shared script reads Windows
+  User environment as a fallback.
+- Use `py -3.14`; do not assume bare `python` has the Supertone SDK.
+- Current home_windows default is the Chunsik Supertone setup through
+  `SUPERTONE_VOICE_ID` and `sona_speech_1`.
+- If Supertone env or SDK is unavailable, stop at
+  `WAIT_SUPERTONE_ENV_OR_SDK_MISSING`; do not switch to Edge TTS, ElevenLabs,
+  browser TTS, Kokoro, or another provider without explicit user approval.
+- Keep generated voice as a separate, clearly named audio asset and update
+  CapCut root plus `Timelines/*` mirrors if it is inserted.
+
 ### Mixed Source Standard
 
 For mixed-source political longform drafts, do not use one continuous label such as

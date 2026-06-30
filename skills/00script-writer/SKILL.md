@@ -71,6 +71,25 @@ This skill may improve:
 - policy-safe phrasing
 - title/thumbnail copy when tied to an existing script review
 
+## Supertone TTS Awareness
+
+This skill does not generate audio, SRT, layout JSON, or CapCut files. When a
+rewrite is meant to become TTS/voice in a YouTube production, make that
+downstream route clear:
+
+- Keep a clean copy-only voice text block when the draft contains one.
+- The production-side default TTS route is Supertone via
+  `${env:WORKSPACE_ROOT}\22factory_20260628\00_asset_tools\tools\make_supertone_tts.py`.
+- On Windows, use `py -3.14` for the shared script; bare `python` may point to a
+  different interpreter.
+- Supertone configuration must come from `SUPERTONE_API_KEY`,
+  `SUPERTONE_VOICE_ID`, `SUPERTONE_PITCH`, `SUPERTONE_SPEED`, and
+  `SUPERTONE_MODEL`; never print or store the API key.
+- On `home_windows`, the shared script can read Windows User-scope environment
+  variables even if the current Codex process does not show them.
+- If the user asks for actual audio generation, route to
+  `000short-production-agent`; do not silently choose a fallback TTS provider.
+
 This skill may run writer/persona review when the user asks for a gate or when
 the current contract requires a visible rewrite gate. Keep the output focused on
 rewrite findings and the revised draft.

@@ -37,6 +37,27 @@ Voice-copy text is part of the draft script only. This skill does not create
 voice, audio files, SRT files, layout JSON, render plans, CapCut drafts, exports,
 upload packages, or production packages.
 
+## Supertone TTS Handoff
+
+When the user says the script will become TTS/voice in a YouTube production,
+make the handoff obvious, but do not generate audio from this skill.
+
+- The production-side default TTS route is Supertone via:
+  `${env:WORKSPACE_ROOT}\22factory_20260628\00_asset_tools\tools\make_supertone_tts.py`.
+- On Windows, the safe launcher is `py -3.14`, not bare `python`.
+- The script reads `SUPERTONE_API_KEY`, `SUPERTONE_VOICE_ID`,
+  `SUPERTONE_PITCH`, `SUPERTONE_SPEED`, and `SUPERTONE_MODEL` from environment
+  variables; never paste, print, or store the API key in chat, files, JSON,
+  CapCut drafts, reports, or Git.
+- On `home_windows`, User-scope Supertone variables may exist even when the
+  current Codex process does not show them. The shared script checks Windows
+  User environment as a fallback.
+- Default voice/model are whatever the environment variables specify
+  (`SUPERTONE_VOICE_ID` is currently the Chunsik setup on home_windows).
+- If the user explicitly asks to generate audio, route to
+  `000short-production-agent`; do not silently use Edge TTS, ElevenLabs,
+  browser TTS, or any fallback provider.
+
 If the user asks to make the video, create SRT/layout, build CapCut, render,
 export, package upload files, or continue production, switch to
 `000short-production-agent`.

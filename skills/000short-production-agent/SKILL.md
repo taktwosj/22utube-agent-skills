@@ -70,6 +70,39 @@ Missing `source.mp4` is a hard stop for source-derived production. Do not procee
 to source evidence, verified analysis, SRT/layout, CapCut, export, upload, or
 final validation without source acquisition and provenance.
 
+## Supertone TTS / Voice Generation
+
+When the user explicitly asks for TTS, voice generation, narration audio, or
+voice files for a YouTube/Shorts production, use the local Supertone route
+before considering any other provider.
+
+Default local command on Windows:
+
+```powershell
+py -3.14 "${env:WORKSPACE_ROOT}\22factory_20260628\00_asset_tools\tools\make_supertone_tts.py" "<대본 텍스트>" "<출력파일.wav>"
+```
+
+Required behavior:
+
+- Read configuration only from environment variables:
+  `SUPERTONE_API_KEY`, `SUPERTONE_VOICE_ID`, `SUPERTONE_PITCH`,
+  `SUPERTONE_SPEED`, `SUPERTONE_MODEL`.
+- Never paste, print, write, serialize, or report the API key. Do not put it in
+  Git, OneDrive production files, CapCut JSON, manifests, logs, reports, or
+  chat.
+- On `home_windows`, User-scope Supertone variables may be registered even when
+  the current Codex process environment is stale. The shared script reads the
+  Windows User environment as a fallback.
+- Use `py -3.14` because the installed Supertone SDK is on that interpreter; do
+  not rely on bare `python` unless you have verified `import supertone` there.
+- The default voice/model are controlled by env vars. Current home_windows
+  setup uses Chunsik through `SUPERTONE_VOICE_ID` and `sona_speech_1`.
+- If env variables or SDK are missing, stop with
+  `WAIT_SUPERTONE_ENV_OR_SDK_MISSING`; do not switch to Edge TTS, ElevenLabs,
+  browser TTS, Kokoro, or any fallback provider without explicit user approval.
+- Record generated audio path, duration, voice id label, model, pitch, and
+  speed in the production manifest, but never record the API key.
+
 For TTS-capable story, narration, 사연, 미담, photo-explainer, 군림보-style, or
 썰풀이 Shorts, script authority must show the TTS storytelling gate was handled.
 Before SRT/layout/CapCut work, confirm the script has a source-supported
