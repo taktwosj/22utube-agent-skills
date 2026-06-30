@@ -80,6 +80,48 @@ Required flow fields:
 
 For current 11short work, this rule must obey the active caption constitution: output `상단 + timed 중단 + TTS 만들 글자만 복사`; do not reintroduce legacy `하단`.
 
+## TTS Storytelling Shorts
+
+If a Shorts remake can be carried by TTS narration, story, 사연, 미담, photo
+explainer, 군림보-style narration, or 썰풀이, emotional storytelling framing is
+mandatory. Do not treat it as a flat summary plus changed synonyms.
+
+The first line should enter through the strongest source-supported emotional
+condition, deadline, loss, desire, contradiction, or irreversible action.
+
+```text
+weak: 할아버지가 손자를 만났다
+strong: 시한부 할아버지가 마지막으로 손자를 보러 왔다
+```
+
+Use the strong version only when the source supports the stronger facts. If the
+source does not support `시한부`, `마지막`, family motive, illness, death,
+confession, or deadline, do not invent them. Instead, intensify the same verified
+meaning through entry order, suspense, viewer question, and payoff recovery.
+
+Required TTS story fields:
+
+```json
+{
+  "tts_story_mode_required": true,
+  "source_supported_emotional_condition": "...",
+  "flat_event_summary": "...",
+  "emotional_entry_line": "...",
+  "changed_scene_entry_order": "...",
+  "changed_korean_expression_strategy": "...",
+  "viewer_emotion_target": "...",
+  "payoff_recovery_line": "..."
+}
+```
+
+Hard fails:
+
+- the draft opens with a neutral event summary even though TTS can carry a story
+- the remake changes only synonyms while keeping the same flow
+- the strongest emotional fact is invented rather than source-supported
+- the viewer cannot instantly tell who is hurting, what they want, what may be
+  lost, and why the moment matters
+
 ## 가단야
 
 Apply 가단야 before script lock.
@@ -252,6 +294,7 @@ Before drafting or revising a Shorts script, answer:
 - What is the payoff?
 - What is the composite label: source region + emotion/intent + family + mode + source surface?
 - What caption layer mix is justified by source evidence: TTS, verified quotes, and `(상황설명)`?
+- If TTS can carry the story, what is the source-supported emotional entry line instead of the flat event summary?
 - What changes keyword, sound, and pixel/frame similarity?
 - What is the policy risk tier?
 - Does the output follow current `상단 + 중단 + TTS 만들 글자만 복사`?

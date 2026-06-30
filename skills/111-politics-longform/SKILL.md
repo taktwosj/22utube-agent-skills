@@ -26,8 +26,9 @@ assets may still be read from `$env:UTUBE_ROOT\yellow\assets\...`. The editable
 CapCut draft remains under the local `com.lveditor.draft` directory; OneDrive
 stores metadata, manifests, snapshots, reports, exports, and upload packages.
 
-Skill sync surfaces: runtime `C:\Users\arajun\.codex\skills\111-politics-longform`;
-shared source `C:\Users\arajun\OneDrive\22utube\codex_skills_source\111-politics-longform`. Ignore old `11utube\codex_skills_source` or `skills_sync` paths unless present.
+Skill sync surfaces: runtime `$HOME\.codex\skills\111-politics-longform`;
+shared source `${env:WORKSPACE_ROOT}\codex_skills_source\111-politics-longform`.
+Ignore old `11utube\codex_skills_source` or `skills_sync` paths unless present.
 
 ## Core Rule
 
@@ -310,6 +311,11 @@ share the exact same value.
    - Each item should be 1-2 lines: first line summarizes what the speaker is saying, second line adds concise interpretation/opinion.
    - Be concrete: name the actor, claim, issue, or consequence. Avoid abstract filler such as `민심을 챙겨야 합니다`, `정치가 중요합니다`, or generic advice.
    - Positive opinion is allowed, but keep it tied to the exact claim: `이 분석은 구조를 보게 만든다`, `이 지점은 민주당이 아프게 들어야 한다`.
+   - Run the `00script-writer` reader comprehension gate on every lower T1 item before patching CapCut. A lower T1 item is `REWRITE_REQUIRED` if a first-time reader cannot explain the two lines in one plain sentence.
+   - Use the writer-mode `구멍/앵커/보상/회수` check for T1: each chapter block must open a concrete question, keep one concrete actor/object/number/action anchor, reward attention with the next detail, and recover that anchor later. Abstract words such as `핵심`, `본질`, `역설`, `의혹`, and `프레임` cannot replace the anchor.
+   - If agent mode is available and the T1 text feels even slightly ambiguous, ask an isolated reader agent to judge `PASS/FAIL`, state what the line means, name the confusing word or subject, and propose a clearer 2-line caption. Do not defend confusing T1 with extra context; rewrite it.
+   - Fail example: `챕터5_ 내란에 기여한 사람이 왜 내란 연루자가 됐어야 했나 / 이 역설적 질문이 특검 전체의 핵심 의혹이다`.
+   - Pass example: `챕터5_ 내란에 기여했다면 왜 수사 대상에서 빠졌나 / 2차 종합특검의 핵심은 바로 이 질문이다`.
 
 5. Chapter mapping examples.
    - `00:00` chapter 1: 유시민 등장, 사전투표, 선거 토론의 판 세팅.

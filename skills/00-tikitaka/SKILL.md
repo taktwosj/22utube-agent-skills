@@ -111,6 +111,59 @@ misread, escalation, reversal, payoff, or another stated role.
 6. Keep status at `DRAFT_EYE_REVIEW` unless the user explicitly asks for the
    next owner.
 
+## Shorts TTS Storytelling Mode
+
+If a Shorts remake can be told as TTS narration, story, or 썰풀이, this mode is
+mandatory, not optional.
+
+This mode is not separate from 우라까이. 우라까이는 the baseline condition: the
+remake must not keep the same expression, scene-entry order, emotional angle, or
+payoff wording. The TTS story gate decides how aggressively the same
+source-supported meaning must be reframed through emotion.
+
+Do not start as a flat event summary. Lead with the strongest source-supported
+emotional condition, deadline, loss, desire, or irreversible action.
+
+```text
+weak: 할아버지가 손자를 만났다
+strong: 시한부 할아버지가 마지막으로 손자를 보러 왔다
+```
+
+The strong version is allowed only when the source supports `시한부` and
+`마지막`. If the source only proves a visit, intensify through framing,
+sequence, suspense, and viewer emotion without inventing facts.
+
+Required TTS story fields:
+
+- `tts_story_mode_required: true|false`
+- `source_supported_emotional_condition`
+- `flat_event_summary`
+- `emotional_entry_line`
+- `changed_scene_entry_order`
+- `changed_korean_expression_strategy`
+- `viewer_emotion_target`
+- `payoff_recovery_line`
+
+For emotional story/remake Shorts, prefer:
+
+- person before explanation
+- loss or deadline before background
+- concrete action before abstract feeling
+- one emotional question before the answer
+- final line that returns to the first emotional anchor
+
+Do not over-explain visible action when TTS is the main carrier. Use captions to
+hit the emotional angle and leave simple visuals to do their own work.
+
+Hard fails:
+
+- flat event summary when TTS narration can carry the story
+- synonym-only Korean replacement
+- same source flow with only different words
+- invented illness, death, family motive, deadline, confession, or final meeting
+- emotionally strong wording where a first-time viewer cannot tell who wants
+  what and what may be lost
+
 ## Required Gates Before Stronger Claims
 
 - Do not claim `SCRIPT_LOCK` from this skill alone.
@@ -119,6 +172,9 @@ misread, escalation, reversal, payoff, or another stated role.
 - Do not skip human Korean cleanup before any final visible Korean text.
 - Do not proceed past missing source evidence when the script depends on exact
   timing, OCR, or dialogue.
+- Do not call a TTS-capable story/remake draft eye-ready unless the TTS
+  storytelling mode has been considered and, when applicable, the emotional
+  entry line is source-supported and non-flat.
 
 ## Reference Routing
 

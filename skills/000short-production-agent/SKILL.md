@@ -70,6 +70,23 @@ Missing `source.mp4` is a hard stop for source-derived production. Do not procee
 to source evidence, verified analysis, SRT/layout, CapCut, export, upload, or
 final validation without source acquisition and provenance.
 
+For TTS-capable story, narration, 사연, 미담, photo-explainer, 군림보-style, or
+썰풀이 Shorts, script authority must show the TTS storytelling gate was handled.
+Before SRT/layout/CapCut work, confirm the script has a source-supported
+emotional entry line or equivalent fields such as:
+
+- `tts_story_mode_required`
+- `source_supported_emotional_condition`
+- `emotional_entry_line`
+- `changed_scene_entry_order`
+- `changed_korean_expression_strategy`
+- `viewer_emotion_target`
+- `payoff_recovery_line`
+
+If this is missing or the draft opens as a flat event summary, stop at
+`WAIT_SCRIPT_REWRITE_REQUIRED` and route back to `00-tikitaka` or
+`00script-writer`. Do not rewrite the story inside production.
+
 ## Owned Outputs
 
 This skill may create, validate, or repair:
