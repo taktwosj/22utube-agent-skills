@@ -1,6 +1,6 @@
 ---
 name: 111-politics-longform
-description: Use when the user says 111정치롱폼, 정치롱폼, 정치롱폼1단계, 정치롱폼2단계, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to make/update a Korean political longform source-download package, CapCut draft, T1 chapter text, YouTube upload package, channel profile, keywords, or thumbnail hooks for a 민주진영 political commentary channel.
+description: Use when the user says 111정치롱폼, 정치롱폼, 정치롱폼1단계, 정치롱폼2단계, 정치롱폼 대화형, Claude 초벌, 캣컵전단계, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to make/update a Korean political longform source-download package, CapCut draft, T1 chapter text, YouTube upload package, channel profile, keywords, or thumbnail hooks for a 민주진영 political commentary channel.
 ---
 
 # 111 Politics Longform
@@ -87,6 +87,61 @@ Stage 2 input gate: if `source_full.mp4` is missing for any used source, return 
 
 Claude/GLM/other agents may produce Stage 1. Codex owns Stage 2 unless the user
 explicitly says otherwise.
+
+## Interactive Stage 2 Handoff Mode
+
+Use this mode when the user says `대화형`, `Claude 초벌`, `캣컵전단계`,
+`인수`, `올려`, or asks what to tell Claude/Codex after another agent made the
+rough package.
+
+Do not jump from a Claude rough package straight to a final CapCut claim.
+Treat the rough package as untrusted input and run a short conversation loop:
+
+```text
+1. INTAKE_SUMMARY:
+   - episode folder
+   - roughcut/video path
+   - sources found or missing
+   - available files
+   - missing files that block Stage 2
+
+2. ONE_BLOCKING_QUESTION:
+   Ask at most one question when the answer is required before file edits.
+   If the missing fact can be inferred from local files, inspect files instead
+   of asking.
+
+3. USER_CONFIRM:
+   When the user says "진행", "올려", "가자", "그걸로", or equivalent,
+   proceed with Stage 2 only if source_full media and lock inputs are present.
+
+4. STAGE2_ACTION:
+   Verify source identity, lock speech boundaries, create locked clips, copy
+   YP007, patch CapCut root plus Timelines mirrors, validate, then report.
+```
+
+If the user only wants a prompt for Claude, output a copyable instruction that
+forces Claude to produce Stage 1 handoff files only. Claude must not report
+CapCut final, upload-ready, or production PASS unless the user explicitly made
+Claude the Stage 2 owner.
+
+Claude Stage 1 handoff must include:
+
+```text
+90_reports/stage1_handoff_to_codex.md
+90_reports/stage1_status.json
+00_source/source_manifest.json
+10_analysis/roughcut_edl.json
+10_analysis/source_labels.json
+10_analysis/topic_flow.json
+20_script/lower_t1_draft.json when available
+roughcut video path or candidate cut paths
+missing/blocker list
+```
+
+Codex Stage 2 must not use candidate `roughcut_edl.json` as final. It must
+create or verify `speech_boundary_lock.json`, `roughcut_edl_locked.json`,
+`source_labels_locked.json`, and locked media before creating the final CapCut
+draft.
 
 ## Hard Gates Before CapCut
 
