@@ -64,6 +64,21 @@ After the first install, start a new Codex chat and invoke `$skil down` for futu
 4. Report the source, target, synced skill names, and backup location.
 5. Tell the user to restart the target agent or open a new chat if newly installed skills do not appear immediately.
 
+## Multi-Machine Sync With Local Commits Or Edits
+
+When syncing Mac mini, home Windows, and office Windows after one machine pushed skill changes, do not blindly run pull/install if another machine reports local ahead commits or uncommitted skill edits.
+
+Required sequence:
+
+1. On every machine, start with `git status --short --branch`, local short HEAD, and remote branch HEAD.
+2. If the working tree is dirty, inspect and preserve meaningful skill edits. Do not `reset --hard`, `git restore`, or stash-and-forget unless the user explicitly says to discard them.
+3. If a machine is ahead and also has important uncommitted edits, commit the local edit first, then `git fetch origin` and rebase onto the remote branch. Resolve conflicts by preserving both the remote split-skill changes and the local safety/contract additions.
+4. Push from that integrating machine only after `git diff --check`, repo verify, unittest, install all, and verify all pass.
+5. Other machines then fast-forward pull the final remote HEAD, run install/update with prune, and verify all runtime targets.
+6. Completion requires local/remote parity and runtime source=target SHA256 parity for Codex, Claude, and Hermes.
+
+Use concrete required-content checks for important contract additions before declaring PASS, for example `07_DRAFT_FAST_REPORT_CONTRACT.md` routing or `Mandatory CapCut Media Settings — HARNESS LOCK` tokens when those were part of the sync.
+
 Preferred existing scripts:
 
 ```powershell
