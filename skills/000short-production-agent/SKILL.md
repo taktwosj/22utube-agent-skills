@@ -194,6 +194,35 @@ exists. Ask for or route to the script owner first.
 8. Run the required harness or validator for the current stage.
 9. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
 
+## Mandatory CapCut Media Settings — HARNESS LOCK
+
+This is a **HARNESS_LOCK** production gate. It is not an optional style checklist and not something to remember verbally. The coordinator must require the harness/validator result before claiming any CapCut draft/project/profile is production-ready.
+
+Every source video segment must carry the Git manifest media settings from `manifests/capcut-template-set.json` and pass `scripts/validate_capcut_timeline_order.py`:
+
+- 품질보정 / QualityEnhance: `HD`
+- 사운드 노멀라이즈: enabled, target loudness `-14 LUFS`
+- 자동조정 / smart_color_adjust: `30~50`
+- 선명하게 / clear: `30~50`
+- 선명도 / sharpen: `30~50`
+- 입자 / particle: `5~30`
+- 인접 source segment는 자동조정/선명하게/선명도 값이 최소 `5` 이상 차이 나야 함
+
+Required validator evidence:
+
+```text
+mandatory_capcut_media_settings_status: PASS
+```
+
+If any of these are missing, out of range, or not checked by the validator, the state is:
+
+```text
+FINAL: BLOCKED
+reason: MANDATORY_CAPCUT_MEDIA_SETTINGS_NOT_HARNESS_VERIFIED
+```
+
+Coordinator rule: whenever the operator asks about CapCut video/sound settings, CapCut readiness, draft quality, or finalization, answer with this harness-locked media gate first. Do not answer only with export settings such as 9:16/1080p/30fps.
+
 ## CapCut Rules
 
 For any CapCut draft/project/profile creation, modification, repair, patch, or
