@@ -36,6 +36,28 @@ Caption rule:
   must be reported plainly because Stage 2 needs transcript evidence to lock
   speech boundaries.
 
+Caption accuracy rule:
+
+- `source_full.ko.srt` from Stage 1 is extraction evidence, not subtitle accuracy
+  proof. `PASS_CAPTION_EXTRACTED` means "a caption file exists and was saved";
+  it does **not** mean the text is display-ready, politically accurate, or safe
+  for final SRT.
+- Korean **manual** captions may be usable after spot-checking. Korean **auto**
+  captions are timing/keyword evidence only by default: they can contain rolling
+  duplicate lines, 0.01-second transition cues, speaker arrows, boundary bleed,
+  and recognition errors in names/terms such as politicians, parties, offices,
+  `레임덕`, `권력증`, `정청래`, `김민석`, `윤석열`, etc.
+- Stage 1 may use auto-SRT for keyword search, candidate roughcut discovery, and
+  rough quote anchors, but must label it as `auto_not_display_ready` or
+  equivalent when reporting. Do not hand an auto-SRT cutout to the user as the
+  final subtitle file.
+- If the user asks for SRT based on Stage 1 cuts, create a separate `AUTO_TIMED_ONLY`
+  file or a clearly named `MANUAL_CLEAN` file. Final/public SRT requires Stage 2
+  verification: de-roll/normalize cues, remove 0.01s transition cues, check cut
+  boundaries against the source video/audio, and manually correct political names
+  and key terms. Whisper/faster-whisper can be used as a cross-check, but its
+  transcript is also not automatically final.
+
 Do not:
 
 - create, edit, inspect, or claim any CapCut draft

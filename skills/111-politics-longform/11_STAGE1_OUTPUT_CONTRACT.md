@@ -37,6 +37,21 @@ Caption extraction rule:
   `PASS_SOURCE_DOWNLOADED` may still be true, but Stage 2 must create or verify
   speech evidence before speech-boundary lock.
 
+Caption accuracy/status rule:
+
+- `PASS_CAPTION_EXTRACTED` is an existence/extraction status only. It must never
+  be described as "accurate SRT", "final subtitles", or "display-ready" unless a
+  separate verification/cleaning file proves that.
+- Add or report caption quality fields when possible:
+  - `caption_source_type: manual|auto|unknown`
+  - `caption_accuracy_status: UNVERIFIED_AUTO | MANUAL_SPOTCHECK_REQUIRED | VERIFIED_FOR_TIMING | MANUAL_CLEAN_REQUIRED | DISPLAY_READY`
+- For YouTube auto captions, default to `UNVERIFIED_AUTO` or
+  `MANUAL_CLEAN_REQUIRED`. Auto captions are acceptable for Stage 1 keyword/time
+  discovery, but final SRT must be produced later as a separate cleaned artifact.
+- A Stage 1 roughcut SRT made by slicing auto captions must be named as timing
+  evidence, e.g. `AUTO_TIMED_ONLY_*.srt`, unless it has been manually corrected
+  and verified.
+
 `stage1_status.json` must include:
 
 ```json

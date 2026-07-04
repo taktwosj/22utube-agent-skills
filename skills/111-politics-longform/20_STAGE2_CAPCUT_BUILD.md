@@ -16,7 +16,9 @@ report `WAIT_DOWNLOAD`. Do not make a CapCut draft.
 Build sequence:
 
 1. verify source identity against manifest and metadata
-2. verify transcript/SRT or create enough speech evidence to lock boundaries
+2. verify transcript/SRT or create enough speech evidence to lock boundaries;
+   treat Stage 1 YouTube auto-SRT as timing/keyword evidence only until
+   de-rolled, boundary-checked, and manually corrected for political names/terms
 3. create `10_analysis\speech_boundary_lock.json`
 4. create `10_analysis\roughcut_edl_locked.json`
 5. create `10_analysis\source_labels_locked.json`
