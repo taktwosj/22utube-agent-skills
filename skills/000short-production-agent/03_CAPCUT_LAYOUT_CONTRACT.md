@@ -131,6 +131,42 @@ no bottom-caption layer
 no unverified quoted speech
 ```
 
+## Tikitaka Segment Audio Plan
+
+When the script came from `00-tikitaka`, the Tikitaka
+`구간 오디오 정책표` / `tikitaka_segment_audio_plan` is the source of truth for
+CapCut audio states.
+
+CapCut implementation must match each segment:
+
+```text
+caption_type=speaker_quote        -> source video/audio audible, TTS off, BGM optional_duck
+caption_type=tts_narration        -> source video/audio muted, TTS on, BGM optional
+caption_type=situation_caption    -> source video/audio muted by default, TTS off, BGM optional
+caption_type=tts_plus_source      -> source video/audio duck/on as planned, TTS on, BGM optional_duck
+caption_type=ranking_item         -> source video/audio muted by default unless the row is a verified quote/reaction
+```
+
+The post-CapCut gate must compare actual CapCut audio/video segment volumes and
+audio tracks against `decisions/tikitaka_segment_audio_plan.json`.
+
+BGM is optional unless the user selected or required a specific BGM/SFX asset.
+Rows with `bgm_policy=optional` or `optional_duck` must not fail only because no
+BGM audio track exists.
+`optional_duck` means no BGM track is required; if the user later selects BGM,
+that segment must duck the BGM under source speech or TTS instead of leaving it
+full volume.
+
+Hard fails:
+
+- speaker quote row has source video/audio volume `0`
+- TTS narration row keeps source video/audio fully audible without
+  `caption_type=tts_plus_source`
+- TTS row has no corresponding TTS audio material/track
+- BGM required row (`bgm_policy=on` or `duck`, or user-selected BGM/SFX) has no
+  BGM audio material/track
+- remixed order in CapCut differs from `timeline_order`
+
 Use this JSON shape for FFmpeg workers:
 
 ```json

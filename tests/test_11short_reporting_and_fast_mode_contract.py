@@ -16,14 +16,32 @@ SKILL_DIR = SKILL.parent
 ROOT = SKILL.parents[2]
 LAYOUT_CONTRACT = SKILL_DIR / "03_CAPCUT_LAYOUT_CONTRACT.md"
 HARNESS_REQUIREMENTS = SKILL_DIR / "04_HARNESS_REQUIREMENTS.md"
+REPORT_CONTRACT = SKILL_DIR / "07_DRAFT_FAST_REPORT_CONTRACT.md"
 TIMELINE_GATE = SKILL_DIR / "scripts" / "validate_capcut_timeline_order.py"
 PRODUCTION_GATE = SKILL_DIR / "scripts" / "validate_production_gate.py"
+CONTRACT_FILES = [
+    SKILL,
+    SKILL_DIR / "02_PIPELINE_RULES.md",
+    LAYOUT_CONTRACT,
+    HARNESS_REQUIREMENTS,
+    SKILL_DIR / "05_CODEX_EXECUTION_PROMPT.md",
+    SKILL_DIR / "06_CAPCUT_CUT_ASSEMBLY_CONTRACT.md",
+    REPORT_CONTRACT,
+    TIMELINE_GATE,
+    PRODUCTION_GATE,
+]
 
 
 class ReportingAndFastModeContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.text = SKILL.read_text(encoding="utf-8")
+        missing = [str(path) for path in CONTRACT_FILES if not path.is_file()]
+        if missing:
+            raise AssertionError(f"missing contract file(s): {missing}")
+        cls.text = "\n\n".join(
+            f"\n<!-- {path.relative_to(ROOT)} -->\n" + path.read_text(encoding="utf-8")
+            for path in CONTRACT_FILES
+        )
 
     def test_report_contract_sections_are_present(self):
         required = [

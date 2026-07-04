@@ -62,13 +62,39 @@ Before generating or repairing production assets, identify the current authority
 - source provenance and usable-file check
 - source-evidence/watch/direct-frame findings when the video content matters
 - script authority, usually `final_script_ko.txt` or the current Tikitaka draft
+- Tikitaka segment audio plan when the script came from `00-tikitaka`
+  (`tikitaka_segment_audio_plan` or equivalent `구간 오디오 정책표`)
 - humanized final Korean text when visible text is final
 - target template/layout
 - requested voice/audio policy, if any
+- requested BGM/SFX asset, if any. BGM is optional unless the user explicitly
+  chooses or requires it.
 
 Missing `source.mp4` is a hard stop for source-derived production. Do not proceed
 to source evidence, verified analysis, SRT/layout, CapCut, export, upload, or
 final validation without source acquisition and provenance.
+
+If the script came from Tikitaka and timed `중단` blocks exist, missing segment
+audio policy is a hard stop:
+
+```text
+WAIT_TIKITAKA_SEGMENT_AUDIO_PLAN
+```
+
+Do not infer quote/TTS/source-audio policy inside production. Use the Tikitaka
+plan as the authority:
+
+- `caption_type=speaker_quote` or visible `"..."` => source audio must be audible
+- `caption_type=tts_narration` => source audio must be muted unless
+  `caption_type=tts_plus_source` explicitly allows ducking
+- `caption_type=situation_caption` => source audio muted by default
+- `caption_type=ranking_item` => source audio muted by default, except verified
+  quote/reaction beats
+- `source_order` and `timeline_order` must be preserved when the script remixes
+  source order
+- `bgm_policy=optional` or `optional_duck` never requires a BGM track. Treat BGM
+  as mandatory only when the plan says `bgm_policy=on` or `duck`, or when the
+  user named a specific BGM/SFX asset.
 
 ## Supertone TTS / Voice Generation
 
@@ -105,11 +131,28 @@ Required behavior:
 
 For TTS-capable story, narration, 사연, 미담, photo-explainer, 군림보-style, or
 썰풀이 Shorts, script authority must show the TTS storytelling gate was handled.
-Before SRT/layout/CapCut work, confirm the script has a source-supported
-emotional entry line or equivalent fields such as:
+Before SRT/layout/CapCut work, confirm which truth mode the script owner chose:
+
+- `fact_first`: information, knowledge, news, politics, medical, legal, safety,
+  accident, crime, finance, or source-sensitive factual explainers. Require
+  source-supported claims and do not accept unverifiable hook premises as fact.
+- `hook_first_writer_premise`: 감동형 narration, TTS-only, BGM-heavy, family,
+  reunion, cute/moment, photo-explainer, or ordinary emotional story Shorts.
+  If the user says `후킹 쎄게`, `작가모드`, `우라까이`, or directly tells the agent
+  to make the hook stronger, production must accept a strong writer premise
+  from the script authority even when it is not source-verifiable. Do not block
+  it just because it is not evidence-backed; block only high-risk or materially
+  harmful invented claims.
+
+For `fact_first`, confirm the script has source-supported fields. For
+`hook_first_writer_premise`, confirm the script has a strong emotional hook or
+equivalent fields such as:
 
 - `tts_story_mode_required`
+- `truth_mode`
 - `source_supported_emotional_condition`
+- `writer_premise_for_hook`
+- `writer_premise_status`
 - `emotional_entry_line`
 - `changed_scene_entry_order`
 - `changed_korean_expression_strategy`
@@ -118,7 +161,9 @@ emotional entry line or equivalent fields such as:
 
 If this is missing or the draft opens as a flat event summary, stop at
 `WAIT_SCRIPT_REWRITE_REQUIRED` and route back to `00-tikitaka` or
-`00script-writer`. Do not rewrite the story inside production.
+`00script-writer`. Do not rewrite the story inside production. Do not reject an
+ordinary emotional/TTS script solely because the hook premise is plausible,
+fictionalized, or not source-verifiable.
 
 ## Owned Outputs
 
@@ -142,11 +187,12 @@ exists. Ask for or route to the script owner first.
 1. Confirm active root and episode folder.
 2. Confirm source file and provenance.
 3. Confirm script authority and visible-text cleanup status.
-4. Build or repair SRT/layout/render-plan assets.
-5. Build or repair the local CapCut draft.
-6. Snapshot CapCut draft JSON into the episode metadata folder.
-7. Run the required harness or validator for the current stage.
-8. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
+4. Confirm `tikitaka_segment_audio_plan` / `구간 오디오 정책표` when the script came from Tikitaka.
+5. Build or repair SRT/layout/render-plan assets from that segment audio plan.
+6. Build or repair the local CapCut draft.
+7. Snapshot CapCut draft JSON into the episode metadata folder.
+8. Run the required harness or validator for the current stage.
+9. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
 
 ## CapCut Rules
 
@@ -180,8 +226,9 @@ Each state needs its own evidence.
 - For Shorts craft constraints, read `references/shorts-academy.md`.
 - For the old Tikitaka production-script contract, read
   `references/tikitaka-script-v17.md`.
-- For work-order, pipeline, layout, harness, and cut-assembly details, read the
-  numbered root docs in this skill folder.
+- For work-order, pipeline, layout, harness, cut-assembly, and DRAFT_FAST /
+  FINAL_LOCK report-contract details, read the numbered root docs in this skill
+  folder, including `07_DRAFT_FAST_REPORT_CONTRACT.md`.
 - For old full-contract details or legacy repair only, read
   `references/archived-full-skill-20260629.md`.
 

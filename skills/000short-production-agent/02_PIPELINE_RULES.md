@@ -21,15 +21,17 @@
 12. If user or story mentions specific speech, write
     `evidence/target_phrase_check.json`.
 13. Create `decisions/segment_decision_table.json`.
-14. If Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N,
+14. If the script came from `00-tikitaka`, import or create
+    `decisions/tikitaka_segment_audio_plan.json` from `구간 오디오 정책표`.
+15. If Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N,
     or benchmark-remake strategy applies, create
     `decisions/shorts_academy_gate.json`.
-15. Create `decisions/capcut_layout_plan.json`.
-16. Create CapCut draft files.
-17. Normalize the draft to `capcut/normalized_draft.json`.
-18. Run harness validation.
-19. Create `reports/evidence_pack.json`.
-20. Create `reports/final_report.md`.
+16. Create `decisions/capcut_layout_plan.json`.
+17. Create CapCut draft files.
+18. Normalize the draft to `capcut/normalized_draft.json`.
+19. Run harness validation.
+20. Create `reports/evidence_pack.json`.
+21. Create `reports/final_report.md`.
 
 ## Input URL Rule
 
@@ -301,6 +303,54 @@ Required fields per detected phrase:
 
 `decisions/segment_decision_table.json` is required before CapCut.
 
+When Tikitaka is the script authority, `decisions/tikitaka_segment_audio_plan.json`
+is also required before CapCut. It must be copied from the Tikitaka
+`구간 오디오 정책표` / `tikitaka_segment_audio_plan`, not guessed in production.
+
+Required fields per Tikitaka segment:
+
+```json
+{
+  "segment_id": "seg_001",
+  "source_order": 4,
+  "timeline_order": 1,
+  "edit_range": "00:00-00:03",
+  "caption_type": "speaker_quote|tts_narration|situation_caption|tts_plus_source|ranking_item",
+  "source_audio_policy": "on|off|duck",
+  "tts_policy": "on|off",
+  "bgm_policy": "optional|optional_duck|on|off|duck",
+  "visible_text_role": "speaker_quote|tts|situation|ranking"
+}
+```
+
+Tikitaka handoff rows may use `edit_range` as the human-readable timing label.
+The normalized `segment_decision_table.json` must still expand that into numeric
+`start` and `end` fields for validators and CapCut workers.
+
+Validation rules:
+
+- `caption_type=speaker_quote` or visible `"..."` requires `source_audio_policy=on`
+- `caption_type=tts_narration` requires `source_audio_policy=off`
+- `caption_type=tts_plus_source` requires `source_audio_policy=duck` or `on`
+  with a recorded reason
+- `caption_type=situation_caption` defaults to `source_audio_policy=off`
+- ranking items default to `source_audio_policy=off`, except verified quote or
+  reaction beats
+- `bgm_policy=optional` or `optional_duck` means no BGM is required yet. Do not
+  fail production for missing BGM unless the user selected a BGM/SFX asset or the
+  locked plan says `bgm_policy=on` or `duck`.
+- `source_order` and `timeline_order` are both required when the script remixes
+  source order
+
+If this plan is missing or conflicts with the script, stop with:
+
+```json
+{
+  "status": "WAIT",
+  "reason": "WAIT_TIKITAKA_SEGMENT_AUDIO_PLAN"
+}
+```
+
 Each segment must include:
 
 - `segment_id`
@@ -315,6 +365,9 @@ Each segment must include:
 - `segment_type`
 - `story_function`
 - `audio_action`
+- `source_audio_policy`
+- `tts_policy`
+- `bgm_policy`
 - `text_action`
 - `capcut_text_layer`
 - `capcut_audio_layer`

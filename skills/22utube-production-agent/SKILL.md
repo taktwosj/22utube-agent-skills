@@ -56,6 +56,26 @@ New work should use the lane folders under the factory root:
 99_archive
 ```
 
+## Shared Asset Folder Rule
+
+`00_asset_tools` is a reusable material library, not an episode workspace.
+
+Allowed examples:
+
+- reusable BGM/SFX/audio under `00_asset_tools\bgm` or a clearly named audio
+  asset folder
+- reusable images, overlays, banners, fonts, templates, and stable helper tools
+- manifest or sync reports that describe those reusable assets
+
+Do not put episode-specific source downloads, locked clips, exports, raw CapCut
+draft folders, one-off politics-longform builders, or per-episode working media
+directly in `00_asset_tools`. Put episode work under the matching lane's
+`episodes` folder, local CapCut draft root, or `99_archive` if it is old cleanup.
+
+BGM is not a default requirement. Treat BGM as a selectable reusable asset:
+use it only when the user chooses a BGM/SFX file, asks for a music mood, or the
+locked production plan names the asset.
+
 Do not put Git skill source or installed runtime skills in the factory root.
 GitHub or the configured skill source owns skill source. OneDrive factory folders
 hold production data, manifests, reports, and final/upload packages.

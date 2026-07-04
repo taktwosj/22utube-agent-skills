@@ -167,25 +167,58 @@ For Shorts drafts that can be told as TTS narration, story, 사연, 미담, phot
 explainer, 군림보-style narration, or 썰풀이, do not polish the draft into a flat
 summary.
 
-The rewrite must preserve or create a source-supported emotional entry line:
-strong condition, deadline, loss, desire, contradiction, or irreversible action
-before background explanation.
+The rewrite must preserve or create a hookable emotional entry line: strong
+condition, deadline, loss, desire, contradiction, misunderstanding, or
+irreversible action before background explanation.
 
 ```text
 weak: 할아버지가 손자를 만났다
 strong: 시한부 할아버지가 마지막으로 손자를 보러 왔다
 ```
 
-Use the strong version only when the source supports the stronger facts. Do not
-invent illness, death, family motive, deadline, confession, or a final meeting.
-If the source is weaker, intensify through Korean expression, entry order,
-suspense, viewer question, and payoff recovery.
+In Shorts writer mode, especially TTS-heavy videos with little or no source
+speech, a strong hook may use a plausible dramatic premise even when it is not
+directly verified. The rewrite should not flatten the hook just because the
+premise is a writer assumption.
+
+If the user says `후킹 쎄게`, `작가모드`, `우라까이`, or directly tells the agent
+to push the opening harder, obey that as a writing-direction override for
+ordinary emotional/TTS/BGM-heavy Shorts. Use `hook_first_writer_premise` unless
+the draft is clearly fact-first: information, knowledge, news, politics,
+medical, legal, safety, accident, crime, finance, or another source-sensitive
+factual explainer.
+
+Treat this as public-facing story framing, not evidence. Internal notes may mark
+it as `writer_premise_status=plausible_unverified` or
+`fictionalized_hook`; the viewer-facing script can still use the premise when it
+creates the wow point.
+
+Example:
+
+```text
+weak: 군인이 수료식에서 딸을 만났다
+strong: 못 만날 줄 알았던 딸이 수료식장에 와 있었다
+```
+
+The strong version does not need proof that someone literally said "she cannot
+come." It must only fit the visible emotional arc and not create a materially
+harmful false claim.
+
+Do not invent high-risk facts such as illness, death, crime, abuse, political or
+news claims, medical diagnoses, or other materially harmful claims unless the
+source actually supports them. For ordinary emotional/family/TTS story hooks,
+prefer dramatic premise over flat fact-reporting.
 
 Mark the draft `REWRITE_REQUIRED` if:
 
 - TTS can carry the story but the opening is a neutral event summary
 - the rewrite changes only synonyms while keeping the source flow
-- the emotional line is unsupported by evidence
+- the user asked for a stronger hook but the rewrite stays in documentary
+  summary mode for an ordinary emotional/TTS/BGM-heavy Shorts draft
+- the rewrite refuses a strong hook only because the emotional premise is not
+  directly verified in an ordinary TTS-heavy story
+- the emotional line creates a high-risk or materially harmful factual claim
+  unsupported by evidence
 - a first-time viewer cannot tell who wants what and what may be lost
 
 ## Output Contract
@@ -213,8 +246,12 @@ Do not add production labels to public-facing text.
 If factual, legal, medical, financial, political, safety, or source-claim risk is
 present, run a policy/evidence pass before calling wording final.
 
-Do not add unsupported facts, verified dialogue, source timing, OCR, or scene
-order. Use source evidence or route back to the source owner when needed.
+Do not add unsupported verified dialogue, source timing, OCR, or scene order.
+Do not present writer premises as source evidence in reports. For public-facing
+ordinary emotional/TTS hooks, unsupported but plausible dramatic premises are
+allowed when they serve retention and do not create high-risk factual harm. Use
+source evidence or route back to the source owner when exact quotes, timings,
+OCR, legal/political/medical/safety claims, or source-sensitive facts are needed.
 
 ## Reference Routing
 

@@ -42,7 +42,9 @@ If the ceiling is unclear, do not write a final script. Ask for or collect 5-10 
 
 ## 마라하기 공식: 일치율 0%
 
-The target is not "copy with different Korean"; it is to change the data surface while preserving the proven message.
+The target is not "copy with different Korean"; it is to change the data surface
+while preserving the viewer reaction and remixing the message into a stronger
+writer premise.
 
 우라까이는 every remake's mandatory structure rule. Do not keep the same flow
 with only different words. If a factual/process sequence cannot be reordered
@@ -85,19 +87,25 @@ For current 11short work, this rule must obey the active caption constitution: o
 Apply 가단야 before script lock.
 
 - 가: 가이드라인. Check policy/safety first, especially minors, injury, rescue, real incidents, weapons, sexual content, hate, harassment, and copyright risk.
-- 단: 단어. Replace the benchmark wording aggressively while preserving source-supported meaning.
+- 단: 단어. Replace the benchmark wording aggressively. Preserve verified quotes
+  and high-risk facts, but allow a stronger writer premise for ordinary
+  emotional/TTS hooks.
 - 야: 야부리. Add hook pressure, viewer reaction, contradiction, comment-coded phrasing, and the message people reacted to.
 
 Use comments as evidence for 야부리 when available. A viral video's top comments often reveal the exact emotion viewers paid attention to: 분노, 감동, 웃참, 공감, 국뽕, 충격, 반전.
 
 ## Script Framing Rules
 
-- First identify the proven message: what did viewers react to?
+- First identify the viewer reaction: what did people react to and what feeling
+  should the remake sell first?
 - Then choose the strongest wow point and payoff.
 - For source-remake shorts, the source visual remains the main actor. Captions point to what to watch.
 - Use `(현장상황설명)` for visible action, state, emotion, atmosphere, or reaction.
 - Use `"화자발언"` only for verified source speech/subtitle/reliable transcript. Do not invent quotes for flavor.
 - Plain lines are narrator/context captions or sparse TTS candidates.
+- For TTS-heavy ordinary stories, plain narrator lines may use a plausible
+  dramatic premise for the hook even when it is not directly verified. Keep that
+  separate from verified source speech and internal evidence notes.
 - The top title should expose category and payoff promise quickly: `대상 + 이상한 상황 + TOP/반전/사건`.
 
 ## Composite Classification And Layer Mix
@@ -215,10 +223,13 @@ User channel families:
 | `랭킹` | Ranked list, TOP-N, best/worst, compilation | Count/list pressure, strongest payoff last | Ranking order must be remixed; set `source_order_allowed=false`. |
 | `유머` | Funny clip, skit, absurd moment, fail, reaction | Setup -> beat -> laugh/reaction | Do not over-explain the joke; cut timing is part of the rewrite. |
 
-If a channel family and content mode conflict, source truth wins first, then the
-channel family, then the content mode. Example: a `동물` clip that is also TOP4
-must keep visible animal behavior accurate while still remixing the ranking
-order.
+If a channel family and content mode conflict, choose the truth mode first.
+For `fact_first` lanes, source truth wins first, then the channel family, then
+the content mode. Example: a `동물` clip that is also TOP4 must keep visible
+animal behavior accurate while still remixing the ranking order. For
+`hook_first_writer_premise` lanes, the emotional writer premise may lead the
+public hook as long as exact quotes/timings/OCR and high-risk claims stay
+separate from invention.
 
 ## Content Mode Notes
 
@@ -233,8 +244,12 @@ order.
   change cut points, entry question, tension placement, wording, speed, SFX,
   crop, and payoff framing instead. Same factual order can remain only when the
   functional viewing flow is clearly different.
-- `사건/미담형`: trust first. Separate fact, inference, and emotional read.
-  Keep jokes restrained.
+- `사건/미담형`: hook first, then trust. Separate verified fact, writer premise,
+  inference, and emotional read. Keep jokes restrained.
+- `감동형/TTS자막/BGM위주`: if the user says `후킹 쎄게`, `작가모드`, or
+  `우라까이`, do not flatten the hook into a verified summary. Start from the
+  strongest plausible emotional premise, then use visible action and payoff to
+  make it feel true.
 - `관찰/리액션형`: explain what the viewer should notice with
   `(현장상황설명)`. Do not replace visible evidence with narrator opinion.
 - `지식/설명형`: turn abstract information into one concrete object, number, or
@@ -247,13 +262,18 @@ Before drafting or revising a Shorts script, answer:
 - What is the channel/category ceiling?
 - Which benchmark channel/video proves demand?
 - What is the 결?
-- What is the proven viewer reaction/message?
+- What is the viewer reaction/message?
 - What is the wow point?
 - What is the payoff?
 - What is the composite label: source region + emotion/intent + family + mode + source surface?
-- What caption layer mix is justified by source evidence: TTS, verified quotes, and `(상황설명)`?
+- What caption layer mix best serves the remake: TTS writer premise, verified
+  quotes, and `(상황설명)`?
 - What changes keyword, sound, and pixel/frame similarity?
 - What is the policy risk tier?
 - Does the output follow current `상단 + 중단 + TTS 만들 글자만 복사`?
 
-If any of ceiling, benchmark evidence, source truth, or policy is missing, mark the script as DRAFT or REWRITE_REQUIRED, not PASS.
+If any of ceiling, benchmark evidence, source truth, or policy is missing, mark
+the script as DRAFT or REWRITE_REQUIRED, not PASS. Exception: in ordinary
+`hook_first_writer_premise` emotional/TTS lanes, missing source proof for the
+dramatic premise does not block drafting; label it as writer premise and keep
+verified source evidence separate.

@@ -203,15 +203,33 @@ Execution TODO
 
 For source-video Shorts/remake requests, the first decision is the story frame, not the caption wording.
 
+- Split the request into one of two truth modes before proposing the frame:
+  - `fact_first`: information, knowledge, news, politics, medical, legal,
+    safety, accident, crime, finance, or any video where factual accuracy is
+    the viewer value. Use verification-first language and mark uncertain items.
+  - `hook_first_writer_premise`: 감동형 narration, TTS-only, BGM-heavy, family,
+    reunion, cute/moment, photo-explainer, or ordinary emotional story Shorts.
+    When the user says `후킹 쎄게`, `작가모드`, `우라까이`, or otherwise asks for a
+    stronger hook, choose the most hookable emotional premise first. It may be
+    plausible, dramatized, or not directly source-verifiable if it fits the
+    visible arc and avoids high-risk factual harm.
+- If uncertain between the two modes, ask the user one concise question:
+  `정보성 검증형으로 갈까요, 감동형 후킹 작가모드로 갈까요?`
 - If the source's core situation is obvious, state the chosen frame and proceed.
 - If the source can be read as multiple genres or the reversal is uncertain, show 2-3 possible frames and recommend one before production.
 - The frame brief must include:
   - `제가 본 상황:`
   - `가능한 풀이:`
+  - `truth_mode:`
+  - `writer_premise_for_hook:`
   - `추천 프레임:`
   - `추천 이유:`
   - `확인 필요:`
-- Do not infer sensitive conditions as fact from appearance alone. Phrase uncertain setup as `도움이 필요한 줄`, `못 움직이는 줄`, `다들 착각한 줄` unless the source explicitly states otherwise.
+- Do not infer sensitive conditions as verified fact from appearance alone. In
+  `fact_first`, phrase uncertain setup as `도움이 필요한 줄`, `못 움직이는 줄`,
+  `다들 착각한 줄` unless the source explicitly states otherwise. In
+  `hook_first_writer_premise`, a stronger public hook is allowed, but keep the
+  internal label as writer premise and do not call it source evidence.
 
 ## 11short Voice/TTS Intake Gate
 
