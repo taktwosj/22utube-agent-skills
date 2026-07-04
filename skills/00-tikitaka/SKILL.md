@@ -1,6 +1,6 @@
 ---
 name: 00-tikitaka
-description: Use only when the user explicitly asks for Tikitaka Korean Shorts remake scripting, 티키타카 하자, 우라까이, hook candidates, 상단/timed 중단 draft creation, Gemini raw intake for Shorts URLs, or provides Gemini Shorts source notes for remake scripting.
+description: Use only when the user explicitly asks for Tikitaka Korean Shorts source analysis, remake scripting, 티키타카 하자, 우라까이, hook candidates, 상단/timed 중단 draft creation, Gemini raw intake for Shorts URLs, or Gemini Shorts source notes. Do not use for SRT, CapCut, production packages, or polishing-only existing scripts.
 ---
 
 # 00 Tikitaka
@@ -62,9 +62,9 @@ timecode mismatch notes. Keep any unverified Gemini ranges as
 
 ## Ownership Matrix
 
-- `00-tikitaka`: script draft only.
-- `00script-writer`: polish existing script only.
-- `000short-production-agent`: production assets only.
+- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00script-writer`: polish/review an existing script draft only.
+- `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 - `22utube-production-agent`: shared factory policy only.
 
 ## Escalation Rule
@@ -73,8 +73,11 @@ Do not move to the next owner unless the user explicitly asks for that owner's
 stage.
 
 Adjacent intent is not permission to escalate. A Tikitaka request does not imply
-production, handoff, `SCRIPT_LOCK`, `PASS`, export, upload, completion, audio
-generation, SRT generation, layout JSON, or CapCut work.
+production, `production_allowed`, `SCRIPT_LOCK`, `PASS`, export, upload,
+completion, audio generation, SRT generation, layout JSON, or CapCut work.
+
+If the user already has a draft and asks only for wording, rhythm, retention,
+or writer review, route to `00script-writer` instead of rewriting it here.
 
 ## Default Boundary
 

@@ -1,6 +1,10 @@
 # Shorts Academy Reference
 
-Use this reference for Korean Shorts channel planning, source-remake scripts, and 11short/Tikitaka work when the user mentions 쇼츠학개론, 마라하기, 한계선, 돈통, 에셋, 결, 가단야, 우라까이, 일치율 0%, 벤치영상, 채널기획, or category selection.
+Use this reference for Tikitaka draft decisions in Korean Shorts source-remake
+scripting when the user mentions 쇼츠학개론, 마라하기, 한계선, 돈통, 에셋, 결,
+가단야, 우라까이, 일치율 0%, 벤치영상, or category constraints. It is
+not standalone channel planning and does not authorize SRT, CapCut, or production
+asset work.
 
 This reference is distilled from 쇼츠학개론 1-3강 text/PDF analysis and the user's added 한계선/Q&A notes. It is a decision guide, not a replacement for source verification, YouTube policy gates, or the current 11short caption contract.
 

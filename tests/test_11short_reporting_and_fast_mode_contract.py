@@ -17,6 +17,7 @@ ROOT = SKILL.parents[2]
 LAYOUT_CONTRACT = SKILL_DIR / "03_CAPCUT_LAYOUT_CONTRACT.md"
 HARNESS_REQUIREMENTS = SKILL_DIR / "04_HARNESS_REQUIREMENTS.md"
 REPORT_CONTRACT = SKILL_DIR / "07_DRAFT_FAST_REPORT_CONTRACT.md"
+SIMILARITY_CONTRACT = SKILL_DIR / "08_SIMILARITY_LOOP_CONTRACT.md"
 TIMELINE_GATE = SKILL_DIR / "scripts" / "validate_capcut_timeline_order.py"
 PRODUCTION_GATE = SKILL_DIR / "scripts" / "validate_production_gate.py"
 CONTRACT_FILES = [
@@ -27,6 +28,7 @@ CONTRACT_FILES = [
     SKILL_DIR / "05_CODEX_EXECUTION_PROMPT.md",
     SKILL_DIR / "06_CAPCUT_CUT_ASSEMBLY_CONTRACT.md",
     REPORT_CONTRACT,
+    SIMILARITY_CONTRACT,
     TIMELINE_GATE,
     PRODUCTION_GATE,
 ]
@@ -149,6 +151,27 @@ class ReportingAndFastModeContractTests(unittest.TestCase):
         gate_text = PRODUCTION_GATE.read_text(encoding="utf-8")
         self.assertIn("pre_capcut_script_package_status", gate_text)
         self.assertNotIn("final_report_before_capcut", gate_text)
+
+    def test_similarity_loop_contract_is_routed_and_bounded(self):
+        required = [
+            "08_SIMILARITY_LOOP_CONTRACT.md",
+            "REFERENCE_FINGERPRINT_REQUIRED",
+            "DRAFT_FAST_SIMILARITY_LOOP",
+            "SIMILARITY_LOOP_MAX_ITERATIONS",
+            "similarity_loop_ledger.jsonl",
+            "WAIT_REFERENCE",
+            "Do not use similarity loops to bypass",
+            "SCRIPT_LOCK",
+            "source.mp4",
+            "patch only the failed similarity dimensions",
+            "every dimension is PASS",
+            "gate_integrity is reflective only",
+            "dimension_vector_only",
+            "still PATCH after the iteration limit",
+        ]
+        for token in required:
+            with self.subTest(token=token):
+                self.assertIn(token, self.text)
 
 
 if __name__ == "__main__":

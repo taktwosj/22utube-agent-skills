@@ -23,8 +23,9 @@
 13. Create `decisions/segment_decision_table.json`.
 14. If the script came from `00-tikitaka`, import or create
     `decisions/tikitaka_segment_audio_plan.json` from `구간 오디오 정책표`.
-15. If Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N,
-    or benchmark-remake strategy applies, create
+15. If an explicit production request and script authority already exist, and
+    Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N, or
+    benchmark-remake strategy applies, create
     `decisions/shorts_academy_gate.json`.
 16. Create `decisions/capcut_layout_plan.json`.
 17. Create CapCut draft files.
@@ -68,11 +69,16 @@ They cannot be used as evidence for:
 
 ## Shorts Academy Production Gate
 
-Run this gate when the job enters production from `00-tikitaka`,
-`00script-writer`, or user wording such as 쇼츠학개론, 마라하기 공식, 한계선,
-돈통/에셋, 결, 가단야, 우라까이, 일치율 0%, 벤치영상, 채널기획, ranking/TOP-N,
-benchmark remake, or channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/
-랭킹/유머/군림보.
+Run this gate only after an explicit production request and script authority
+exist. Broad Shorts Academy wording alone does not start production. It only
+validates handed-off script decisions before SRT/layout, CapCut, harness, or
+final-report work.
+
+The gate can apply when the production job came from `00-tikitaka`,
+`00script-writer`, or a user-approved script package that contains terms such
+as 쇼츠학개론, 마라하기 공식, 한계선, 돈통/에셋, 결, 가단야, 우라까이,
+일치율 0%, 벤치영상, 채널기획, ranking/TOP-N, benchmark remake, or
+channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/랭킹/유머/군림보.
 
 Read `references/shorts-academy.md` before segment decisions, render plan,
 SRT/layout, CapCut draft creation, harness, or final report.

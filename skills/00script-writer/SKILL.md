@@ -1,15 +1,15 @@
 ---
 name: 00script-writer
-description: Use only when the user already has a Korean video or Shorts script draft and asks to polish wording, rhythm, tone, hook pressure, retention, readability, or policy-safe rewrite.
+description: Use only when the user already provides an existing Korean script or caption draft and asks for polish, rhythm, tone, hook pressure, retention, readability, policy-safe rewrite, or writer review. Do not use for URL/source intake, Tikitaka/urakkai initial drafting, channel planning, SRT, CapCut, or production assets.
 ---
 
 # Script Writer
 
 ## Ownership Matrix
 
-- `00-tikitaka`: script draft only.
-- `00script-writer`: polish existing script only.
-- `000short-production-agent`: production assets only.
+- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00script-writer`: polish/review an existing script draft only.
+- `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 - `22utube-production-agent`: shared factory policy only.
 
 ## Escalation Rule
@@ -20,6 +20,11 @@ assets, export video, or package uploads.
 
 If the user asks for Tikitaka remake scripting, 우라까이, hook candidates, 상단,
 timed 중단, or Gemini source-note scripting, route to `00-tikitaka`.
+
+Within this skill, `우라까이`, hook pressure, and Shorts Academy terms are
+rewrite directions for an already-provided draft only. They are not permission
+to start URL intake, source analysis, channel planning, or the first remake
+draft.
 
 If the user asks for production assets, subtitles, layout JSON, CapCut, render,
 export, upload, or production validation, route to `000short-production-agent`.
@@ -259,6 +264,8 @@ OCR, legal/political/medical/safety claims, or source-sensitive facts are needed
 - For rhythm, read `references/rhythm-rules.md`.
 - For policy, read `references/youtube-policy-gate.md`.
 - For evidence tiers, read `references/evidence-tier.md`.
+- For Shorts Academy terms in an existing draft review only, read
+  `references/shorts-academy.md`.
 - For hooks and memory anchors, read the relevant `references/*anchor*.md` and
   `references/hook-loop-structure.md`.
 - For old full-contract details or legacy repair only, read

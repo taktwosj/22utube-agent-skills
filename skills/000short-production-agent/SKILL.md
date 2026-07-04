@@ -1,15 +1,15 @@
 ---
 name: 000short-production-agent
-description: Use only when the user explicitly asks to create, validate, or repair production assets, subtitles, layout JSON, CapCut drafts, render packages, export packages, upload packages, or production packages.
+description: Use only when the user explicitly asks to create, validate, or repair production assets, subtitles, layout JSON, CapCut drafts, render packages, export packages, upload packages, or production packages. Do not use for script creation, urakkai decisions, hook/channel planning, or draft-only polishing.
 ---
 
 # 11short Production Agent
 
 ## Ownership Matrix
 
-- `00-tikitaka`: script draft only.
-- `00script-writer`: polish existing script only.
-- `000short-production-agent`: production assets only.
+- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00script-writer`: polish/review an existing script draft only.
+- `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 - `22utube-production-agent`: shared factory policy only.
 
 ## Escalation Rule
@@ -21,6 +21,10 @@ exports, upload packages, production packages, production validation, or repair.
 Route Tikitaka, 우라까이, hook, 상단, timed 중단, or Gemini source-note scripting
 to `00-tikitaka`; wording-only improvement to `00script-writer`; shared policy
 questions to `22utube-production-agent`.
+
+Do not originate the script, choose the urakkai angle, create hook/channel
+planning, or polish a draft inside this skill. Confirm script authority first,
+then build or validate the requested production files.
 
 ## Default Boundary
 
@@ -190,9 +194,11 @@ exists. Ask for or route to the script owner first.
 4. Confirm `tikitaka_segment_audio_plan` / `구간 오디오 정책표` when the script came from Tikitaka.
 5. Build or repair SRT/layout/render-plan assets from that segment audio plan.
 6. Build or repair the local CapCut draft.
-7. Snapshot CapCut draft JSON into the episode metadata folder.
-8. Run the required harness or validator for the current stage.
-9. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
+7. If reference sameness is requested or required, run the bounded similarity
+   loop from `08_SIMILARITY_LOOP_CONTRACT.md`; patch only failed dimensions.
+8. Snapshot CapCut draft JSON into the episode metadata folder.
+9. Run the required harness or validator for the current stage.
+10. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
 
 ## Mandatory CapCut Media Settings — HARNESS LOCK
 
@@ -252,12 +258,15 @@ Each state needs its own evidence.
 
 - For CapCut text effect presets, read
   `references/capcut_text_effect_presets.md`.
-- For Shorts craft constraints, read `references/shorts-academy.md`.
+- For Shorts craft constraints after an explicit production request and script
+  authority, read `references/shorts-academy.md`.
 - For the old Tikitaka production-script contract, read
   `references/tikitaka-script-v17.md`.
-- For work-order, pipeline, layout, harness, cut-assembly, and DRAFT_FAST /
-  FINAL_LOCK report-contract details, read the numbered root docs in this skill
-  folder, including `07_DRAFT_FAST_REPORT_CONTRACT.md`.
+- For work-order, pipeline, layout, harness, cut-assembly, DRAFT_FAST /
+  FINAL_LOCK report-contract, and reference-similarity loop details, read the
+  numbered root docs in this skill folder, including
+  `07_DRAFT_FAST_REPORT_CONTRACT.md` and
+  `08_SIMILARITY_LOOP_CONTRACT.md`.
 - For old full-contract details or legacy repair only, read
   `references/archived-full-skill-20260629.md`.
 
