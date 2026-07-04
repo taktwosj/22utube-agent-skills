@@ -56,6 +56,24 @@ bash "$HOME/agent-skills/scripts/update.sh" --target all --prune
 
 After the first install, start a new Codex chat and invoke `$skil down` for future updates.
 
+## Automatic Runtime Sync Rule
+
+A shared skill edit is not complete when only `skills/<name>` changed in Git, and it is also not complete when only one runtime folder changed. Any source skill change must automatically end in:
+
+1. source repo commit/pull/rebase as needed
+2. runtime install/update for all targets with prune
+3. `verify` source=target SHA256 parity for Codex, Claude, and Hermes
+
+This repo ships Git hooks for that automation. `install.ps1` / `install.sh` configures:
+
+```text
+git config core.hooksPath .githooks
+```
+
+The hooks run after relevant `post-commit`, `post-merge`, and `post-rewrite` events. They skip dirty worktrees to avoid copying uncommitted edits into runtime folders; in that case the agent must commit/clean first, then run install/update manually.
+
+If hooks are absent, stale, or skipped, the agent must still perform the same install+verify sequence in the same turn before reporting that skills are synchronized.
+
 ## Normal Update Workflow
 
 1. Identify the current OS.

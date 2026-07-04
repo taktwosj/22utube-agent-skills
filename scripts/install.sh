@@ -257,3 +257,12 @@ for target_name in selected_targets:
 
 print(f"DONE install target={target_arg} dry_run={dry_run}")
 PY
+
+if [ -d "$REPO_ROOT/.githooks" ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    echo "DRYRUN HOOKS git config core.hooksPath .githooks"
+  else
+    git -C "$REPO_ROOT" config core.hooksPath .githooks
+    echo "HOOKS core.hooksPath=.githooks"
+  fi
+fi

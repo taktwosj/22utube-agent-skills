@@ -13,6 +13,18 @@ function Get-RepoRoot {
   return (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 }
 
+function Enable-GitHooks([string]$RepoRoot, [switch]$DryRun) {
+  $hooksDir = Join-Path $RepoRoot ".githooks"
+  if (-not (Test-Path -LiteralPath $hooksDir)) { return }
+  if ($DryRun) {
+    Write-Output "DRYRUN HOOKS git config core.hooksPath .githooks"
+    return
+  }
+  git -C $RepoRoot config core.hooksPath .githooks
+  if ($LASTEXITCODE -ne 0) { throw "git config core.hooksPath failed" }
+  Write-Output "HOOKS core.hooksPath=.githooks"
+}
+
 function Test-IsWindowsHost {
   return [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
 }
@@ -254,5 +266,7 @@ foreach ($targetName in $selectedTargets) {
     Invoke-StrictDisable $targetConfig $targetName @($targetSkills | ForEach-Object { $_.name }) $stamp -DryRun:$DryRun
   }
 }
+
+Enable-GitHooks $repoRoot -DryRun:$DryRun
 
 Write-Output "DONE install target=$Target dry_run=$($DryRun.IsPresent)"
