@@ -109,7 +109,7 @@ restore notes.
 
 ## Cross-Lane Rules
 
-- Treat OneDrive paths as shared production workspace.
+- Treat factory and episode paths as shared production workspace.
 - Avoid destructive edits unless explicitly requested.
 - Do not print secrets, tokens, cookies, API keys, session IDs, or private
   customer identifiers.

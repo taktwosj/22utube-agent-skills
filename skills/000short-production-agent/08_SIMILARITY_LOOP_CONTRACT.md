@@ -23,10 +23,29 @@ Before the loop starts, create or locate a reference fingerprint. It must name
 the reference authority and record the intended sameness dimensions:
 
 - `source_reference`: source URL, source file, or locked reference package
+- `shorts_type_template_matrix`: `story_type`, `production_type`, and
+  `template_profile` selected by the script owner or operator
+- `final_capcut_project_file`: local CapCut draft/project file or folder being
+  evaluated, plus the metadata snapshot path used for review
 - `structure_order`: hook, setup, escalation, reversal, payoff
 - `rhythm_map`: edit beats, caption timing, emphasis points
 - `caption_roles`: top text, timed middle captions, TTS/narration text
 - `visual_layout`: template, text roles, T1-T6 order, forbidden bottom layers
+- `template_profile`: selected `black` / `블랙기본`, `insta white` / `인스타템플릿`, or named template; reference draft path; T1-T6 role map; source-video slot; background/frame assets
+- `middle_caption_format`: timed `중단` layer, caption role, line count, font/effect/position, and whether T3/T4/T5/T6 are active or unused
+- `reference_visual_preview`: screenshot, cover image, contact sheet, or frame sample showing that the candidate visually follows the reference template profile
+- `visual_screenshot_required`: screenshot, cover/contact sheet, or sampled
+  frames required for visual convergence
+- `caption_layer_role_match`: actual text layers match the intended role map
+- `caption_position_match`: actual positions, scale, safe area, line count, and
+  effects match the selected template profile
+- `source_caption_overlap_check`: generated captions do not awkwardly overlap
+  burned-in source captions, faces, or key action
+- `capcut_processing_idle_check`: the CapCut UI/project is not still applying
+  internal features or background processing before review
+- `mandatory_capcut_media_settings_status`: validator evidence for media
+  settings when the candidate is presented as ready
+- `active_draft_cleanup`: no backup, before-snapshot, or temporary helper files left inside the active local CapCut draft tree
 - `audio_policy`: source audio, TTS, BGM, mute, ducking, quote handling
 - `tone_target`: Tikitaka pressure, emotional premise, humor, comment trigger
 - `nonnegotiable_gates`: source, script, humanize, CapCut, and upload gates
@@ -41,9 +60,11 @@ Do not guess a reference fingerprint from memory.
 
 ## DRAFT_FAST_SIMILARITY_LOOP
 
-The loop may run in `DRAFT_FAST` after the required source and script authority
-exist. A successful similarity loop still means working draft similarity, not
-production approval.
+The loop may run in `AUTO_FULL_CAPCUT_PROJECT`, `INTERACTIVE_SCRIPT_APPROVAL`
+handoff validation, or explicit `DRAFT_FAST` after the required source and
+script authority exist. A successful similarity loop still means similarity
+convergence only; it does not replace the selected mode's production,
+visual/template, user-review, or final-lock gates.
 
 Allowed candidate surfaces:
 
@@ -67,8 +88,17 @@ structure_similarity
 rhythm_similarity
 caption_role_similarity
 visual_layout_similarity
+template_profile_similarity
+middle_caption_format_similarity
+caption_layer_role_similarity
+caption_position_similarity
+reference_visual_preview_similarity
+reference_frame_similarity
+source_caption_overlap_check
+capcut_processing_idle_check
 audio_policy_similarity
 tone_similarity
+active_draft_cleanup
 gate_integrity
 ```
 
@@ -148,8 +178,17 @@ Each JSONL row should include:
     "rhythm_similarity": "PATCH",
     "caption_role_similarity": "PASS",
     "visual_layout_similarity": "PATCH",
+    "template_profile_similarity": "PASS",
+    "middle_caption_format_similarity": "PATCH",
+    "caption_layer_role_similarity": "PASS",
+    "caption_position_similarity": "PATCH",
+    "reference_visual_preview_similarity": "PASS",
+    "reference_frame_similarity": "PASS",
+    "source_caption_overlap_check": "PASS",
+    "capcut_processing_idle_check": "PASS",
     "audio_policy_similarity": "PASS",
     "tone_similarity": "PASS",
+    "active_draft_cleanup": "PASS",
     "gate_integrity": "PASS"
   },
   "patches": ["patched timed middle caption beat 3"],
@@ -173,6 +212,15 @@ Do not use similarity loops to bypass any hard gate, including:
 - failed production gate
 - failed post-CapCut gate
 - failed mandatory CapCut media settings harness
+- failed template profile match (`FAIL_TEMPLATE_PROFILE_MISMATCH`)
+- failed middle caption format match (`FAIL_MIDDLE_CAPTION_FORMAT_MISMATCH`)
+- missing visual screenshot evidence (`WAIT_VISUAL_SCREENSHOT_REQUIRED`)
+- pending operator CapCut review (`WAIT_USER_CAPCUT_REVIEW`)
+- failed caption layer role match
+- failed caption position match
+- failed source caption overlap check
+- non-idle CapCut processing state
+- unclean active CapCut draft folder (`FAIL_PROJECT_CLEANUP`)
 - missing upload package evidence
 
 If a hard gate is missing, return the existing `WAIT_*`, `FAIL_*`, or
@@ -186,6 +234,7 @@ When this loop is used, include these report tokens:
 ```text
 DRAFT_FAST_SIMILARITY_LOOP
 REFERENCE_FINGERPRINT_REQUIRED
+shorts_type_template_matrix
 SIMILARITY_LOOP_MAX_ITERATIONS
 similarity_loop_ledger.jsonl
 ```

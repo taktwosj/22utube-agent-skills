@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install shared Codex skills into the current user's runtime skill folder."""
+"""Install Git-managed Codex skills into the current user's runtime skill folder."""
 
 from __future__ import annotations
 
@@ -70,41 +70,13 @@ def candidate_source_paths() -> List[Path]:
     if env_source:
         candidates.append(expand_path(env_source))
 
-    for env_name in ("OneDrive", "OneDriveCommercial"):
-        env_value = os.environ.get(env_name)
-        if env_value:
-            base = expand_path(env_value)
-            candidates.append(base / "22utube" / "11utube" / "codex_skills_source")
-
-    user_profile = os.environ.get("USERPROFILE")
-    if user_profile:
-        base = expand_path(user_profile)
-        candidates.append(base / "OneDrive" / "22utube" / "11utube" / "codex_skills_source")
-
     home = Path.home()
-    candidates.extend(
-        [
-            home / "agent-skills" / "skills",
-            home / "OneDrive" / "22utube" / "11utube" / "codex_skills_source",
-        ]
-    )
-
-    for pattern in (
-        "Library/CloudStorage/OneDrive*/22utube/11utube/codex_skills_source",
-        "OneDrive*/22utube/11utube/codex_skills_source",
-    ):
-        try:
-            candidates.extend(home.glob(pattern))
-        except OSError:
-            pass
+    candidates.append(home / "agent-skills" / "skills")
 
     for start in (Path.cwd(), Path(__file__).resolve()):
         current = start if start.is_dir() else start.parent
         for parent in (current, *current.parents):
-            if parent.name == "codex_skills_source":
-                candidates.append(parent)
-            candidates.append(parent / "codex_skills_source")
-            candidates.append(parent / "11utube" / "codex_skills_source")
+            candidates.append(parent / "agent-skills" / "skills")
 
     return unique_paths(candidates)
 
@@ -137,7 +109,7 @@ def materialize_source(source: Optional[str], temp_root: Path) -> Path:
         if found:
             return found
         raise SystemExit(
-            "ERROR source not found. Pass --source pointing to 22utube/11utube/codex_skills_source."
+            "ERROR source not found. Pass --source pointing to $HOME/agent-skills/skills."
         )
 
     if is_url(source):
@@ -286,11 +258,11 @@ def sync_skills(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Install shared Codex skills from codex_skills_source into ~/.codex/skills."
+        description="Install Git-managed Codex skills into ~/.codex/skills."
     )
     parser.add_argument(
         "--source",
-        help="Source folder, local .zip, or .zip URL. Defaults to common 22utube OneDrive paths.",
+        help="Source folder, local .zip, or .zip URL. Defaults to $HOME/agent-skills/skills.",
     )
     parser.add_argument(
         "--target",

@@ -18,6 +18,15 @@ from typing import Any
 
 PASS_VALUES = {"PASS", "DONE", "SCRIPT_LOCK", "SCRIPT_LOCKED", "HARNESS_PASS"}
 FAIL_VALUES = {"FAIL", "FAILED", "BLOCK", "BLOCKED", "SCRIPT_REWRITE", "HARNESS_FAILED"}
+SCRIPT_LOCK_PACKAGE_FILES = {
+    "original_structure_summary": "original_structure_summary.md",
+    "urakkai_structure_plan": "urakkai_structure_plan.md",
+    "urakkai_structure_delta": "urakkai_structure_delta.json",
+    "block_map": "block_map.json",
+    "block_role_map": "block_role_map.json",
+    "block_voice_switch_map": "block_voice_switch_map.json",
+    "tts_copy_text": "tts_copy_text.txt",
+}
 
 
 def utc_now() -> str:
@@ -136,6 +145,109 @@ def passish(block: dict[str, Any]) -> bool:
     return str(block.get("status") or "").upper() in PASS_VALUES
 
 
+def json_artifact_status(work_dir: Path, name: str, label: str) -> dict[str, Any]:
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, f"{label} missing")
+    if data.get("_parse_error"):
+        return status_block("FAILED", name, f"{label} parse failed")
+    if data.get("_non_object"):
+        return status_block("FAILED", name, f"{label} json root must be an object")
+
+    raw_status = str(data.get("status") or data.get("gate_status") or "").upper()
+    if raw_status in FAIL_VALUES:
+        return status_block("FAILED", name, f"{label} status={raw_status}")
+    if raw_status and raw_status not in PASS_VALUES:
+        return status_block("FAILED", name, f"{label} status is not PASS: {raw_status}")
+    return status_block("PASS", name)
+
+
+def block_map_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["block_map"]
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, "block_map missing")
+    if data.get("_parse_error"):
+        return status_block("FAILED", name, "block_map parse failed")
+    if data.get("_non_object"):
+        return status_block("FAILED", name, "block_map json root must be an object")
+
+    sequence = data.get("edit_block_sequence")
+    blocks = data.get("blocks") or data.get("edit_blocks")
+    if not isinstance(sequence, list) or not sequence:
+        return status_block("FAILED", name, "block_map.edit_block_sequence missing")
+    if not isinstance(blocks, list) or not blocks:
+        return status_block("FAILED", name, "block_map.blocks missing")
+
+    required = {"edit_id", "source_block_id", "original_order", "urakkai_order"}
+    for index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            return status_block("FAILED", name, f"block_map.blocks[{index}] must be object")
+        missing = sorted(key for key in required if block.get(key) in (None, ""))
+        if missing:
+            return status_block(
+                "FAILED",
+                name,
+                f"block_map.blocks[{index}] missing {', '.join(missing)}",
+            )
+    return status_block("PASS", name)
+
+
+def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
+    checks = {
+        "original_structure_summary": file_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["original_structure_summary"],
+            "original structure summary",
+        ),
+        "urakkai_structure_plan": file_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["urakkai_structure_plan"],
+            "urakkai structure plan",
+        ),
+        "urakkai_structure_delta": json_artifact_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["urakkai_structure_delta"],
+            "urakkai structure delta",
+        ),
+        "block_map": block_map_status(work_dir),
+        "block_role_map": json_artifact_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["block_role_map"],
+            "block role map",
+        ),
+        "block_voice_switch_map": json_artifact_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["block_voice_switch_map"],
+            "block voice switch map",
+        ),
+        "tts_copy_text": file_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["tts_copy_text"],
+            "TTS copy text",
+        ),
+    }
+    missing = [name for name, block in checks.items() if not passish(block)]
+    status = "PASS" if not missing else "FAIL"
+    return {
+        "gate_name": "SCRIPT_HANDOFF_GATE",
+        "status": status,
+        "generated_by": "tikitaka_harness_runner",
+        "checked_at": utc_now(),
+        "script_status": "SCRIPT_LOCK_PACKAGE" if status == "PASS" else "WAIT_SCRIPT_HANDOFF_GATE",
+        "capcut_allowed": status == "PASS",
+        "input_files": list(SCRIPT_LOCK_PACKAGE_FILES.values()),
+        "checks": checks,
+        "missing_or_failed": missing,
+    }
+
+
+def capcut_permission_status(script_handoff_gate: dict[str, Any]) -> tuple[str, str]:
+    if passish(script_handoff_gate) and script_handoff_gate.get("script_status") == "SCRIPT_LOCK_PACKAGE":
+        return "CAPCUT_OPENABLE_PROJECT_ALLOWED", "WAIT_CAPCUT_OPENABLE_PROJECT"
+    return "WAIT_SCRIPT_HANDOFF_GATE", "WAIT_SCRIPT_HANDOFF_GATE"
+
+
 def build_visual_gate(job_state: dict[str, Any]) -> str:
     def line(label: str, block: dict[str, Any]) -> str:
         evidence = block.get("evidence") or "없음"
@@ -151,6 +263,9 @@ def build_visual_gate(job_state: dict[str, Any]) -> str:
             line("Execution Spec", job_state["execution_spec"]),
             line("5작가 모드", job_state["persona_mode"]),
             line("Script Gate", job_state["script_gate"]),
+            line("Script Handoff Gate", job_state["script_handoff_gate"]),
+            f"CapCut openable permission: {job_state['capcut_permission']}",
+            f"Production status: {job_state['production_status']}",
             line("n8n", job_state["n8n"]),
             line("Validation Report", job_state["validation"]),
             line("Evidence Pack", job_state["evidence_pack"]),
@@ -176,6 +291,8 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
     implementation_log = file_status(work_dir, "implementation_log.md", "implementation log")
     personas = persona_status(work_dir)
     script_gate = script_gate_status(work_dir)
+    script_handoff_gate = build_script_handoff_gate(work_dir)
+    capcut_permission, production_status = capcut_permission_status(script_handoff_gate)
     n8n = n8n_status(work_dir, previous_state)
 
     upstream = {
@@ -184,6 +301,7 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "implementation_log": implementation_log,
         "persona_mode": personas,
         "script_gate": script_gate,
+        "script_handoff_gate": script_handoff_gate,
         "n8n": n8n,
         "harness_trace": trace,
     }
@@ -217,6 +335,9 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "implementation_log": implementation_log,
         "persona_mode": personas,
         "script_gate": script_gate,
+        "script_handoff_gate": script_handoff_gate,
+        "capcut_permission": capcut_permission,
+        "production_status": production_status,
         "n8n": n8n,
         "validation": validation,
         "evidence_pack": evidence_pack,
@@ -227,6 +348,7 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
 
     write_json(work_dir / "validation_report.json", validation)
     write_json(work_dir / "evidence_pack.json", evidence_pack)
+    write_json(work_dir / "script_handoff_gate.json", script_handoff_gate)
     write_json(work_dir / "job_state.json", state)
     (work_dir / "visual_gate.md").write_text(build_visual_gate(state), encoding="utf-8")
     return state

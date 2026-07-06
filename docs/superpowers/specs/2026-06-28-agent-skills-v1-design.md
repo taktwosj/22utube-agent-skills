@@ -2,7 +2,9 @@
 
 ## Goal
 
-Move the active 22utube/11utube agent skills from OneDrive shared folders into a Git source of truth named `22utube-agent-skills`, with copy-only installation into Codex, Claude, and Hermes runtime folders.
+Maintain the active 22utube/11utube agent skills in a Git source of truth named
+`22utube-agent-skills`, with copy-only installation into Codex, Claude, and
+Hermes runtime folders.
 
 ## Source And Targets
 

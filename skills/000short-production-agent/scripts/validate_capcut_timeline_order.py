@@ -222,6 +222,19 @@ CATCUP_TEMPLATE_MASTERS = {
         "text_track_count": 4,
         "frame_keywords": ("insta", "white"),
     },
+    "insta_white_audio_split_v1": {
+        "reference_project": "insta white",
+        "accepted_reference_projects": {
+            "insta white",
+            "260625-ig-contortion-top3-urakkai-instagram-tts",
+        },
+        "rejected_reference_projects": {
+            "260625-ig-contortion-top3-urakkai-instagram-tts-fixed",
+        },
+        "track_count": 9,
+        "text_track_count": 4,
+        "frame_keywords": ("insta", "white"),
+    },
     "black_template_master_v1": {
         "reference_project": "black",
         "accepted_reference_projects": {"black"},
@@ -1977,6 +1990,7 @@ def validate_scenario_post_gate(
         contract,
         draft_path,
     )
+    draft = load_draft_content_for_catcup(root, timeline_manifest, contract, draft_path)
     script_alignment_result = validate_manifest_script_alignment(
         timeline_manifest,
         pre_gate_result,

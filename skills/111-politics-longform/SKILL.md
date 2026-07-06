@@ -12,6 +12,7 @@ Always read [00_CORE_RULES.md](00_CORE_RULES.md) first.
 Then load only the files required by the current request:
 
 - Stage 1 / Claude rough package / 자료조사 / source intake:
+  - [references/youtube_source_channels.md](references/youtube_source_channels.md)
   - [10_STAGE1_RESEARCH_SOURCE.md](10_STAGE1_RESEARCH_SOURCE.md)
   - [11_STAGE1_OUTPUT_CONTRACT.md](11_STAGE1_OUTPUT_CONTRACT.md)
 - Stage 2 / Codex finalization / CapCut / 캣컷 / 출력 / 제작:

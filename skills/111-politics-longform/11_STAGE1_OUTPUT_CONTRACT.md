@@ -17,6 +17,41 @@ episode_manifest.json
 90_reports\stage1_status.json
 ```
 
+`00_source\source_manifest.json` must record source discovery evidence:
+
+```json
+{
+  "standard_political_channels_checked": [
+    "KTV 국민방송 @KTV_korea",
+    "NATV 국회방송 @NATV_korea",
+    "김어준의 겸손은힘들다 뉴스공장 @gyeomsonisnothing",
+    "스픽스 channel_id UCgeOlLcX6PReHdWImEnUVTg"
+  ],
+  "forbidden_channels_checked": [
+    "MBC 라디오 시사 @mbcradio_sisa"
+  ],
+  "sources": [
+    {
+      "channel": "",
+      "channel_id": "",
+      "channel_url": "",
+      "webpage_url": "",
+      "upload_date": "",
+      "title": ""
+    }
+  ]
+}
+```
+
+If the channel pool is stale, renamed, unavailable, or too narrow for the issue,
+record `CHANNEL_LIST_STALE` or `ISSUE_SPECIFIC_SOURCE_ADDED` in the Stage 1
+report instead of silently skipping the check.
+
+If a candidate source matches a forbidden channel, set `status` to
+`WAIT_FORBIDDEN_SOURCE_CHANNEL`, write the rejected URL/handle in the Stage 1
+report, and choose another source before continuing. Do not download from a
+forbidden channel for contrast/context.
+
 Download rule:
 
 - `PASS_SOURCE_DOWNLOADED` is allowed only when the actual `source_full.mp4` exists and ffprobe evidence proves it is playable.

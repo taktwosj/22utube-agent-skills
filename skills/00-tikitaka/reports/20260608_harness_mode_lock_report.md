@@ -6,15 +6,15 @@
 
 ## 원인
 
-- 로컬 런타임 `00-tikitaka` 스킬이 공유 원본보다 짧은 구버전이었다.
+- 로컬 런타임 `00-tikitaka` 스킬이 Git 원본보다 짧은 구버전이었다.
 - 기존 규칙은 5작가 모드와 SCRIPT_LOCK을 요구했지만, 최종 보고 문구를 `job_state.json`, `validation_report.json`, `evidence_pack.json`, `visual_gate.md` 같은 외부 증거에 묶는 fail-closed 장치가 부족했다.
 - 그래서 실제 에이전트/하네스/n8n 실행 없이도 답변에서 `PASS`처럼 보이는 문구를 쓸 수 있었다.
 
 ## 수정 범위
 
-- source skill: `{UTUBE_ROOT}/codex_skills_source/00-tikitaka/SKILL.md`
+- source skill: `$HOME/agent-skills/skills/00-tikitaka/SKILL.md`
 - local runtime skill: `%USERPROFILE%/.codex/skills/00-tikitaka/SKILL.md`
-- new runner: `{UTUBE_ROOT}/codex_skills_source/00-tikitaka/scripts/tikitaka_harness_runner.py`
+- new runner: `$HOME/agent-skills/skills/00-tikitaka/scripts/tikitaka_harness_runner.py`
 - local runner: `%USERPROFILE%/.codex/skills/00-tikitaka/scripts/tikitaka_harness_runner.py`
 
 ## 추가된 LOCK 규칙
@@ -34,7 +34,7 @@
 명령:
 
 ```powershell
-py -3 {UTUBE_ROOT}\codex_skills_source\00-tikitaka\scripts\tikitaka_harness_runner.py {work_dir} --job-id {job_id}
+py -3 $HOME\agent-skills\skills\00-tikitaka\scripts\tikitaka_harness_runner.py {work_dir} --job-id {job_id}
 ```
 
 생성/갱신 파일:
@@ -89,15 +89,15 @@ SCRIPT_LOCK: NOT_LOCKED
 수정 전 백업:
 
 ```text
-{UTUBE_ROOT}/codex_skills_source/_backups/tikitaka_harness_mode_20260608-131936/source_SKILL.md
-{UTUBE_ROOT}/codex_skills_source/_backups/tikitaka_harness_mode_20260608-131936/local_SKILL.md
+Pre-Git OneDrive backup paths were retired during the agent-skills Git migration.
+Use Git history and runtime target backups for rollback.
 ```
 
 롤백 방법:
 
 ```powershell
-Copy-Item "{UTUBE_ROOT}\codex_skills_source\_backups\tikitaka_harness_mode_20260608-131936\source_SKILL.md" "{UTUBE_ROOT}\codex_skills_source\00-tikitaka\SKILL.md" -Force
-Copy-Item "{UTUBE_ROOT}\codex_skills_source\_backups\tikitaka_harness_mode_20260608-131936\local_SKILL.md" "%USERPROFILE%\.codex\skills\00-tikitaka\SKILL.md" -Force
+git -C "$HOME\agent-skills" restore --source <known-good-commit> -- skills/00-tikitaka
+powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\install.ps1" -Target all -Only 00-tikitaka
 ```
 
 ## 남은 주의

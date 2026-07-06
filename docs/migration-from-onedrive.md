@@ -1,6 +1,7 @@
 # Migration From OneDrive
 
-OneDrive `codex_skills_source` is now legacy cache. The Git repo is the source of truth.
+The Git repo is now the only skill source of truth. OneDrive is no longer a
+skill-source or skill-cache location.
 
 Migration flow:
 

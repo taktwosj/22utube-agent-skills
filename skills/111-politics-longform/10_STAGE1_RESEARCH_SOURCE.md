@@ -3,9 +3,31 @@
 Stage 1 is the Claude-friendly pre-CapCut phase. Its job is to produce a source
 handoff package for Codex Stage 2.
 
+Before choosing source URLs, read
+[references/youtube_source_channels.md](references/youtube_source_channels.md)
+and check the standard political source pool. The list is a discovery aid, not
+proof. Final source truth still comes from the downloaded video's YouTube
+metadata, `source_full.info.json`, captions, and ffprobe evidence.
+
+Forbidden channel rule:
+
+- If any candidate URL, playlist item, search result, or downloaded metadata
+  matches a `Hard Blacklist` entry, stop Stage 1 with
+  `WAIT_FORBIDDEN_SOURCE_CHANNEL`.
+- Do not download, quote, label, or use blacklisted channels as contrast/context.
+
+Source mix rule:
+
+- When the issue allows it, prefer a mix of at least one official/public-record
+  source and one current-affairs commentary source. Prior tests showed this
+  공식 채널 + 시사채널 mix gives the best political-longform result.
+- Use the hard whitelist first for official/public-record footage, then use
+  trusted 시사 channels for framing, reaction, and narrative pressure.
+
 Do:
 
 - research the political issue and source context
+- check the standard source-channel pool and record which channels were checked
 - collect original URLs
 - verify source channel and upload date
 - download FHD/1080-first source video when available
@@ -62,6 +84,9 @@ Do not:
 
 - create, edit, inspect, or claim any CapCut draft
 - mention `jungchilong` details except to say CapCut belongs to Stage 2
+- use the source-channel pool as the visible source label without verifying the
+  actual downloaded video metadata
+- use any `Hard Blacklist` channel, including `@mbcradio_sisa`
 - create `speech_boundary_lock.json`
 - create locked clips
 - claim final, export complete, upload-ready, or production PASS

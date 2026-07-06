@@ -105,12 +105,11 @@ def main() -> int:
         "/.claude",
         "/.agents",
         "/codex_skills",
-        "/codex_skills_source",
         "/agent-skills",
         "/skills/",
     ]
     if ONEDRIVE_ROOT in path_haystack and any(part in path_haystack for part in dangerous_onedrive_parts):
-        return deny("OneDrive must not contain runtime skills, .codex, .claude, .agents, or skill source.")
+        return deny("OneDrive production tree must not contain runtime folders, .codex, .claude, .agents, or Git-source mirrors.")
 
     if any(path.startswith(JUNGCHILONG) for path in touched_paths) or DIRECT_JUNGCHILONG_WRITE.search(command):
         return deny("jungchilong is a locked visual skeleton. Copy it first; do not patch the base directly.")

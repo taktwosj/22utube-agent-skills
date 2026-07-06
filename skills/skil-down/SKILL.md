@@ -32,7 +32,6 @@ Common source locations:
 ```text
 Windows: $HOME\agent-skills\skills
 macOS / Mac mini: $HOME/agent-skills/skills
-Legacy OneDrive cache: $env:UTUBE_ROOT\codex_skills_source
 ```
 
 If an operational document shows `py -3`, use `python3` on the Mac mini. If it shows `python3`, use `py -3` on this Windows PC.

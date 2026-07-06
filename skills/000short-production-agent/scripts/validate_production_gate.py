@@ -22,6 +22,21 @@ ALLOWED_SCRIPT_LOCK_SOURCES = {
     "tikitaka_harness_runner",
     "real_writer_agent_mode",
 }
+ALLOWED_SCRIPT_HANDOFF_GATE_GENERATORS = {
+    "tikitaka_harness_runner",
+    "validate_tikitaka_handoff",
+    "validate_tikitaka_handoff.py",
+}
+SCRIPT_HANDOFF_GATE_PATH_KEYS = (
+    "script_handoff_gate_path",
+    "script_handoff_gate_json",
+    "script_handoff_gate",
+)
+BLOCK_MAP_PATH_KEYS = (
+    "block_map_path",
+    "canonical_block_map_path",
+    "tikitaka_block_map_path",
+)
 
 SCENARIO_FIRST_MODES = {
     "scenario_first_montage",
@@ -365,6 +380,13 @@ CATCUP_TEMPLATE_MASTERS = {
             "260625-ig-contortion-top3-urakkai-instagram-tts",
         },
     },
+    "insta_white_audio_split_v1": {
+        "reference_project": "insta white",
+        "accepted_reference_projects": {
+            "insta white",
+            "260625-ig-contortion-top3-urakkai-instagram-tts",
+        },
+    },
     "black_template_master_v1": {
         "reference_project": "black",
         "accepted_reference_projects": {"black"},
@@ -633,6 +655,130 @@ def require_json_status_pass(root: Path, rel_path: str, label: str) -> dict[str,
     if status_value(data) != "PASS":
         raise GateFail(f"{label} status must be PASS: {path}")
     return data
+
+
+def default_or_declared_path(
+    sources: list[dict[str, Any]],
+    keys: tuple[str, ...],
+    default_path: str,
+) -> str:
+    value = first_status_value(sources, keys)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return default_path
+
+
+def validate_handoff_block_map(block_map: dict[str, Any], label: str = "block_map.json") -> None:
+    sequence = block_map.get("edit_block_sequence")
+    blocks = block_map.get("blocks") or block_map.get("edit_blocks")
+    voice_switch_map = block_map.get("block_voice_switch_map") or block_map.get("voice_switches")
+
+    if not isinstance(sequence, list) or not sequence:
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} edit_block_sequence missing")
+    if not isinstance(blocks, list) or not blocks:
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} blocks missing")
+    if not isinstance(voice_switch_map, list) or not voice_switch_map:
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} block_voice_switch_map missing")
+
+    required = {"edit_id", "source_block_id", "original_order", "urakkai_order"}
+    for index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} blocks[{index}] must be object")
+        missing = sorted(key for key in required if block.get(key) in (None, ""))
+        if missing:
+            raise GateFail(
+                f"WAIT_SCRIPT_HANDOFF_GATE: {label} blocks[{index}] missing {', '.join(missing)}"
+            )
+
+
+def validate_script_handoff_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    sources = collect_status_sources(contract, root)
+    gate_rel_path = default_or_declared_path(
+        sources,
+        SCRIPT_HANDOFF_GATE_PATH_KEYS,
+        "20_script/script_handoff_gate.json",
+    )
+    gate_path = as_path(root, gate_rel_path)
+    if not gate_path.exists():
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: script_handoff_gate.json file missing: {gate_path}")
+    gate = load_json(gate_path)
+
+    if gate.get("gate_name") != "SCRIPT_HANDOFF_GATE":
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: gate_name must be SCRIPT_HANDOFF_GATE")
+    if str(gate.get("status") or "").upper() != "PASS":
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: script_handoff_gate status must be PASS")
+    if gate.get("script_status") != "SCRIPT_LOCK_PACKAGE":
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: script_status must be SCRIPT_LOCK_PACKAGE")
+    if gate.get("capcut_allowed") is not True:
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: capcut_allowed must be true")
+    generator = str(gate.get("generated_by") or "").strip()
+    if generator not in ALLOWED_SCRIPT_HANDOFF_GATE_GENERATORS:
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: script_handoff_gate must be validator generated")
+
+    block_map_rel_path = (
+        first_status_value(sources, BLOCK_MAP_PATH_KEYS)
+        or gate.get("block_map_path")
+        or "20_script/block_map.json"
+    )
+    if not isinstance(block_map_rel_path, str) or not block_map_rel_path.strip():
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: block_map.json path missing")
+    block_map_path = require_file(root, block_map_rel_path, "block_map")
+    block_map = load_json(block_map_path)
+    validate_handoff_block_map(block_map)
+
+    for input_file in gate.get("input_files") or []:
+        if isinstance(input_file, str) and input_file.strip():
+            input_path = as_path(root, input_file)
+            if not input_path.exists() and not Path(input_file).is_absolute():
+                input_path = gate_path.parent / input_file
+            if not input_path.exists():
+                raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: gate input file missing: {input_file}")
+
+    return {
+        "script_handoff_gate_status": "PASS",
+        "script_handoff_gate_path": str(gate_path),
+        "script_status": "SCRIPT_LOCK_PACKAGE",
+        "block_map_path": str(block_map_path),
+        "capcut_permission": "CAPCUT_OPENABLE_PROJECT_ALLOWED",
+    }
+
+
+def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    """Validate only the second-stage CapCut-openable entry contract.
+
+    This gate intentionally does not require FINAL_LOCK writer/persona, n8n, or
+    upload-readiness fields. Those remain owned by validate_shared_requirements.
+    """
+
+    script_handoff_result = validate_script_handoff_gate(contract, root)
+    sources = collect_status_sources(contract, root)
+    source_manifest_rel_path = (
+        first_status_value(
+            sources,
+            (
+                "source_manifest_path",
+                "source_manifest_json",
+                "source_manifest",
+            ),
+        )
+        or "00_source/source_manifest.json"
+    )
+    if not isinstance(source_manifest_rel_path, str) or not source_manifest_rel_path.strip():
+        raise GateFail("source_manifest_path missing before CAPCUT_OPENABLE_PROJECT")
+    source_manifest_path = require_file(root, source_manifest_rel_path, "source_manifest")
+
+    return {
+        "status": "CAPCUT_OPENABLE_PROJECT_ALLOWED",
+        "mode": "CAPCUT_OPENABLE_PROJECT",
+        "script_handoff_gate_status": script_handoff_result["script_handoff_gate_status"],
+        "script_status": script_handoff_result["script_status"],
+        "capcut_permission": script_handoff_result["capcut_permission"],
+        "block_map_path": script_handoff_result["block_map_path"],
+        "source_manifest_path": str(source_manifest_path),
+        "next_gate": "ASSET_PREP_GATE",
+        "final_lock_required": False,
+        "upload_ready": False,
+    }
 
 
 def require_scalar_list(value: Any, label: str) -> list[Any]:
@@ -2292,7 +2438,9 @@ def validate_scenario_first_montage(
     }
 
 
-def validate_shared_requirements(contract: dict[str, Any], root: Path) -> None:
+def validate_shared_requirements(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    script_handoff_result = validate_script_handoff_gate(contract, root)
+
     if contract.get("similarity_breaker_harness") != "PASS":
         if contract.get("similarity_breaker_harness") != "N/A_SCENARIO_FIRST_MONTAGE":
             raise GateFail("similarity_breaker_harness is not PASS")
@@ -2356,6 +2504,8 @@ def validate_shared_requirements(contract: dict[str, Any], root: Path) -> None:
         contract.get("harness_report_assets", ""),
         "harness_report_assets",
     )
+
+    return script_handoff_result
 
 
 def validate_youtube_restriction_guideline(
@@ -2588,7 +2738,7 @@ def validate_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
 
     policy_result = validate_youtube_restriction_guideline(contract, root)
     report_voice_result = validate_report_first_voice_gate(contract, root)
-    validate_shared_requirements(contract, root)
+    shared_result = validate_shared_requirements(contract, root)
 
     result = {
         "gate": "PRODUCTION_GATE",
@@ -2601,6 +2751,7 @@ def validate_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
     }
     result.update(policy_result)
     result.update(report_voice_result)
+    result.update(shared_result)
     result.update(assembly_result)
     return result
 
