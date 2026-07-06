@@ -5,6 +5,23 @@ description: Use only when the user explicitly asks for Tikitaka Korean Shorts s
 
 # 00 Tikitaka
 
+## Active Instruction Authority - 2026-07-06
+
+Authority: `shorts_script_analysis_single_source_v20260706.md`.
+
+For current Shorts script analysis and Tikitaka drafts, use only the
+2026-07-06 single-source contract:
+
+- Output `상단 + timed 중단 + 중단 TTS 글자만 복사`.
+- Do not output legacy `하단`, `하단 원문`, 3-layer script packages, or bottom
+  first-line candidate blocks.
+- Treat any legacy reference that says `TTS 만들 글자만 복사` as
+  `중단 TTS 글자만 복사`.
+- Use quoted lines only for verified source speech.
+- Use parenthesized lines for reaction, emotion, situation, visual, SFX, or
+  meme captions.
+- Derive the TTS copy block only from timed `중단` lines intended for voice.
+
 ## Gemini Raw Intake First
 
 When the user says `티키타카 하자` without source notes, ask for the Shorts URL
@@ -800,6 +817,9 @@ Hard fails:
 
 ## Reference Routing
 
+- Active Shorts script analysis authority is
+  `shorts_script_analysis_single_source_v20260706.md`; apply it before any
+  reference file below.
 - For hook review, read `references/pre_script_hook_review.md`.
 - For Shorts craft rules, read `references/shorts-academy.md`.
 - For old contract details or legacy repair only, read

@@ -40,6 +40,9 @@ skil-down
 verification requirements. The CapCut draft bundles themselves stay in
 OneDrive/CapCut storage, not in Git.
 
+Current Tikitaka Shorts script analysis authority is
+`skills/00-tikitaka/shorts_script_analysis_single_source_v20260706.md`.
+
 ## First Install
 
 Windows:

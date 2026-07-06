@@ -82,7 +82,7 @@ Required flow fields:
 }
 ```
 
-For current 11short work, this rule must obey the active caption constitution: output `상단 + timed 중단 + TTS 만들 글자만 복사`; do not reintroduce legacy `하단`.
+For current 11short work, this rule must obey the active caption constitution: output `상단 + timed 중단 + 중단 TTS 글자만 복사`; do not reintroduce legacy `하단`.
 
 ## TTS Storytelling Shorts
 
@@ -301,6 +301,6 @@ Before drafting or revising a Shorts script, answer:
 - If TTS can carry the story, what is the source-supported emotional entry line instead of the flat event summary?
 - What changes keyword, sound, and pixel/frame similarity?
 - What is the policy risk tier?
-- Does the output follow current `상단 + 중단 + TTS 만들 글자만 복사`?
+- Does the output follow current `상단 + 중단 + 중단 TTS 글자만 복사`?
 
 If any of ceiling, benchmark evidence, source truth, or policy is missing, mark the script as DRAFT or REWRITE_REQUIRED, not PASS.

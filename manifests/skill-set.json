@@ -1,7 +1,8 @@
 {
   "repo_name": "22utube-agent-skills",
-  "version": "2026.06.28",
+  "version": "2026.07.06",
   "source_of_truth": "git",
+  "active_shorts_script_authority": "skills/00-tikitaka/shorts_script_analysis_single_source_v20260706.md",
   "onedrive_role": "production-data-only",
   "skills": [
     {

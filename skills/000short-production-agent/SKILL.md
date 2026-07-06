@@ -474,7 +474,8 @@ Each state needs its own evidence.
 - For Shorts craft constraints after an explicit production request and script
   authority, read `references/shorts-academy.md`.
 - For the old Tikitaka production-script contract, read
-  `references/tikitaka-script-v17.md`.
+  `references/tikitaka-script-v17.md` only for legacy repair. It is not current
+  Tikitaka script authority.
 - For work-order, pipeline, layout, harness, cut-assembly, DRAFT_FAST /
   FINAL_LOCK report-contract, and reference-similarity loop details, read the
   numbered root docs in this skill folder, including
