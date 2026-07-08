@@ -51,7 +51,7 @@ py -3 $HOME\agent-skills\skills\00-tikitaka\scripts\tikitaka_harness_runner.py {
 - n8n 증거가 없으면 `n8n: NOT_RUN`
 - 5작가 산출물이 5개 미만이면 `5작가 모드: NOT_RUN`
 - script gate 증거가 없거나 pass count/hard veto 조건이 맞지 않으면 `Script Gate: FAILED` 또는 `NOT_RUN`
-- 모든 증거가 통과할 때만 `SCRIPT_LOCK: SCRIPT_LOCKED`
+- 모든 증거가 통과할 때만 `SCRIPT_LOCK: SCRIPT_LOCK`
 
 ## 검증 결과
 
@@ -68,8 +68,8 @@ SCRIPT_LOCK: NOT_LOCKED
 
 ```text
 EXIT=0
-SCRIPT_LOCK: SCRIPT_LOCKED
-최종 상태: SCRIPT_LOCKED
+SCRIPT_LOCK: SCRIPT_LOCK
+최종 상태: SCRIPT_LOCK
 완료 보고 가능 여부: YES
 ```
 

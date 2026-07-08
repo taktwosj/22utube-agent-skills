@@ -106,43 +106,297 @@ CapCut project creation. `validate_shared_requirements is FINAL_LOCK only`.
 When the handoff gate is PASS, do not stop CapCut project creation just because
 final report, upload, writer-persona, or n8n evidence is not complete.
 
+## Default CapCut Mother Template Rule
+
+This rule has higher priority than any episode-local builder script, old report,
+or previous CapCut output.
+
+Unless the user explicitly names another root CapCut template and provides
+template-root proof, every normal/current 11short CapCut build or repair must
+start by cloning the local CapCut draft named exactly:
+
+```text
+shrt white
+```
+
+Required default evidence before CapCut build:
+
+```text
+template_profile=shrt_white_base_v1
+reference_project_name=shrt white
+reference_project_path=<actual local CapCut draft path for shrt white>
+derived_from_reference_project=true
+```
+
+Do not search old episode folders, old `90_reports/build_*.py` scripts, or prior
+CapCut outputs for the base before using `shrt white`. A hard-coded
+`REFERENCE_NAME` in an old builder is stale evidence, not template authority.
+
+These names are never the default root base:
+
+```text
+260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1
+260708 short
+*_base_v2
+*_base_v3
+previous episode project folders
+```
+
+They may be inspected only as style samples or forensic evidence. If `shrt
+white` is missing, inaccessible, or not recorded as the cloned reference, stop
+with `WAIT_SHRT_WHITE_BASE_REQUIRED` / `WAIT_SHRT_WHITE_BASE_MISSING` /
+`FAIL_SHRT_WHITE_BASE_NOT_CLONED`. If a stale builder points at a derived
+project, stop with `FAIL_STALE_DERIVED_REFERENCE_BUILDER`; do not repair that
+builder into the next project.
+
+## Report 2 Contract
+
+`보고서2` starts only after the user approves 보고서1 and chooses a voice/audio
+route. A CapCut/project request can select stage 2, but it cannot skip 보고서1
+승인 or TTS/오디오 방식 결정. If either is missing, stop with:
+
+```text
+WAIT_REPORT1_APPROVAL_TTS_DECISION
+required: report1_approved + voice_audio_route_decided
+```
+
+When receiving a Tikitaka 보고서1 package, read `report1_handoff.json` when
+present. It must have `REPORT1_HANDOFF_GATE`, `owner_skill=00-tikitaka`, and
+`next_skill=000short-production-agent`. If the handoff is missing, invalid, or
+points elsewhere, stop with `WAIT_REPORT1_HANDOFF_GATE`. 보고서2 starts only
+after that handoff plus `report1_approved=true` and
+`voice_audio_route_decided=true`.
+
+It is the final user-facing report for the two-report Shorts workflow. The
+workflow has only 보고서1 and 보고서2; 보고서2 is the final report. It is still not
+an upload-ready claim unless the user explicitly approves upload and
+rights/risk handling.
+
+Write 보고서2 in 한글 우선 with 예/아니오 단답 rows. The default report template must
+exist from the first CapCut project creation, because the same shape is reused
+for later repairs.
+
+Required 보고서2 기본 양식:
+
+```text
+# 보고서2
+
+보고서2 시작: 예
+최종보고서: 예
+상태: REPORT2_FINAL
+CapCut 프로젝트 생성 후 보고: 예
+CapCut 프로젝트명:
+CapCut 열어보기 필요: 예
+사용자 확인 대기: 예
+업로드 준비 완료: 아니오
+최종 잠금: 아니오
+
+제목:
+
+내용(출처 태그 포함):
+
+대본 반영: 예/아니오
+TTS/오디오 반영: 예/아니오
+자막 반영: 예/아니오
+원본 영상 반영: 예/아니오
+임시파일 정리: 예/아니오
+
+현재 기준:
+- 현재 draft_content.json 기준
+- 현재 draft_meta_info.json 기준
+
+남은 일:
+- 사용자가 CapCut을 열고 문제를 제시하면 수정 후 다시 보고서2
+- 사용자가 내보내기로 영상 생성하면 보고서2 종료
+```
+
+When the user opens CapCut and reports a problem, repair the local project and
+emit 보고서2 again with `status: REPORT2_REVISED`. It is still 보고서2, the final
+report shape for that repaired state. Keep the same basic form so each revision
+is comparable.
+
+Manual CapCut editing is expected. 수동 편집 길이 변화 is expected after the
+operator opens CapCut. A duration difference between an earlier
+automatic snapshot and the current local project is `MANUAL_EDIT_EXPECTED`, not
+a failure by itself. 길이 차이만으로 FAIL 금지. Re-read the current local
+`draft_content.json` and `draft_meta_info.json`; treat those as the latest
+technical state after user edits.
+
+When the user says they exported the video through CapCut, mark:
+
+```text
+status: REPORT2_CLOSED_BY_USER_EXPORT
+보고서2 종료: 예
+```
+
+Even after export, keep `업로드 준비 완료: 아니오` unless the user explicitly
+approves upload and rights/risk handling. 명시 승인 전 아니오.
+
+## Stage Scope Gate
+
+For `URL + Gemini/source analysis` intake, do not treat the URL, Gemini text,
+or a generic `진행/해줘` as stage-2 permission by itself. Before source download,
+TTS, SRT/layout, CapCut, render, or upload work, the coordinator must identify
+one of these scopes:
+
+```text
+stage_1_script = 00-tikitaka only; produce 상단 + timed 중단 + TTS 만들 글자만 복사 + 보고서1; then WAIT
+stage_2_full = source verification + TTS/user audio + SRT/layout + CapCut project + 보고서2
+```
+
+If the user says `대본까지`, `대본만`, `초벌`, `티키타카`, `초안만`, `검토용`,
+or `스크립트만`, stop before stage 2 with `WAIT_USER_STAGE_DECISION`.
+
+Stage 2 intent is selected only with one of:
+
+- `user_stage_decision=stage_2_full`
+- explicit stage-2 wording such as `끝까지`, `자동으로 다`, `최종`, `다음단계`,
+  `업로드까지`, `슈퍼톤`, `슈퍼톤으로`, `supertone`, `TTS 만들어`,
+  `tts 만들`, `TTS 생성`, `tts 생성`, `TTS mp3`, `tts mp3`,
+  `캣컵프로젝트파일까지`, `캣컵 프로젝트 파일까지`,
+  `캐컷프로젝트파일까지`, or `capcut project`
+- user-provided or explicitly authorized TTS/SRT/audio path
+
+`자동모드` is explicit stage-2 wording: user says 자동모드 = stage_2_full.
+
+Stage 2 work and 보고서2 still require both:
+
+```text
+report1_approved=true
+voice_audio_route_decided=true
+```
+
+If the user already asked for stage 2 before seeing the script, treat that as
+future intent only. After 보고서1, ask for script OK and TTS/오디오 route before
+CapCut creation.
+
+Mandatory report/checklist gates:
+
+```text
+G0 INTAKE = ask "어디까지 만들까?" unless stage_1_script or stage_2_full is already explicit
+G1 STAGE 1 = script_handoff_gate.json + block_map.json + block_voice_switch_map.json + TTS copy body
+G2 STAGE 1 STOP = 보고서1 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
+G3 STAGE 2 ENTRY = stage_2_full intent + report1_approved + voice_audio_route_decided
+G4 FINAL = [FINAL_LOCK 최종 보고] only after production, visual, media-settings, cleanup, and harness gates pass
+```
+
+The Tikitaka harness must emit `stage_gate_todo.md` and
+`stage_scope_report.md`. Production must not treat a missing checklist/report as
+permission to skip reporting.
+
+RE-ENTRY:
+
+```text
+REWORK_IN_NEW_CHAT_ANALYZE_FIRST
+MIDDLE_PACKAGE_REWORK_REVIEW_GATE
+REPORT_BEFORE_ACTION
+```
+
+When the user brings an existing package or asks in a new chat to rework a
+CapCut project/package, analyze the files and report the resume point before
+editing: `draft_content.json` plus `script_handoff_gate.json` PASS plus
+`block_map.json` means CapCut rework, `draft_content.json` alone means
+`WAIT_SCRIPT_HANDOFF_GATE` and `stage_1_repair`, `script_handoff_gate.json`
+FAIL or invalid means `WAIT_SCRIPT_HANDOFF_GATE_REPAIR` and `stage_1_repair`,
+`script_handoff_gate.json` PASS means stage-2 resume after user decision, and
+neither means restart at G0.
+
+The validator enforces this through `project_file_request_mode()`. Do not work
+around it by writing `project_file_request_mode=AUTO_FULL_CAPCUT_PROJECT` into a
+contract unless the user-stage evidence, 보고서1 approval, and voice/audio route
+decision above exist.
+
 ## Production Mode Selection
 
-When the user provides a Shorts URL plus Gemini/source analysis and asks to
-`진행`, `해`, `끝까지`, `골기능`, `캣컵프로젝트파일까지`, `CapCut project`, or
-equivalent project-file completion, route as:
+When the user provides a Shorts URL plus Gemini/source analysis and explicitly
+opens stage 2, route as:
 
 ```text
 URL_PLUS_GEMINI_PLUS_PROJECT_FILE
-PROJECT_FILE_REQUEST_DEFAULT=AUTO_FULL_CAPCUT_PROJECT
+PROJECT_FILE_REQUEST_MODE=AUTO_FULL_CAPCUT_PROJECT
 ```
 
 In `AUTO_FULL_CAPCUT_PROJECT`, build toward the best possible complete local
 CapCut project file / perfect local CapCut project file and run the source, script, SRT/layout, CapCut,
 visual/template, media-settings, cleanup, and report gates.
-Do not default ordinary project-file requests to DRAFT_FAST.
+Do not default URL+Gemini intake to AUTO_FULL or DRAFT_FAST without the Stage
+Scope Gate evidence above.
 
 Use `INTERACTIVE_SCRIPT_APPROVAL` when the user asks to choose or approve the
 urakkai/script/template direction before production. In that mode, stop at the
 named script checkpoints and ask before continuing.
 
 Use `DRAFT_FAST_EXPLICIT_ONLY` only when the user explicitly says `DRAFT_FAST`,
-`빠른 초안`, `기술 초안`, `초안만`, `검토용 draft만`, or an equivalent fast-draft
-request. DRAFT_FAST is allowed only when the user explicitly says a fast draft
-is the goal.
+`빠른 초안`, `기술 초안`, `검토용 draft만`, or `검토용 드래프트만`.
+Plain `초안만` belongs to `stage_1_script`; it is not fast
+CapCut permission unless the user also says draft/CapCut. DRAFT_FAST is allowed
+only when the user explicitly says a fast draft is the goal. DRAFT_FAST does not
+waive `report1_approved + voice_audio_route_decided`; it is still a CapCut
+draft stage and must wait behind `WAIT_REPORT1_APPROVAL_TTS_DECISION`.
 
 ## Template Base Rule
 
-Default to `neutral_base_template` for reusable CapCut project generation. If a
-current builder temporarily copies an episode-specific project such as china-driver,
+`TEMPLATE_REFERENCE_RESOLUTION_GATE` is mandatory before any template-backed
+CapCut draft/project build or repair.
+
+For the current 11short default lane, `TEMPLATE_REFERENCE_RESOLUTION_GATE` starts
+from the Default CapCut Mother Template Rule above: no explicit non-default
+template from the user means `shrt white`, not an old derived project.
+
+Required evidence fields:
+
+```text
+reference_project_name
+reference_project_path
+template_profile
+```
+
+A user-visible CapCut reference project beats generic defaults, but a prior
+episode/project is not automatically the root template. Before building, resolve
+the actual root/mother CapCut template for that style. Do not chain derivatives
+as `1 -> 2 -> 3 -> 4`.
+
+For character-comments / game-character-comments work,
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1` is a prior derived
+project / style sample only. It must not be reported or enforced as the root
+template authority unless the user explicitly proves that it is the original
+mother template. If the root template cannot be identified, stop with
+`FAIL_TEMPLATE_ROOT_NOT_RESOLVED` before cloning or building.
+
+`template_profile is not satisfied by `neutral_base_template` text alone`.
+`neutral_base_template` is only a fallback label after no user-visible reference
+project exists or after the user explicitly waives the visible reference. Do not
+create a helper-only fresh draft, do not generate a synthetic
+`source + audio + text` CapCut draft, and do not use a helper script output as
+the style basis until `reference_project_name` and `reference_project_path` have
+been resolved.
+
+Failure states:
+
+```text
+FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED
+FAIL_TEMPLATE_REFERENCE_MISMATCH
+```
+
+Use `FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED` when the reference project name/path
+is missing, inaccessible, or not opened/located before build. Use
+`FAIL_TEMPLATE_ROOT_NOT_RESOLVED` when a named reference is only a prior derived
+project and the true root/mother template is unknown. Use
+`FAIL_TEMPLATE_REFERENCE_MISMATCH` when the produced draft was not cloned or
+derived from the resolved root/reference. In every CapCut report, manifest, and
+validation result, report both the root template and any style/sample project
+used.
+
+If a current builder temporarily copies an episode-specific project such as china-driver,
 treat that project as a structure seed only, not story/content authority. The
 `SCRIPT_LOCK_PACKAGE remains the Source of Truth` for text, edit order, caption
 roles, audio policy, and source ranges.
 
 Do not let a template project's old title, script, BGM decision, source-audio
 decision, or failed episode status leak into a new draft. Report any
-episode-specific seed as temporary and replace with a neutral base template when
-one is available.
+episode-specific seed as temporary and replace with a neutral base template only
+when no user-visible reference project exists or the user explicitly approves
+that fallback.
 
 ## Active Root
 
@@ -388,11 +642,16 @@ exists. Ask for or route to the script owner first.
 6. Validate `SCRIPT_HANDOFF_GATE` and canonical `block_map.json` first when the
    script came from Tikitaka; stop at `WAIT_SCRIPT_HANDOFF_GATE` if the gate is
    missing or failed.
-7. Build or repair SRT/layout/render-plan assets from that segment audio plan.
-8. Build or repair the local CapCut draft/project by `edit_block_sequence`.
-9. If reference sameness is requested or required, run the bounded similarity
+7. For template-backed CapCut work, resolve `TEMPLATE_REFERENCE_RESOLUTION_GATE`
+   before any draft generation. Stop with `FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED`
+   when `reference_project_name` or `reference_project_path` is missing, and
+   stop with `FAIL_TEMPLATE_REFERENCE_MISMATCH` if the new draft is not derived
+   from the resolved reference.
+8. Build or repair SRT/layout/render-plan assets from that segment audio plan.
+9. Build or repair the local CapCut draft/project by `edit_block_sequence`.
+10. If reference sameness is requested or required, run the bounded similarity
    loop from `08_SIMILARITY_LOOP_CONTRACT.md`; patch only failed dimensions.
-10. For template-backed drafts/projects, apply
+11. For template-backed drafts/projects, apply
    `DRAFT_FAST_REFERENCE_SIMILARITY_REQUIRED` from
    `07_DRAFT_FAST_REPORT_CONTRACT.md`: `template_profile_match`,
    `middle_caption_format_match`, `caption_layer_role_match`,
@@ -401,13 +660,13 @@ exists. Ask for or route to the script owner first.
    `capcut_processing_idle_check`, and `active_draft_cleanup_gate` must pass
    before reporting visual/template readiness.
    `SIMILARITY_LOOP_PASS is not DRAFT_FAST_PASS`.
-11. For a `final_capcut_project_file`, verify the
+12. For a `final_capcut_project_file`, verify the
    `shorts_type_template_matrix` (`story_type`, `production_type`,
    `template_profile`) before any visual/template claim.
-12. Snapshot CapCut draft JSON into the episode metadata folder.
-13. Run the required harness or validator for the current stage, including
+13. Snapshot CapCut draft JSON into the episode metadata folder.
+14. Run the required harness or validator for the current stage, including
     `CAPCUT_EDIT_READY_GATE` when the target is a CapCut edit-ready draft.
-14. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
+15. Report `PASS/FAIL/WAIT` with evidence paths and one concrete next blocker.
 
 ## Mandatory CapCut Media Settings — HARNESS LOCK
 

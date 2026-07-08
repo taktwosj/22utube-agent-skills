@@ -10,10 +10,16 @@ This contract separates the script-writing role from the CapCut production role:
 
 ## Template Selection Gate
 
+- If the user does not explicitly name another root CapCut template, the root
+  base is `shrt white`. This default wins over old episode-local builder
+  scripts, previous CapCut outputs, and any hard-coded `REFERENCE_NAME`.
+
 - Generic 11short/쇼츠공장 production has no third silent format default. The
-  current official presets are the two defaults in
+  current official presets are the named defaults in
   `manifests/capcut-template-set.json`.
 - Current named presets:
+  - `shrt white`: current default white-base Shorts draft. Use this when the
+    operator says `shrt white`, `short white`, or the 기본베이스 for this lane.
   - `black` / `블랙기본` / `블랙템플릿`: black-band layout draft base.
   - `insta white` / `인스타템플릿` / `인스타 템플릿`: Instagram/Reels draft base.
 - Future presets such as `정치템플릿` may be added. If the user names a new template, use that exact user-selected template and record it in the manifest.
@@ -23,8 +29,8 @@ This contract separates the script-writing role from the CapCut production role:
 ## CapCut T-track Contract
 
 `T1/T2/T3` are not work-stage names. They are the internal CapCut text-track order.
-Keep this order in every selected template (`black`, `insta white`, or a future
-user-named template):
+Keep this order in every selected template (`shrt white`, `black`, `insta white`,
+or a future user-named template):
 
 ```text
 T1 = 소제목1
@@ -40,13 +46,56 @@ A9 = 원본음성 / BGM / 랭킹 기본 배경음
 A10 = TTS / 효과음 / 나의 사전 설정 효과음
 ```
 
+## Shrt White Base - 2026-07-08
+
+Default editable CapCut base project:
+
+```text
+shrt white
+```
+
+For `shrt white`, preserve this CapCut row order exactly as shown in the
+operator's timeline, top to bottom:
+
+```text
+T1 = top title 1
+T2 = top title 2
+T3 = TTS / 나레이션 자막
+T4 = "화자발언"
+T5 = (상황설명)
+V6 = 인스타 또는 블랙 템플릿 이미지
+E7 = 미러링 편집효과
+V8 = 원본영상, 음소거상태
+A9 = 나레이션
+A10 = 화자발언 / 원본화자 오디오
+A11 = 효과음, optional and usually filled manually by the operator
+A12 = BGM
+```
+
+`shrt white` is the default base. `black` and `insta white` are template image
+or style variants used inside the same lane, not permission to change the row
+order. Do not replace `shrt white` with `260708 short`,
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`, or any previous episode
+copy. If a candidate base has `.bak`, `before_*`, `*_backup_*`, `template.tmp`,
+old active audio, or old active text, treat it as contaminated and stop before
+using it as the base.
+
+Old scripts such as `90_reports/build_*_base_v2.py` or
+`90_reports/build_*_base_v3.py` are not template authority. If they contain
+`REFERENCE_NAME = "260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1"` or
+point at any previous episode output, do not run them as the base builder; stop
+with `FAIL_STALE_DERIVED_REFERENCE_BUILDER` or rebuild from `shrt white`.
+
+For `shrt white`, this section overrides the older generic `T1~T6` table above:
+there is no `source_speech_2` row. `T5` is the situation row.
+
 Rules:
 
-- Do not change the role or order of `T1~T6` to make room for audio, BGM, SFX, or imported media.
+- Do not change the role or order of the `shrt white` rows above to make room for audio, BGM, SFX, or imported media.
 - Insert original audio, TTS, BGM, ranking BGM, and SFX only on A-tracks (`A9/A10` or additional audio rows). Never write audio/video segments into T-tracks.
-- After adding audio, re-open the actual `draft_content.json` and verify track order and track type. If `T1~T6` order/role/segment identity changed, FAIL.
-- `T4/T5` may contain only source-verified speech/subtitle/STT/OCR. Do not invent quoted speech.
-- `T6` may overlap `T3/T4/T5` when it explains the same visual moment.
+- After adding audio, re-open the actual `draft_content.json` and verify track order and track type. If row order/role/segment identity changed, FAIL.
+- `T4` may contain only source-verified speech/subtitle/STT/OCR. Do not invent quoted speech.
+- `T5` is the situation row and may overlap `T3/T4` when it explains the same visual moment.
 - No `하단`, `하단 원문`, bottom-caption, or bottom-TTS layer is allowed.
 - Bracketed timecodes such as `[00:00-00:03]` are operator markers and must never become visible text.
 
@@ -74,11 +123,12 @@ Rules:
 Official CatCup template masters:
 
 ```text
+shrt white
 black
 insta white
 ```
 
-Use these two CapCut sample projects as current defaults.
+Use these CapCut sample projects as current defaults.
 `insta white` is the display name of local draft folder
 `260625-ig-contortion-top3-urakkai-instagram-tts`. Do not use
 `260625-ig-contortion-top3-urakkai-instagram-tts-fixed`; it contains

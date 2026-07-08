@@ -2,6 +2,11 @@
 
 ## Required Inputs
 
+Current `22factory_20260628` work should store these under the numbered episode
+folders (`00_source`, `10_analysis`, `20_script`, `50_capcut_project`,
+`90_reports`) and pass explicit paths to validators. The flat paths below remain
+legacy compatibility aliases for older local harnesses.
+
 - `source/source.mp4`
 - `source/ffprobe_report.json`
 - `evidence/scene_segments.json`
@@ -14,6 +19,9 @@
 - `decisions/shorts_academy_gate.json` when Tikitaka, Shorts Academy, ranking/TOP-N,
   or benchmark-remake strategy applies
 - `decisions/capcut_layout_plan.json`
+- `20_script/script_handoff_gate.json`
+- `20_script/block_map.json`
+- `20_script/block_voice_switch_map.json`
 - `capcut/draft_content.json`
 - `capcut/draft_meta_info.json`
 - `capcut/draft_virtual_store.json`
@@ -39,6 +47,12 @@ Any one of these fails or blocks the job:
 - OCR `NOT_RUN` or `FAILED`
 - missing OCR engine record
 - missing `segment_decision_table.json`
+- missing `20_script/script_handoff_gate.json`, `20_script/block_map.json`, or
+  `20_script/block_voice_switch_map.json` before CapCut project creation
+- `script_handoff_gate.json` is not `SCRIPT_HANDOFF_GATE` / `PASS` /
+  `SCRIPT_LOCK_PACKAGE` / `capcut_allowed=true`
+- `block_voice_switch_map.json` does not cover every `edit_block_sequence`
+  block with explicit `source_audio` and `tts` decisions
 - Tikitaka/Shorts Academy/ranking/TOP-N/benchmark-remake job is missing
   `decisions/shorts_academy_gate.json`
 - applicable `shorts_academy_gate` is not `PASS` or `N/A` with a concrete reason
@@ -78,7 +92,25 @@ Any one of these fails or blocks the job:
 - CapCut draft was created from generic wording without a recorded
   user-selected template or template-selection gate result
 - normal/general Shorts target is not routed to one of the official manifest
-  defaults, `black` or `insta white`
+  defaults, `shrt white`, `black`, or `insta white`
+- current default 11short CapCut build or repair lacks
+  `template_profile=shrt_white_base_v1`,
+  `reference_project_name=shrt white`, `reference_project_path`, or
+  `derived_from_reference_project=true`
+- current default 11short CapCut build or repair uses `260708 short`,
+  `260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`, `*_base_v2`,
+  `*_base_v3`, or a previous episode project as the root base without an
+  explicit user-named non-default root template and separate root proof
+- episode-local builder scripts such as `90_reports/build_*_base_v2.py` contain
+  a hard-coded stale `REFERENCE_NAME` to a prior derived project and are used as
+  production authority instead of being ignored or blocked
+- `shrt white` target does not record
+  `catcup_reference_layout_profile=shrt_white_base_v1`
+  and `catcup_reference_project=shrt white`
+- `shrt white` actual draft does not preserve the required operator timeline
+  row order: `T1`, `T2`, `TTS`, `"화자발언"`, `(상황설명)`, template image,
+  mirroring edit effect, muted original video, narration, speaker audio,
+  optional SFX, and BGM
 - Instagram/Reels target is not cloned or derived from `인스타템플릿` /
   `인스타 템플릿`, unless the user explicitly requested the legacy route and the
   report says so
@@ -155,7 +187,8 @@ Any one of these fails or blocks the job:
   `["tts","source_speech","situation_emotion"]`
 - actual `draft_content.json` T-track order changed after audio insertion, or audio/video/material segments were written into T1~T6 text tracks
 - applicable `catcup_reference_layout_profile` is missing or not one of
-  `insta_white_template_master_v1` or `black_template_master_v1`
+  `shrt_white_base_v1`, `insta_white_template_master_v1`, or
+  `black_template_master_v1`
 - applicable `catcup_text_role_rows` is missing active role-separated rows for
   `top_title_1`/T1, `top_title_2`/T2, `tts`/T3, and
   `situation_emotion`/T6

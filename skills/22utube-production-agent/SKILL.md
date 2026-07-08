@@ -24,6 +24,30 @@ If the user asks to polish an existing script, route to `00script-writer`.
 If the user asks to create, validate, or repair production assets, route to
 `000short-production-agent` or the lane-specific production skill.
 
+## 11short Two-Report Routing
+
+22utube-production-agent is the first policy/root gate for new 11short/Shorts
+work. Then route Shorts script/remake work to `00-tikitaka` for 보고서1.
+After 보고서1 approval and voice/audio route decision, route to `000short-production-agent` for 보고서2.
+
+This skill must not write 보고서1 or 보고서2.
+
+## 11short Default CapCut Base Policy
+
+For current 11short CapCut work, the default root/mother CapCut draft is:
+
+```text
+shrt white
+```
+
+Unless the user explicitly names another root CapCut template, route stage 2 to
+`000short-production-agent` with `shrt white` as the only default base.
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`, `260708 short`,
+`*_base_v2`, `*_base_v3`, and previous episode projects are not default bases;
+they are prior derived/style samples at most. If the base cannot be resolved,
+the correct policy status is `WAIT_SHRT_WHITE_BASE_REQUIRED` or
+`FAIL_TEMPLATE_ROOT_NOT_RESOLVED`, not a fallback to old builders.
+
 ## Default Boundary
 
 Default state is `REFERENCE_ONLY`.

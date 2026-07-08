@@ -213,6 +213,27 @@ function Test-Repo($RepoRoot, $SkillSet, $Targets) {
   }
 }
 
+function Test-UnittestSuite([string]$RepoRoot) {
+  $oldPythonUtf8 = $env:PYTHONUTF8
+  $oldDontWriteBytecode = $env:PYTHONDONTWRITEBYTECODE
+  try {
+    $env:PYTHONUTF8 = "1"
+    $env:PYTHONDONTWRITEBYTECODE = "1"
+    Push-Location -LiteralPath $RepoRoot
+    try {
+      & python -m unittest discover -s tests -p "test_*.py" -v
+      if ($LASTEXITCODE -ne 0) {
+        Add-Error "python unittest suite failed"
+      }
+    } finally {
+      Pop-Location
+    }
+  } finally {
+    $env:PYTHONUTF8 = $oldPythonUtf8
+    $env:PYTHONDONTWRITEBYTECODE = $oldDontWriteBytecode
+  }
+}
+
 function Get-TargetSkillPath($TargetConfig, [string]$SkillName) {
   $root = Get-TargetRoot $TargetConfig
   if ($TargetConfig.layout -eq "category") {
@@ -292,6 +313,7 @@ $targets = Read-JsonFile (Join-Path $repoRoot "manifests/targets.json")
 $sourceCommit = Get-SourceCommit $repoRoot
 
 Test-Repo $repoRoot $skillSet $targets
+Test-UnittestSuite $repoRoot
 foreach ($targetName in Get-SelectedTargets $Target) {
   Test-Target $repoRoot $skillSet $targets $targetName $sourceCommit
   if ($Strict) {

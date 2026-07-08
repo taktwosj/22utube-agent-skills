@@ -8,7 +8,7 @@ Git source of truth for 22utube/11utube agent and video-production skills.
 - Codex runtime: copy installed to `$HOME/.codex/skills`.
 - Claude runtime: copy installed to `$HOME/.claude/skills`.
 - Hermes runtime: copy installed to `%LOCALAPPDATA%/Hermes/skills/22utube` on Windows and `$HOME/.hermes/skills/22utube` on macOS/default Unix hosts.
-- OneDrive: production data only, including video sources, evidence, renders, CapCut drafts, and upload copy.
+- OneDrive: lightweight production handoff data only, including manifests, reports, scripts, captions, CapCut draft manifests/snapshots/restore notes, and upload copy.
 
 Runtime folders are install targets, not edit targets. Edit skills in this repo, then run install/update/verify.
 
@@ -37,8 +37,9 @@ skil-down
 
 `manifests/skill-set.json` is the authoritative install list.
 `manifests/capcut-template-set.json` records CapCut template identities and
-verification requirements. The CapCut draft bundles themselves stay in
-OneDrive/CapCut storage, not in Git.
+verification requirements. Raw local CapCut draft folders stay in the active
+machine's CapCut project storage; OneDrive keeps only manifests, snapshots, and
+restore notes unless an explicit handoff package is requested.
 
 Current Tikitaka Shorts script analysis authority is
 `skills/00-tikitaka/shorts_script_analysis_single_source_v20260706.md`.

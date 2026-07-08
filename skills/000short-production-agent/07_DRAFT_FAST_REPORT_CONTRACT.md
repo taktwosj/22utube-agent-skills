@@ -6,6 +6,47 @@ This document preserves the 11short factory reporting and fast-mode contract tha
 
 Current official template defaults are only `black` / `블랙기본` and `insta white` / `인스타템플릿`; there is no separate official third/basic template base unless the operator adds it to `manifests/capcut-template-set.json`.
 
+## TEMPLATE_REFERENCE_RESOLUTION_GATE
+
+Before any template-backed CapCut draft/project is created, repaired, or
+reported, resolve the actual user-visible CapCut reference project.
+
+Required fields:
+
+```text
+reference_project_name
+reference_project_path
+template_profile
+```
+
+For character-comments / game-character-comments work, do not treat a prior
+episode/project as the root template just because it has the desired style.
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1` is a known prior derived
+project / style sample, not the root template authority by default. Resolve the
+actual root/mother CapCut template first. If the root cannot be identified, stop
+with `FAIL_TEMPLATE_ROOT_NOT_RESOLVED`; do not chain derivatives as
+`1 -> 2 -> 3 -> 4`.
+
+The selected `template_profile` is not satisfied by `neutral_base_template` text
+alone. `neutral_base_template` is a fallback label, not proof that the intended
+CapCut project style was cloned. Do not create a helper-only fresh draft, do not
+start from a synthetic helper project, and do not report DRAFT/FINAL until the
+reference project has been resolved.
+
+Failure tokens:
+
+```text
+FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED
+FAIL_TEMPLATE_REFERENCE_MISMATCH
+FAIL_TEMPLATE_ROOT_NOT_RESOLVED
+```
+
+Use `FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED` when `reference_project_name` or
+`reference_project_path` is missing, inaccessible, or not checked before build.
+Use `FAIL_TEMPLATE_REFERENCE_MISMATCH` when the new draft does not derive from
+the resolved reference. Every report must report the reference project name
+used.
+
 ## DRAFT_FAST_REFERENCE_SIMILARITY_REQUIRED
 
 When the selected template is `black` / `블랙기본` or `insta white` / `인스타템플릿`, `DRAFT_FAST` must create or locate a reference fingerprint before reporting a CapCut draft as DRAFT.
@@ -27,25 +68,87 @@ FAIL_PROJECT_CLEANUP
 
 `SIMILARITY_LOOP_PASS is not DRAFT_FAST_PASS`: the similarity loop may only clear similarity dimensions. `DRAFT_FAST` still needs the fast gates above plus media, openability, Korean text, and visual checks.
 
-## Production Mode Gate
+## Stage Scope Gate
 
-`PROJECT_FILE_REQUEST_DEFAULT` is `AUTO_FULL_CAPCUT_PROJECT`, not `DRAFT_FAST`.
+`URL + Gemini/source analysis` has no silent project-file default. The default
+stage-2 answer is `WAIT_USER_STAGE_DECISION`, not `AUTO_FULL_CAPCUT_PROJECT` and
+not `DRAFT_FAST`.
 
-Use `URL_PLUS_GEMINI_PLUS_PROJECT_FILE` when the user provides a Shorts URL,
-Gemini/source analysis, and asks to `진행`, `해`, `끝까지`, `골기능`,
-`캣컵프로젝트파일까지`, `CapCut project`, or equivalent project-file completion.
-That means: produce the best possible local CapCut project file through the
-normal script, production, visual/template, and cleanup gates. The target is a
-perfect local CapCut project file, not a deliberately shallow technical draft.
+Use `stage_1_script` when the user says `대본까지`, `대본만`, `초벌`,
+`티키타카`, `초안만`, `검토용`, or `스크립트만`. That means: produce the
+Tikitaka script package, `TTS 만들 글자만 복사`, block maps, and 보고서1,
+then stop before source/TTS/SRT/CapCut production.
+
+Use `URL_PLUS_GEMINI_PLUS_PROJECT_FILE` only when stage 2 is authorized by
+`user_stage_decision=stage_2_full`, explicit wording such as `끝까지`,
+`자동으로 다`, `최종`, `다음단계`, `업로드까지`, `슈퍼톤으로`,
+`슈퍼톤`, `supertone`, `TTS 만들어`, `tts 만들`, `TTS 생성`, `tts 생성`,
+`TTS mp3`, `tts mp3`, `캣컵프로젝트파일까지`, `캣컵 프로젝트 파일까지`,
+`캐컷프로젝트파일까지`, or `capcut project`, or by a user-provided/authorized
+TTS/SRT/audio path. That means: produce the best possible local CapCut project
+file through the normal source, script, production, visual/template, cleanup,
+and report gates. The target is a user-reviewable local CapCut project file,
+not a silent bypass from raw Gemini text.
+
+`자동모드` is explicit stage-2 wording: user says 자동모드 = stage_2_full.
+
+Mandatory G0-G4 contract:
+
+```text
+G0 INTAKE = ask "어디까지 만들까?" unless stage_1_script or stage_2_full is already explicit
+G1 STAGE 1 = script_handoff_gate.json + block_map.json + block_voice_switch_map.json + TTS copy body
+G2 STAGE 1 STOP = 보고서1 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
+G3 STAGE 2 ENTRY = stage_2_full intent + report1_approved + voice_audio_route_decided
+G4 FINAL = [FINAL_LOCK 최종 보고] only after production, visual, media-settings, cleanup, and harness gates pass
+```
+
+`stage_gate_todo.md` and `stage_scope_report.md` are mandatory harness outputs
+for this stage boundary. They are the checklist/report evidence that the agent
+asked, stopped, or advanced at the right point.
+
+RE-ENTRY / middle-package contract:
+
+```text
+RE-ENTRY
+REWORK_IN_NEW_CHAT_ANALYZE_FIRST
+MIDDLE_PACKAGE_REWORK_REVIEW_GATE
+REPORT_BEFORE_ACTION
+```
+
+If an existing script package, handoff folder, or CapCut project is supplied in
+a new chat, analyze the package and report the resume point before action:
+`draft_content.json` plus `script_handoff_gate.json` PASS plus `block_map.json`
+=> CapCut rework; `draft_content.json` alone =>
+`WAIT_SCRIPT_HANDOFF_GATE` and `stage_1_repair`; `script_handoff_gate.json`
+FAIL or invalid => `WAIT_SCRIPT_HANDOFF_GATE_REPAIR` and `stage_1_repair`;
+`script_handoff_gate.json` PASS => stage-2 resume after user decision; neither
+=> restart at G0.
+
+A generic `진행/해줘` next to stage-1 wording is not stage-2 permission.
+
+`project_file_request_mode=AUTO_FULL_CAPCUT_PROJECT` inside a contract is not
+stage-2 authority by itself. The validator must still see the user-stage
+decision, explicit stage-2 text, or TTS/SRT/audio path evidence, and it must
+also see `report1_approved=true` plus `voice_audio_route_decided=true`.
+
+If stage 2 intent exists but 보고서1 승인 or TTS/오디오 방식 결정 is missing,
+stop with:
+
+```text
+WAIT_REPORT1_APPROVAL_TTS_DECISION
+required: report1_approved + voice_audio_route_decided
+```
 
 Use `INTERACTIVE_SCRIPT_APPROVAL` when the user asks to choose, review, or
 decide during the urakkai/script/template phase. In that mode, stop at the
 named checkpoints and ask before production continues.
 
-Use `DRAFT_FAST_EXPLICIT_ONLY` for fast technical drafts. DRAFT_FAST is allowed
-only when the user explicitly says `DRAFT_FAST`, `빠른 초안`, `기술 초안`,
-`초안만`, `검토용 draft만`, or a clear equivalent. Do not default ordinary
-project-file requests to DRAFT_FAST.
+Use `DRAFT_FAST_EXPLICIT_ONLY` only for a literal fast CapCut draft request such
+as `DRAFT_FAST`, `검토용 draft만`, `검토용 드래프트만`, `빠른 초안`, or `기술 초안`.
+Do not treat `대본/초벌/티키타카/초안만` stage-1 script work as CapCut DRAFT_FAST
+permission. DRAFT_FAST does not waive `report1_approved + voice_audio_route_decided`;
+it is still a CapCut draft stage and must wait behind
+`WAIT_REPORT1_APPROVAL_TTS_DECISION`.
 
 ## DRAFT_FAST State Split
 
@@ -189,7 +292,32 @@ for `DRAFT_FAST`. `upload_ready=YES` is allowed only in `FINAL_LOCK` or explicit
 
 ## 11short Factory Report Contract
 
-Every 11short response after a draft attempt must use one of these two report shapes. Do not invent a third shape.
+Every 11short response after a draft attempt must use the matching report shape.
+Do not use DRAFT_FAST report shape for stage-1 script approval.
+
+For stage-1 script-only work, use `보고서1`. Required stage-1 lines:
+
+```text
+# 보고서1
+대본 승인용: 예
+CapCut 생성: 아니오
+TTS 생성: 아니오
+업로드 준비: 아니오
+상태: WAIT_USER_STAGE_DECISION
+모드: stage_1_script
+CapCut draft: NOT_CREATED
+draft path: N/A
+source: URL/Gemini raw only or verified source status
+TTS 만들 글자만 복사:
+BLOCKERS:
+- WAIT_USER_STAGE_DECISION
+NEXT:
+- 사용자 선택: 수정 / 2단계 CapCut 프로젝트 / TTS MP3 제공 / Supertone 자동
+```
+
+The stage-1 report must include the visible script body and `TTS 만들 글자만
+복사`. It must not claim `SCRIPT_LOCK`, `production PASS`, `upload_ready`, or
+`FINAL`.
 
 ### DRAFT_FAST report shape
 
@@ -201,6 +329,8 @@ Every 11short response after a draft attempt must use one of these two report sh
 CapCut draft:
 draft path:
 source:
+reference_project_name:
+reference_project_path:
 
 쇼츠 유형:
 - story_type:
@@ -217,6 +347,9 @@ source:
 - FINAL_LOCK:
 
 빠른 검증:
+- TEMPLATE_REFERENCE_RESOLUTION_GATE:
+- reference_project_name:
+- reference_project_path:
 - template_copy:
 - template_profile_match:
 - source_replaced:

@@ -18,8 +18,16 @@ This skill improves an existing Korean script draft. It does not start a Shorts
 remake lane, create production files, build CapCut drafts, generate SRT/layout
 assets, export video, or package uploads.
 
-If the user asks for Tikitaka remake scripting, 우라까이, hook candidates, 상단,
-timed 중단, or Gemini source-note scripting, route to `00-tikitaka`.
+If the user asks for new Tikitaka remake scripting, first-draft 우라까이,
+source-analysis hook candidates, first `상단`, first timed `중단`, or Gemini
+source-note scripting without an existing draft, route to `00-tikitaka`.
+
+If the user provides an existing draft and asks to improve that existing draft's
+visible script elements, existing draft's `상단`, timed `중단`, hook candidates,
+hook pressure, rhythm, or wording, stay inside `00script-writer`. Treat it as
+`rewrite_status: REWRITE_DRAFT` and keep
+`production_status: WAIT_EXPLICIT_000SHORT_REQUEST` until the user explicitly
+asks for production assets.
 
 Within this skill, `우라까이`, hook pressure, and Shorts Academy terms are
 rewrite directions for an already-provided draft only. They are not permission
@@ -36,9 +44,19 @@ If the user asks about shared folder/root/archive policy, read
 
 Default state is `REWRITE_DRAFT`.
 
-Do not claim `SCRIPT_LOCK`, `PASS`, production-ready, upload-ready, or complete
-from a rewrite alone. A rewrite can be stronger, cleaner, and policy-safer while
-still requiring downstream owner gates.
+Do not claim `SCRIPT_LOCK`, production-ready, upload-ready, or complete from a
+rewrite alone. A rewrite can be stronger, cleaner, and policy-safer while still
+requiring downstream owner gates.
+
+Writer-owned PASS values are namespaced only:
+
+```text
+reader_comprehension_gate_status=PASS
+persona_rewrite_gate_status=PASS
+```
+
+writer-owned PASS values never create SCRIPT_LOCK, `production_status=PASS`,
+`upload_ready`, or CapCut/SRT permission.
 
 ## Active Root
 

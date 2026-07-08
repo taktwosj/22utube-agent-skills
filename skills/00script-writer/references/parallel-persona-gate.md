@@ -1,6 +1,8 @@
 # Parallel Persona Gate
 
-This gate is the default script QA step for script creation, serious rewrite, or final script/caption approval. Run it after a complete draft exists and before calling the work final.
+This gate is the default writer-side script QA step for serious rewrite or
+existing script/caption review. Run it after a complete draft exists and before
+calling the rewrite wording clean.
 
 This gate does not decide YouTube policy compliance. If the script, captions,
 title, thumbnail, upload text, source, or links have policy risk, run
@@ -65,7 +67,7 @@ When a persona finishes, update that row to `PASS`, `REWRITE`, or `FAIL`. If a r
 
 ## Pass Rule
 
-Final PASS requires both metrics:
+Rewrite gate PASS requires both metrics:
 
 - `우리 한국어 텍스트만으로 이해`: at least 3 of 5 YES.
 - `30초 이상/끝까지 시청`: at least 3 of 5 YES.
@@ -99,7 +101,7 @@ chosen_personas:
 공통 이탈 지점:
 공통 이해불가 문장:
 수정 반영 여부:
-최종 판정: PASS / REWRITE_REQUIRED
+persona_rewrite_gate_status: PASS / REWRITE_REQUIRED
 ```
 
 ## JSON Records

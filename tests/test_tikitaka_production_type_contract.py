@@ -51,19 +51,81 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, text)
 
-    def test_tikitaka_routes_auto_full_vs_interactive_approval_before_production(self):
+    def test_tikitaka_routes_stage_scope_before_production(self):
         text = SKILL.read_text(encoding="utf-8")
 
         for token in [
-            "AUTO_FULL_CAPCUT_PROJECT",
+            "Stage Scope Gate",
+            "stage_1_script",
+            "stage_2_full",
+            "자동모드",
+            "user says 자동모드 = stage_2_full",
+            "슈퍼톤",
+            "supertone",
+            "tts 만들",
+            "tts 생성",
+            "tts mp3",
+            "캣컵프로젝트파일까지",
+            "캣컵 프로젝트 파일까지",
+            "캐컷프로젝트파일까지",
+            "capcut project",
+            "WAIT_USER_STAGE_DECISION",
+            "G0 INTAKE",
+            "G1 STAGE 1",
+            "G2 STAGE 1 STOP",
+            "G3 STAGE 2 ENTRY",
+            "G4 FINAL",
+            "stage_gate_todo.md",
+            "stage_scope_report.md",
+            "REWORK_IN_NEW_CHAT_ANALYZE_FIRST",
+            "MIDDLE_PACKAGE_REWORK_REVIEW_GATE",
+            "REPORT_BEFORE_ACTION",
             "INTERACTIVE_SCRIPT_APPROVAL",
-            "URL_PLUS_GEMINI_PLUS_PROJECT_FILE",
             "URAKKAI_DIRECTION_CHECKPOINT",
             "SCRIPT_APPROVAL_CHECKPOINT",
             "TEMPLATE_APPROVAL_CHECKPOINT",
             "DRAFT_FAST_EXPLICIT_ONLY",
-            "Do not stop at DRAFT_EYE_REVIEW when the user explicitly asks for project-file completion",
+            "A generic",
+            "진행/해줘",
+            "is not stage-2 permission",
             "Do not choose DRAFT_FAST just because the output is not upload-ready",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+        self.assertNotIn("Continuation Mode Gate", text)
+
+    def test_report_one_is_korean_yes_no_script_approval_report(self):
+        text = SKILL.read_text(encoding="utf-8")
+
+        for token in [
+            "Report 1 Contract",
+            "보고서1",
+            "대본 승인용",
+            "한글 우선",
+            "예/아니오 단답",
+            "상단",
+            "timed 중단",
+            "TTS 만들 글자만 복사",
+            "사용자 OK 대기",
+            "TTS_USER_DECISION_WAIT",
+            "사용자가 OK한 뒤",
+            "사용자 제공 TTS",
+            "Codex/API TTS 생성",
+            "보고서2로 이동",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_report_one_names_000short_as_next_skill_for_report_two(self):
+        text = SKILL.read_text(encoding="utf-8")
+
+        for token in [
+            "다음 스킬: 000short-production-agent",
+            "다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT",
+            "다음 채팅에 붙일 지시",
+            "Use $000short-production-agent",
+            "보고서1 승인 + TTS/오디오 방식 결정",
+            "00-tikitaka는 보고서2를 작성하지 않는다",
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, text)

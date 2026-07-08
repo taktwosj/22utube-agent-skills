@@ -148,21 +148,70 @@ completion, audio generation, SRT generation, layout JSON, or CapCut work.
 If the user already has a draft and asks only for wording, rhythm, retention,
 or writer review, route to `00script-writer` instead of rewriting it here.
 
-## Continuation Mode Gate
+## Stage Scope Gate
 
-When the user provides a Shorts URL plus Gemini/source notes and asks to
-`진행`, `해`, `끝까지`, `골기능`, `캣컵프로젝트파일까지`, `CapCut project`, or
-equivalent project-file completion, mark the handoff as:
+When the user provides a Shorts URL plus Gemini/source notes, first separate the
+scope before any production escalation:
 
 ```text
-URL_PLUS_GEMINI_PLUS_PROJECT_FILE
-AUTO_FULL_CAPCUT_PROJECT
+stage_1_script = 대본/티키타카 only
+stage_2_full = source/TTS/SRT/CapCut project
 ```
 
-Do not stop at DRAFT_EYE_REVIEW when the user explicitly asks for project-file completion.
-In that case, this skill still owns only the urakkai/script decision, but it
-must prepare a production-ready handoff and route to `000short-production-agent`
-without requiring another generic permission question.
+If the scope is unclear, stop at `WAIT_USER_STAGE_DECISION` and ask where to
+stop before any TTS, SRT, layout, CapCut, render, export, or upload work.
+
+If the user says `대본까지`, `대본만`, `초벌`, `티키타카`, `초안만`, `검토용`,
+or `스크립트만`, this skill produces the stage-1 package only: 상단, timed 중단,
+`TTS 만들 글자만 복사`, `block_map.json`, `block_voice_switch_map.json`, and the
+보고서1. Then stop at `WAIT_REPORT1_APPROVAL_TTS_DECISION` until the user says OK
+and chooses the TTS/audio route.
+
+If the user already says `끝까지`, `자동으로 다`, `최종`, `다음단계`,
+`업로드까지`, `슈퍼톤`, `슈퍼톤으로`, `supertone`, `TTS 만들어`, `tts 만들`,
+`TTS 생성`, `tts 생성`, `TTS mp3`, `tts mp3`, `캣컵프로젝트파일까지`,
+`캣컵 프로젝트 파일까지`, `캐컷프로젝트파일까지`, or `capcut project`, mark
+`user_stage_decision=stage_2_full` as future intent. Still output 보고서1 and
+wait for `report1_approved=true` plus `voice_audio_route_decided=true` before
+route to `000short-production-agent`. A generic `진행/해줘` next to stage-1
+wording is not stage-2 permission.
+
+`자동모드` is an explicit stage-2 token: user says 자동모드 = stage_2_full.
+
+Mandatory gate map for URL + Gemini/source intake:
+
+```text
+G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
+G1 STAGE 1 = create SCRIPT_LOCK_PACKAGE files: script_handoff_gate.json, block_map.json, block_voice_switch_map.json, TTS copy body
+G2 STAGE 1 STOP = output 보고서1 and stop until report1_approved + voice_audio_route_decided
+G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
+G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
+```
+
+The harness must write `stage_gate_todo.md` and `stage_scope_report.md` when it
+audits a package. The todo/report are not optional narration: they are the
+visible checklist that proves where the run stopped.
+
+RE-ENTRY rule:
+
+```text
+REWORK_IN_NEW_CHAT_ANALYZE_FIRST
+MIDDLE_PACKAGE_REWORK_REVIEW_GATE
+REPORT_BEFORE_ACTION
+```
+
+If the user brings a middle package, old handoff folder, or a CapCut project
+rework request in a new chat, analyze the package before action and report the
+resume point:
+
+- `draft_content.json` + `script_handoff_gate.json` PASS + `block_map.json`
+  exists => this reached CapCut; resume at CapCut rework.
+- `draft_content.json` alone is not enough; report `WAIT_SCRIPT_HANDOFF_GATE`
+  and resume at `stage_1_repair`.
+- `script_handoff_gate.json` FAIL or invalid => report
+  `WAIT_SCRIPT_HANDOFF_GATE_REPAIR` and resume at `stage_1_repair`.
+- `script_handoff_gate.json` PASS with `SCRIPT_LOCK_PACKAGE` => stage 1 is done; resume at stage 2 only after user decision.
+- neither exists => restart from G0 and ask where to stop.
 
 Use `INTERACTIVE_SCRIPT_APPROVAL` when the user asks to choose or decide during
 the script process. Stop and ask at the requested checkpoints:
@@ -173,9 +222,78 @@ SCRIPT_APPROVAL_CHECKPOINT
 TEMPLATE_APPROVAL_CHECKPOINT
 ```
 
-Use `DRAFT_FAST_EXPLICIT_ONLY` only when the user explicitly says `DRAFT_FAST`,
-`빠른 초안`, `기술 초안`, `초안만`, `검토용 draft만`, or a clear equivalent.
+Use `DRAFT_FAST_EXPLICIT_ONLY` only for an explicit fast CapCut draft request,
+not for `대본/초벌/티키타카` stage-1 script work. Do not choose DRAFT_FAST just
+because the output is not upload-ready.
+
 Do not choose DRAFT_FAST just because the output is not upload-ready.
+
+## Report 1 Contract
+
+`보고서1` is the Tikitaka 대본 승인용 report. It is not a CapCut, export, upload,
+or production report.
+
+Write 보고서1 in 한글 우선, short, scan-friendly form. Use 예/아니오 단답 for
+gate items whenever possible. The operator should be able to approve or reject
+the script without reading implementation labels.
+
+Required 보고서1 shape:
+
+```text
+# 보고서1
+
+대본 승인용: 예
+CapCut 생성: 아니오
+TTS 생성: 아니오
+업로드 준비: 아니오
+
+상단:
+...
+
+timed 중단:
+[블록 1 | 편집 00:00-00:03 | 원본 제안 ... | 상태 PROPOSED_SOURCE_TIMECODE]
+...
+
+TTS 만들 글자만 복사:
+...
+
+확인:
+- 이 대본으로 갈까요? 예/아니오
+- TTS는 사용자가 줄까요? 예/아니오
+- Codex/API TTS 생성으로 갈까요? 예/아니오
+
+상태:
+- 사용자 OK 대기
+- TTS_USER_DECISION_WAIT
+
+handoff:
+- 다음 스킬: 000short-production-agent
+- 다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT
+- 다음 채팅에 붙일 지시: Use $000short-production-agent
+- 필요 조건: 보고서1 승인 + TTS/오디오 방식 결정
+- 00-tikitaka는 보고서2를 작성하지 않는다
+```
+
+After 보고서1, stop until the user approves the script. Only after 사용자가 OK한 뒤
+and one TTS route is chosen may the work move to 보고서2:
+
+- 사용자 제공 TTS
+- Codex/API TTS 생성
+- no-TTS/source/BGM route explicitly approved
+
+If the user approves the script and asks for CapCut, route to
+`000short-production-agent` and mark the next stage as 보고서2로 이동.
+The Tikitaka harness must also write `report1_handoff.json` with
+`next_skill=000short-production-agent`; if it is missing, treat the package as
+not ready for a new-chat stage-2 handoff.
+
+CapCut base handoff note: `00-tikitaka` does not build CapCut, but when it names
+the next production stage it must not name an old derived project as the base.
+Unless the user explicitly names another root CapCut template later in
+`000short-production-agent`, the stage-2 default base is `shrt white`.
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`, `260708 short`,
+`*_base_v2`, `*_base_v3`, and previous episode projects are prior derived/style
+samples only.
 
 ## Default Boundary
 

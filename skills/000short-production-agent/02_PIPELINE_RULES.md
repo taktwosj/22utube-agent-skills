@@ -23,16 +23,21 @@
 13. Create `decisions/segment_decision_table.json`.
 14. If the script came from `00-tikitaka`, import or create
     `decisions/tikitaka_segment_audio_plan.json` from `구간 오디오 정책표`.
-15. If an explicit production request and script authority already exist, and
+15. If the script came from `00-tikitaka`, require `SCRIPT_HANDOFF_GATE` before
+    SRT/TTS/layout/asset prep or CapCut creation:
+    `20_script/script_handoff_gate.json`, `20_script/block_map.json`, and
+    `20_script/block_voice_switch_map.json` must pass with every edit block
+    covered by explicit `source_audio` and `tts` decisions.
+16. If an explicit production request and script authority already exist, and
     Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N, or
     benchmark-remake strategy applies, create
     `decisions/shorts_academy_gate.json`.
-16. Create `decisions/capcut_layout_plan.json`.
-17. Create CapCut draft files.
-18. Normalize the draft to `capcut/normalized_draft.json`.
-19. Run harness validation.
-20. Create `reports/evidence_pack.json`.
-21. Create `reports/final_report.md`.
+17. Create `decisions/capcut_layout_plan.json`.
+18. Create CapCut draft files.
+19. Normalize the draft to `capcut/normalized_draft.json`.
+20. Run harness validation.
+21. Create `reports/evidence_pack.json`.
+22. Create `reports/final_report.md`.
 
 ## Input URL Rule
 

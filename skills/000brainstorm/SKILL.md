@@ -33,15 +33,48 @@ Current route when the user gives a YouTube URL plus an existing Gemini analysis
 
 ```text
 000brainstorm intent brief
--> 000short-production-agent owns source download/evidence/watch verification
--> Gemini is saved as raw intake and cross-checked, not treated as fact authority
+-> Stage Scope Gate: "어디까지 만들까?" unless the user already chose stage 1 or stage 2
 -> 00-tikitaka writes 상단 + timed 중단 + 중단 TTS 글자만 복사
--> 00script-writer/writer gate; SCRIPT_LOCK only after any required source timecodes are user-confirmed
+-> 보고서1
+-> STOP at WAIT_REPORT1_APPROVAL_TTS_DECISION
+-> after user OK + TTS/audio route: 000short-production-agent owns source download/evidence/watch verification
+-> Gemini is saved as raw intake and cross-checked, not treated as fact authority
 -> requested Supertone/Chunsik TTS if explicitly requested
 -> SRT/layout/render_plan
--> CapCut draft
+-> CapCut draft + 보고서2
 -> harness
 ```
+
+Stage Scope Gate:
+
+- If the user says `대본까지`, `대본만`, `초벌`, `티키타카`, `초안만`,
+  `검토용`, or `스크립트만`, set `user_stage_decision=stage_1_script`, do only
+  00-tikitaka script/handoff work, output 보고서1, then stop at
+  `WAIT_REPORT1_APPROVAL_TTS_DECISION` until the user says OK and chooses the
+  TTS/audio route.
+- If the user says `끝까지`, `자동모드`, `자동으로 다`, `최종`, `다음단계`, `업로드까지`,
+  `슈퍼톤`, `슈퍼톤으로`, `supertone`, `TTS 만들어`, `tts 만들`,
+  `TTS 생성`, `tts 생성`, `TTS mp3`, `tts mp3`, `캣컵프로젝트파일까지`,
+  `캣컵 프로젝트 파일까지`, `캐컷프로젝트파일까지`, or `capcut project`, set
+  `user_stage_decision=stage_2_full` as future intent, then still require
+  보고서1 approval and TTS/audio route before production gates.
+- user says 자동모드 = stage_2_full.
+- Stage 2 intent still cannot start 보고서2/CapCut until
+  `report1_approved=true` and `voice_audio_route_decided=true`; otherwise stop
+  with `WAIT_REPORT1_APPROVAL_TTS_DECISION`.
+- If neither scope is clear, ask exactly one blocking question before file
+  edits or downloads: `어디까지 만들까요? 1단계 대본 보고까지, 아니면 2단계 CapCut 프로젝트까지?`
+- A generic `진행/해줘` beside stage-1 wording is not stage-2 permission.
+- Mandatory report mapping: `G2 STAGE 1 STOP = 보고서1`
+  and `G4 FINAL = [FINAL_LOCK 최종 보고]`.
+- RE-ENTRY: If the user brings a middle package or asks for rework in a new chat, run
+  `REWORK_IN_NEW_CHAT_ANALYZE_FIRST` / `MIDDLE_PACKAGE_REWORK_REVIEW_GATE` /
+  `REPORT_BEFORE_ACTION`: inspect whether `draft_content.json`,
+  `script_handoff_gate.json`, and `block_map.json` exist, then report the
+  resume stage before any edits. `draft_content.json` alone is
+  `WAIT_SCRIPT_HANDOFF_GATE` and `stage_1_repair`; CapCut rework requires
+  `draft_content.json` plus `script_handoff_gate.json` PASS plus
+  `block_map.json`.
 
 ## Mandatory 11short Channel/Template Proposal Gate - 2026-06-25
 
@@ -67,6 +100,14 @@ fallback defaults:
 - `별별지구인g9`: `인스타템플릿`; person rankings, information-led stories,
   knowledge/information, brand/craft/world stories, unusual jobs, history or
   object backstories.
+
+CapCut root-base note: the channel/template proposal above is a routing/style
+proposal, not permission to use a previous CapCut output as the root base. For
+current 11short production, if the user has not explicitly named another root
+CapCut template, stage 2 must use `shrt white` as the default mother draft.
+Never propose `260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`,
+`260708 short`, `*_base_v2`, `*_base_v3`, or a previous episode project as the
+default base.
 
 The first brief must state:
 
@@ -175,6 +216,7 @@ Brainstorm
 - 원하는 결과물:
 - 적용 스킬/프로젝트:
 - 추천 채널/템플릿:
+- 진행 범위:
 - 보이스/모델/API:
 - 자막/화면 규칙:
 - 파일/폴더 규칙:

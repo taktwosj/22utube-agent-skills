@@ -57,6 +57,41 @@ class SkillRoutingBoundaryTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, desc)
 
+    def test_script_writer_body_keeps_existing_draft_hook_work_in_writer_lane(self):
+        text = skill_text("00script-writer")
+        for token in [
+            "existing draft's `상단`, timed `중단`, hook candidates",
+            "stay inside `00script-writer`",
+            "rewrite_status: REWRITE_DRAFT",
+            "production_status: WAIT_EXPLICIT_000SHORT_REQUEST",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_script_writer_pass_terms_are_namespaced_not_production_pass(self):
+        text = skill_text("00script-writer")
+        persona_ref = read(SKILLS / "00script-writer" / "references" / "parallel-persona-gate.md")
+        combined = text + "\n" + persona_ref
+
+        for token in [
+            "reader_comprehension_gate_status=PASS",
+            "persona_rewrite_gate_status=PASS",
+            "writer-owned PASS values never create SCRIPT_LOCK",
+            "production_status=PASS",
+            "upload_ready",
+            "CapCut/SRT permission",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, combined)
+
+        for forbidden in [
+            "Final PASS",
+            "before calling the work final",
+            "최종 판정: PASS / REWRITE_REQUIRED",
+        ]:
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, persona_ref)
+
     def test_production_frontmatter_is_assets_only(self):
         desc = description(skill_text("000short-production-agent"))
         for token in [
@@ -72,6 +107,37 @@ class SkillRoutingBoundaryTests(unittest.TestCase):
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, desc)
+
+    def test_22utube_policy_then_tikitaka_then_000short_handoff_is_explicit(self):
+        policy = skill_text("22utube-production-agent")
+        tikitaka = skill_text("00-tikitaka")
+        production = skill_text("000short-production-agent")
+
+        for token in [
+            "22utube-production-agent is the first policy/root gate",
+            "Then route Shorts script/remake work to `00-tikitaka`",
+            "After 보고서1 approval and voice/audio route decision, route to `000short-production-agent` for 보고서2",
+        ]:
+            with self.subTest(skill="22utube", token=token):
+                self.assertIn(token, policy)
+
+        for token in [
+            "report1_handoff.json",
+            "next_skill=000short-production-agent",
+            "다음 스킬: 000short-production-agent",
+            "00-tikitaka는 보고서2를 작성하지 않는다",
+        ]:
+            with self.subTest(skill="00-tikitaka", token=token):
+                self.assertIn(token, tikitaka)
+
+        for token in [
+            "report1_handoff.json",
+            "REPORT1_HANDOFF_GATE",
+            "next_skill=000short-production-agent",
+            "owner_skill=00-tikitaka",
+        ]:
+            with self.subTest(skill="000short", token=token):
+                self.assertIn(token, production)
 
     def test_agent_prompts_do_not_reintroduce_broad_routing(self):
         tikitaka = read(SKILLS / "00-tikitaka" / "agents" / "openai.yaml")
