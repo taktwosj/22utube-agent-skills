@@ -43,6 +43,30 @@ class TtsTimingRelockGateTests(unittest.TestCase):
             with self.assertRaisesRegex(module.GateFail, "WAIT_TTS_TIMING_RELOCK"):
                 module.validate_stage2_tikitaka_handoff(root)
 
+    def test_legacy_probe_duration_fields_exceeding_slot_without_action_blocks_stage2(self):
+        module = load_source_module_no_bytecode("stage2_handoff_tts_legacy_actual_exceeds", STAGE2_VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_valid_tikitaka_v2_package(root)
+            write_json(
+                root / "20_script" / "tts_duration_probe.json",
+                {
+                    "status": "PASS",
+                    "tts_items": [
+                        {
+                            "edit_id": "E1",
+                            "planned_duration_sec": 3.0,
+                            "actual_duration_sec": 3.8,
+                            "within_tolerance": False,
+                            "reconciliation_action": "none",
+                        }
+                    ],
+                },
+            )
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_TTS_TIMING_RELOCK"):
+                module.validate_stage2_tikitaka_handoff(root)
+
     def test_actual_tts_duration_exceeding_slot_with_locked_action_allows_stage2(self):
         module = load_source_module_no_bytecode("stage2_handoff_tts_actual_reconciled", STAGE2_VALIDATOR)
         with tempfile.TemporaryDirectory() as tmp:

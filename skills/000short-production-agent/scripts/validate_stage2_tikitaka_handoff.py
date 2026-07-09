@@ -317,20 +317,28 @@ def validate_tts_timing(root: Path, has_narration_audio: bool) -> None:
         if not isinstance(item, dict):
             raise GateFail(f"WAIT_TTS_TIMING_RELOCK: tts_duration_probe.tts_items[{index}] must be object")
         planned = item.get("planned_tts_duration_sec")
+        planned_field = "planned_tts_duration_sec"
+        if planned in (None, ""):
+            planned = item.get("planned_duration_sec")
+            planned_field = "planned_duration_sec"
         actual = item.get("actual_tts_duration_sec")
+        actual_field = "actual_tts_duration_sec"
+        if actual in (None, ""):
+            actual = item.get("actual_duration_sec")
+            actual_field = "actual_duration_sec"
         action = str(item.get("reconciliation_action") or "").strip()
         if action not in ALLOWED_RECONCILIATION_ACTIONS:
             raise GateFail("WAIT_TTS_TIMING_RELOCK: unsupported reconciliation action")
         if planned not in (None, ""):
             require_number(
                 planned,
-                f"tts_duration_probe.tts_items[{index}].planned_tts_duration_sec",
+                f"tts_duration_probe.tts_items[{index}].{planned_field}",
                 "WAIT_TTS_TIMING_RELOCK",
             )
         if actual not in (None, ""):
             require_number(
                 actual,
-                f"tts_duration_probe.tts_items[{index}].actual_tts_duration_sec",
+                f"tts_duration_probe.tts_items[{index}].{actual_field}",
                 "WAIT_TTS_TIMING_RELOCK",
             )
             if (
