@@ -22,6 +22,54 @@ For current Shorts script analysis and Tikitaka drafts, use only the
   meme captions.
 - Derive the TTS copy block only from timed `중단` lines intended for voice.
 
+## Tikitaka Current Order
+
+Current Tikitaka work is a reproducible design stage, not an abstract script
+stage. The stage order is:
+
+```text
+source evidence
+-> 1차설계서
+-> timeline_design.json
+-> timeline_design_gate.json
+-> humanize_korean_gate
+-> block_map.json / block_voice_switch_map.json
+-> script_handoff_gate.json
+-> report1_handoff.json
+```
+
+`1차설계서` is the operator-facing CapCut timeline design. It must show the real
+track/time layout as a table, including expandable rows for `T1/T2/TTS`,
+`"" 화자발언 A/B/C...`, `() 상황설명 A/B/C...`, video, and audio lanes. If a
+speaker quote or situation caption needs multiple rows, add rows; do not
+compress them into one abstract paragraph.
+
+`timeline_design.json` is the machine-readable version of that design. Every
+segment must preserve protected fields:
+
+```text
+time_start/time_end/track/caption_type/audio_policy
+```
+
+`timeline_design_gate.json` must be PASS before the design can be treated as a
+handoff artifact.
+
+Humanize Korean runs after the 1차설계서 is structurally fixed and before the
+handoff gate. Humanize may change wording only: visible Korean in T1/T2/TTS,
+`"" 화자발언`, and `() 상황설명`. It must not change time ranges, track rows,
+caption roles, edit order, audio policy, verified quotes, source facts, names,
+numbers, or the separation between quote/situation/TTS roles. Record the result
+as `humanize_korean_gate.json` with `humanize_korean_gate=PASS`.
+
+Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate=PASS. If Humanize
+needs a structural change, return to Tikitaka design repair instead of silently
+patching the script.
+
+`00script-writer is not a default stage`. Use it only when the user explicitly
+asks for a rewrite or when the 1차설계서 text fails readability/hook pressure.
+Even then it may patch wording only; it may not change
+`time_start/time_end/track/caption_type/audio_policy`.
+
 ## Gemini Raw Intake First
 
 When the user says `티키타카 하자` without source notes, ask for the Shorts URL
@@ -182,8 +230,8 @@ Mandatory gate map for URL + Gemini/source intake:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
-G1 STAGE 1 = create SCRIPT_LOCK_PACKAGE files: script_handoff_gate.json, block_map.json, block_voice_switch_map.json, TTS copy body
-G2 STAGE 1 STOP = output 보고서1 and stop until report1_approved + voice_audio_route_decided
+G1 STAGE 1 = create 1차설계서, timeline_design.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_voice_switch_map.json, TTS copy body, and script_handoff_gate.json
+G2 STAGE 1 STOP = output 1차설계서/보고서1 and stop until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
 ```
@@ -247,6 +295,18 @@ CapCut 생성: 아니오
 TTS 생성: 아니오
 업로드 준비: 아니오
 
+1차설계서:
+| 트랙 / 시간 | 0-3초 | 3.1-5초 | ... |
+| T1 | ... | ... | ... |
+| T2 | ... | ... | ... |
+| TTS | ... | 없음 | ... |
+| "" 화자발언 A | 없음 | "..." | 없음 |
+| "" 화자발언 B | 없음 | 없음 | "..." |
+| () 상황설명 A | (...) | 없음 | 없음 |
+| 영상 | ... | ... | ... |
+| 오디오 A10 | ... | 없음 | ... |
+| 오디오 A9 | 없음 | source_audio | ... |
+
 상단:
 ...
 
@@ -265,6 +325,8 @@ TTS 만들 글자만 복사:
 상태:
 - 사용자 OK 대기
 - TTS_USER_DECISION_WAIT
+- timeline_design_gate.json 확인
+- humanize_korean_gate.json 확인
 
 handoff:
 - 다음 스킬: 000short-production-agent
@@ -445,9 +507,23 @@ Default chat output:
 중단 TTS 글자만 복사
 ...
 
+1차설계서
+| 트랙 / 시간 | 0-3초 | 3.1-4초 | 4.1-8초 |
+| T1 | 텍스트 | 텍스트 | 텍스트 |
+| T2 | 텍스트 | 텍스트 | 텍스트 |
+| TTS | 없음 | 없음 | 텍스트 |
+| "" 화자발언 A | 텍스트 | 텍스트 | 없음 |
+| "" 화자발언 B | 없음 | 텍스트 | 텍스트 |
+| () 상황설명 A | (행복한표정) | 없음 | 없음 |
+| 영상 | source_visual | source_visual | source_visual |
+| 오디오 A10 | intro_narration | 없음 | 없음 |
+| 오디오 A9 | 없음 | source_audio | source_audio |
+
 상태
 - script_status: DRAFT_EYE_REVIEW
 - production_status: WAIT_EXPLICIT_000SHORT_REQUEST
+- timeline_design_gate: PASS|WAIT|FAIL
+- humanize_korean_gate: PASS|WAIT|FAIL
 ```
 
 ## Urakkai Edit-Order Handoff Contract
@@ -466,6 +542,12 @@ does not create CapCut, audio files, SRT, exports, or upload packages.
   source captions/dialogue.
 - `urakkai structure locked`: changed viewpoint, hook, reversal, and emotional
   line.
+- `1차설계서`: operator-facing CapCut timeline table with track/time rows.
+- `timeline_design.json`: machine-readable design with protected time, track,
+  caption role, and audio policy fields.
+- `timeline_design_gate.json`: PASS before handoff.
+- `humanize_korean_gate.json`: PASS after visible Korean cleanup and before
+  `script_handoff_gate.json`.
 - `wow point reordered`: strongest payoff/visual point moved to the edit order
   where it creates the best retention.
 - `source-to-urakkai delta table`: original block -> remake block changes.
@@ -502,12 +584,17 @@ may start:
   `wow_overlay_text is optional`; the user may add these in CapCut manually.
 - `urakkai_order_map`: original order vs remake order, for example
   `1-2-3-4-5 -> 4-3-5-1-2-3`.
+- `timeline_design.json`: canonical design table for tracks, time ranges, text
+  roles, video, and audio lanes.
+- `timeline_design_gate.json`: design validation result.
 - `edit_block_sequence`: the actual edit timeline order that production must
   implement.
 - `block_map.json`: canonical source-of-truth map for every edit block.
 - `block_role_map`: readable table for `"..."`, `(...)`, and TTS roles.
 - `block_voice_switch_map`: readable table for source audio, TTS, SFX, and BGM
   switching by edit block.
+- `humanize_korean_gate.json`: visible Korean cleanup result, with no protected
+  structure changes.
 - `tts_copy_text`: narration-only copy text. Text with
   `included_in_tts_copy=false` must not be placed into the TTS body.
 - `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
@@ -566,9 +653,10 @@ roles, and audio switches are locked:
 Hard fails:
 
 - `original_block_map`, `wow_point_map`, `urakkai_order_map`,
-  `edit_block_sequence`, `block_map.json`, `block_role_map`,
-  `block_voice_switch_map`, `tts_copy_text`, or `script_handoff_gate.json` is
-  missing when production handoff is requested.
+  `timeline_design.json`, `timeline_design_gate.json`,
+  `humanize_korean_gate.json`, `edit_block_sequence`, `block_map.json`,
+  `block_role_map`, `block_voice_switch_map`, `tts_copy_text`, or
+  `script_handoff_gate.json` is missing when production handoff is requested.
 - `speaker_quote` has no verified or explicitly proposed source range.
 - `tts_narration` keeps `source_audio=on`.
 - `situation_caption` has `tts=on` without an `exception_reason`.
@@ -820,10 +908,16 @@ preserves the strongest source-backed viewer question wins.
 4. Write hook candidates if requested or useful.
 5. **Run dual writer mode** to confirm wow point, urakai, story type, and
    production type.
-6. Produce `상단 + timed 중단` with type-appropriate audio policy.
-7. Provide the copy-only voice text block as script text, not as audio work.
-8. Keep status at `DRAFT_EYE_REVIEW` unless the user explicitly asks for the
-   next owner.
+6. Produce `1차설계서`: a CapCut-style time/track layout table, not an abstract
+   script report.
+7. Write `timeline_design.json` from the same layout and pass
+   `timeline_design_gate.json`.
+8. Run Humanize Korean on visible text only and record
+   `humanize_korean_gate.json` before handoff.
+9. Produce `상단 + timed 중단`, `block_map.json`,
+   `block_voice_switch_map.json`, and the copy-only TTS text block.
+10. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
+    user explicitly asks for the next owner.
 
 ## Shorts TTS Storytelling Mode
 
@@ -926,6 +1020,8 @@ Hard fails:
 - Do not claim `SCRIPT_LOCK` from this skill alone.
 - Do not claim production allowed.
 - Do not claim source-verified truth from raw Gemini notes.
+- Do not run `SCRIPT_HANDOFF_GATE` before `timeline_design_gate.json` and
+  `humanize_korean_gate.json` are PASS.
 - Do not skip human Korean cleanup before any final visible Korean text.
 - Do not proceed past missing source evidence when the script depends on exact
   timing, OCR, or dialogue.

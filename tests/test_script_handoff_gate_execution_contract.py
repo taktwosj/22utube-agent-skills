@@ -54,6 +54,33 @@ def create_script_lock_package_artifacts(work_dir: Path) -> None:
     write(work_dir / "final_script_ko.md", "상단: 테스트 훅\n\ntimed 중단:\n테스트 중단")
     write_json(work_dir / "urakkai_structure_delta.json", '{"status":"PASS"}')
     write_json(
+        work_dir / "timeline_design.json",
+        """
+        {
+          "tracks": ["T1", "T2", "TTS", "speaker_quote_A", "situation_caption_A"],
+          "segments": [
+            {
+              "edit_id": "E1",
+              "time_start": "00:00",
+              "time_end": "00:03",
+              "track": "TTS",
+              "caption_type": "tts_narration",
+              "audio_policy": "tts_on_source_off"
+            }
+          ]
+        }
+        """,
+    )
+    write_json(
+        work_dir / "timeline_design_gate.json",
+        """
+        {
+          "status": "PASS",
+          "gate_name": "timeline_design_gate"
+        }
+        """,
+    )
+    write_json(
         work_dir / "block_map.json",
         """
         {
@@ -91,6 +118,22 @@ def create_script_lock_package_artifacts(work_dir: Path) -> None:
         """,
     )
     write(work_dir / "tts_copy_text.txt", "테스트 나레이션")
+    write_humanize_gate_pass(work_dir)
+
+
+def write_humanize_gate_pass(work_dir: Path) -> None:
+    write_json(
+        work_dir / "humanize_korean_gate.json",
+        """
+        {
+          "status": "PASS",
+          "gate_name": "humanize_korean_gate",
+          "scope": "visible_text_only",
+          "structure_changed": false,
+          "protected_fields_changed": false
+        }
+        """,
+    )
 
 
 def write_stage2_decision(work_dir: Path) -> None:
@@ -211,6 +254,23 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(state["production_status"], "WAIT_USER_STAGE_DECISION")
             self.assertIs(evidence["capcut_allowed"], False)
             self.assertEqual(evidence["capcut_blocker"], "WAIT_USER_STAGE_DECISION")
+
+    def test_tikitaka_harness_fails_script_handoff_gate_when_humanize_gate_missing(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_humanize_missing", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            (work_dir / "humanize_korean_gate.json").unlink()
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("humanize_korean_gate", gate["missing_or_failed"])
+            self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
 
     def test_tikitaka_harness_detects_stage1_request_text_and_writes_todo_report(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_stage1_text", TIKITAKA_HARNESS)

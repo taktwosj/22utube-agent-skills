@@ -58,6 +58,27 @@ Mirror sync rule:
 - If any MD5 differs after patching, report `FAIL_JSON_MIRROR_MD5` and fix
   before opening CapCut or claiming PASS.
 
+Source media import rule:
+
+- Replacing only `materials.videos[*].path` is not enough. If the copied
+  `jungchilong` video material still has `material_name=Subscribe Youtube`,
+  `source_platform=13`, `source=1`, `category_name` set to an online category,
+  or `draft_meta_info.json` type `7` online material entries, CapCut may restore
+  the old `Cache/onlineMaterial/*` placeholder when the project opens.
+- For every locked source clip, patch the active video material as a local
+  import:
+  - `path` and `media_path` = absolute locked clip path
+  - `material_name` = locked clip filename
+  - `source_platform=0`, `source=0`, `category_name=local`
+  - unique `local_material_id` / `local_id` / `material_id`
+  - real `duration`, `width`, `height`, and `has_audio=true`
+- Patch `draft_meta_info.json` too: put the same locked clips under
+  `draft_materials` group `type=0` with `file_Path`, duration, width, height,
+  and matching local ids; clear stale online/template media in group `type=7`.
+- Before claiming CapCut openability, grep the active draft JSON for
+  `Subscribe Youtube` and `onlineMaterial`. Any active occurrence is
+  `FAIL_SOURCE_MEDIA_NOT_IMPORTED`.
+
 Visible text roles:
 
 - `t1`: source channel only, `출처 {채널명}`
@@ -74,6 +95,7 @@ Rules:
 - use role detection before hard-coded track index
 - preserve `jungchilong` geometry, font, stroke, color, render order, banners, subscribe graphics, transitions, and effects unless user asks to redesign
 - keep source speech embedded unless user explicitly asks for TTS, narration, BGM, or detached audio repair
+- do not trim, shift, mute, replace, normalize away, or regenerate source/interpreter audio by default. For CapCut-safe local clips, transcode the locked source clip to H.264 video + AAC 48kHz audio while preserving the original spoken content, then set `source_timerange.start=0`, `target_timerange.duration=full media duration`, `volume=1.0`, and `last_nonzero_volume=1.0`. VP9/AV1 + Opus locked clips may preview with broken or cut interpreter audio in CapCut; do not use them directly for final local drafts.
 - visible text must not expose internal terms such as `M1-`, `roughcut`, `edl`, or `진입`
 - use UTF-8 file IO; stop at `WAIT_ENCODING_UNSAFE` if Korean is corrupted
 

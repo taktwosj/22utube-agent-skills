@@ -22,6 +22,9 @@ SCRIPT_LOCK_PACKAGE_FILES = {
     "original_structure_summary": "original_structure_summary.md",
     "urakkai_structure_plan": "urakkai_structure_plan.md",
     "urakkai_structure_delta": "urakkai_structure_delta.json",
+    "timeline_design": "timeline_design.json",
+    "timeline_design_gate": "timeline_design_gate.json",
+    "humanize_korean_gate": "humanize_korean_gate.json",
     "block_map": "block_map.json",
     "block_role_map": "block_role_map.json",
     "block_voice_switch_map": "block_voice_switch_map.json",
@@ -666,6 +669,53 @@ def visible_script_body_status(work_dir: Path) -> dict[str, Any]:
     return status_block("MISSING", None, "visible script body missing")
 
 
+def humanize_korean_gate_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["humanize_korean_gate"]
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, "humanize_korean_gate missing")
+    if data.get("_parse_error"):
+        return status_block("FAILED", name, "humanize_korean_gate parse failed")
+    if data.get("_non_object"):
+        return status_block("FAILED", name, "humanize_korean_gate json root must be an object")
+
+    raw_status = str(data.get("status") or data.get("gate_status") or "").upper()
+    if raw_status not in PASS_VALUES:
+        return status_block("FAILED", name, "humanize_korean_gate status must be PASS")
+    if data.get("structure_changed") is True:
+        return status_block("FAILED", name, "humanize_korean_gate must not change timeline structure")
+    if data.get("protected_fields_changed") is True:
+        return status_block("FAILED", name, "humanize_korean_gate must not change protected fields")
+    return status_block("PASS", name)
+
+
+def timeline_design_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["timeline_design"]
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, "timeline_design missing")
+    if data.get("_parse_error"):
+        return status_block("FAILED", name, "timeline_design parse failed")
+    if data.get("_non_object"):
+        return status_block("FAILED", name, "timeline_design json root must be an object")
+
+    segments = data.get("segments") or data.get("timeline_segments")
+    if not isinstance(segments, list) or not segments:
+        return status_block("FAILED", name, "timeline_design.segments missing")
+    required = {"edit_id", "time_start", "time_end", "track", "caption_type", "audio_policy"}
+    for index, segment in enumerate(segments):
+        if not isinstance(segment, dict):
+            return status_block("FAILED", name, f"timeline_design.segments[{index}] must be object")
+        missing = sorted(key for key in required if segment.get(key) in (None, ""))
+        if missing:
+            return status_block(
+                "FAILED",
+                name,
+                f"timeline_design.segments[{index}] missing {', '.join(missing)}",
+            )
+    return status_block("PASS", name)
+
+
 def block_map_status(work_dir: Path) -> dict[str, Any]:
     name = SCRIPT_LOCK_PACKAGE_FILES["block_map"]
     data = read_json(work_dir / name)
@@ -769,6 +819,13 @@ def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
             SCRIPT_LOCK_PACKAGE_FILES["urakkai_structure_delta"],
             "urakkai structure delta",
         ),
+        "timeline_design": timeline_design_status(work_dir),
+        "timeline_design_gate": json_status_pass_artifact_status(
+            work_dir,
+            SCRIPT_LOCK_PACKAGE_FILES["timeline_design_gate"],
+            "timeline design gate",
+        ),
+        "humanize_korean_gate": humanize_korean_gate_status(work_dir),
         "block_map": block_map_status(work_dir),
         "block_role_map": block_role_map_status(work_dir),
         "block_voice_switch_map": block_voice_switch_map_status(work_dir),
@@ -945,8 +1002,10 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
             visible_tts_copy_text,
             "",
             "대본 산출물:",
+            "- 1차설계서 / timeline_design.json / timeline_design_gate.json",
             "- 상단/중단/구간오디오정책표",
             "- TTS 만들 글자만 복사",
+            "- humanize_korean_gate.json",
             "- block_map.json / block_voice_switch_map.json",
             "",
             "handoff:",

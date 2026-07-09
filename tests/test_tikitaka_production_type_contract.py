@@ -219,6 +219,40 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, text)
 
+    def test_tikitaka_requires_timeline_design_before_handoff_and_humanize_gate(self):
+        text = SKILL.read_text(encoding="utf-8")
+
+        for token in [
+            "Tikitaka Current Order",
+            "1차설계서",
+            "timeline_design.json",
+            "timeline_design_gate.json",
+            "humanize_korean_gate",
+            "Humanize Korean",
+            "T1/T2/TTS",
+            "화자발언",
+            "상황설명",
+            "00script-writer is not a default stage",
+            "Humanize may change wording only",
+            "time_start/time_end/track/caption_type/audio_policy",
+            "Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate=PASS",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+        section_start = text.index("Tikitaka Current Order")
+        section_end = text.index("## Gemini Raw Intake First")
+        section = text[section_start:section_end]
+        order = [
+            "source evidence",
+            "1차설계서",
+            "timeline_design_gate.json",
+            "humanize_korean_gate",
+            "script_handoff_gate.json",
+        ]
+        positions = [section.index(token) for token in order]
+        self.assertEqual(positions, sorted(positions))
+
 
 if __name__ == "__main__":
     unittest.main()
