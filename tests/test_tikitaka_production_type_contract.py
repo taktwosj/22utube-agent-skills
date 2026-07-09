@@ -4,6 +4,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skills" / "00-tikitaka" / "SKILL.md"
+TIKITAKA_HARNESS = (
+    ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
+)
 SINGLE_SOURCE = (
     ROOT
     / "skills"
@@ -252,7 +255,7 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             "00script-writer is not a default stage",
             "Humanize may change wording only",
             "time_start/time_end/track/caption_type/audio_policy",
-            "Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json=PASS",
+            "Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json status=PASS",
             "TTS 만들 글자만 복사` is a legacy alias of `중단 TTS 글자만 복사`",
         ]:
             with self.subTest(token=token):
@@ -274,6 +277,38 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
         ]
         positions = [section.index(token) for token in order]
         self.assertEqual(positions, sorted(positions))
+
+    def test_tikitaka_v2_wording_uses_canonical_handoff_artifact_names(self):
+        text = SKILL.read_text(encoding="utf-8")
+        harness_text = TIKITAKA_HARNESS.read_text(encoding="utf-8")
+
+        self.assertIn("humanize_korean_gate.json status=PASS", text)
+        self.assertNotIn("humanize_korean_gate.json=PASS", text)
+        self.assertIn("block_role_map.json", text)
+        self.assertIn("block_voice_switch_map.json", text)
+        self.assertIn("tts_copy_text.txt", text)
+        self.assertIn(
+            "Legacy aliases without extensions are accepted only for old packages.",
+            text,
+        )
+
+        required_start = text.index("Required handoff files")
+        required_end = text.index("`block_map.json` must keep")
+        required_section = text[required_start:required_end]
+        self.assertNotIn("- `block_role_map`:", required_section)
+        self.assertNotIn("- `tts_copy_text`:", required_section)
+
+        hard_fails_start = text.index("Hard fails:", required_end)
+        hard_fails_end = text.index("Use `1/2/3/4/5` labels", hard_fails_start)
+        hard_fails_section = text[hard_fails_start:hard_fails_end]
+        self.assertIn("`block_role_map.json`", hard_fails_section)
+        self.assertIn("`tts_copy_text.txt`", hard_fails_section)
+        self.assertNotIn("`block_role_map`,", hard_fails_section)
+        self.assertNotIn("`tts_copy_text`,", hard_fails_section)
+        self.assertIn(
+            "G1: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
+            harness_text,
+        )
 
     def test_tts_make_copy_is_legacy_alias_not_prohibited_output(self):
         skill_text = SKILL.read_text(encoding="utf-8")

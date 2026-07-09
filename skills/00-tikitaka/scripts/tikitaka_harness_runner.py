@@ -960,7 +960,7 @@ def build_stage_gate_todo(job_state: dict[str, Any]) -> str:
             "# 11short Stage Gate TODO",
             "",
             f"{checked(decision != 'WAIT_USER_STAGE_DECISION')} G0: {decision} - user stage decision or request token",
-            f"{checked(handoff_pass)} G1: stage 1 artifacts - script_handoff_gate.json",
+            f"{checked(handoff_pass)} G1: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
             f"{checked(handoff_pass)} G2: stage 1 STOP - 보고서1",
             f"{checked(stage2_pass and capcut_allowed)} G3: stage 2 entry - user_stage_decision=stage_2_full",
             f"{checked(final_allowed)} G4: final production report is production-agent owned",

@@ -95,11 +95,11 @@ handoff gate. Humanize may change wording only: visible Korean in T1/T2/TTS,
 `"" 화자발언`, and `() 상황설명`. It must not change time ranges, track rows,
 caption roles, edit order, audio policy, verified quotes, source facts, names,
 numbers, or the separation between quote/situation/TTS roles. Record the result
-as `humanize_korean_gate.json` with `humanize_korean_gate.json=PASS`.
+as `humanize_korean_gate.json` with `humanize_korean_gate.json status=PASS`.
 
-Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json=PASS. If Humanize
-needs a structural change, return to Tikitaka design repair instead of silently
-patching the script.
+Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json status=PASS. If
+Humanize needs a structural change, return to Tikitaka design repair instead of
+silently patching the script.
 
 `00script-writer is not a default stage`. Use it only when the user explicitly
 asks for a rewrite or when the 1차설계서 text fails readability/hook pressure.
@@ -719,13 +719,13 @@ may start:
   implement.
 - `block_map.json`: canonical source-of-truth map for every edit block.
 - `block_role_map.json`: readable table for `"..."`, `(...)`, and TTS roles.
-- `block_role_map`: readable table for `"..."`, `(...)`, and TTS roles.
-- `block_voice_switch_map`: readable table for source audio, TTS, SFX, and BGM
-  switching by edit block.
+- `block_voice_switch_map.json`: readable table for source audio, TTS, SFX, and
+  BGM switching by edit block.
 - `tts_copy_text.txt`: narration-only copy text. Text with
   `included_in_tts_copy=false` must not be placed into the TTS body.
-- `tts_copy_text`: narration-only copy text.
 - `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
+
+Legacy aliases without extensions are accepted only for old packages.
 
 `block_map.json` must keep both source and edit identities:
 
@@ -783,7 +783,7 @@ Hard fails:
 - `original_block_map`, `wow_point_map`, `urakkai_order_map`,
   `timeline_design.json`, `timeline_design_gate.json`,
   `humanize_korean_gate.json`, `edit_block_sequence`, `block_map.json`,
-  `block_role_map`, `block_voice_switch_map`, `tts_copy_text`, or
+  `block_role_map.json`, `block_voice_switch_map.json`, `tts_copy_text.txt`, or
   `script_handoff_gate.json` is missing when production handoff is requested.
 - `speaker_quote` has no verified or explicitly proposed source range.
 - `tts_narration` keeps `source_audio=on`.
