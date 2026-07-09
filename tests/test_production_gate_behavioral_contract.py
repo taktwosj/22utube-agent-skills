@@ -72,13 +72,55 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
     }
     if inline_voice_map:
         block_map["block_voice_switch_map"] = voice_map["switches"]
-    else:
-        gate["input_files"].append("block_voice_switch_map.json")
-        gate["block_voice_switch_map_path"] = "block_voice_switch_map.json"
-        write_json(root / "20_script" / "block_voice_switch_map.json", voice_map)
+    gate["input_files"].append("block_voice_switch_map.json")
+    gate["block_voice_switch_map_path"] = "block_voice_switch_map.json"
+    write_json(root / "20_script" / "block_voice_switch_map.json", voice_map)
 
     write_json(root / "20_script" / "script_handoff_gate.json", gate)
     write_json(root / "20_script" / "block_map.json", block_map)
+    write_json(
+        root / "20_script" / "timeline_design.json",
+        {
+            "project_duration_sec": 8,
+            "segments": [
+                {
+                    "edit_id": "E1",
+                    "time_start": "00:00",
+                    "time_end": "00:03",
+                    "track": "audio.narration_tts",
+                    "caption_type": "tts_narration",
+                    "audio_policy": "tts_on_source_off",
+                },
+                {
+                    "edit_id": "E2",
+                    "time_start": "00:03",
+                    "time_end": "00:08",
+                    "track": "audio.speaker_source",
+                    "caption_type": "speaker_quote",
+                    "audio_policy": "source_on_tts_off",
+                },
+            ],
+        },
+    )
+    write_json(root / "20_script" / "timeline_design_gate.json", {"status": "PASS"})
+    write_json(
+        root / "20_script" / "humanize_korean_gate.json",
+        {
+            "status": "PASS",
+            "structure_changed": False,
+            "protected_fields_changed": False,
+        },
+    )
+    write_json(
+        root / "20_script" / "block_role_map.json",
+        {
+            "roles": [
+                {"edit_id": "E1", "caption_type": "tts_narration"},
+                {"edit_id": "E2", "caption_type": "speaker_quote"},
+            ]
+        },
+    )
+    write(root / "20_script" / "tts_copy_text.txt", "테스트 나레이션")
 
 
 def create_report1_handoff(root: Path, *, status: str = "PASS", next_skill: str = "000short-production-agent") -> None:
@@ -323,12 +365,12 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             create_script_handoff(root)
-            block_map_path = root / "20_script" / "block_map.json"
-            block_map = json.loads(block_map_path.read_text(encoding="utf-8"))
-            block_map["block_voice_switch_map"] = [
+            voice_map_path = root / "20_script" / "block_voice_switch_map.json"
+            voice_map = json.loads(voice_map_path.read_text(encoding="utf-8"))
+            voice_map["switches"] = [
                 {"edit_id": "E1", "source_audio": "off", "tts": "on"}
             ]
-            write_json(block_map_path, block_map)
+            write_json(voice_map_path, voice_map)
 
             with self.assertRaisesRegex(module.GateFail, "voice switch coverage"):
                 module.validate_script_handoff_gate({}, root)

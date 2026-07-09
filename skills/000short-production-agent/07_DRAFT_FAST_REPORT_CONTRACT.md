@@ -4,7 +4,10 @@ This document preserves the 11short factory reporting and fast-mode contract tha
 
 ## Template Default Contract
 
-Current official template defaults are only `black` / `블랙기본` and `insta white` / `인스타템플릿`; there is no separate official third/basic template base unless the operator adds it to `manifests/capcut-template-set.json`.
+Current default 11short CapCut base is `shrt white`.
+
+`black` and `insta white` are explicit user-selected variants or style/template
+variants. They are not the normal/current default base.
 
 ## TEMPLATE_REFERENCE_RESOLUTION_GATE
 
@@ -96,7 +99,17 @@ Mandatory G0-G4 contract:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless stage_1_script or stage_2_full is already explicit
-G1 STAGE 1 = script_handoff_gate.json + block_map.json + block_voice_switch_map.json + TTS copy body
+G1 STAGE 1 =
+1차설계서
++ timeline_design.json
++ timeline_design_gate.json
++ humanize_korean_gate.json
++ block_map.json
++ block_role_map.json
++ block_voice_switch_map.json
++ tts_copy_text.txt
++ script_handoff_gate.json
++ report1_handoff.json
 G2 STAGE 1 STOP = 보고서1 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = stage_2_full intent + report1_approved + voice_audio_route_decided
 G4 FINAL = [FINAL_LOCK 최종 보고] only after production, visual, media-settings, cleanup, and harness gates pass
@@ -149,6 +162,21 @@ Do not treat `대본/초벌/티키타카/초안만` stage-1 script work as CapCu
 permission. DRAFT_FAST does not waive `report1_approved + voice_audio_route_decided`;
 it is still a CapCut draft stage and must wait behind
 `WAIT_REPORT1_APPROVAL_TTS_DECISION`.
+
+## Tikitaka v2 Handoff In DRAFT_FAST
+
+DRAFT_FAST does not waive Tikitaka v2 handoff requirements.
+
+Even in DRAFT_FAST, if the script came from `00-tikitaka` v2, the draft must
+read and preserve:
+
+- `timeline_design.json`
+- `timeline_design_gate.json`
+- `humanize_korean_gate.json`
+- `block_role_map.json`
+- `block_voice_switch_map.json`
+- `tts_copy_text.txt`
+- `report1_handoff.json`
 
 ## DRAFT_FAST State Split
 

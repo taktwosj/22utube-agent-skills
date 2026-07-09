@@ -789,6 +789,62 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                 """,
             )
             write_json(
+                root / "20_script" / "block_role_map.json",
+                """
+                {
+                  "roles": [
+                    {"edit_id": "E1", "caption_type": "speaker_quote"}
+                  ]
+                }
+                """,
+            )
+            write_json(
+                root / "20_script" / "block_voice_switch_map.json",
+                """
+                {
+                  "switches": [
+                    {"edit_id": "E1", "source_audio": "on", "tts": "off"}
+                  ]
+                }
+                """,
+            )
+            write_json(
+                root / "20_script" / "timeline_design.json",
+                """
+                {
+                  "project_duration_sec": 3,
+                  "segments": [
+                    {
+                      "edit_id": "E1",
+                      "time_start": "00:00",
+                      "time_end": "00:03",
+                      "track": "audio.speaker_source",
+                      "caption_type": "speaker_quote",
+                      "audio_policy": "source_on_tts_off"
+                    }
+                  ]
+                }
+                """,
+            )
+            write_json(
+                root / "20_script" / "timeline_design_gate.json",
+                """
+                {
+                  "status": "PASS"
+                }
+                """,
+            )
+            write_json(
+                root / "20_script" / "humanize_korean_gate.json",
+                """
+                {
+                  "status": "PASS",
+                  "structure_changed": false,
+                  "protected_fields_changed": false
+                }
+                """,
+            )
+            write_json(
                 root / "20_script" / "report1_handoff.json",
                 """
                 {

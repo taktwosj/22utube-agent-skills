@@ -19,9 +19,15 @@ legacy compatibility aliases for older local harnesses.
 - `decisions/shorts_academy_gate.json` when Tikitaka, Shorts Academy, ranking/TOP-N,
   or benchmark-remake strategy applies
 - `decisions/capcut_layout_plan.json`
+- `20_script/report1_handoff.json`
+- `20_script/timeline_design.json`
+- `20_script/timeline_design_gate.json`
+- `20_script/humanize_korean_gate.json`
 - `20_script/script_handoff_gate.json`
 - `20_script/block_map.json`
+- `20_script/block_role_map.json`
 - `20_script/block_voice_switch_map.json`
+- `20_script/tts_copy_text.txt`
 - `capcut/draft_content.json`
 - `capcut/draft_meta_info.json`
 - `capcut/draft_virtual_store.json`
@@ -34,6 +40,8 @@ legacy compatibility aliases for older local harnesses.
 - `proof/capcut_assembly_report.json`
 - `reports/validation_report.json`
 - `reports/evidence_pack.json`
+- `50_capcut_project/media_link_manifest.json`
+- `50_capcut_project/source_relink_gate.json`
 
 ## Hard Fail
 
@@ -47,12 +55,35 @@ Any one of these fails or blocks the job:
 - OCR `NOT_RUN` or `FAILED`
 - missing OCR engine record
 - missing `segment_decision_table.json`
+- missing `20_script/report1_handoff.json` before CapCut project creation
+- `report1_handoff.json` is invalid
+- `report1_handoff.next_skill` is not `000short-production-agent`
+- `report1_approved` is not true
+- `voice_audio_route_decided` is not true
+- missing `20_script/timeline_design.json` before CapCut project creation
+- `timeline_design_gate.json` is not PASS
+- `humanize_korean_gate.json` is not PASS
+- missing `20_script/block_role_map.json`
+- missing `20_script/tts_copy_text.txt` when any `caption_type=tts_narration`
+  exists
 - missing `20_script/script_handoff_gate.json`, `20_script/block_map.json`, or
   `20_script/block_voice_switch_map.json` before CapCut project creation
 - `script_handoff_gate.json` is not `SCRIPT_HANDOFF_GATE` / `PASS` /
   `SCRIPT_LOCK_PACKAGE` / `capcut_allowed=true`
 - `block_voice_switch_map.json` does not cover every `edit_block_sequence`
   block with explicit `source_audio` and `tts` decisions
+- `capcut_layout_plan.json` changes protected fields from `timeline_design.json`
+- `time_start`, `time_end`, `track`, `caption_type`, or `audio_policy` differs
+  from the locked design without `WAIT_TIKITAKA_DESIGN_REPAIR`
+- `audio.narration_tts` is not resolved to A9 under `shrt_white_base_v1`
+- `audio.speaker_source` is not resolved to A10 under `shrt_white_base_v1`
+- T1/T2 are missing or not full project duration
+- visible text contains placeholder/operator text such as `의견입력`,
+  `placeholder`, `Default`, `T1`, `T2`, `수정필요`, `작업자`, or bracketed
+  timecode markers. `T1` and `T2` are allowed as track ids only, not visible
+  text values
+- source media exists but active CapCut draft material path does not point to
+  an existing source or clip file
 - Tikitaka/Shorts Academy/ranking/TOP-N/benchmark-remake job is missing
   `decisions/shorts_academy_gate.json`
 - applicable `shorts_academy_gate` is not `PASS` or `N/A` with a concrete reason

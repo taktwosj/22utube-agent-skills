@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CapCut timeline manifest",
+  "type": "object",
+  "required": [
+    "draft_name",
+    "template_profile",
+    "source_timeline_design_path",
+    "protected_fields_preserved",
+    "semantic_audio_resolution"
+  ],
+  "properties": {
+    "draft_name": { "type": "string", "minLength": 1 },
+    "template_profile": { "type": "string" },
+    "source_timeline_design_path": { "type": "string" },
+    "protected_fields_preserved": { "const": true },
+    "semantic_audio_resolution": {
+      "type": "object",
+      "required": ["audio.narration_tts", "audio.speaker_source", "audio.sfx", "audio.bgm"],
+      "properties": {
+        "audio.narration_tts": { "const": "A9" },
+        "audio.speaker_source": { "const": "A10" },
+        "audio.sfx": { "const": "A11" },
+        "audio.bgm": { "const": "A12" }
+      }
+    }
+  }
+}

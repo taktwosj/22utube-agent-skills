@@ -2,6 +2,9 @@
 
 ## Current Pipeline
 
+If Tikitaka v2 handoff exists, use the Tikitaka v2 Handoff-First Pipeline below
+before the source-first sequence. Do not reinterpret the locked script.
+
 1. Confirm `input/video_url.txt`.
 2. Save user Gemini/VLM/GPT content as `input/analysis_hint_raw.txt`.
 3. Download or locate `source/source.mp4`; for YouTube sources, prefer
@@ -38,6 +41,49 @@
 20. Run harness validation.
 21. Create `reports/evidence_pack.json`.
 22. Create `reports/final_report.md`.
+
+## Tikitaka v2 Handoff-First Pipeline
+
+If Tikitaka v2 handoff exists, start from the locked handoff package.
+
+1. Read `20_script/report1_handoff.json`.
+2. Confirm `owner_skill=00-tikitaka`.
+3. Confirm `next_skill=000short-production-agent`.
+4. Confirm `report1_approved=true`.
+5. Confirm `voice_audio_route_decided=true`.
+6. Read `20_script/script_handoff_gate.json`.
+7. Confirm `SCRIPT_HANDOFF_GATE` PASS and `capcut_allowed=true`.
+8. Read `20_script/timeline_design.json`.
+9. Confirm `20_script/timeline_design_gate.json` PASS.
+10. Confirm `20_script/humanize_korean_gate.json` PASS.
+11. Read `20_script/block_map.json`.
+12. Read `20_script/block_role_map.json`.
+13. Read `20_script/block_voice_switch_map.json`.
+14. Read `20_script/tts_copy_text.txt`.
+15. Confirm `00_source/source_manifest.json` or `00_source/source.mp4`.
+16. Resolve template. Default is `shrt white`.
+17. Resolve semantic audio tracks:
+
+```text
+audio.narration_tts  -> A9
+audio.speaker_source -> A10
+audio.sfx            -> A11
+audio.bgm            -> A12
+```
+
+18. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`.
+19. Generate `cut_manifest.json`.
+20. Clone `shrt white`.
+21. Implement `timeline_design.json` into `draft_content.json`.
+22. Normalize draft.
+23. Run media link gate.
+24. Run T1/T2 full-duration gate.
+25. Run visible text clean gate.
+26. Run timeline implementation gate.
+27. Create `90_reports/report2_handoff.json` and 보고서2.
+
+`capcut_layout_plan.json` is a derived implementation plan. It is not allowed to
+override `timeline_design.json`.
 
 ## Input URL Rule
 
@@ -161,8 +207,10 @@ Required output:
     "T4": "화자발언1",
     "T5": "화자발언2",
     "T6": "현장상황 / 행동 / 감정설명",
-    "A9": "원본음성 / BGM / 랭킹 기본 배경음",
-    "A10": "TTS / 효과음 / 나의 사전 설정 효과음"
+    "A9": "narration / TTS audio",
+    "A10": "speaker source audio / original speech",
+    "A11": "SFX",
+    "A12": "BGM"
   },
   "catcup_text_role_rows": [
     {"role": "top_title_1", "active": true, "planned_track_id": "T1"},
@@ -202,17 +250,19 @@ content modes may preserve unavoidable factual/source chronology only when the
 functional viewing flow is changed through hook entry, tension placement,
 reaction timing, caption interpretation, cut emphasis, or payoff recovery.
 
-For current CatCup/11short template-backed projects, use one of the two local
-default sample projects:
+For current CatCup/11short template-backed projects, the default base is the
+local draft named `shrt white`. Use `black` or `insta white` only when the user
+explicitly selects that variant.
 
 ```text
+$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\shrt white
 $env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\black
 $env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\260625-ig-contortion-top3-urakkai-instagram-tts
 ```
 
-The second folder displays in CapCut as `insta white`. Both sample projects use
-test media internally; generated drafts must replace that media with the job
-source while preserving the sample project structure.
+The third folder displays in CapCut as `insta white`. Variant sample projects
+use test media internally; generated drafts must replace that media with the job
+source while preserving the selected project structure.
 
 The hard check is the role-separated placement in `catcup_text_role_rows`, not
 the presence of SFX, BGM, transition effects, or decorative animation. Effects

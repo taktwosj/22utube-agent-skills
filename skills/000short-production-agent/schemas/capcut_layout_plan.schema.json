@@ -2,8 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "11short capcut_layout_plan",
   "type": "object",
-  "required": ["top_text", "middle_text", "bottom_text", "video_tracks", "audio_plan"],
+  "required": [
+    "project_duration_sec",
+    "template_profile",
+    "reference_project_name",
+    "derived_from_reference_project",
+    "source_timeline_design_path",
+    "protected_fields_preserved",
+    "top_text",
+    "middle_text",
+    "bottom_text",
+    "fixed_tracks",
+    "timeline_segments",
+    "video_tracks",
+    "audio_plan",
+    "semantic_audio_resolution",
+    "media_links"
+  ],
   "properties": {
+    "project_duration_sec": { "type": "number", "exclusiveMinimum": 0 },
+    "template_profile": {
+      "type": "string",
+      "pattern": "shrt_white_base_v1"
+    },
+    "reference_project_name": { "const": "shrt white" },
+    "derived_from_reference_project": { "const": true },
+    "source_timeline_design_path": { "type": "string" },
+    "protected_fields_preserved": { "const": true },
     "top_text": { "type": "object" },
     "middle_text": { "type": "array" },
     "bottom_text": {
@@ -11,7 +36,32 @@
       "type": "array",
       "maxItems": 0
     },
+    "fixed_tracks": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "timeline_segments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edit_id", "time_start", "time_end", "track", "caption_type", "audio_policy"]
+      }
+    },
     "video_tracks": { "type": "array" },
-    "audio_plan": { "type": "array" }
+    "audio_plan": { "type": "array" },
+    "semantic_audio_resolution": {
+      "type": "object",
+      "required": ["audio.narration_tts", "audio.speaker_source", "audio.sfx", "audio.bgm"],
+      "properties": {
+        "audio.narration_tts": { "const": "A9" },
+        "audio.speaker_source": { "const": "A10" },
+        "audio.sfx": { "const": "A11" },
+        "audio.bgm": { "const": "A12" }
+      }
+    },
+    "media_links": {
+      "type": "array",
+      "items": { "type": "object" }
+    }
   }
 }

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -1432,6 +1433,22 @@ def validate_report1_handoff_gate(contract: dict[str, Any], root: Path) -> dict[
     }
 
 
+def validate_stage2_tikitaka_handoff_gate(
+    contract: dict[str, Any],
+    root: Path,
+) -> dict[str, Any]:
+    validator_path = Path(__file__).with_name("validate_stage2_tikitaka_handoff.py")
+    spec = importlib.util.spec_from_file_location("_stage2_tikitaka_handoff", validator_path)
+    if spec is None or spec.loader is None:
+        raise GateFail("WAIT_TIMELINE_DESIGN_REQUIRED: stage2 Tikitaka handoff validator unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_stage2_tikitaka_handoff(root, contract)
+    except Exception as exc:
+        raise GateFail(str(exc)) from exc
+
+
 def report_scalar(value: Any) -> str:
     if value in (None, ""):
         return ""
@@ -1748,6 +1765,7 @@ def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path)
     request_mode = project_file_request_mode(merged_request_scope_contract(contract, root))
     report1_handoff_result = validate_report1_handoff_gate(contract, root)
     script_handoff_result = validate_script_handoff_gate(contract, root)
+    stage2_tikitaka_handoff_result = validate_stage2_tikitaka_handoff_gate(contract, root)
     sources = collect_status_sources(contract, root)
     default_capcut_base_result = validate_default_capcut_base_policy(sources, root)
     template_reference_result = validate_template_reference_resolution(sources, root)
@@ -1823,6 +1841,7 @@ def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path)
         "script_handoff_gate_status": script_handoff_result["script_handoff_gate_status"],
         "report1_handoff_gate_status": report1_handoff_result["report1_handoff_gate_status"],
         "report1_handoff_gate_path": report1_handoff_result["report1_handoff_gate_path"],
+        **stage2_tikitaka_handoff_result,
         "script_status": script_handoff_result["script_status"],
         "capcut_permission": script_handoff_result["capcut_permission"],
         "block_map_path": script_handoff_result["block_map_path"],

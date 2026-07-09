@@ -100,11 +100,82 @@ next_gate: ASSET_PREP_GATE
 ```
 
 Use `validate_capcut_openable_project_entry` for the second stage. It validates
-`SCRIPT_HANDOFF_GATE`, `block_map.json`, and source manifest readiness for local
-CapCut project creation. `validate_shared_requirements is FINAL_LOCK only`.
+`REPORT1_HANDOFF_GATE`, `SCRIPT_HANDOFF_GATE`, Tikitaka v2 timeline design
+files, role/audio maps, and source manifest readiness for local CapCut project
+creation. `validate_shared_requirements is FINAL_LOCK only`.
 `persona_mode/script_gate/n8n are FINAL_LOCK blockers`, not CAPCUT_OPENABLE_PROJECT blockers.
 When the handoff gate is PASS, do not stop CapCut project creation just because
 final report, upload, writer-persona, or n8n evidence is not complete.
+
+## Stage 2 Tikitaka v2 Handoff Source of Truth
+
+When input comes from `00-tikitaka` v2, production must implement
+`20_script/timeline_design.json`. Do not reinterpret the script.
+
+This extends the existing Stage 2 gate. It does not create a new stage.
+
+Existing requirements still apply:
+
+- `20_script/report1_handoff.json`
+- `report1_approved=true`
+- `voice_audio_route_decided=true`
+- default CapCut base `shrt white`
+
+Required Stage 2 inputs:
+
+```text
+20_script/report1_handoff.json
+20_script/script_handoff_gate.json
+20_script/timeline_design.json
+20_script/timeline_design_gate.json
+20_script/humanize_korean_gate.json
+20_script/block_map.json
+20_script/block_role_map.json
+20_script/block_voice_switch_map.json
+20_script/tts_copy_text.txt
+00_source/source_manifest.json or 00_source/source.mp4
+```
+
+Primary machine-readable authority:
+
+```text
+20_script/timeline_design.json
+```
+
+Derived implementation artifacts:
+
+```text
+10_analysis/capcut_layout_plan.json
+cut_manifest.json
+capcut_timeline_manifest.json
+50_capcut_project/draft_content_snapshot.json
+50_capcut_project/draft_meta_info_snapshot.json
+50_capcut_project/media_link_manifest.json
+50_capcut_project/source_relink_gate.json
+90_reports/report2_handoff.json
+```
+
+Protected fields:
+
+```text
+time_start
+time_end
+track
+caption_type
+audio_policy
+```
+
+If any protected field must change, stop with:
+
+```text
+WAIT_TIKITAKA_DESIGN_REPAIR
+```
+
+`capcut_layout_plan.json` is derived from `timeline_design.json`. It must not
+override, shorten, reorder, merge, split, rename, or reinterpret protected
+timeline fields. Semantic audio lanes may be resolved to real CapCut A-tracks by
+template profile, but that resolution must be recorded in the CapCut timeline
+manifest.
 
 ## Default CapCut Mother Template Rule
 
@@ -274,7 +345,7 @@ Mandatory report/checklist gates:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless stage_1_script or stage_2_full is already explicit
-G1 STAGE 1 = script_handoff_gate.json + block_map.json + block_voice_switch_map.json + TTS copy body
+G1 STAGE 1 = 1차설계서 + timeline_design.json + timeline_design_gate.json + humanize_korean_gate.json + block_map.json + block_role_map.json + block_voice_switch_map.json + tts_copy_text.txt + script_handoff_gate.json + report1_handoff.json
 G2 STAGE 1 STOP = 보고서1 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = stage_2_full intent + report1_approved + voice_audio_route_decided
 G4 FINAL = [FINAL_LOCK 최종 보고] only after production, visual, media-settings, cleanup, and harness gates pass
@@ -429,6 +500,11 @@ Before generating or repairing production assets, identify the current authority
 - script authority, usually `final_script_ko.txt` or the current Tikitaka draft
 - Tikitaka `SCRIPT_LOCK_PACKAGE` when the script came from `00-tikitaka`; this
   package is the Source of Truth for `CAPCUT_OPENABLE_PROJECT`.
+- Tikitaka v2 `timeline_design.json` when the script came from `00-tikitaka`;
+  this is the machine-readable Stage 2 source of truth and `capcut_layout_plan`
+  must be derived from it.
+- Tikitaka `timeline_design_gate.json` and `humanize_korean_gate.json`; both
+  must be PASS before SRT/layout/CapCut work.
 - Tikitaka segment audio plan when the script came from `00-tikitaka`
   (`tikitaka_segment_audio_plan` or equivalent `구간 오디오 정책표`)
 - Tikitaka `SCRIPT_HANDOFF_GATE` when the script came from `00-tikitaka`:
@@ -437,6 +513,9 @@ Before generating or repairing production assets, identify the current authority
 - canonical `20_script/block_map.json` with `edit_block_sequence`,
   `block_voice_switch_map`, `original_order`, `urakkai_order`,
   `source_block_id`, and `edit_id`.
+- canonical `20_script/block_role_map.json` and
+  `20_script/block_voice_switch_map.json`.
+- `20_script/tts_copy_text.txt` when any `caption_type=tts_narration` exists.
 - humanized final Korean text when visible text is final
 - `story_type`, `production_type`, and `template_profile` when the project is
   template-backed or when the user asks for a final CapCut project file
@@ -463,9 +542,14 @@ missing or failed, stop before SRT, TTS, layout, asset prep, or CapCut work:
 WAIT_SCRIPT_HANDOFF_GATE
 required:
 - script_handoff_gate.json
+- timeline_design.json
+- timeline_design_gate.json
+- humanize_korean_gate.json
 - block_map.json
+- block_role_map.json
 - edit_block_sequence
 - block_voice_switch_map
+- tts_copy_text.txt when tts_narration exists
 ```
 
 Do not infer quote/TTS/source-audio policy inside production. Use the Tikitaka
@@ -495,9 +579,11 @@ For Tikitaka remixes such as `source 1-2-3-4-5 -> timeline 4-3-1-5-2`, build
 audio as separate lanes, not as one mixed source clip:
 
 ```text
-A10 narration / TTS lane: full generated narration, not cut
-A9 source_audio lane: extracted original/source audio, on/off/duck by segment
-A8 bgm lane: separate optional or required BGM/SFX, ducked by policy
+shrt white canonical audio mapping:
+audio.narration_tts  -> A9
+audio.speaker_source -> A10
+audio.sfx            -> A11
+audio.bgm            -> A12
 source video track: video visible, source-video audio muted by default
 ```
 
@@ -511,18 +597,32 @@ these lanes by `edit_block_sequence`, not by original source order:
 
 ```text
 V1 source video      = source video visual only; embedded source audio muted
-A10 TTS narration   = generated narration; full duration preserved
-A9 source_audio     = extracted original/source audio; quote ranges only
-A8 SFX              = optional; must not cover speech
-A7 BGM              = optional; duck under speech and TTS
+A9 narration/TTS    = generated narration; full duration preserved
+A10 speaker/source  = extracted original/source speech; quote ranges only
+A11 SFX             = optional; must not cover speech
+A12 BGM             = optional; duck under speech and TTS
 ```
 
 Required switch mapping:
 
 ```text
-speaker_quote = A9 ON + A10 OFF
-tts_narration = A10 ON + A9 OFF
-situation_caption = A9 OFF + A10 OFF by default
+speaker_quote:
+- audio.speaker_source ON -> A10
+- audio.narration_tts OFF -> A9 off
+
+tts_narration:
+- audio.narration_tts ON -> A9
+- audio.speaker_source OFF -> A10 off
+
+situation_caption:
+- A9 OFF
+- A10 OFF
+- unless explicit exception_reason exists
+
+tts_plus_source:
+- A9 ON
+- A10 duck/on according to locked audio_policy
+
 source_audio=on/off/duck
 tts=on/off
 edit_order implemented

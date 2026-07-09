@@ -30,6 +30,24 @@ factory paths above.
 
 If `analysis_hint` conflicts with source evidence, source evidence wins.
 
+## Tikitaka v2 Handoff Source Of Truth
+
+When the job comes from `00-tikitaka` v2, the Stage 2 source of truth is:
+
+1. `20_script/report1_handoff.json`
+2. `20_script/script_handoff_gate.json`
+3. `20_script/timeline_design.json`
+4. `20_script/timeline_design_gate.json`
+5. `20_script/humanize_korean_gate.json`
+6. `20_script/block_map.json`
+7. `20_script/block_role_map.json`
+8. `20_script/block_voice_switch_map.json`
+9. `20_script/tts_copy_text.txt`
+10. `00_source/source_manifest.json` or `00_source/source.mp4`
+
+`10_analysis/capcut_layout_plan.json` is derived from `timeline_design.json`.
+It is not higher authority than the locked Tikitaka design.
+
 ## Required Outputs
 
 - `00_source/video_url.txt`
@@ -45,14 +63,22 @@ If `analysis_hint` conflicts with source evidence, source evidence wins.
 - `10_analysis/crosscheck_report.json`
 - `10_analysis/segment_decision_table.json`
 - `10_analysis/capcut_layout_plan.json`
+- `20_script/report1_handoff.json`
+- `20_script/timeline_design.json`
+- `20_script/timeline_design_gate.json`
+- `20_script/humanize_korean_gate.json`
 - `20_script/script_handoff_gate.json`
 - `20_script/block_map.json`
+- `20_script/block_role_map.json`
 - `20_script/block_voice_switch_map.json`
+- `20_script/tts_copy_text.txt`
 - `50_capcut_project/capcut_project_name.txt`
 - `50_capcut_project/local_capcut_path.txt`
 - `50_capcut_project/capcut_draft_manifest.json`
 - `50_capcut_project/draft_content_snapshot.json`
 - `50_capcut_project/draft_meta_info_snapshot.json`
+- `50_capcut_project/media_link_manifest.json`
+- `50_capcut_project/source_relink_gate.json`
 - `50_capcut_project/restore_notes.md`
 - `cut_manifest.json`
 - `proof/contact_sheet.jpg`
@@ -61,6 +87,7 @@ If `analysis_hint` conflicts with source evidence, source evidence wins.
 - `proof/capcut_assembly_report.json`
 - `90_reports/validation_report.json`
 - `90_reports/evidence_pack.json`
+- `90_reports/report2_handoff.json`
 - `90_reports/final_report.md`
 
 ## Prohibitions

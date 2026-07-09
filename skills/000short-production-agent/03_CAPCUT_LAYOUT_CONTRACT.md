@@ -42,8 +42,12 @@ T6 = (현장상황 / 행동 / 감정설명)
 
 V7 = 템플릿 배경 / 랭킹중간 / 전환용 클립
 V8 = 실제 영상 짜집은 source clip
-A9 = 원본음성 / BGM / 랭킹 기본 배경음
-A10 = TTS / 효과음 / 나의 사전 설정 효과음
+For current `shrt white` work, ignore old generic A9/A10 mappings.
+Use the shrt white canonical audio mapping only:
+A9  = narration / TTS audio
+A10 = speaker source audio / original speech
+A11 = SFX
+A12 = BGM
 ```
 
 ## Shrt White Base - 2026-07-08
@@ -92,12 +96,35 @@ there is no `source_speech_2` row. `T5` is the situation row.
 Rules:
 
 - Do not change the role or order of the `shrt white` rows above to make room for audio, BGM, SFX, or imported media.
-- Insert original audio, TTS, BGM, ranking BGM, and SFX only on A-tracks (`A9/A10` or additional audio rows). Never write audio/video segments into T-tracks.
+- Insert original audio, TTS, BGM, ranking BGM, and SFX only on A-tracks (`A9/A10/A11/A12` or additional audio rows). Never write audio/video segments into T-tracks.
 - After adding audio, re-open the actual `draft_content.json` and verify track order and track type. If row order/role/segment identity changed, FAIL.
 - `T4` may contain only source-verified speech/subtitle/STT/OCR. Do not invent quoted speech.
 - `T5` is the situation row and may overlap `T3/T4` when it explains the same visual moment.
 - No `하단`, `하단 원문`, bottom-caption, or bottom-TTS layer is allowed.
 - Bracketed timecodes such as `[00:00-00:03]` are operator markers and must never become visible text.
+
+## Tikitaka v2 Semantic Audio Resolution
+
+`00-tikitaka` v2 does not lock real CapCut A-track ids. It locks semantic audio
+lanes:
+
+```text
+audio.narration_tts
+audio.speaker_source
+audio.sfx
+audio.bgm
+```
+
+For `shrt_white_base_v1`, resolve them as:
+
+```text
+audio.narration_tts  -> A9
+audio.speaker_source -> A10
+audio.sfx            -> A11
+audio.bgm            -> A12
+```
+
+Any other resolution under `shrt_white_base_v1` is `FAIL_AUDIO_TRACK_MAPPING`.
 
 ## Template Style Preservation Gate
 

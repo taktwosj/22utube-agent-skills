@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tikitaka v2 timeline_design",
+  "type": "object",
+  "required": ["project_duration_sec", "segments"],
+  "properties": {
+    "project_duration_sec": { "type": "number", "exclusiveMinimum": 0 },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["edit_id", "time_start", "time_end", "track", "caption_type", "audio_policy"],
+        "properties": {
+          "edit_id": { "type": "string", "minLength": 1 },
+          "time_start": { "type": "string", "minLength": 1 },
+          "time_end": { "type": "string", "minLength": 1 },
+          "track": {
+            "type": "string",
+            "not": { "enum": ["A9", "A10", "A11", "A12"] }
+          },
+          "caption_type": { "type": "string", "minLength": 1 },
+          "audio_policy": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

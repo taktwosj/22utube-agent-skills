@@ -1,5 +1,13 @@
 # 05_CODEX_EXECUTION_PROMPT
 
+Archive/reference-only note: this file is not active execution authority for
+current Tikitaka v2 -> `000short-production-agent` work. Use `SKILL.md`,
+`01_WORK_ORDER_TEMPLATE.md`, `02_PIPELINE_RULES.md`,
+`03_CAPCUT_LAYOUT_CONTRACT.md`, `04_HARNESS_REQUIREMENTS.md`, and
+`07_DRAFT_FAST_REPORT_CONTRACT.md` for the current `shrt white` /
+`timeline_design.json` contract. This file remains only for legacy repair
+context.
+
 You are the execution agent for current 11short source-verified Shorts remake
 production.
 
