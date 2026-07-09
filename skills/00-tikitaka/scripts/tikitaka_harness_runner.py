@@ -18,6 +18,13 @@ from typing import Any
 
 PASS_VALUES = {"PASS", "DONE", "SCRIPT_LOCK", "HARNESS_PASS"}
 FAIL_VALUES = {"FAIL", "FAILED", "BLOCK", "BLOCKED", "SCRIPT_REWRITE", "HARNESS_FAILED"}
+ALLOWED_STAGE1_AUDIO_TRACKS = {
+    "audio.narration_tts": "narration_tts",
+    "audio.speaker_source": "speaker_source",
+    "audio.sfx": "sfx",
+    "audio.bgm": "bgm",
+}
+FORBIDDEN_STAGE1_CAPCUT_AUDIO_TRACKS = {"A9", "A10", "A11", "A12"}
 SCRIPT_LOCK_PACKAGE_FILES = {
     "original_structure_summary": "original_structure_summary.md",
     "urakkai_structure_plan": "urakkai_structure_plan.md",
@@ -713,6 +720,39 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
                 name,
                 f"timeline_design.segments[{index}] missing {', '.join(missing)}",
             )
+        track = str(segment.get("track") or "")
+        if track in FORBIDDEN_STAGE1_CAPCUT_AUDIO_TRACKS:
+            return status_block(
+                "FAILED",
+                name,
+                f"timeline_design.segments[{index}] must use semantic audio track, not {track}",
+            )
+        if track.startswith("audio."):
+            expected_lane = ALLOWED_STAGE1_AUDIO_TRACKS.get(track)
+            if expected_lane is None:
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] unsupported semantic audio track {track}",
+                )
+            if segment.get("semantic_lane") != expected_lane:
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] semantic_lane must be {expected_lane}",
+                )
+            if segment.get("resolved_capcut_track") is not None:
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] resolved_capcut_track must be null in stage 1",
+                )
+            if segment.get("resolved_by") != "000short-production-agent":
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] resolved_by must be 000short-production-agent",
+                )
     return status_block("PASS", name)
 
 
@@ -997,16 +1037,17 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
             "대본 본문:",
             visible_script_body,
             "",
-            f"TTS 만들 글자만 복사 source: {visible_tts_source}",
-            "TTS 만들 글자만 복사:",
+            f"중단 TTS 글자만 복사 source: {visible_tts_source}",
+            "중단 TTS 글자만 복사:",
             visible_tts_copy_text,
             "",
             "대본 산출물:",
             "- 1차설계서 / timeline_design.json / timeline_design_gate.json",
             "- 상단/중단/구간오디오정책표",
-            "- TTS 만들 글자만 복사",
+            "- 중단 TTS 글자만 복사",
             "- humanize_korean_gate.json",
-            "- block_map.json / block_voice_switch_map.json",
+            "- block_map.json / block_role_map.json / block_voice_switch_map.json",
+            "- tts_copy_text.txt",
             "",
             "handoff:",
             "- 다음 스킬: 000short-production-agent",

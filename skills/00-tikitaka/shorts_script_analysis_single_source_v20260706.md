@@ -14,7 +14,6 @@ bottom-first-line instruction documents for current work.
   - separate bottom narration layer
   - 3-layer script package
   - `하단 첫마디 후보`
-  - `TTS 만들 글자만 복사`
 - If any older reference says `TTS 만들 글자만 복사`, read it as
   `중단 TTS 글자만 복사`.
 
@@ -54,7 +53,12 @@ Do not create these for current Tikitaka script output:
 - `하단 첫마디 후보 5개`
 - separate timed narration timeline outside `중단`
 - 3-layer script package
-- `TTS 만들 글자만 복사`
+- bottom/body caption narration layer
+
+Allowed alias:
+
+- `TTS 만들 글자만 복사` may appear only as a legacy alias of
+  `중단 TTS 글자만 복사`. It is not a separate output contract.
 
 ## Production Boundary
 

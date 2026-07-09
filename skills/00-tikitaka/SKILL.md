@@ -22,6 +22,41 @@ For current Shorts script analysis and Tikitaka drafts, use only the
   meme captions.
 - Derive the TTS copy block only from timed `중단` lines intended for voice.
 
+## TTS Copy Text Naming Rule
+
+Canonical contract label:
+
+```text
+중단 TTS 글자만 복사
+```
+
+Accepted legacy alias:
+
+```text
+TTS 만들 글자만 복사
+```
+
+`TTS 만들 글자만 복사` is a legacy alias of `중단 TTS 글자만 복사`.
+The legacy alias is allowed only as a backward-compatible label for the same
+block. It must be interpreted as `중단 TTS 글자만 복사`, not as a separate legacy
+output.
+
+Internal artifact:
+
+```text
+tts_copy_text.txt
+```
+
+Meaning:
+
+- timed `중단` 중 voice/TTS 의도 줄만 시간표 없이 모은 순수 복사용 텍스트
+- 음성파일 아님
+- SRT 아님
+- CapCut production asset 아님
+- 사용자가 직접 복사해서 TTS/나레이션 툴에 붙여넣는 원문 블록
+- visual-only `(...)` 상황설명은 기본 제외
+- verified `"..."` 화자발언은 기본 제외
+
 ## Tikitaka Current Order
 
 Current Tikitaka work is a reproducible design stage, not an abstract script
@@ -32,8 +67,9 @@ source evidence
 -> 1차설계서
 -> timeline_design.json
 -> timeline_design_gate.json
--> humanize_korean_gate
--> block_map.json / block_voice_switch_map.json
+-> humanize_korean_gate.json
+-> block_map.json / block_role_map.json / block_voice_switch_map.json
+-> tts_copy_text.txt
 -> script_handoff_gate.json
 -> report1_handoff.json
 ```
@@ -59,9 +95,9 @@ handoff gate. Humanize may change wording only: visible Korean in T1/T2/TTS,
 `"" 화자발언`, and `() 상황설명`. It must not change time ranges, track rows,
 caption roles, edit order, audio policy, verified quotes, source facts, names,
 numbers, or the separation between quote/situation/TTS roles. Record the result
-as `humanize_korean_gate.json` with `humanize_korean_gate=PASS`.
+as `humanize_korean_gate.json` with `humanize_korean_gate.json=PASS`.
 
-Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate=PASS. If Humanize
+Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json=PASS. If Humanize
 needs a structural change, return to Tikitaka design repair instead of silently
 patching the script.
 
@@ -69,6 +105,61 @@ patching the script.
 asks for a rewrite or when the 1차설계서 text fails readability/hook pressure.
 Even then it may patch wording only; it may not change
 `time_start/time_end/track/caption_type/audio_policy`.
+
+## Purpose Of 1차설계서
+
+`00-tikitaka` is not a pretty-script generator. It is the Stage 1 design owner
+for reproducible Shorts production.
+
+The purpose of `1차설계서` is to lock the production contract before CapCut work:
+what the viewer sees, when it appears, which semantic lane owns it, whether it
+is TTS narration, verified speaker quote, situation caption, source video, or
+audio policy, and what the next production skill must implement without
+reinterpretation.
+
+Human operators approve `1차설계서`.
+Production agents implement `timeline_design.json`.
+
+Downstream production must not rewrite hooks, reorder beats, change time ranges,
+change tracks, change caption_type, change audio_policy, convert speaker_quote
+to TTS, convert situation_caption to speaker_quote, or add BGM/SFX unless the
+locked handoff explicitly allows it.
+
+## timeline_design.json audio track
+
+Audio rows in `timeline_design.json` must not leave `track` empty.
+Stage 1에서는 A9/A10/A11/A12 같은 real CapCut track id를 직접 잠그지 않는다.
+Tikitaka locks semantic audio tracks only; 실제 CapCut A-track 매핑은 Stage 2의
+`000short-production-agent`가 `shrt white` 기준으로 해결한다.
+
+Required audio track shape:
+
+```json
+{
+  "track": "audio.narration_tts",
+  "semantic_lane": "narration_tts",
+  "resolved_capcut_track": null,
+  "resolved_by": "000short-production-agent"
+}
+```
+
+Allowed semantic tracks:
+
+```text
+audio.narration_tts
+audio.speaker_source
+audio.sfx
+audio.bgm
+```
+
+1차설계서 audio row labels:
+
+```text
+오디오 / 나레이션·TTS
+오디오 / 화자발언·원본화자
+오디오 / SFX
+오디오 / BGM
+```
 
 ## Gemini Raw Intake First
 
@@ -210,10 +301,13 @@ If the scope is unclear, stop at `WAIT_USER_STAGE_DECISION` and ask where to
 stop before any TTS, SRT, layout, CapCut, render, export, or upload work.
 
 If the user says `대본까지`, `대본만`, `초벌`, `티키타카`, `초안만`, `검토용`,
-or `스크립트만`, this skill produces the stage-1 package only: 상단, timed 중단,
-`TTS 만들 글자만 복사`, `block_map.json`, `block_voice_switch_map.json`, and the
-보고서1. Then stop at `WAIT_REPORT1_APPROVAL_TTS_DECISION` until the user says OK
-and chooses the TTS/audio route.
+or `스크립트만`, this skill produces the stage-1 package only: `1차설계서`,
+상단, timed 중단, `중단 TTS 글자만 복사`, `timeline_design.json`,
+`timeline_design_gate.json`, `humanize_korean_gate.json`, `block_map.json`,
+`block_role_map.json`, `block_voice_switch_map.json`,
+`script_handoff_gate.json`, and 보고서1. Then stop at
+`WAIT_REPORT1_APPROVAL_TTS_DECISION` until the user says OK and chooses the
+TTS/audio route.
 
 If the user already says `끝까지`, `자동으로 다`, `최종`, `다음단계`,
 `업로드까지`, `슈퍼톤`, `슈퍼톤으로`, `supertone`, `TTS 만들어`, `tts 만들`,
@@ -230,7 +324,7 @@ Mandatory gate map for URL + Gemini/source intake:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
-G1 STAGE 1 = create 1차설계서, timeline_design.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_voice_switch_map.json, TTS copy body, and script_handoff_gate.json
+G1 STAGE 1 = create 1차설계서, timeline_design.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, and script_handoff_gate.json
 G2 STAGE 1 STOP = output 1차설계서/보고서1 and stop until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
@@ -296,6 +390,28 @@ TTS 생성: 아니오
 업로드 준비: 아니오
 
 1차설계서:
+메타:
+episode_id:
+source_url:
+source_title:
+source_evidence_status: VERIFIED | PARTIAL | PROPOSED
+source_tags:
+upload_tags:
+remake_title_ko:
+upload_title_candidate:
+content_summary_ko:
+channel_family:
+story_type:
+production_type:
+shorts_design_type:
+caption_policy:
+audio_policy:
+template_direction:
+default_capcut_base: shrt white
+tts_route:
+source_speech_policy:
+card_asset_role:
+
 | 트랙 / 시간 | 0-3초 | 3.1-5초 | ... |
 | T1 | ... | ... | ... |
 | T2 | ... | ... | ... |
@@ -304,8 +420,10 @@ TTS 생성: 아니오
 | "" 화자발언 B | 없음 | 없음 | "..." |
 | () 상황설명 A | (...) | 없음 | 없음 |
 | 영상 | ... | ... | ... |
-| 오디오 A10 | ... | 없음 | ... |
-| 오디오 A9 | 없음 | source_audio | ... |
+| 오디오 / 나레이션·TTS | ... | 없음 | ... |
+| 오디오 / 화자발언·원본화자 | 없음 | source_audio | ... |
+| 오디오 / SFX | 없음 | optional | 없음 |
+| 오디오 / BGM | optional | optional_duck | optional |
 
 상단:
 ...
@@ -314,7 +432,7 @@ timed 중단:
 [블록 1 | 편집 00:00-00:03 | 원본 제안 ... | 상태 PROPOSED_SOURCE_TIMECODE]
 ...
 
-TTS 만들 글자만 복사:
+중단 TTS 글자만 복사:
 ...
 
 확인:
@@ -445,6 +563,9 @@ Required fields before drafting:
 
 - `story_type`: one of the S1-S7 story structures below.
 - `production_type`: one of the A-F production types below.
+- `shorts_design_type`: one of `SD1`, `SD2`, `SD3`, `SD4`, or `unknown`.
+  Use `unknown` when source ambiguity remains; do not force SD1-SD4 before the
+  design evidence supports it.
 - `audio_policy`: the high-level source/TTS/BGM choice.
 - `caption_policy`: top, timed middle, quote, situation/card, or explicit
   template exception.
@@ -485,6 +606,7 @@ Default chat output:
 쇼츠 유형
 - story_type: S5 emotion_payoff
 - production_type: narration_plus_speaker
+- shorts_design_type: unknown
 - audio_policy: tts_narration + selected_original_speech + bgm_optional
 - caption_policy: top + timed_middle + situation_caption
 - caption_layer_mix: top + timed_middle + quote/situation as needed
@@ -516,14 +638,16 @@ Default chat output:
 | "" 화자발언 B | 없음 | 텍스트 | 텍스트 |
 | () 상황설명 A | (행복한표정) | 없음 | 없음 |
 | 영상 | source_visual | source_visual | source_visual |
-| 오디오 A10 | intro_narration | 없음 | 없음 |
-| 오디오 A9 | 없음 | source_audio | source_audio |
+| 오디오 / 나레이션·TTS | intro_narration | 없음 | 없음 |
+| 오디오 / 화자발언·원본화자 | 없음 | source_audio | source_audio |
+| 오디오 / SFX | 없음 | optional | 없음 |
+| 오디오 / BGM | optional | optional_duck | optional |
 
 상태
 - script_status: DRAFT_EYE_REVIEW
 - production_status: WAIT_EXPLICIT_000SHORT_REQUEST
 - timeline_design_gate: PASS|WAIT|FAIL
-- humanize_korean_gate: PASS|WAIT|FAIL
+- humanize_korean_gate.json: PASS|WAIT|FAIL
 ```
 
 ## Urakkai Edit-Order Handoff Contract
@@ -537,7 +661,8 @@ does not create CapCut, audio files, SRT, exports, or upload packages.
 
 `SCRIPT_LOCK_PACKAGE` must contain:
 
-- `shorts type locked`: `story_type`, `production_type`, and template direction.
+- `shorts type locked`: `story_type`, `production_type`,
+  `shorts_design_type`, and template direction.
 - `source structure summary`: original title/core, source block order, and key
   source captions/dialogue.
 - `urakkai structure locked`: changed viewpoint, hook, reversal, and emotional
@@ -553,6 +678,7 @@ does not create CapCut, audio files, SRT, exports, or upload packages.
 - `source-to-urakkai delta table`: original block -> remake block changes.
 - `block role map`: each block marked as `"..."`, `(...)`, or TTS narration.
 - `block audio map`: source_audio, TTS, SFX, and BGM policy by edit block.
+- `tts_copy_text.txt`: narration-only copy text.
 - `TTS copy body`: narration-only copy text.
 - `source voice ON/OFF/duck ranges locked`: original/source voice switch ranges.
 
@@ -587,16 +713,18 @@ may start:
 - `timeline_design.json`: canonical design table for tracks, time ranges, text
   roles, video, and audio lanes.
 - `timeline_design_gate.json`: design validation result.
+- `humanize_korean_gate.json`: visible Korean cleanup result, with no protected
+  structure changes.
 - `edit_block_sequence`: the actual edit timeline order that production must
   implement.
 - `block_map.json`: canonical source-of-truth map for every edit block.
+- `block_role_map.json`: readable table for `"..."`, `(...)`, and TTS roles.
 - `block_role_map`: readable table for `"..."`, `(...)`, and TTS roles.
 - `block_voice_switch_map`: readable table for source audio, TTS, SFX, and BGM
   switching by edit block.
-- `humanize_korean_gate.json`: visible Korean cleanup result, with no protected
-  structure changes.
-- `tts_copy_text`: narration-only copy text. Text with
+- `tts_copy_text.txt`: narration-only copy text. Text with
   `included_in_tts_copy=false` must not be placed into the TTS body.
+- `tts_copy_text`: narration-only copy text.
 - `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
 
 `block_map.json` must keep both source and edit identities:
@@ -761,6 +889,7 @@ When production is likely to continue, also provide a copyable JSON handoff:
   "story_type": "emotion_payoff",
   "story_type_code": "S5",
   "production_type": "narration_plus_speaker",
+  "shorts_design_type": "SD3",
   "audio_policy": "tts_narration + selected_original_speech + bgm_optional",
   "caption_policy": "top + timed_middle + situation_caption",
   "caption_layer_mix": ["top", "timed_middle", "quote", "situation_caption"],
@@ -793,7 +922,9 @@ Hard fails:
   recorded
 - production handoff is requested, but no machine-readable
   `tikitaka_segment_audio_plan` is provided
-- the first draft omits `story_type` or `production_type`
+- the first draft omits `story_type`, `production_type`, or
+  `shorts_design_type` or sets it to a value outside
+  `SD1|SD2|SD3|SD4|unknown`
 - `instagram_card_tts` card/comment/community text is marked as
   `speaker_quote` or `tts_narration`
 - `yellow_lower_caption` is used without an explicit locked template
@@ -859,6 +990,54 @@ source quote, and not the TTS narration body itself.
   TTS/BGM. Card text uses `caption_type=situation_caption` and
   `card_asset_role=visual_situation_card`, never `speaker_quote`.
 
+## Shorts Design Type Matrix (SD1-SD4)
+
+`shorts_design_type` is the practical Shorts 설계유형. It does not replace
+`story_type` or `production_type`; it locks how TTS, BGM, verified quotes, and
+situation captions are mixed in the 1차설계서 and `timeline_design.json`.
+
+Allowed values:
+
+```text
+SD1
+SD2
+SD3
+SD4
+unknown
+```
+
+```text
+코드 | 설계 의미
+SD1  | TTS나레이션초반 only 이후 BGM/자막형
+SD2  | TTS 설명 / BGM형
+SD3  | TTS 설명 / "" 화자발언 / () 상황설명형
+SD4  | "" 화자발언 / () 상황설명 / TTS 혼합형
+unknown | source/design ambiguity remains
+```
+
+### SD1 Intro TTS Then BGM Caption
+
+Use when TTS should hook only the first 2-5 seconds, then the video continues
+with BGM, visual captions, or light situation captions. Source audio is off by
+default except for explicitly verified reaction or quote beats.
+
+### SD2 TTS Explain BGM
+
+Use when TTS explanation carries the whole short and BGM is the support bed.
+Most source audio stays off, and verified `"..."` 화자발언 is absent or rare.
+
+### SD3 TTS Explain Quote Situation
+
+Use when TTS explains the arc, selected verified source speech appears as
+`"..."` 화자발언, and visual/emotional context appears as `()` 상황설명. This is
+the default mixed remake design for many Tikitaka Shorts.
+
+### SD4 Quote Situation TTS Mix
+
+Use when verified `"..."` 화자발언, `()` 상황설명, and TTS are all active across
+the timeline. Every segment must lock source_audio on/off/duck, tts on/off, and
+BGM/SFX policy before handoff.
+
 ## Dual Writer Mode (우라까이/와우포인트/유형 확정)
 
 When confirming wow point, urakai structure, story type, and production type,
@@ -889,6 +1068,8 @@ use two real CLI-based writer agents to debate before locking.
 Both writers must output:
 - recommended `story_type` (S1-S7) with reasoning
 - recommended `production_type` (A-F canonical code) with reasoning
+- recommended `shorts_design_type` (`SD1`, `SD2`, `SD3`, `SD4`, or `unknown`)
+  with reasoning
 - wow point confirmation or correction
 - urakai structure recommendation
 - one concrete disagreement point
@@ -902,8 +1083,8 @@ preserves the strongest source-backed viewer question wins.
 
 1. State the frame: what situation the remake is using and why.
 2. **Run Story And Production Type Gate**: choose `story_type`,
-   `production_type`, audio policy, caption policy, source speech policy, and
-   card asset role before the first draft.
+   `production_type`, `shorts_design_type`, audio policy, caption policy,
+   source speech policy, and card asset role before the first draft.
 3. Map source notes into functional beats.
 4. Write hook candidates if requested or useful.
 5. **Run dual writer mode** to confirm wow point, urakai, story type, and
@@ -914,8 +1095,9 @@ preserves the strongest source-backed viewer question wins.
    `timeline_design_gate.json`.
 8. Run Humanize Korean on visible text only and record
    `humanize_korean_gate.json` before handoff.
-9. Produce `상단 + timed 중단`, `block_map.json`,
-   `block_voice_switch_map.json`, and the copy-only TTS text block.
+9. Produce `상단 + timed 중단`, `block_map.json`, `block_role_map.json`,
+   `block_voice_switch_map.json`, and `tts_copy_text.txt` from
+   `중단 TTS 글자만 복사`.
 10. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
     user explicitly asks for the next owner.
 

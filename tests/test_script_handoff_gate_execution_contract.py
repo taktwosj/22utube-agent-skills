@@ -272,6 +272,72 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIn("humanize_korean_gate", gate["missing_or_failed"])
             self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
 
+    def test_tikitaka_harness_accepts_semantic_audio_tracks_in_timeline_design(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_semantic_audio", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "timeline_design.json",
+                """
+                {
+                  "segments": [
+                    {
+                      "edit_id": "E1",
+                      "time_start": "00:00",
+                      "time_end": "00:03",
+                      "track": "audio.narration_tts",
+                      "semantic_lane": "narration_tts",
+                      "resolved_capcut_track": null,
+                      "resolved_by": "000short-production-agent",
+                      "caption_type": "tts_narration",
+                      "audio_policy": "tts_on_source_off"
+                    }
+                  ]
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
+
+    def test_tikitaka_harness_rejects_capcut_audio_track_ids_in_timeline_design(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_capcut_audio_track", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "timeline_design.json",
+                """
+                {
+                  "segments": [
+                    {
+                      "edit_id": "E1",
+                      "time_start": "00:00",
+                      "time_end": "00:03",
+                      "track": "A9",
+                      "caption_type": "tts_narration",
+                      "audio_policy": "tts_on_source_off"
+                    }
+                  ]
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("timeline_design", gate["missing_or_failed"])
+            self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
+
     def test_tikitaka_harness_detects_stage1_request_text_and_writes_todo_report(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_stage1_text", TIKITAKA_HARNESS)
 
@@ -300,7 +366,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIn("TTS 생성: 아니오", report)
             self.assertIn("WAIT_USER_STAGE_DECISION", report)
             self.assertIn("reason: stage 1 script-only request; stop after 보고서1", report)
-            self.assertIn("TTS 만들 글자만 복사", report)
+            self.assertIn("중단 TTS 글자만 복사", report)
             self.assertIn("상단: 테스트 훅", report)
             self.assertIn("timed 중단:", report)
             self.assertIn("테스트 나레이션", report)
@@ -331,7 +397,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIn("CapCut 생성: 아니오", report)
             self.assertIn("TTS 생성: 아니오", report)
             self.assertIn("WAIT_REPORT1_APPROVAL_TTS_DECISION", report)
-            self.assertIn("TTS 만들 글자만 복사", report)
+            self.assertIn("중단 TTS 글자만 복사", report)
             self.assertIn("상단: 테스트 훅", report)
             self.assertIn("테스트 나레이션", report)
             self.assertIn("다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT", report)
