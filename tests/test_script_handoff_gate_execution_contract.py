@@ -61,11 +61,27 @@ def create_script_lock_package_artifacts(work_dir: Path) -> None:
           "segments": [
             {
               "edit_id": "E1",
+              "source_ref": "S1",
+              "source_order": 1,
+              "timeline_order": 1,
+              "assembly_role": "intro_narration",
               "time_start": "00:00",
               "time_end": "00:03",
-              "track": "TTS",
+              "track": "audio.narration_tts",
+              "semantic_lane": "narration_tts",
+              "resolved_capcut_track": null,
+              "resolved_by": "000short-production-agent",
               "caption_type": "tts_narration",
-              "audio_policy": "tts_on_source_off"
+              "visible_text_role": "tts_caption",
+              "audio_role": "audio.narration_tts",
+              "duration_basis": "estimated_tts_duration",
+              "duration_status": "ESTIMATED_ACCEPTED",
+              "tts_text_ref": "tts_001",
+              "planned_tts_duration_sec": 3.0,
+              "estimated_tts_duration_sec": 3.0,
+              "tts_duration_status": "ESTIMATED_ACCEPTED",
+              "visual_strategy": "hold_source_visual",
+              "audio_policy": {"source_audio": "off", "tts": "on", "bgm": "optional"}
             }
           ]
         }
@@ -118,6 +134,41 @@ def create_script_lock_package_artifacts(work_dir: Path) -> None:
         """,
     )
     write(work_dir / "tts_copy_text.txt", "테스트 나레이션")
+    write_json(
+        work_dir / "tts_duration_probe.json",
+        """
+        {
+          "status": "PASS",
+          "source": "estimated_text",
+          "tts_items": [
+            {
+              "edit_id": "E1",
+              "tts_text_ref": "tts_001",
+              "text": "?뚯뒪???섎젅?댁뀡",
+              "planned_duration_sec": 3.0,
+              "actual_duration_sec": null,
+              "estimated_duration_sec": 3.0,
+              "delta_sec": 0.0,
+              "within_tolerance": true,
+              "reconciliation_action": null
+            }
+          ]
+        }
+        """,
+    )
+    write_json(
+        work_dir / "tts_timing_reconciliation_gate.json",
+        """
+        {
+          "status": "PASS",
+          "gate_name": "TTS_TIMING_RECONCILIATION_GATE",
+          "duration_basis": "estimated_text",
+          "tts_duration_status": "ESTIMATED_ACCEPTED",
+          "timeline_design_updated": false,
+          "protected_fields_changed": false
+        }
+        """,
+    )
     write_humanize_gate_pass(work_dir)
 
 
@@ -286,6 +337,10 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                   "segments": [
                     {
                       "edit_id": "E1",
+                      "source_ref": "S1",
+                      "source_order": 1,
+                      "timeline_order": 1,
+                      "assembly_role": "intro_narration",
                       "time_start": "00:00",
                       "time_end": "00:03",
                       "track": "audio.narration_tts",
@@ -293,7 +348,16 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                       "resolved_capcut_track": null,
                       "resolved_by": "000short-production-agent",
                       "caption_type": "tts_narration",
-                      "audio_policy": "tts_on_source_off"
+                      "visible_text_role": "tts_caption",
+                      "audio_role": "audio.narration_tts",
+                      "duration_basis": "estimated_tts_duration",
+                      "duration_status": "ESTIMATED_ACCEPTED",
+                      "tts_text_ref": "tts_001",
+                      "planned_tts_duration_sec": 3.0,
+                      "estimated_tts_duration_sec": 3.0,
+                      "tts_duration_status": "ESTIMATED_ACCEPTED",
+                      "visual_strategy": "hold_source_visual",
+                      "audio_policy": {"source_audio": "off", "tts": "on", "bgm": "optional"}
                     }
                   ]
                 }
@@ -337,6 +401,229 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(gate["status"], "FAIL")
             self.assertIn("timeline_design", gate["missing_or_failed"])
             self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
+
+    def test_tikitaka_harness_rejects_timeline_design_without_assembly_role(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_missing_assembly_role", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "timeline_design.json",
+                """
+                {
+                  "segments": [
+                    {
+                      "edit_id": "E1",
+                      "source_ref": "S1",
+                      "source_order": 1,
+                      "timeline_order": 1,
+                      "time_start": "00:00",
+                      "time_end": "00:03",
+                      "track": "audio.speaker_source",
+                      "semantic_lane": "speaker_source",
+                      "resolved_capcut_track": null,
+                      "resolved_by": "000short-production-agent",
+                      "caption_type": "speaker_quote",
+                      "visible_text_role": "speaker_quote",
+                      "audio_role": "audio.speaker_source",
+                      "duration_basis": "source_range",
+                      "duration_status": "SOURCE_AUDIO_LOCKED",
+                      "source_audio_range": "00:01-00:03",
+                      "quote_verification_status": "VERIFIED_SOURCE_SPEECH",
+                      "visual_strategy": "source_visual_action",
+                      "audio_policy": {"source_audio": "on", "tts": "off", "bgm": "optional_duck"}
+                    }
+                  ]
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("timeline_design", gate["missing_or_failed"])
+            self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
+
+    def test_tikitaka_harness_requires_tts_timing_gate_only_for_narration_audio(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_narration_timing_required", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            (work_dir / "tts_duration_probe.json").unlink()
+            (work_dir / "tts_timing_reconciliation_gate.json").unlink()
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("tts_timing_reconciliation_gate", gate["missing_or_failed"])
+            self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
+
+    def test_tikitaka_harness_allows_tts_caption_without_narration_timing_gate(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_tts_caption_only", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "timeline_design.json",
+                """
+                {
+                  "segments": [
+                    {
+                      "edit_id": "E1",
+                      "source_ref": "S1",
+                      "source_order": 1,
+                      "timeline_order": 1,
+                      "assembly_role": "reaction_caption",
+                      "time_start": "00:00",
+                      "time_end": "00:03",
+                      "track": "TTS",
+                      "caption_type": "tts_caption",
+                      "visible_text_role": "tts_caption",
+                      "audio_role": "none",
+                      "duration_basis": "fixed_design_duration",
+                      "duration_status": "FIXED_DESIGN_LOCKED",
+                      "visual_strategy": "source_visual_hold",
+                      "audio_policy": {"source_audio": "off", "tts": "off", "bgm": "optional"}
+                    }
+                  ]
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
+
+    def test_tikitaka_harness_relocks_when_actual_tts_duration_exceeds_without_action(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_tts_duration_relock", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "tts_duration_probe.json",
+                """
+                {
+                  "status": "PASS",
+                  "source": "generated_tts",
+                  "tts_items": [
+                    {
+                      "edit_id": "E1",
+                      "tts_text_ref": "tts_001",
+                      "text": "?뚯뒪???섎젅?댁뀡",
+                      "planned_duration_sec": 3.0,
+                      "actual_duration_sec": 4.0,
+                      "estimated_duration_sec": null,
+                      "delta_sec": 1.0,
+                      "within_tolerance": false,
+                      "reconciliation_action": null
+                    }
+                  ]
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("tts_duration_probe", gate["missing_or_failed"])
+            self.assertEqual(state["script_lock"]["status"], "NOT_LOCKED")
+
+    def test_tikitaka_harness_allows_actual_tts_duration_with_locked_reconciliation_action(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_tts_duration_reconciled", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "timeline_design.json",
+                """
+                {
+                  "segments": [
+                    {
+                      "edit_id": "E1",
+                      "source_ref": "S1",
+                      "source_order": 1,
+                      "timeline_order": 1,
+                      "assembly_role": "intro_narration",
+                      "time_start": "00:00",
+                      "time_end": "00:04",
+                      "track": "audio.narration_tts",
+                      "semantic_lane": "narration_tts",
+                      "resolved_capcut_track": null,
+                      "resolved_by": "000short-production-agent",
+                      "caption_type": "tts_narration",
+                      "visible_text_role": "tts_caption",
+                      "audio_role": "audio.narration_tts",
+                      "duration_basis": "actual_tts_duration",
+                      "duration_status": "ACTUAL_AUDIO_LOCKED",
+                      "tts_text_ref": "tts_001",
+                      "planned_tts_duration_sec": 3.0,
+                      "actual_tts_duration_sec": 4.0,
+                      "tts_duration_status": "ACTUAL_AUDIO_LOCKED",
+                      "visual_strategy": "hold_source_visual",
+                      "audio_policy": {"source_audio": "off", "tts": "on", "bgm": "optional"}
+                    }
+                  ]
+                }
+                """,
+            )
+            write_json(
+                work_dir / "tts_duration_probe.json",
+                """
+                {
+                  "status": "PASS",
+                  "source": "generated_tts",
+                  "tts_items": [
+                    {
+                      "edit_id": "E1",
+                      "tts_text_ref": "tts_001",
+                      "text": "?뚯뒪???섎젅?댁뀡",
+                      "planned_duration_sec": 3.0,
+                      "actual_duration_sec": 4.0,
+                      "estimated_duration_sec": null,
+                      "delta_sec": 1.0,
+                      "within_tolerance": false,
+                      "reconciliation_action": "extend_visual"
+                    }
+                  ]
+                }
+                """,
+            )
+            write_json(
+                work_dir / "tts_timing_reconciliation_gate.json",
+                """
+                {
+                  "status": "PASS",
+                  "gate_name": "TTS_TIMING_RECONCILIATION_GATE",
+                  "duration_basis": "actual_audio",
+                  "tts_duration_status": "ACTUAL_AUDIO_LOCKED",
+                  "timeline_design_updated": true,
+                  "protected_fields_changed": true,
+                  "allowed_reconciliation_action": "extend_visual"
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
 
     def test_tikitaka_harness_detects_stage1_request_text_and_writes_todo_report(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_stage1_text", TIKITAKA_HARNESS)

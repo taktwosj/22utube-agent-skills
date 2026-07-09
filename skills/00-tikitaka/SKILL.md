@@ -70,6 +70,8 @@ source evidence
 -> humanize_korean_gate.json
 -> block_map.json / block_role_map.json / block_voice_switch_map.json
 -> tts_copy_text.txt
+-> tts_duration_probe.json
+-> tts_timing_reconciliation_gate.json
 -> script_handoff_gate.json
 -> report1_handoff.json
 ```
@@ -84,7 +86,9 @@ compress them into one abstract paragraph.
 segment must preserve protected fields:
 
 ```text
-time_start/time_end/track/caption_type/audio_policy
+edit_id/source_ref/source_order/timeline_order/assembly_role/
+caption_type/visible_text_role/audio_role/time_start/time_end/track/
+duration_basis/duration_status/audio_policy/visual_strategy
 ```
 
 `timeline_design_gate.json` must be PASS before the design can be treated as a
@@ -124,6 +128,246 @@ Downstream production must not rewrite hooks, reorder beats, change time ranges,
 change tracks, change caption_type, change audio_policy, convert speaker_quote
 to TTS, convert situation_caption to speaker_quote, or add BGM/SFX unless the
 locked handoff explicitly allows it.
+
+## Assembly Role Sequence Contract
+
+`00-tikitaka` does not only reorder source blocks.
+
+The purpose of Tikitaka design is to create a new editable Shorts assembly plan:
+the sequence of narration audio, visible captions, verified speaker quotes,
+situation captions, source video, source audio, TTS audio, SFX, and BGM policy.
+
+`source_order` records where the material came from.
+`timeline_order` records where it appears in the remake.
+`assembly_role` records what function the segment performs in the new Shorts
+design.
+
+A valid Tikitaka design may transform:
+
+```text
+source 1-2-3-4-5
+```
+
+into a new role sequence such as:
+
+```text
+TTS narration -> situation caption -> speaker quote -> TTS narration -> payoff quote
+```
+
+or:
+
+```text
+narration -> caption -> caption -> speaker quote -> situation caption
+```
+
+This is not a script rewrite after handoff. This is the Stage 1 design itself.
+
+Production must implement this assembly role sequence without reinterpretation.
+
+## Assembly Role Enum
+
+Allowed `assembly_role` values:
+
+```text
+intro_narration
+context_narration
+payoff_narration
+ending_narration
+verified_speaker_quote
+situation_caption
+reaction_caption
+card_or_comment_caption
+source_visual_hold
+source_visual_action
+transition_or_separator
+ranking_item
+```
+
+Meaning:
+
+```text
+caption_type = 자막/오디오의 종류
+assembly_role = 쇼츠 안에서 이 beat가 수행하는 기능
+source_order = 원본에서 몇 번째 재료인가
+timeline_order = 리메이크에서 몇 번째로 보여주는가
+```
+
+Examples:
+
+```json
+{
+  "caption_type": "tts_narration",
+  "assembly_role": "intro_narration"
+}
+```
+
+```json
+{
+  "caption_type": "situation_caption",
+  "assembly_role": "reaction_caption"
+}
+```
+
+## TTS Caption vs Narration Audio
+
+`TTS` alone can mean visible text only. It does not automatically mean an audio
+file exists or must be generated.
+
+Narration audio is locked only when the design explicitly uses a narration
+signal such as:
+
+```text
+caption_type=tts_narration
+audio_role=audio.narration_tts
+오디오 / 나레이션·TTS
+```
+
+If the segment is only a visible TTS-style caption, use:
+
+```text
+caption_type=tts_caption
+audio_role=none
+```
+
+`tts_duration_probe.json` and `tts_timing_reconciliation_gate.json` are required
+only for narration-audio segments, not for TTS caption-only text.
+
+## Duration Basis Enum
+
+Allowed `duration_basis` values:
+
+```text
+source_range
+estimated_tts_duration
+actual_tts_duration
+fixed_design_duration
+visual_hold
+```
+
+Allowed `duration_status` values:
+
+```text
+SOURCE_AUDIO_LOCKED
+ESTIMATED_ACCEPTED
+ACTUAL_AUDIO_LOCKED
+FIXED_DESIGN_LOCKED
+WAIT_ACTUAL_TTS_AUDIO
+```
+
+## TTS Timing Reconciliation Gate
+
+If any `caption_type=tts_narration` or `audio_role=audio.narration_tts` segment
+exists, Tikitaka must distinguish estimated timing from actual-audio timing.
+
+Before final `SCRIPT_HANDOFF_GATE`, one of these must be true:
+
+1. `tts_duration_status=ESTIMATED_ACCEPTED`
+   - no actual TTS audio file is available yet
+   - timeline uses estimated narration duration
+   - Stage 2 must stop with `WAIT_TTS_TIMING_RELOCK` if generated/provided audio exceeds tolerance
+
+2. `tts_duration_status=ACTUAL_AUDIO_LOCKED`
+   - actual TTS/audio duration was measured
+   - `timeline_design.json` was reconciled to the measured duration
+   - `tts_timing_reconciliation_gate.json` is PASS
+
+Actual TTS duration must not be solved by cutting narration.
+
+If actual narration is longer than the planned visual beat, return to Tikitaka
+design repair unless the locked design explicitly allows one of:
+
+```text
+extend_visual
+shift_later_beats
+hold_frame
+freeze_frame
+repeat_visual
+shorten_text_and_regenerate_tts
+```
+
+`tts_duration_probe.json` shape:
+
+```json
+{
+  "status": "PASS",
+  "source": "user_tts_audio|generated_tts|estimated_text",
+  "tts_items": [
+    {
+      "edit_id": "E1",
+      "tts_text_ref": "tts_001",
+      "text": "이 사람이 성공한 이유는 3가지라고 합니다.",
+      "planned_duration_sec": 3.0,
+      "actual_duration_sec": 4.0,
+      "estimated_duration_sec": null,
+      "delta_sec": 1.0,
+      "within_tolerance": false,
+      "reconciliation_action": "extend_visual"
+    }
+  ]
+}
+```
+
+`tts_timing_reconciliation_gate.json` shape:
+
+```json
+{
+  "status": "PASS",
+  "gate_name": "TTS_TIMING_RECONCILIATION_GATE",
+  "duration_basis": "actual_audio|estimated_text",
+  "tts_duration_status": "ACTUAL_AUDIO_LOCKED|ESTIMATED_ACCEPTED",
+  "timeline_design_updated": true,
+  "protected_fields_changed": true,
+  "change_reason": "actual TTS duration exceeded planned slot",
+  "allowed_reconciliation_action": "extend_visual",
+  "requires_new_timeline_design_gate": true,
+  "requires_new_humanize_korean_gate": true,
+  "requires_new_script_handoff_gate": true
+}
+```
+
+`protected_fields_changed=true` is allowed only inside design repair before
+`SCRIPT_HANDOFF_GATE`. After `SCRIPT_HANDOFF_GATE`, protected field changes are
+forbidden.
+
+## User Design Revision Loop
+
+If the user changes the assembly order, narration order, role sequence,
+duration, or audio policy after seeing `1차설계서`, this is not Humanize.
+
+It is Tikitaka design repair.
+
+Examples:
+
+```text
+34215 구조를 32145로 변경
+나레이션을 먼저 넣기
+화자발언을 뒤로 밀기
+TTS 3초 구간을 실제 음성 4초에 맞추기
+상황설명 beat를 추가하기
+speaker_quote를 TTS narration으로 바꾸기
+나레이션 -> 자막 -> 자막 -> 화자발언 순서로 변경하기
+```
+
+When design repair occurs, invalidate and regenerate:
+
+```text
+1차설계서
+timeline_design.json
+timeline_design_gate.json
+humanize_korean_gate.json
+block_map.json
+block_role_map.json
+block_voice_switch_map.json
+tts_copy_text.txt
+tts_duration_probe.json
+tts_timing_reconciliation_gate.json
+script_handoff_gate.json
+report1_handoff.json
+```
+
+Humanize may only change Korean wording. Humanize must not change
+`assembly_role`, `source_order`, `timeline_order`, time ranges, `caption_type`,
+`audio_policy`, `duration_basis`, or semantic audio lanes.
 
 ## timeline_design.json audio track
 
@@ -411,6 +655,13 @@ default_capcut_base: shrt white
 tts_route:
 source_speech_policy:
 card_asset_role:
+
+조립 역할 순서:
+E1 intro_narration        | source=S4 | timeline=1 | 나레이션·TTS | source_audio=off | duration=4.0s | duration_basis=actual_tts_duration
+E2 verified_speaker_quote | source=S3 | timeline=2 | "화자발언" | source_audio=on | duration=2.0s | duration_basis=source_range
+E3 reaction_caption       | source=S2 | timeline=3 | (상황설명) | source_audio=off | duration=2.0s | duration_basis=fixed_design_duration
+E4 payoff_narration       | source=S1 | timeline=4 | 나레이션·TTS | source_audio=off | duration=3.0s | duration_basis=estimated_tts_duration
+E5 verified_speaker_quote | source=S5 | timeline=5 | "화자발언" | source_audio=on | duration=2.5s | duration_basis=source_range
 
 | 트랙 / 시간 | 0-3초 | 3.1-5초 | ... |
 | T1 | ... | ... | ... |
@@ -723,6 +974,9 @@ may start:
   BGM switching by edit block.
 - `tts_copy_text.txt`: narration-only copy text. Text with
   `included_in_tts_copy=false` must not be placed into the TTS body.
+- `tts_duration_probe.json`: required only when narration audio is planned.
+- `tts_timing_reconciliation_gate.json`: required only when narration audio is
+  planned.
 - `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
 
 Legacy aliases without extensions are accepted only for old packages.
@@ -734,6 +988,9 @@ edit_id
 source_block_id
 original_order
 urakkai_order
+source_order
+timeline_order
+assembly_role
 source_time
 edit_time
 mid_caption
@@ -785,6 +1042,13 @@ Hard fails:
   `humanize_korean_gate.json`, `edit_block_sequence`, `block_map.json`,
   `block_role_map.json`, `block_voice_switch_map.json`, `tts_copy_text.txt`, or
   `script_handoff_gate.json` is missing when production handoff is requested.
+- `timeline_design.json` segment is missing `source_order`, `timeline_order`,
+  `assembly_role`, `visible_text_role`, `audio_role`, `duration_basis`,
+  `duration_status`, or `visual_strategy`.
+- narration-audio segment exists but `tts_duration_probe.json` or
+  `tts_timing_reconciliation_gate.json` is missing.
+- actual narration duration exceeds the planned visual slot without an allowed
+  reconciliation action; use `WAIT_TTS_TIMING_RELOCK`.
 - `speaker_quote` has no verified or explicitly proposed source range.
 - `tts_narration` keeps `source_audio=on`.
 - `situation_caption` has `tts=on` without an `exception_reason`.
@@ -808,6 +1072,7 @@ Allowed values:
 caption_type:
 - speaker_quote        = original/source speaker line, shown with "..."
 - tts_narration        = generated voice narration
+- tts_caption          = TTS-style visible caption only; no voice file implied
 - situation_caption    = visual/situation explanation, shown with (...)
 - tts_plus_source      = TTS while source audio remains intentionally audible
 - ranking_item         = ranking/TOP-N beat
@@ -834,6 +1099,7 @@ Default mapping:
 ```text
 "화자발언" / speaker_quote      -> source_audio=on,   tts=off, bgm=optional_duck
 TTS 나레이션 / tts_narration    -> source_audio=off,  tts=on,  bgm=optional
+TTS 자막만 / tts_caption        -> source_audio=off,  tts=off, bgm=optional
 (상황설명) / situation_caption  -> source_audio=off,  tts=off, bgm=optional
 TTS+원본현장음 / tts_plus_source -> source_audio=duck, tts=on,  bgm=optional_duck
 랭킹형 / ranking_item           -> source_audio=off by default; use on only for verified quote/reaction beats

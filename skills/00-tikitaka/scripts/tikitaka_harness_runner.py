@@ -25,6 +25,47 @@ ALLOWED_STAGE1_AUDIO_TRACKS = {
     "audio.bgm": "bgm",
 }
 FORBIDDEN_STAGE1_CAPCUT_AUDIO_TRACKS = {"A9", "A10", "A11", "A12"}
+ALLOWED_ASSEMBLY_ROLES = {
+    "intro_narration",
+    "context_narration",
+    "payoff_narration",
+    "ending_narration",
+    "verified_speaker_quote",
+    "situation_caption",
+    "reaction_caption",
+    "card_or_comment_caption",
+    "source_visual_hold",
+    "source_visual_action",
+    "transition_or_separator",
+    "ranking_item",
+}
+ALLOWED_DURATION_BASIS = {
+    "source_range",
+    "estimated_tts_duration",
+    "actual_tts_duration",
+    "fixed_design_duration",
+    "visual_hold",
+}
+ALLOWED_DURATION_STATUS = {
+    "SOURCE_AUDIO_LOCKED",
+    "ESTIMATED_ACCEPTED",
+    "ACTUAL_AUDIO_LOCKED",
+    "FIXED_DESIGN_LOCKED",
+    "WAIT_ACTUAL_TTS_AUDIO",
+}
+NARRATION_AUDIO_TTS_STATUSES = {
+    "ESTIMATED_ACCEPTED",
+    "ACTUAL_AUDIO_LOCKED",
+    "WAIT_ACTUAL_TTS_AUDIO",
+}
+ALLOWED_RECONCILIATION_ACTIONS = {
+    "extend_visual",
+    "shift_later_beats",
+    "hold_frame",
+    "freeze_frame",
+    "repeat_visual",
+    "shorten_text_and_regenerate_tts",
+}
 SCRIPT_LOCK_PACKAGE_FILES = {
     "original_structure_summary": "original_structure_summary.md",
     "urakkai_structure_plan": "urakkai_structure_plan.md",
@@ -36,6 +77,8 @@ SCRIPT_LOCK_PACKAGE_FILES = {
     "block_role_map": "block_role_map.json",
     "block_voice_switch_map": "block_voice_switch_map.json",
     "tts_copy_text": "tts_copy_text.txt",
+    "tts_duration_probe": "tts_duration_probe.json",
+    "tts_timing_reconciliation_gate": "tts_timing_reconciliation_gate.json",
 }
 SCRIPT_BODY_CANDIDATES = (
     "final_script_ko.md",
@@ -696,6 +739,27 @@ def humanize_korean_gate_status(work_dir: Path) -> dict[str, Any]:
     return status_block("PASS", name)
 
 
+def segment_uses_narration_audio(segment: dict[str, Any]) -> bool:
+    return (
+        segment.get("caption_type") == "tts_narration"
+        or segment.get("audio_role") == "audio.narration_tts"
+    )
+
+
+def timeline_design_segments(work_dir: Path) -> list[dict[str, Any]]:
+    data = read_json(work_dir / SCRIPT_LOCK_PACKAGE_FILES["timeline_design"])
+    if not data or data.get("_parse_error") or data.get("_non_object"):
+        return []
+    segments = data.get("segments") or data.get("timeline_segments")
+    if not isinstance(segments, list):
+        return []
+    return [segment for segment in segments if isinstance(segment, dict)]
+
+
+def timeline_design_has_narration_audio(work_dir: Path) -> bool:
+    return any(segment_uses_narration_audio(segment) for segment in timeline_design_segments(work_dir))
+
+
 def timeline_design_status(work_dir: Path) -> dict[str, Any]:
     name = SCRIPT_LOCK_PACKAGE_FILES["timeline_design"]
     data = read_json(work_dir / name)
@@ -709,7 +773,25 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
     segments = data.get("segments") or data.get("timeline_segments")
     if not isinstance(segments, list) or not segments:
         return status_block("FAILED", name, "timeline_design.segments missing")
-    required = {"edit_id", "time_start", "time_end", "track", "caption_type", "audio_policy"}
+    required = {
+        "edit_id",
+        "source_ref",
+        "source_order",
+        "timeline_order",
+        "assembly_role",
+        "visible_text_role",
+        "audio_role",
+        "time_start",
+        "time_end",
+        "track",
+        "caption_type",
+        "audio_policy",
+        "duration_basis",
+        "duration_status",
+        "visual_strategy",
+    }
+    seen_edit_ids: set[str] = set()
+    seen_timeline_orders: dict[Any, int] = {}
     for index, segment in enumerate(segments):
         if not isinstance(segment, dict):
             return status_block("FAILED", name, f"timeline_design.segments[{index}] must be object")
@@ -719,6 +801,36 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
                 "FAILED",
                 name,
                 f"timeline_design.segments[{index}] missing {', '.join(missing)}",
+            )
+        edit_id = str(segment.get("edit_id") or "")
+        if edit_id in seen_edit_ids:
+            return status_block("FAILED", name, f"timeline_design.segments[{index}] duplicate edit_id")
+        seen_edit_ids.add(edit_id)
+        timeline_order = segment.get("timeline_order")
+        if timeline_order in seen_timeline_orders and not segment.get("parallel_group_id"):
+            return status_block(
+                "FAILED",
+                name,
+                "timeline_design duplicate timeline_order without parallel_group_id",
+            )
+        seen_timeline_orders[timeline_order] = index
+        if segment.get("assembly_role") not in ALLOWED_ASSEMBLY_ROLES:
+            return status_block(
+                "FAILED",
+                name,
+                f"timeline_design.segments[{index}] unsupported assembly_role",
+            )
+        if segment.get("duration_basis") not in ALLOWED_DURATION_BASIS:
+            return status_block(
+                "FAILED",
+                name,
+                f"timeline_design.segments[{index}] unsupported duration_basis",
+            )
+        if segment.get("duration_status") not in ALLOWED_DURATION_STATUS:
+            return status_block(
+                "FAILED",
+                name,
+                f"timeline_design.segments[{index}] unsupported duration_status",
             )
         track = str(segment.get("track") or "")
         if track in FORBIDDEN_STAGE1_CAPCUT_AUDIO_TRACKS:
@@ -752,6 +864,42 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
                     "FAILED",
                     name,
                     f"timeline_design.segments[{index}] resolved_by must be 000short-production-agent",
+                )
+        if segment_uses_narration_audio(segment):
+            tts_required = {"tts_text_ref", "planned_tts_duration_sec", "tts_duration_status"}
+            tts_missing = sorted(key for key in tts_required if segment.get(key) in (None, ""))
+            if tts_missing:
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] missing {', '.join(tts_missing)}",
+                )
+            if segment.get("tts_duration_status") not in NARRATION_AUDIO_TTS_STATUSES:
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] unsupported tts_duration_status",
+                )
+            if segment.get("tts_duration_status") == "ACTUAL_AUDIO_LOCKED" and segment.get("actual_tts_duration_sec") in (None, ""):
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] actual_tts_duration_sec required",
+                )
+            if segment.get("tts_duration_status") == "ESTIMATED_ACCEPTED" and segment.get("estimated_tts_duration_sec") in (None, ""):
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] estimated_tts_duration_sec required",
+                )
+        if segment.get("caption_type") == "speaker_quote":
+            quote_required = {"source_audio_range", "quote_verification_status"}
+            quote_missing = sorted(key for key in quote_required if segment.get(key) in (None, ""))
+            if quote_missing:
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"timeline_design.segments[{index}] missing {', '.join(quote_missing)}",
                 )
     return status_block("PASS", name)
 
@@ -841,6 +989,71 @@ def block_voice_switch_map_status(work_dir: Path) -> dict[str, Any]:
     return status_block("PASS", name)
 
 
+def tts_duration_probe_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["tts_duration_probe"]
+    if not timeline_design_has_narration_audio(work_dir):
+        return status_block("PASS", name, "not required")
+
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, "tts_duration_probe missing")
+    if data.get("_parse_error"):
+        return status_block("FAILED", name, "tts_duration_probe parse failed")
+    if data.get("_non_object"):
+        return status_block("FAILED", name, "tts_duration_probe json root must be an object")
+
+    status = str(data.get("status") or "").strip()
+    if status not in {"PASS", "ESTIMATED_ACCEPTED"}:
+        return status_block("FAILED", name, f"WAIT_TTS_TIMING_RELOCK: tts_duration_probe status {status}")
+
+    items = data.get("tts_items") or []
+    if not isinstance(items, list):
+        return status_block("FAILED", name, "tts_duration_probe.tts_items must be a list")
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            return status_block("FAILED", name, f"tts_duration_probe.tts_items[{index}] must be object")
+        planned = item.get("planned_duration_sec")
+        actual = item.get("actual_duration_sec")
+        if planned not in (None, "") and actual not in (None, ""):
+            try:
+                planned_value = float(planned)
+                actual_value = float(actual)
+            except (TypeError, ValueError):
+                return status_block("FAILED", name, f"tts_duration_probe.tts_items[{index}] duration must be numeric")
+            over_tolerance = actual_value > planned_value and item.get("within_tolerance") is False
+            if over_tolerance and item.get("reconciliation_action") not in ALLOWED_RECONCILIATION_ACTIONS:
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_TTS_TIMING_RELOCK: actual TTS duration exceeds planned slot without allowed reconciliation action",
+                )
+    return status_block("PASS", name)
+
+
+def tts_timing_reconciliation_gate_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["tts_timing_reconciliation_gate"]
+    if not timeline_design_has_narration_audio(work_dir):
+        return status_block("PASS", name, "not required")
+
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, "WAIT_TTS_TIMING_RELOCK: tts_timing_reconciliation_gate missing")
+    if data.get("_parse_error"):
+        return status_block("FAILED", name, "tts_timing_reconciliation_gate parse failed")
+    if data.get("_non_object"):
+        return status_block("FAILED", name, "tts_timing_reconciliation_gate json root must be an object")
+    if data.get("gate_name") not in (None, "", "TTS_TIMING_RECONCILIATION_GATE"):
+        return status_block("FAILED", name, "tts_timing_reconciliation_gate gate_name must be TTS_TIMING_RECONCILIATION_GATE")
+    if str(data.get("status") or "").strip() != "PASS":
+        return status_block("FAILED", name, "WAIT_TTS_TIMING_RELOCK: tts_timing_reconciliation_gate status must be PASS")
+    if data.get("tts_duration_status") not in {"ESTIMATED_ACCEPTED", "ACTUAL_AUDIO_LOCKED"}:
+        return status_block("FAILED", name, "WAIT_TTS_TIMING_RELOCK: tts_duration_status must be ESTIMATED_ACCEPTED or ACTUAL_AUDIO_LOCKED")
+    action = data.get("allowed_reconciliation_action")
+    if action not in (None, "") and action not in ALLOWED_RECONCILIATION_ACTIONS:
+        return status_block("FAILED", name, "WAIT_TTS_TIMING_RELOCK: unsupported reconciliation action")
+    return status_block("PASS", name)
+
+
 def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
     checks = {
         "visible_script_body": visible_script_body_status(work_dir),
@@ -869,6 +1082,8 @@ def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
         "block_map": block_map_status(work_dir),
         "block_role_map": block_role_map_status(work_dir),
         "block_voice_switch_map": block_voice_switch_map_status(work_dir),
+        "tts_duration_probe": tts_duration_probe_status(work_dir),
+        "tts_timing_reconciliation_gate": tts_timing_reconciliation_gate_status(work_dir),
         "tts_copy_text": file_status(
             work_dir,
             SCRIPT_LOCK_PACKAGE_FILES["tts_copy_text"],

@@ -351,6 +351,41 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn(token, text)
 
+    def test_tikitaka_v3_assembly_design_lock_contract_is_documented(self):
+        skill_text = SKILL.read_text(encoding="utf-8")
+        single_source_text = SINGLE_SOURCE.read_text(encoding="utf-8")
+
+        for token in [
+            "Assembly Role Sequence Contract",
+            "Assembly Role Enum",
+            "Duration Basis Enum",
+            "TTS Timing Reconciliation Gate",
+            "tts_duration_probe.json",
+            "tts_timing_reconciliation_gate.json",
+            "User Design Revision Loop",
+            "WAIT_TTS_TIMING_RELOCK",
+            "source_order",
+            "timeline_order",
+            "assembly_role",
+            "visible_text_role",
+            "audio_role",
+            "duration_basis",
+            "duration_status",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, skill_text)
+
+        for token in [
+            "Assembly Design Authority",
+            "source_order",
+            "timeline_order",
+            "assembly_role",
+            "duration_basis",
+            "Production must implement the locked assembly design without reinterpretation.",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, single_source_text)
+
 
 if __name__ == "__main__":
     unittest.main()

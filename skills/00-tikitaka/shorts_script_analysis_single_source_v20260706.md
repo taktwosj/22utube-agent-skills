@@ -60,6 +60,39 @@ Allowed alias:
 - `TTS 만들 글자만 복사` may appear only as a legacy alias of
   `중단 TTS 글자만 복사`. It is not a separate output contract.
 
+## Assembly Design Authority
+
+Current Tikitaka output is not only source reorder.
+
+`timeline_design.json` must describe a new Shorts assembly design with:
+
+```text
+source_order
+timeline_order
+assembly_role
+caption_type
+visible_text_role
+audio_role
+time_start
+time_end
+duration_basis
+duration_status
+audio_policy
+visual_strategy
+```
+
+`source_order` and `timeline_order` must be separated.
+
+`assembly_role` defines the function of the beat in the remake, such as intro
+narration, verified speaker quote, reaction caption, payoff narration, or
+transition.
+
+`TTS` alone can mean visible caption text only. A voice/audio file is implied
+only when narration is explicit, such as `caption_type=tts_narration` or
+`audio_role=audio.narration_tts`.
+
+Production must implement the locked assembly design without reinterpretation.
+
 ## Production Boundary
 
 `00-tikitaka` may write draft script text and script handoff information. It
