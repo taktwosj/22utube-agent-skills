@@ -1103,11 +1103,22 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                   "segments": [
                     {
                       "edit_id": "E1",
+                      "source_ref": "S1",
+                      "source_order": 1,
+                      "timeline_order": 1,
+                      "assembly_role": "verified_speaker_quote",
                       "time_start": "00:00",
                       "time_end": "00:03",
                       "track": "audio.speaker_source",
                       "caption_type": "speaker_quote",
-                      "audio_policy": "source_on_tts_off"
+                      "visible_text_role": "speaker_quote",
+                      "audio_role": "audio.speaker_source",
+                      "duration_basis": "source_range",
+                      "duration_status": "SOURCE_AUDIO_LOCKED",
+                      "source_audio_range": {"start": "00:00", "end": "00:03"},
+                      "quote_verification_status": "VERIFIED_STT",
+                      "audio_policy": "source_on_tts_off",
+                      "visual_strategy": "source_visual_action"
                     }
                   ]
                 }

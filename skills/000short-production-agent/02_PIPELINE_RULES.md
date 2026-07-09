@@ -2,7 +2,7 @@
 
 ## Current Pipeline
 
-If Tikitaka v2 handoff exists, use the Tikitaka v2 Handoff-First Pipeline below
+If Tikitaka v3 handoff exists, use the Tikitaka v3 Handoff-First Pipeline below
 before the source-first sequence. Do not reinterpret the locked script.
 
 1. Confirm `input/video_url.txt`.
@@ -42,9 +42,9 @@ before the source-first sequence. Do not reinterpret the locked script.
 21. Create `reports/evidence_pack.json`.
 22. Create `reports/final_report.md`.
 
-## Tikitaka v2 Handoff-First Pipeline
+## Tikitaka v3 Handoff-First Pipeline
 
-If Tikitaka v2 handoff exists, start from the locked handoff package.
+If Tikitaka v3 handoff exists, start from the locked handoff package.
 
 1. Read `20_script/report1_handoff.json`.
 2. Confirm `owner_skill=00-tikitaka`.
@@ -54,15 +54,33 @@ If Tikitaka v2 handoff exists, start from the locked handoff package.
 6. Read `20_script/script_handoff_gate.json`.
 7. Confirm `SCRIPT_HANDOFF_GATE` PASS and `capcut_allowed=true`.
 8. Read `20_script/timeline_design.json`.
-9. Confirm `20_script/timeline_design_gate.json` PASS.
-10. Confirm `20_script/humanize_korean_gate.json` PASS.
-11. Read `20_script/block_map.json`.
-12. Read `20_script/block_role_map.json`.
-13. Read `20_script/block_voice_switch_map.json`.
-14. Read `20_script/tts_copy_text.txt`.
-15. Confirm `00_source/source_manifest.json` or `00_source/source.mp4`.
-16. Resolve template. Default is `shrt white`.
-17. Resolve semantic audio tracks:
+9. Validate expanded segment fields:
+
+```text
+source_ref
+source_order
+timeline_order
+assembly_role
+visible_text_role
+audio_role
+duration_basis
+duration_status
+visual_strategy
+```
+
+10. Confirm `20_script/timeline_design_gate.json` PASS.
+11. Confirm `20_script/humanize_korean_gate.json` PASS.
+12. Read `20_script/block_map.json`.
+13. Read `20_script/block_role_map.json`.
+14. Read `20_script/block_voice_switch_map.json`.
+15. If narration-audio exists, read `20_script/tts_copy_text.txt`,
+    `20_script/tts_duration_probe.json`, and
+    `20_script/tts_timing_reconciliation_gate.json`.
+16. If only `tts_caption/audio_role=none` exists, do not require TTS timing
+    files and do not generate narration audio.
+17. Confirm `00_source/source_manifest.json` or `00_source/source.mp4`.
+18. Resolve template. Default is `shrt white`.
+19. Resolve semantic audio tracks:
 
 ```text
 audio.narration_tts  -> A9
@@ -71,19 +89,30 @@ audio.sfx            -> A11
 audio.bgm            -> A12
 ```
 
-18. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`.
-19. Generate `cut_manifest.json`.
-20. Clone `shrt white`.
-21. Implement `timeline_design.json` into `draft_content.json`.
-22. Normalize draft.
-23. Run media link gate.
-24. Run T1/T2 full-duration gate.
-25. Run visible text clean gate.
-26. Run timeline implementation gate.
+20. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`
+    while preserving source_order/timeline_order/assembly_role/duration fields.
+21. Generate `cut_manifest.json`.
+22. Clone `shrt white`.
+23. Implement `timeline_design.json` into `draft_content.json`.
+24. Generate `capcut_timeline_manifest.json` proving protected field
+    preservation.
+25. Normalize draft.
+26. Run media link gate.
+27. Run T1/T2 full-duration gate.
+28. Run visible text clean gate.
+29. Run timeline implementation gate.
+30. Create `90_reports/report2_handoff.json` and report.
 27. Create `90_reports/report2_handoff.json` and 보고서2.
 
 `capcut_layout_plan.json` is a derived implementation plan. It is not allowed to
 override `timeline_design.json`.
+
+Do not derive timeline_order from source_order.
+Do not treat source_order as playback order.
+Do not collapse tts_caption into tts_narration.
+Do not generate narration audio when audio_role=none.
+Do not modify assembly_role sequence.
+Do not modify duration_basis/duration_status without WAIT_TIKITAKA_DESIGN_REPAIR.
 
 ## Input URL Rule
 

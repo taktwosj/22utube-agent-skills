@@ -178,6 +178,28 @@ read and preserve:
 - `tts_copy_text.txt`
 - `report1_handoff.json`
 
+## Tikitaka v3 DRAFT_FAST Non-Waiver
+
+DRAFT_FAST does not waive expanded timeline requirements.
+
+If the script came from `00-tikitaka` v3, even DRAFT_FAST must preserve:
+
+```text
+source_order
+timeline_order
+assembly_role
+visible_text_role
+audio_role
+duration_basis
+duration_status
+tts_duration_status
+```
+
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation.
+
+`tts_narration/audio_role=audio.narration_tts` requires TTS timing
+reconciliation.
+
 ## DRAFT_FAST State Split
 
 Never use one generic `DRAFT_FAST PASS` label. Split draft evidence into

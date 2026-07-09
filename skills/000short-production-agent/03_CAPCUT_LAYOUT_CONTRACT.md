@@ -126,6 +126,48 @@ audio.bgm            -> A12
 
 Any other resolution under `shrt_white_base_v1` is `FAIL_AUDIO_TRACK_MAPPING`.
 
+## Tikitaka v3 Expanded Timeline Implementation
+
+`000short-production-agent` must implement the expanded `timeline_design.json`
+as an assembly contract.
+
+source_order is source provenance.
+timeline_order is playback/edit order.
+assembly_role is the function of the beat in the remake.
+duration_basis and duration_status are timing authority.
+
+Do not derive playback order from source order.
+Do not derive timeline_order from source_order.
+
+Do not change:
+
+```text
+source_ref
+source_order
+timeline_order
+assembly_role
+caption_type
+visible_text_role
+audio_role
+time_start
+time_end
+track
+duration_basis
+duration_status
+audio_policy
+visual_strategy
+```
+
+If a change is required, stop with:
+
+```text
+WAIT_TIKITAKA_DESIGN_REPAIR
+```
+
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS
+generation. `tts_narration/audio_role=audio.narration_tts` requires TTS timing
+reconciliation before CapCut audio insertion.
+
 ## Template Style Preservation Gate
 
 - A selected preset/template must be cloned or derived from that actual local CapCut draft. Do not rebuild the look by hand from a generic three-text fallback.

@@ -85,19 +85,43 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
             "segments": [
                 {
                     "edit_id": "E1",
+                    "source_ref": "S3",
+                    "source_order": 3,
+                    "timeline_order": 1,
+                    "assembly_role": "intro_narration",
                     "time_start": "00:00",
                     "time_end": "00:03",
                     "track": "audio.narration_tts",
                     "caption_type": "tts_narration",
+                    "visible_text_role": "tts_caption",
+                    "audio_role": "audio.narration_tts",
+                    "duration_basis": "estimated_tts_duration",
+                    "duration_status": "ESTIMATED_ACCEPTED",
+                    "tts_text_ref": "tts_copy_text.txt#E1",
+                    "planned_tts_duration_sec": 3.0,
+                    "tts_duration_status": "ESTIMATED_ACCEPTED",
+                    "estimated_tts_duration_sec": 2.8,
                     "audio_policy": "tts_on_source_off",
+                    "visual_strategy": "source_visual_hold",
                 },
                 {
                     "edit_id": "E2",
+                    "source_ref": "S1",
+                    "source_order": 1,
+                    "timeline_order": 2,
+                    "assembly_role": "verified_speaker_quote",
                     "time_start": "00:03",
                     "time_end": "00:08",
                     "track": "audio.speaker_source",
                     "caption_type": "speaker_quote",
+                    "visible_text_role": "speaker_quote",
+                    "audio_role": "audio.speaker_source",
+                    "duration_basis": "source_range",
+                    "duration_status": "SOURCE_AUDIO_LOCKED",
+                    "source_audio_range": {"start": "00:03", "end": "00:08"},
+                    "quote_verification_status": "VERIFIED_STT",
                     "audio_policy": "source_on_tts_off",
+                    "visual_strategy": "source_visual_action",
                 },
             ],
         },
@@ -121,6 +145,28 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
         },
     )
     write(root / "20_script" / "tts_copy_text.txt", "테스트 나레이션")
+    write_json(
+        root / "20_script" / "tts_duration_probe.json",
+        {
+            "status": "ESTIMATED_ACCEPTED",
+            "tts_items": [
+                {
+                    "edit_id": "E1",
+                    "planned_tts_duration_sec": 3.0,
+                    "estimated_tts_duration_sec": 2.8,
+                    "within_tolerance": True,
+                }
+            ],
+        },
+    )
+    write_json(
+        root / "20_script" / "tts_timing_reconciliation_gate.json",
+        {
+            "status": "PASS",
+            "tts_duration_status": "ESTIMATED_ACCEPTED",
+            "reconciliation_action": "none",
+        },
+    )
 
 
 def create_report1_handoff(root: Path, *, status: str = "PASS", next_skill: str = "000short-production-agent") -> None:

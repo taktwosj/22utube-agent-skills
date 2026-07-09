@@ -120,7 +120,7 @@ class ReportingAndFastModeContractTests(unittest.TestCase):
         self.assertIn("black", harness)
         self.assertIn("insta white", harness)
         self.assertNotIn("subtitle_1", layout)
-        self.assertNotIn("tts_caption", layout)
+        self.assertIn("tts_caption/audio_role=none", layout)
         self.assertNotIn("verified_speaker_1", layout)
 
     def test_shrt_white_base_contract_preserves_operator_row_order(self):

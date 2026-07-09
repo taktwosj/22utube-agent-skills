@@ -100,16 +100,16 @@ next_gate: ASSET_PREP_GATE
 ```
 
 Use `validate_capcut_openable_project_entry` for the second stage. It validates
-`REPORT1_HANDOFF_GATE`, `SCRIPT_HANDOFF_GATE`, Tikitaka v2 timeline design
-files, role/audio maps, and source manifest readiness for local CapCut project
+`REPORT1_HANDOFF_GATE`, `SCRIPT_HANDOFF_GATE`, Tikitaka v3 timeline design
+files, role/audio maps, timing gates, and source manifest readiness for local CapCut project
 creation. `validate_shared_requirements is FINAL_LOCK only`.
 `persona_mode/script_gate/n8n are FINAL_LOCK blockers`, not CAPCUT_OPENABLE_PROJECT blockers.
 When the handoff gate is PASS, do not stop CapCut project creation just because
 final report, upload, writer-persona, or n8n evidence is not complete.
 
-## Stage 2 Tikitaka v2 Handoff Source of Truth
+## Stage 2 Tikitaka v3 Expanded Timeline Source of Truth
 
-When input comes from `00-tikitaka` v2, production must implement
+When input comes from `00-tikitaka` v3, production must implement the expanded
 `20_script/timeline_design.json`. Do not reinterpret the script.
 
 This extends the existing Stage 2 gate. It does not create a new stage.
@@ -133,6 +133,8 @@ Required Stage 2 inputs:
 20_script/block_role_map.json
 20_script/block_voice_switch_map.json
 20_script/tts_copy_text.txt
+20_script/tts_duration_probe.json when narration-audio exists
+20_script/tts_timing_reconciliation_gate.json when narration-audio exists
 00_source/source_manifest.json or 00_source/source.mp4
 ```
 
@@ -158,11 +160,21 @@ capcut_timeline_manifest.json
 Protected fields:
 
 ```text
+edit_id
+source_ref
+source_order
+timeline_order
+assembly_role
+caption_type
+visible_text_role
+audio_role
 time_start
 time_end
 track
-caption_type
+duration_basis
+duration_status
 audio_policy
+visual_strategy
 ```
 
 If any protected field must change, stop with:
@@ -173,9 +185,25 @@ WAIT_TIKITAKA_DESIGN_REPAIR
 
 `capcut_layout_plan.json` is derived from `timeline_design.json`. It must not
 override, shorten, reorder, merge, split, rename, or reinterpret protected
-timeline fields. Semantic audio lanes may be resolved to real CapCut A-tracks by
-template profile, but that resolution must be recorded in the CapCut timeline
-manifest.
+timeline fields. `source_order` is source provenance. `timeline_order` is
+playback/edit order. Do not derive timeline_order from source_order. Semantic
+audio lanes may be resolved to real CapCut A-tracks by template profile, but
+that resolution must be recorded in the CapCut timeline manifest.
+
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation.
+`tts_narration/audio_role=audio.narration_tts` is narration audio
+and requires `tts_duration_probe.json` plus
+`tts_timing_reconciliation_gate.json`.
+
+`capcut_timeline_manifest.json` must prove:
+
+```text
+protected_fields_preserved=true
+assembly_role_sequence_preserved=true
+timeline_order_preserved=true
+source_order_preserved=true
+duration_basis_preserved=true
+```
 
 ## Default CapCut Mother Template Rule
 

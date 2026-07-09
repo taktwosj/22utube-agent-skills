@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate 00-tikitaka v2 handoff inputs before Stage 2 CapCut work."""
+"""Validate 00-tikitaka v3 handoff inputs before Stage 2 CapCut work."""
 
 from __future__ import annotations
 
@@ -15,11 +15,66 @@ class GateFail(Exception):
 
 REQUIRED_SEGMENT_FIELDS = {
     "edit_id",
+    "source_ref",
+    "source_order",
+    "timeline_order",
+    "assembly_role",
+    "caption_type",
+    "visible_text_role",
+    "audio_role",
     "time_start",
     "time_end",
     "track",
-    "caption_type",
+    "duration_basis",
+    "duration_status",
     "audio_policy",
+    "visual_strategy",
+}
+ALLOWED_ASSEMBLY_ROLES = {
+    "intro_narration",
+    "context_narration",
+    "payoff_narration",
+    "ending_narration",
+    "verified_speaker_quote",
+    "situation_caption",
+    "reaction_caption",
+    "card_or_comment_caption",
+    "source_visual_hold",
+    "source_visual_action",
+    "transition_or_separator",
+    "ranking_item",
+}
+ALLOWED_DURATION_BASIS = {
+    "source_range",
+    "estimated_tts_duration",
+    "actual_tts_duration",
+    "fixed_design_duration",
+    "visual_hold",
+}
+ALLOWED_DURATION_STATUS = {
+    "SOURCE_AUDIO_LOCKED",
+    "ESTIMATED_ACCEPTED",
+    "ACTUAL_AUDIO_LOCKED",
+    "FIXED_DESIGN_LOCKED",
+    "WAIT_ACTUAL_TTS_AUDIO",
+}
+NARRATION_AUDIO_TTS_STATUSES = {
+    "ESTIMATED_ACCEPTED",
+    "ACTUAL_AUDIO_LOCKED",
+    "WAIT_ACTUAL_TTS_AUDIO",
+}
+READY_TTS_TIMING_STATUSES = {
+    "ESTIMATED_ACCEPTED",
+    "ACTUAL_AUDIO_LOCKED",
+}
+ALLOWED_RECONCILIATION_ACTIONS = {
+    "",
+    "none",
+    "extend_slot",
+    "retime_segment",
+    "split_segment",
+    "shorten_text",
+    "manual_acceptance",
 }
 SEMANTIC_AUDIO_TRACKS = {
     "audio.narration_tts",
@@ -87,6 +142,28 @@ def require_existing_file(path: Path, label: str, fail_token: str) -> Path:
     return path
 
 
+def require_number(value: Any, field: str, fail_token: str) -> None:
+    if isinstance(value, bool):
+        raise GateFail(f"{fail_token}: {field} must be numeric")
+    if isinstance(value, (int, float)) and value >= 0:
+        return
+    raise GateFail(f"{fail_token}: {field} must be numeric")
+
+
+def segment_uses_narration_audio(segment: dict[str, Any]) -> bool:
+    return (
+        segment.get("caption_type") == "tts_narration"
+        or segment.get("audio_role") == "audio.narration_tts"
+    )
+
+
+def segment_uses_speaker_quote(segment: dict[str, Any]) -> bool:
+    return (
+        segment.get("caption_type") == "speaker_quote"
+        or segment.get("assembly_role") == "verified_speaker_quote"
+    )
+
+
 def validate_report1_handoff(
     root: Path,
     contract: dict[str, Any] | None = None,
@@ -129,7 +206,9 @@ def validate_timeline_design(root: Path) -> tuple[dict[str, Any], bool]:
     if not isinstance(segments, list) or not segments:
         raise GateFail("WAIT_TIMELINE_DESIGN_REQUIRED: timeline_design.segments missing")
 
-    has_tts_narration = False
+    has_narration_audio = False
+    seen_edit_ids: set[str] = set()
+    seen_timeline_orders: dict[Any, str] = {}
     for index, segment in enumerate(segments):
         if not isinstance(segment, dict):
             raise GateFail(f"WAIT_TIMELINE_DESIGN_REPAIR: segments[{index}] must be object")
@@ -138,6 +217,30 @@ def validate_timeline_design(root: Path) -> tuple[dict[str, Any], bool]:
             raise GateFail(
                 f"WAIT_TIMELINE_DESIGN_REPAIR: segments[{index}] missing {', '.join(missing)}"
             )
+
+        edit_id = str(segment.get("edit_id"))
+        if edit_id in seen_edit_ids:
+            raise GateFail("WAIT_TIMELINE_DESIGN_REPAIR: duplicate edit_id")
+        seen_edit_ids.add(edit_id)
+
+        timeline_order = segment.get("timeline_order")
+        parallel_group_id = str(segment.get("parallel_group_id") or "")
+        existing_parallel_group_id = seen_timeline_orders.get(timeline_order)
+        if existing_parallel_group_id is not None:
+            if not parallel_group_id or existing_parallel_group_id != parallel_group_id:
+                raise GateFail(
+                    "WAIT_TIMELINE_DESIGN_REPAIR: duplicate timeline_order without parallel_group_id"
+                )
+        else:
+            seen_timeline_orders[timeline_order] = parallel_group_id
+
+        if segment.get("assembly_role") not in ALLOWED_ASSEMBLY_ROLES:
+            raise GateFail("WAIT_TIMELINE_DESIGN_REPAIR: unsupported assembly_role")
+        if segment.get("duration_basis") not in ALLOWED_DURATION_BASIS:
+            raise GateFail("WAIT_TIMELINE_DESIGN_REPAIR: unsupported duration_basis")
+        if segment.get("duration_status") not in ALLOWED_DURATION_STATUS:
+            raise GateFail("WAIT_TIMELINE_DESIGN_REPAIR: unsupported duration_status")
+
         track = str(segment.get("track") or "")
         if track in FORBIDDEN_STAGE1_CAPCUT_AUDIO_TRACKS:
             raise GateFail(
@@ -149,9 +252,112 @@ def validate_timeline_design(root: Path) -> tuple[dict[str, Any], bool]:
                 "WAIT_TIMELINE_DESIGN_REPAIR: unsupported semantic audio track "
                 f"{track}"
             )
-        if segment.get("caption_type") == "tts_narration":
-            has_tts_narration = True
-    return data, has_tts_narration
+
+        if segment_uses_narration_audio(segment):
+            has_narration_audio = True
+            for field in ("tts_text_ref", "planned_tts_duration_sec", "tts_duration_status"):
+                if segment.get(field) in (None, ""):
+                    raise GateFail(f"WAIT_TTS_TIMING_RELOCK: segments[{index}] missing {field}")
+            require_number(
+                segment.get("planned_tts_duration_sec"),
+                f"segments[{index}].planned_tts_duration_sec",
+                "WAIT_TTS_TIMING_RELOCK",
+            )
+            tts_status = str(segment.get("tts_duration_status") or "")
+            if tts_status not in NARRATION_AUDIO_TTS_STATUSES:
+                raise GateFail("WAIT_TTS_TIMING_RELOCK: unsupported tts_duration_status")
+            if tts_status == "ESTIMATED_ACCEPTED":
+                if segment.get("estimated_tts_duration_sec") in (None, ""):
+                    raise GateFail(
+                        f"WAIT_TTS_TIMING_RELOCK: segments[{index}] missing estimated_tts_duration_sec"
+                    )
+                require_number(
+                    segment.get("estimated_tts_duration_sec"),
+                    f"segments[{index}].estimated_tts_duration_sec",
+                    "WAIT_TTS_TIMING_RELOCK",
+                )
+            if tts_status == "ACTUAL_AUDIO_LOCKED":
+                if segment.get("actual_tts_duration_sec") in (None, ""):
+                    raise GateFail(
+                        f"WAIT_TTS_TIMING_RELOCK: segments[{index}] missing actual_tts_duration_sec"
+                    )
+                require_number(
+                    segment.get("actual_tts_duration_sec"),
+                    f"segments[{index}].actual_tts_duration_sec",
+                    "WAIT_TTS_TIMING_RELOCK",
+                )
+
+        if segment_uses_speaker_quote(segment):
+            for field in ("source_audio_range", "quote_verification_status"):
+                if segment.get(field) in (None, ""):
+                    raise GateFail(f"WAIT_TIMELINE_DESIGN_REPAIR: segments[{index}] missing {field}")
+
+    return data, has_narration_audio
+
+
+def validate_tts_timing(root: Path, has_narration_audio: bool) -> None:
+    if not has_narration_audio:
+        return
+
+    probe_path = root / "20_script" / "tts_duration_probe.json"
+    if not probe_path.exists():
+        raise GateFail(f"WAIT_TTS_TIMING_RELOCK: tts_duration_probe.json missing: {probe_path}")
+    probe = load_json(probe_path, "tts_duration_probe.json")
+    probe_status = status_value(probe)
+    if probe_status not in {"PASS", "ESTIMATED_ACCEPTED"}:
+        raise GateFail(
+            f"WAIT_TTS_TIMING_RELOCK: tts_duration_probe status must be PASS or ESTIMATED_ACCEPTED"
+        )
+    tts_items = probe.get("tts_items", [])
+    if tts_items is None:
+        tts_items = []
+    if not isinstance(tts_items, list):
+        raise GateFail("WAIT_TTS_TIMING_RELOCK: tts_duration_probe.tts_items must be list")
+    for index, item in enumerate(tts_items):
+        if not isinstance(item, dict):
+            raise GateFail(f"WAIT_TTS_TIMING_RELOCK: tts_duration_probe.tts_items[{index}] must be object")
+        planned = item.get("planned_tts_duration_sec")
+        actual = item.get("actual_tts_duration_sec")
+        action = str(item.get("reconciliation_action") or "").strip()
+        if action not in ALLOWED_RECONCILIATION_ACTIONS:
+            raise GateFail("WAIT_TTS_TIMING_RELOCK: unsupported reconciliation action")
+        if planned not in (None, ""):
+            require_number(
+                planned,
+                f"tts_duration_probe.tts_items[{index}].planned_tts_duration_sec",
+                "WAIT_TTS_TIMING_RELOCK",
+            )
+        if actual not in (None, ""):
+            require_number(
+                actual,
+                f"tts_duration_probe.tts_items[{index}].actual_tts_duration_sec",
+                "WAIT_TTS_TIMING_RELOCK",
+            )
+            if (
+                planned not in (None, "")
+                and actual > planned
+                and item.get("within_tolerance") is False
+                and action in {"", "none"}
+            ):
+                raise GateFail(
+                    "WAIT_TTS_TIMING_RELOCK: actual TTS duration exceeds planned slot without reconciliation action"
+                )
+
+    gate_path = root / "20_script" / "tts_timing_reconciliation_gate.json"
+    if not gate_path.exists():
+        raise GateFail(
+            f"WAIT_TTS_TIMING_RELOCK: tts_timing_reconciliation_gate.json missing: {gate_path}"
+        )
+    gate = load_json(gate_path, "tts_timing_reconciliation_gate.json")
+    if status_value(gate) != "PASS":
+        raise GateFail("WAIT_TTS_TIMING_RELOCK: tts_timing_reconciliation_gate status must be PASS")
+    if str(gate.get("tts_duration_status") or "") not in READY_TTS_TIMING_STATUSES:
+        raise GateFail(
+            "WAIT_TTS_TIMING_RELOCK: tts_duration_status must be ESTIMATED_ACCEPTED or ACTUAL_AUDIO_LOCKED"
+        )
+    action = str(gate.get("reconciliation_action") or "").strip()
+    if action not in ALLOWED_RECONCILIATION_ACTIONS:
+        raise GateFail("WAIT_TTS_TIMING_RELOCK: unsupported reconciliation action")
 
 
 def validate_humanize_gate(root: Path) -> dict[str, Any]:
@@ -186,7 +392,7 @@ def validate_stage2_tikitaka_handoff(
     root = Path(root)
     report1 = validate_report1_handoff(root, contract)
     validate_script_handoff(root)
-    timeline_design, has_tts_narration = validate_timeline_design(root)
+    timeline_design, has_narration_audio = validate_timeline_design(root)
     require_status_pass(
         root / "20_script" / "timeline_design_gate.json",
         "timeline_design_gate.json",
@@ -208,7 +414,8 @@ def validate_stage2_tikitaka_handoff(
         "block_voice_switch_map.json",
         "WAIT_SCRIPT_HANDOFF_GATE",
     )
-    if has_tts_narration:
+    if has_narration_audio:
+        validate_tts_timing(root, has_narration_audio)
         tts_copy = require_existing_file(
             root / "20_script" / "tts_copy_text.txt",
             "tts_copy_text.txt",
