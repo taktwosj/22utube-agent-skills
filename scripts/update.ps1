@@ -36,13 +36,25 @@ if ($remote) {
 
 $install = Join-Path $PSScriptRoot "install.ps1"
 $verify = Join-Path $PSScriptRoot "verify.ps1"
+$powerShellExe = $null
+foreach ($candidate in @("pwsh", "pwsh.exe", "powershell", "powershell.exe")) {
+  $command = Get-Command $candidate -ErrorAction SilentlyContinue
+  if ($command) {
+    $powerShellExe = $command.Source
+    break
+  }
+}
+if (-not $powerShellExe) {
+  throw "No PowerShell executable found for install/verify subprocesses."
+}
+
 $installArgs = @("-ExecutionPolicy", "Bypass", "-File", $install, "-Target", $Target)
 if ($Only.Count -gt 0) { $installArgs += "-Only"; $installArgs += $Only }
 if ($Prune) { $installArgs += "-Prune" }
 if ($Strict) { $installArgs += "-Strict" }
 if ($DryRun) { $installArgs += "-DryRun" }
 
-powershell @installArgs
+& $powerShellExe @installArgs
 if ($LASTEXITCODE -ne 0) { throw "install failed" }
 
 if ($DryRun) {
@@ -50,7 +62,7 @@ if ($DryRun) {
 } else {
   $verifyArgs = @("-ExecutionPolicy", "Bypass", "-File", $verify, "-Target", $Target)
   if ($Strict) { $verifyArgs += "-Strict" }
-  powershell @verifyArgs
+  & $powerShellExe @verifyArgs
   if ($LASTEXITCODE -ne 0) { throw "verify failed" }
 }
 

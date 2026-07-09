@@ -44,9 +44,16 @@ printf '%s\n' "$$" > "$LOCK_FILE"
 
 echo "22utube skill auto-sync: install+verify all after $HOOK_NAME"
 
-if command -v powershell.exe >/dev/null 2>&1 && [ -f "$REPO_ROOT/scripts/install.ps1" ]; then
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/install.ps1" -Target all -Prune
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/verify.ps1" -Target all
+POWERSHELL_EXE=""
+if command -v pwsh.exe >/dev/null 2>&1; then
+  POWERSHELL_EXE="pwsh.exe"
+elif command -v powershell.exe >/dev/null 2>&1; then
+  POWERSHELL_EXE="powershell.exe"
+fi
+
+if [ -n "$POWERSHELL_EXE" ] && [ -f "$REPO_ROOT/scripts/install.ps1" ]; then
+  "$POWERSHELL_EXE" -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/install.ps1" -Target all -Prune
+  "$POWERSHELL_EXE" -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/verify.ps1" -Target all
 else
   bash "$REPO_ROOT/scripts/install.sh" --target all --prune
   bash "$REPO_ROOT/scripts/verify.sh" --target all
