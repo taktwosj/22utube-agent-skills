@@ -190,7 +190,7 @@ playback/edit order. Do not derive timeline_order from source_order. Semantic
 audio lanes may be resolved to real CapCut A-tracks by template profile, but
 that resolution must be recorded in the CapCut timeline manifest.
 
-`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation.
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation or TTS timing requirements.
 `tts_narration/audio_role=audio.narration_tts` is narration audio
 and requires `tts_duration_probe.json` plus
 `tts_timing_reconciliation_gate.json`.
@@ -203,6 +203,15 @@ assembly_role_sequence_preserved=true
 timeline_order_preserved=true
 source_order_preserved=true
 duration_basis_preserved=true
+duration_status_preserved=true
+```
+
+The active production gate must reject old six-field-only `timeline_design.json`
+packages. If an active validation path accepts only `edit_id`, `time_start`,
+`time_end`, `track`, `caption_type`, and `audio_policy`, treat it as:
+
+```text
+FAIL_ACTIVE_GATE_ACCEPTS_OLD_TIMELINE_DESIGN
 ```
 
 ## Default CapCut Mother Template Rule

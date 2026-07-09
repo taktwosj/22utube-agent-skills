@@ -12,6 +12,7 @@
     "timeline_order_preserved",
     "source_order_preserved",
     "duration_basis_preserved",
+    "duration_status_preserved",
     "semantic_audio_resolution",
     "implemented_segments"
   ],
@@ -25,6 +26,7 @@
     "timeline_order_preserved": { "const": true },
     "source_order_preserved": { "const": true },
     "duration_basis_preserved": { "const": true },
+    "duration_status_preserved": { "const": true },
     "semantic_audio_resolution": {
       "type": "object",
       "required": ["audio.narration_tts", "audio.speaker_source", "audio.sfx", "audio.bgm"],

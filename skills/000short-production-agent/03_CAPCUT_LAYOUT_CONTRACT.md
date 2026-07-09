@@ -164,8 +164,8 @@ If a change is required, stop with:
 WAIT_TIKITAKA_DESIGN_REPAIR
 ```
 
-`tts_caption/audio_role=none` is caption-only and must not trigger TTS
-generation. `tts_narration/audio_role=audio.narration_tts` requires TTS timing
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation or TTS timing requirements.
+`tts_narration/audio_role=audio.narration_tts` requires TTS timing
 reconciliation before CapCut audio insertion.
 
 ## Template Style Preservation Gate

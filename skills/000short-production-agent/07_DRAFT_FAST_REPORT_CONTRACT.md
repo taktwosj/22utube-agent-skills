@@ -195,7 +195,7 @@ duration_status
 tts_duration_status
 ```
 
-`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation.
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation or TTS timing requirements.
 
 `tts_narration/audio_role=audio.narration_tts` requires TTS timing
 reconciliation.
