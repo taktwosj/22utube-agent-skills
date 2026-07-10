@@ -2,9 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Tikitaka v3 expanded timeline_design",
   "type": "object",
-  "required": ["project_duration_sec", "segments"],
+  "required": ["project_duration_sec", "source_fingerprint_sha256", "segments"],
   "properties": {
     "project_duration_sec": { "type": "number", "exclusiveMinimum": 0 },
+    "source_fingerprint_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
     "segments": {
       "type": "array",
       "minItems": 1,

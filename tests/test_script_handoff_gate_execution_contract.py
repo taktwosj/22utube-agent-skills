@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from _support import load_source_module_no_bytecode
+from _support import load_source_module_no_bytecode, write_valid_source_mp4
 
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE_FINGERPRINT = "a" * 64
 TIKITAKA_HARNESS = ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
 PRODUCTION_GATE = (
     ROOT
@@ -25,6 +28,101 @@ def write(path: Path, text: str = "ok") -> None:
 
 def write_json(path: Path, text: str) -> None:
     write(path, text.strip() + "\n")
+
+
+def create_source_identity_and_linked_draft(root: Path) -> None:
+    source = root / "00_source" / "source.mp4"
+    write_valid_source_mp4(source)
+    source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    lock = {
+        "status": "PASS",
+        "canonical_url": "https://www.youtube.com/shorts/fixture123",
+        "video_id": "fixture123",
+        "local_source_path": "00_source/source.mp4",
+        "sha256": source_sha256,
+        "duration_sec": 8.0,
+    }
+    write_json(root / "10_analysis" / "source_identity_lock.json", json.dumps(lock))
+    write_json(
+        root / "10_analysis" / "source_evidence.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "video_id": "fixture123",
+                "source_fingerprint_sha256": source_sha256,
+                "ffprobe_status": "PASS",
+                "has_video_stream": True,
+                "probed_duration_sec": 8.0,
+                "stt": {
+                    "status": "PASS",
+                    "verified_ranges": [{"start_sec": 0.0, "end_sec": 3.0}],
+                },
+            }
+        ),
+    )
+    write_json(
+        root / "10_analysis" / "crosscheck_report.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "video_id": "fixture123",
+                "source_fingerprint_sha256": source_sha256,
+                "hint_vs_evidence_compared": True,
+            }
+        ),
+    )
+    write_json(
+        root / "00_source" / "source_manifest.json",
+        json.dumps(
+            {
+                **lock,
+                "source_identity_lock_path": "10_analysis/source_identity_lock.json",
+                "source_evidence_path": "10_analysis/source_evidence.json",
+                "crosscheck_report_path": "10_analysis/crosscheck_report.json",
+            }
+        ),
+    )
+    write_json(
+        root / "10_analysis" / "tikitaka_source_request.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "owner_skill": "00-tikitaka",
+                "requested_source_url": lock["canonical_url"],
+                "requested_video_id": lock["video_id"],
+                "user_stage_decision": "stage_2_full",
+            }
+        ),
+    )
+    write_json(
+        root / "50_capcut_project" / "draft_content.json",
+        json.dumps(
+            {
+                "materials": {
+                    "videos": [
+                        {
+                            "id": "source-video",
+                            "role": "source_video",
+                            "path": str(source),
+                            "active": True,
+                            "audio_enabled": False,
+                        }
+                    ]
+                }
+            }
+        ),
+    )
+    for relative in (
+        "20_script/report1_handoff.json",
+        "20_script/script_handoff_gate.json",
+        "20_script/timeline_design.json",
+    ):
+        path = root / relative
+        if not path.exists():
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["source_fingerprint_sha256"] = source_sha256
+        write_json(path, json.dumps(payload))
 
 
 def create_tikitaka_base_evidence(work_dir: Path) -> None:
@@ -48,7 +146,43 @@ def create_tikitaka_base_evidence(work_dir: Path) -> None:
     write(work_dir / "n8n_execution_id.txt", "n8n-ok")
 
 
+def attach_source_fingerprint(path: Path) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["source_fingerprint_sha256"] = SOURCE_FINGERPRINT
+    write_json(path, json.dumps(payload))
+
+
 def create_script_lock_package_artifacts(work_dir: Path) -> None:
+    write(
+        work_dir / "design_blueprint.md",
+        """# 설계도
+
+## 기본 정보
+fixture
+
+## 제작 판단
+fixture
+
+## 상단 고정 문구
+fixture
+
+## 조립 역할 순서
+| 편집 | 역할 |
+|---|---|
+| E1 | hook |
+
+## 트랙별 타임라인
+| 편집 | 시작 | 종료 |
+|---|---:|---:|
+| E1 | 00:00 | 00:03 |
+
+## TTS 복사용 문구
+테스트 중단
+
+## 승인 전 점검
+fixture
+""",
+    )
     write(work_dir / "original_structure_summary.md")
     write(work_dir / "urakkai_structure_plan.md")
     write(work_dir / "final_script_ko.md", "상단: 테스트 훅\n\ntimed 중단:\n테스트 중단")
@@ -57,6 +191,7 @@ def create_script_lock_package_artifacts(work_dir: Path) -> None:
         work_dir / "timeline_design.json",
         """
         {
+          "source_fingerprint_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "tracks": ["T1", "T2", "TTS", "speaker_quote_A", "situation_caption_A"],
           "segments": [
             {
@@ -255,6 +390,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(gate["generated_by"], "tikitaka_harness_runner")
             self.assertEqual(gate["script_status"], "SCRIPT_LOCK_PACKAGE")
             self.assertIs(gate["capcut_allowed"], True)
+            self.assertEqual(gate["source_fingerprint_sha256"], SOURCE_FINGERPRINT)
             self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
 
     def test_tikitaka_harness_writes_report1_handoff_to_000short(self):
@@ -270,7 +406,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertTrue(handoff_path.is_file())
             handoff = module.read_json(handoff_path)
             self.assertEqual(handoff["gate_name"], "REPORT1_HANDOFF_GATE")
-            self.assertEqual(handoff["report"], "보고서1")
+            self.assertEqual(handoff["report"], "설계도")
             self.assertEqual(handoff["owner_skill"], "00-tikitaka")
             self.assertEqual(handoff["next_skill"], "000short-production-agent")
             self.assertEqual(handoff["next_stage"], "보고서2")
@@ -279,6 +415,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIn("voice_audio_route_decided=true", handoff["required_before_next"])
             self.assertEqual(handoff["status"], "WAIT")
             self.assertEqual(handoff["blocker"], "WAIT_REPORT1_APPROVAL_TTS_DECISION")
+            self.assertEqual(handoff["source_fingerprint_sha256"], SOURCE_FINGERPRINT)
             self.assertEqual(state["report1_handoff_gate"]["next_skill"], "000short-production-agent")
 
             report = (work_dir / "stage_scope_report.md").read_text(encoding="utf-8")
@@ -363,6 +500,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                 }
                 """,
             )
+            attach_source_fingerprint(work_dir / "timeline_design.json")
             write_stage2_decision(work_dir)
 
             state = module.audit(work_dir, "job-test")
@@ -393,6 +531,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                 }
                 """,
             )
+            attach_source_fingerprint(work_dir / "timeline_design.json")
             write_stage2_decision(work_dir)
 
             state = module.audit(work_dir, "job-test")
@@ -499,6 +638,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                 }
                 """,
             )
+            attach_source_fingerprint(work_dir / "timeline_design.json")
             write_stage2_decision(work_dir)
 
             state = module.audit(work_dir, "job-test")
@@ -583,6 +723,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                 }
                 """,
             )
+            attach_source_fingerprint(work_dir / "timeline_design.json")
             write_json(
                 work_dir / "tts_duration_probe.json",
                 """
@@ -615,7 +756,54 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                   "tts_duration_status": "ACTUAL_AUDIO_LOCKED",
                   "timeline_design_updated": true,
                   "protected_fields_changed": true,
-                  "allowed_reconciliation_action": "extend_visual"
+                  "reconciliation_action": "extend_visual"
+                }
+                """,
+            )
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
+
+    def test_tikitaka_harness_allows_none_when_actual_tts_fits_slot(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_tts_duration_none", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_json(
+                work_dir / "tts_duration_probe.json",
+                """
+                {
+                  "status": "PASS",
+                  "source": "generated_tts",
+                  "tts_items": [
+                    {
+                      "edit_id": "E1",
+                      "tts_text_ref": "tts_001",
+                      "text": "테스트 음성",
+                      "planned_duration_sec": 4.0,
+                      "actual_duration_sec": 3.4,
+                      "within_tolerance": true,
+                      "reconciliation_action": "none"
+                    }
+                  ]
+                }
+                """,
+            )
+            write_json(
+                work_dir / "tts_timing_reconciliation_gate.json",
+                """
+                {
+                  "status": "PASS",
+                  "gate_name": "TTS_TIMING_RECONCILIATION_GATE",
+                  "duration_basis": "actual_audio",
+                  "tts_duration_status": "ACTUAL_AUDIO_LOCKED",
+                  "timeline_design_updated": true,
+                  "protected_fields_changed": false,
+                  "reconciliation_action": "none"
                 }
                 """,
             )
@@ -644,15 +832,15 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIn("[x] G0: stage_1_script", todo)
             self.assertIn("[x] G2: stage 1 STOP", todo)
             self.assertIn("[ ] G3: stage 2 entry", todo)
-            self.assertIn("보고서1", todo)
+            self.assertIn("설계도", todo)
 
             report = (work_dir / "stage_scope_report.md").read_text(encoding="utf-8")
-            self.assertIn("# 보고서1", report)
+            self.assertIn("# 설계도", report)
             self.assertIn("대본 승인용: 예", report)
             self.assertIn("CapCut 생성: 아니오", report)
             self.assertIn("TTS 생성: 아니오", report)
             self.assertIn("WAIT_USER_STAGE_DECISION", report)
-            self.assertIn("reason: stage 1 script-only request; stop after 보고서1", report)
+            self.assertIn("reason: stage 1 script-only request; stop after 설계도", report)
             self.assertIn("중단 TTS 글자만 복사", report)
             self.assertIn("상단: 테스트 훅", report)
             self.assertIn("timed 중단:", report)
@@ -679,7 +867,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIn("[ ] G3: stage 2 entry", todo)
 
             report = (work_dir / "stage_scope_report.md").read_text(encoding="utf-8")
-            self.assertIn("# 보고서1", report)
+            self.assertIn("# 설계도", report)
             self.assertIn("대본 승인용: 예", report)
             self.assertIn("CapCut 생성: 아니오", report)
             self.assertIn("TTS 생성: 아니오", report)
@@ -706,7 +894,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
             self.assertIn("visible_script_body", state["script_handoff_gate"]["missing_or_failed"])
             report = (work_dir / "stage_scope_report.md").read_text(encoding="utf-8")
-            self.assertIn("# 보고서1 BLOCKED", report)
+            self.assertIn("# 설계도 BLOCKED", report)
             self.assertIn("대본 승인용: 아니오", report)
             self.assertIn("FAIL_REPORT1_VISIBLE_SCRIPT_BODY_MISSING", report)
             self.assertNotIn("대본 승인용: 예", report)
@@ -726,7 +914,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
             self.assertIn("tts_copy_text", state["script_handoff_gate"]["missing_or_failed"])
             report = (work_dir / "stage_scope_report.md").read_text(encoding="utf-8")
-            self.assertIn("# 보고서1 BLOCKED", report)
+            self.assertIn("# 설계도 BLOCKED", report)
             self.assertIn("대본 승인용: 아니오", report)
             self.assertIn("FAIL_REPORT1_TTS_COPY_TEXT_MISSING", report)
             self.assertNotIn("대본 승인용: 예", report)
@@ -1150,12 +1338,13 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                   "status": "PASS",
                   "owner_skill": "00-tikitaka",
                   "next_skill": "000short-production-agent",
-                  "next_gate": "CAPCUT_OPENABLE_PROJECT"
+                  "next_gate": "CAPCUT_OPENABLE_PROJECT",
+                  "report1_approved": true,
+                  "voice_audio_route_decided": true
                 }
                 """,
             )
-            write(root / "00_source" / "source_manifest.json", '{"status":"PASS"}')
-            write(root / "50_capcut_project" / "draft_content.json", '{"materials":{}}')
+            create_source_identity_and_linked_draft(root)
             reference_path = root / "capcut_refs" / "shrt white"
             reference_path.mkdir(parents=True)
 

@@ -8,9 +8,7 @@ description: Use only when the user explicitly asks to create, validate, or repa
 ## Ownership Matrix
 
 - `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
-- `00script-writer`: polish/review an existing script draft only.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
-- `22utube-production-agent`: shared factory policy only.
 
 ## Escalation Rule
 
@@ -19,8 +17,8 @@ user explicitly asks for subtitles, layout JSON, render plans, CapCut drafts,
 exports, upload packages, production packages, production validation, or repair.
 
 Route Tikitaka, 우라까이, hook, 상단, timed 중단, or Gemini source-note scripting
-to `00-tikitaka`; wording-only improvement to `00script-writer`; shared policy
-questions to `22utube-production-agent`.
+to `00-tikitaka`; keep wording-only revisions in that skill; follow the
+workspace `AGENTS.md` and `docs/YOUTUBE_PRODUCTION_WORK_ORDER.md` for policy.
 
 Do not originate the script, choose the urakkai angle, create hook/channel
 planning, or polish a draft inside this skill. Confirm script authority first,
@@ -259,8 +257,8 @@ builder into the next project.
 
 ## Report 2 Contract
 
-`보고서2` starts only after the user approves 보고서1 and chooses a voice/audio
-route. A CapCut/project request can select stage 2, but it cannot skip 보고서1
+`보고서2` starts only after `설계도 승인` and a voice/audio route decision.
+A CapCut/project request can select stage 2, but it cannot skip 설계도
 승인 or TTS/오디오 방식 결정. If either is missing, stop with:
 
 ```text
@@ -268,7 +266,8 @@ WAIT_REPORT1_APPROVAL_TTS_DECISION
 required: report1_approved + voice_audio_route_decided
 ```
 
-When receiving a Tikitaka 보고서1 package, read `report1_handoff.json` when
+When receiving a Tikitaka 설계도 package, read the legacy-compatible internal
+`report1_handoff.json` when
 present. It must have `REPORT1_HANDOFF_GATE`, `owner_skill=00-tikitaka`, and
 `next_skill=000short-production-agent`. If the handoff is missing, invalid, or
 points elsewhere, stop with `WAIT_REPORT1_HANDOFF_GATE`. 보고서2 starts only
@@ -276,7 +275,7 @@ after that handoff plus `report1_approved=true` and
 `voice_audio_route_decided=true`.
 
 It is the final user-facing report for the two-report Shorts workflow. The
-workflow has only 보고서1 and 보고서2; 보고서2 is the final report. It is still not
+workflow has one 설계도 and one 보고서2; 보고서2 is the final report. It is still not
 an upload-ready claim unless the user explicitly approves upload and
 rights/risk handling.
 
@@ -348,7 +347,7 @@ TTS, SRT/layout, CapCut, render, or upload work, the coordinator must identify
 one of these scopes:
 
 ```text
-stage_1_script = 00-tikitaka only; produce 상단 + timed 중단 + TTS 만들 글자만 복사 + 보고서1; then WAIT
+stage_1_script = 00-tikitaka only; produce 상단 + timed 중단 + 중단 TTS 글자만 복사 + 설계도; then WAIT
 stage_2_full = source verification + TTS/user audio + SRT/layout + CapCut project + 보고서2
 ```
 
@@ -375,7 +374,7 @@ voice_audio_route_decided=true
 ```
 
 If the user already asked for stage 2 before seeing the script, treat that as
-future intent only. After 보고서1, ask for script OK and TTS/오디오 route before
+future intent only. After 설계도, ask for design OK and TTS/오디오 route before
 CapCut creation.
 
 Mandatory report/checklist gates:
@@ -383,7 +382,7 @@ Mandatory report/checklist gates:
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless stage_1_script or stage_2_full is already explicit
 G1 STAGE 1 = 1차설계서 + timeline_design.json + timeline_design_gate.json + humanize_korean_gate.json + block_map.json + block_role_map.json + block_voice_switch_map.json + tts_copy_text.txt + script_handoff_gate.json + report1_handoff.json
-G2 STAGE 1 STOP = 보고서1 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
+G2 STAGE 1 STOP = 설계도 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = stage_2_full intent + report1_approved + voice_audio_route_decided
 G4 FINAL = [FINAL_LOCK 최종 보고] only after production, visual, media-settings, cleanup, and harness gates pass
 ```
@@ -411,7 +410,7 @@ neither means restart at G0.
 
 The validator enforces this through `project_file_request_mode()`. Do not work
 around it by writing `project_file_request_mode=AUTO_FULL_CAPCUT_PROJECT` into a
-contract unless the user-stage evidence, 보고서1 approval, and voice/audio route
+contract unless the user-stage evidence, 설계도 approval, and voice/audio route
 decision above exist.
 
 ## Production Mode Selection
@@ -534,6 +533,19 @@ Before generating or repairing production assets, identify the current authority
 - `source.mp4` or equivalent source file
 - source provenance and usable-file check
 - source-evidence/watch/direct-frame findings when the video content matters
+- `10_analysis/source_identity_lock.json` with `status=PASS`, canonical URL,
+  video id, actual local source path, SHA256, and duration. Missing or mismatched
+  lock is `WAIT_SOURCE_IDENTITY_LOCK`.
+- `10_analysis/source_evidence.json` and
+  `10_analysis/crosscheck_report.json` with `status=PASS`, the same video id,
+  and the same source SHA256. Missing or mismatched evidence is
+  `WAIT_SOURCE_EVIDENCE_REQUIRED`.
+- `10_analysis/tikitaka_source_request.json` written by `00-tikitaka` from its
+  Shorts intake URL. Its URL/video id must match the source identity lock or
+  stop at `WAIT_SOURCE_REQUEST_BINDING`.
+- Do an actual ffprobe of the local media in Stage 2 validation; copied
+  `ffprobe_status=PASS` text is not evidence. Invalid/non-video media is
+  `WAIT_SOURCE_MEDIA_FFPROBE`.
 - script authority, usually `final_script_ko.txt` or the current Tikitaka draft
 - Tikitaka `SCRIPT_LOCK_PACKAGE` when the script came from `00-tikitaka`; this
   package is the Source of Truth for `CAPCUT_OPENABLE_PROJECT`.
@@ -564,6 +576,23 @@ Before generating or repairing production assets, identify the current authority
 Missing `source.mp4` is a hard stop for source-derived production. Do not proceed
 to source evidence, verified analysis, SRT/layout, CapCut, export, upload, or
 final validation without source acquisition and provenance.
+
+Stage 2 validators must parse `block_map.json`, `block_role_map.json`, and
+`block_voice_switch_map.json` and require exact `edit_id` coverage against
+`timeline_design.json`; mismatch is `WAIT_HANDOFF_MAP_COHERENCE`. Approval and
+voice-route booleans must exist in `report1_handoff.json` itself; an external
+contract/status file cannot supply missing approval.
+
+`report1_handoff.json`, `script_handoff_gate.json`, and
+`timeline_design.json` must all carry the exact source media SHA256 as
+`source_fingerprint_sha256`. Any omission or mismatch is
+`WAIT_SOURCE_HANDOFF_FINGERPRINT`.
+
+Before `CAPCUT_OPENABLE_PROJECT`, run the active media-link validator and prove
+that the real source path is present in active draft materials. Empty or
+source-unlinked materials are `WAIT_CAPCUT_SOURCE_MEDIA_LINK`. Before production
+PASS, the actual source media must be included in declared SHA256 inputs;
+otherwise stop with `SOURCE_MEDIA_HASH_REQUIRED`.
 
 If the script came from Tikitaka and timed `중단` blocks exist, missing segment
 audio policy is a hard stop:
@@ -746,8 +775,8 @@ equivalent fields such as:
 - `payoff_recovery_line`
 
 If this is missing or the draft opens as a flat event summary, stop at
-`WAIT_SCRIPT_REWRITE_REQUIRED` and route back to `00-tikitaka` or
-`00script-writer`. Do not rewrite the story inside production. Do not reject an
+`WAIT_SCRIPT_REWRITE_REQUIRED` and route back to `00-tikitaka`. Do not rewrite
+the story inside production. Do not reject an
 ordinary emotional/TTS script solely because the hook premise is plausible,
 fictionalized, or not source-verifiable.
 
@@ -882,3 +911,18 @@ Each state needs its own evidence.
 
 Keep this `SKILL.md` as the active production router. Do not re-add broad
 Tikitaka, 우라까이, channel-family, hook, or analysis triggers to the description.
+
+## Integrated Blueprint and Upload Contract
+
+Do not create a separate human-facing assembly report. Read and preserve
+`20_script/design_blueprint.md`, then append `## 조립도` after the Stage 1
+design sections. The assembly section must include `프로젝트 실체`,
+`설계도 반영 결과` table, `실제 CapCut 트랙 구성` table, `TTS 실제 길이 대조`
+table, `검증 결과`, and `남은 사람 작업`.
+
+After assembly, append `## 업로드 패키지` as the final H2 section. It must
+contain non-empty `제목`, `상세설명`, `출처`, `해시태그`, and
+`추천 업로드채널` fields. Missing sections or a different final section are
+hard failures: `FAIL_DESIGN_BLUEPRINT`, `FAIL_ASSEMBLY_BLUEPRINT`, or
+`FAIL_UPLOAD_PACKAGE`. Run `scripts/validate_integrated_blueprint.py` in
+`production` phase before reporting `CAPCUT_EDIT_READY`.

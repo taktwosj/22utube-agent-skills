@@ -1132,7 +1132,11 @@ def upload_ready_state(contract: dict[str, Any], *, stage: str) -> dict[str, Any
     }
 
 
-def validate_declared_input_hashes(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+def validate_declared_input_hashes(
+    contract: dict[str, Any],
+    root: Path,
+    required_source_path: Path | None = None,
+) -> dict[str, Any]:
     declared = contract.get("input_files") or contract.get("declared_input_files") or []
     if not declared:
         raise GateFail("input_files must include at least one hashed input file")
@@ -1140,6 +1144,7 @@ def validate_declared_input_hashes(contract: dict[str, Any], root: Path) -> dict
         raise GateFail("input_files must be a list")
 
     verified = 0
+    verified_paths: set[str] = set()
     for index, item in enumerate(declared):
         if isinstance(item, str):
             raise GateFail(f"input_files[{index}] sha256 required; use object form")
@@ -1158,6 +1163,11 @@ def validate_declared_input_hashes(contract: dict[str, Any], root: Path) -> dict
                 f"input_files[{index}] sha256 mismatch: {raw_path}"
             )
         verified += 1
+        verified_paths.add(str(path.resolve()).lower())
+    if required_source_path is not None:
+        resolved_source = str(as_path(root, required_source_path).resolve()).lower()
+        if resolved_source not in verified_paths:
+            raise GateFail("SOURCE_MEDIA_HASH_REQUIRED: source media must be a declared hashed input")
     return {"input_file_hashes_verified": True, "input_file_count": verified}
 
 
@@ -1436,6 +1446,8 @@ def validate_report1_handoff_gate(contract: dict[str, Any], root: Path) -> dict[
 def validate_stage2_tikitaka_handoff_gate(
     contract: dict[str, Any],
     root: Path,
+    *,
+    require_production_blueprint: bool = False,
 ) -> dict[str, Any]:
     validator_path = Path(__file__).with_name("validate_stage2_tikitaka_handoff.py")
     spec = importlib.util.spec_from_file_location("_stage2_tikitaka_handoff", validator_path)
@@ -1444,9 +1456,30 @@ def validate_stage2_tikitaka_handoff_gate(
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     try:
-        return module.validate_stage2_tikitaka_handoff(root, contract)
+        return module.validate_stage2_tikitaka_handoff(
+            root,
+            contract,
+            require_production_blueprint=require_production_blueprint,
+        )
     except Exception as exc:
         raise GateFail(str(exc)) from exc
+
+
+def validate_capcut_media_link_gate(
+    root: Path,
+    draft_content_path: Path,
+    source_path: Path,
+) -> dict[str, Any]:
+    validator_path = Path(__file__).with_name("validate_capcut_media_links.py")
+    spec = importlib.util.spec_from_file_location("_capcut_media_links", validator_path)
+    if spec is None or spec.loader is None:
+        raise GateFail("WAIT_CAPCUT_SOURCE_MEDIA_LINK: media-link validator unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_capcut_media_links(root, draft_content_path, source_path)
+    except Exception as exc:
+        raise GateFail(f"WAIT_CAPCUT_SOURCE_MEDIA_LINK: {exc}") from exc
 
 
 def report_scalar(value: Any) -> str:
@@ -1793,6 +1826,11 @@ def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path)
     )
     draft_content_path = require_file(root, draft_content_rel_path, "draft_content")
     load_json(draft_content_path)
+    media_link_result = validate_capcut_media_link_gate(
+        root,
+        draft_content_path,
+        Path(stage2_tikitaka_handoff_result["source_path"]),
+    )
     capcut_project_name = first_status_value(sources, ("capcut_project_name", "project_name"))
     local_capcut_path = first_status_value(sources, ("local_capcut_path", "capcut_local_path"))
     upload_title = first_report_field(
@@ -1859,6 +1897,7 @@ def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path)
         "subtitle_reflected": subtitle_reflected,
         "source_video_reflected": source_video_reflected,
         "temp_files_cleaned": temp_files_cleaned,
+        **media_link_result,
         **default_capcut_base_result,
         **template_reference_result,
         "next_gate": "ASSET_PREP_GATE",
@@ -3815,11 +3854,20 @@ def validate_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
     )
     require(source_pointer, "source_url or source_path is required")
     request_mode = project_file_request_mode(merged_request_scope_contract(contract, root))
+    stage2_tikitaka_handoff_result = validate_stage2_tikitaka_handoff_gate(
+        contract,
+        root,
+        require_production_blueprint=True,
+    )
 
     render_plan_path = require_file(root, contract.get("render_plan_path", ""), "render_plan")
     render_plan = load_json(render_plan_path)
     proof_result = validate_production_proof_files(contract, root)
-    input_hash_result = validate_declared_input_hashes(contract, root)
+    input_hash_result = validate_declared_input_hashes(
+        contract,
+        root,
+        Path(stage2_tikitaka_handoff_result["source_path"]),
+    )
     mode = assembly_mode(contract, render_plan)
 
     if mode in SCENARIO_FIRST_MODES:
@@ -3856,6 +3904,7 @@ def validate_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
     result.update(policy_result)
     result.update(report_voice_result)
     result.update(shared_result)
+    result.update(stage2_tikitaka_handoff_result)
     result.update(assembly_result)
     result.update(proof_result)
     result.update(input_hash_result)

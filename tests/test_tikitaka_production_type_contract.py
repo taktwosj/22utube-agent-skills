@@ -107,8 +107,8 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
         text = SKILL.read_text(encoding="utf-8")
 
         for token in [
-            "Report 1 Contract",
-            "보고서1",
+            "설계도 계약",
+            "설계도",
             "대본 승인용",
             "한글 우선",
             "예/아니오 단답",
@@ -133,7 +133,7 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             "다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT",
             "다음 채팅에 붙일 지시",
             "Use $000short-production-agent",
-            "보고서1 승인 + TTS/오디오 방식 결정",
+            "설계도 승인 + TTS/오디오 방식 결정",
             "00-tikitaka는 보고서2를 작성하지 않는다",
         ]:
             with self.subTest(token=token):
@@ -252,7 +252,7 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             "T1/T2/TTS",
             "화자발언",
             "상황설명",
-            "00script-writer is not a default stage",
+            "Wording polish is an optional pass inside this skill",
             "Humanize may change wording only",
             "time_start/time_end/track/caption_type/audio_policy",
             "Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json status=PASS",

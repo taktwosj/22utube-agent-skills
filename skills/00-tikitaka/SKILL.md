@@ -63,7 +63,9 @@ Current Tikitaka work is a reproducible design stage, not an abstract script
 stage. The stage order is:
 
 ```text
-source evidence
+tikitaka_source_request.json
+-> source evidence
+-> source_identity_lock.json + verified source_fingerprint_sha256
 -> 1차설계서
 -> timeline_design.json
 -> timeline_design_gate.json
@@ -105,9 +107,9 @@ Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json status=PASS. If
 Humanize needs a structural change, return to Tikitaka design repair instead of
 silently patching the script.
 
-`00script-writer is not a default stage`. Use it only when the user explicitly
+Wording polish is an optional pass inside this skill when the user explicitly
 asks for a rewrite or when the 1차설계서 text fails readability/hook pressure.
-Even then it may patch wording only; it may not change
+That pass may patch wording only; it may not change
 `time_start/time_end/track/caption_type/audio_policy`.
 
 ## Purpose Of 1차설계서
@@ -277,6 +279,7 @@ If actual narration is longer than the planned visual beat, return to Tikitaka
 design repair unless the locked design explicitly allows one of:
 
 ```text
+none
 extend_visual
 shift_later_beats
 hold_frame
@@ -318,7 +321,7 @@ shorten_text_and_regenerate_tts
   "timeline_design_updated": true,
   "protected_fields_changed": true,
   "change_reason": "actual TTS duration exceeded planned slot",
-  "allowed_reconciliation_action": "extend_visual",
+  "reconciliation_action": "extend_visual",
   "requires_new_timeline_design_gate": true,
   "requires_new_humanize_korean_gate": true,
   "requires_new_script_handoff_gate": true
@@ -477,6 +480,35 @@ Runner contract:
   `Playground` item (`span.nav-item-main-text` text `Playground`) and then force
   `/prompts/new_chat` again. This prevents stale restored chats/old Model JSON
   from being treated as the new Shorts result.
+- The extension bridge result is accepted only when all run-binding fields are
+  present: `playgroundStatus=VERIFIED_NEW_CHAT`,
+  `urlContextStatus=VERIFIED_ON`, `promptUrlVerified=true`,
+  `promptNonceVerified=true`, and `generationStarted=true`.
+- Generate a unique `run_nonce` per attempt. The final JSON must return the same
+  `run_nonce`, the exact requested `source_video_id`, the exact `video_url`, and
+  a non-empty `observed_source_title` that matches trusted yt-dlp metadata.
+- Missing URL metadata, title/duration/id mismatch, a stale nonce, or a bridge
+  status outside the allowlist is `RESULT_SOURCE_MISMATCH` or a WAIT blocker;
+  it must never reach the save function.
+- When source media exists, bind raw intake, script handoff, and production to
+  `10_analysis/source_identity_lock.json`. The lock contains canonical URL,
+  video id, local source path, SHA256, and duration. Raw JSON without the same
+  source identity remains analysis hint only.
+- At Shorts intake, write `10_analysis/tikitaka_source_request.json` from the
+  exact URL in the current request before Gemini or source acquisition. Match
+  its URL/video id to the source identity lock before design lock. Then carry the lock SHA256 as
+  `source_fingerprint_sha256` in `timeline_design.json`,
+  `script_handoff_gate.json`, and `report1_handoff.json`. A missing or unequal
+  fingerprint is `WAIT_SOURCE_HANDOFF_FINGERPRINT`, never a valid Stage 2 handoff.
+
+```json
+{
+  "status": "PASS",
+  "owner_skill": "00-tikitaka",
+  "requested_source_url": "https://www.youtube.com/shorts/<video-id>",
+  "requested_video_id": "<video-id>"
+}
+```
 - The runner may launch the dedicated Chrome window offscreen/minimized and must
   close it cleanly when done so Chrome does not show a next-run restore-pages
   bubble. If the dedicated window is visible, do not ask the user to interact
@@ -485,6 +517,8 @@ Runner contract:
   `permission denied`, `RESULT_TIMEOUT`, source identity mismatch, duration/id
   mismatch, unrelated animal/old-video output, or missing `final_warning_ko` is
   FAIL, not a saved result. `final_warning_ko` alone is never enough.
+- Manual copy/save follows the same run nonce and source-identity checks. Never
+  save a copied JSON merely because it contains `final_warning_ko`.
 
 Only use manual AI Studio copy/save as a fallback when the runner is blocked and
 report the blocker. Do not use the old `+ Create new instruction` -> `0701경`
@@ -515,9 +549,7 @@ timecode mismatch notes. Keep any unverified Gemini ranges as
 ## Ownership Matrix
 
 - `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
-- `00script-writer`: polish/review an existing script draft only.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
-- `22utube-production-agent`: shared factory policy only.
 
 ## Escalation Rule
 
@@ -529,7 +561,7 @@ production, `production_allowed`, `SCRIPT_LOCK`, `PASS`, export, upload,
 completion, audio generation, SRT generation, layout JSON, or CapCut work.
 
 If the user already has a draft and asks only for wording, rhythm, retention,
-or writer review, route to `00script-writer` instead of rewriting it here.
+or review, perform that wording-only pass here without changing the story plan.
 
 ## Stage Scope Gate
 
@@ -549,7 +581,7 @@ or `스크립트만`, this skill produces the stage-1 package only: `1차설계�
 상단, timed 중단, `중단 TTS 글자만 복사`, `timeline_design.json`,
 `timeline_design_gate.json`, `humanize_korean_gate.json`, `block_map.json`,
 `block_role_map.json`, `block_voice_switch_map.json`,
-`script_handoff_gate.json`, and 보고서1. Then stop at
+`script_handoff_gate.json`, and 설계도. Then stop at
 `WAIT_REPORT1_APPROVAL_TTS_DECISION` until the user says OK and chooses the
 TTS/audio route.
 
@@ -557,7 +589,7 @@ If the user already says `끝까지`, `자동으로 다`, `최종`, `다음단�
 `업로드까지`, `슈퍼톤`, `슈퍼톤으로`, `supertone`, `TTS 만들어`, `tts 만들`,
 `TTS 생성`, `tts 생성`, `TTS mp3`, `tts mp3`, `캣컵프로젝트파일까지`,
 `캣컵 프로젝트 파일까지`, `캐컷프로젝트파일까지`, or `capcut project`, mark
-`user_stage_decision=stage_2_full` as future intent. Still output 보고서1 and
+`user_stage_decision=stage_2_full` as future intent. Still output 설계도 and
 wait for `report1_approved=true` plus `voice_audio_route_decided=true` before
 route to `000short-production-agent`. A generic `진행/해줘` next to stage-1
 wording is not stage-2 permission.
@@ -569,7 +601,7 @@ Mandatory gate map for URL + Gemini/source intake:
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
 G1 STAGE 1 = create 1차설계서, timeline_design.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, and script_handoff_gate.json
-G2 STAGE 1 STOP = output 1차설계서/보고서1 and stop until report1_approved + voice_audio_route_decided
+G2 STAGE 1 STOP = output 설계도 and stop until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
 ```
@@ -614,19 +646,21 @@ because the output is not upload-ready.
 
 Do not choose DRAFT_FAST just because the output is not upload-ready.
 
-## Report 1 Contract
+## 설계도 계약
 
-`보고서1` is the Tikitaka 대본 승인용 report. It is not a CapCut, export, upload,
-or production report.
+`설계도` is the Tikitaka 제작 승인용 blueprint. It combines the operator-facing
+`1차설계서` with the locked script, time, track, caption-role, video, and audio
+lane decisions required before CapCut assembly. It is not a CapCut, export,
+upload, or production result.
 
-Write 보고서1 in 한글 우선, short, scan-friendly form. Use 예/아니오 단답 for
+Write 설계도 in 한글 우선, short, scan-friendly form. Use 예/아니오 단답 for
 gate items whenever possible. The operator should be able to approve or reject
-the script without reading implementation labels.
+the complete Stage 1 production design without reading implementation labels.
 
-Required 보고서1 shape:
+Required 설계도 shape:
 
 ```text
-# 보고서1
+# 설계도
 
 대본 승인용: 예
 CapCut 생성: 아니오
@@ -639,6 +673,7 @@ episode_id:
 source_url:
 source_title:
 source_evidence_status: VERIFIED | PARTIAL | PROPOSED
+source_fingerprint_sha256:
 source_tags:
 upload_tags:
 remake_title_ko:
@@ -701,11 +736,11 @@ handoff:
 - 다음 스킬: 000short-production-agent
 - 다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT
 - 다음 채팅에 붙일 지시: Use $000short-production-agent
-- 필요 조건: 보고서1 승인 + TTS/오디오 방식 결정
+- 필요 조건: 설계도 승인 + TTS/오디오 방식 결정
 - 00-tikitaka는 보고서2를 작성하지 않는다
 ```
 
-After 보고서1, stop until the user approves the script. Only after 사용자가 OK한 뒤
+After 설계도, stop until the user approves the design. Only after 사용자가 OK한 뒤
 and one TTS route is chosen may the work move to 보고서2:
 
 - 사용자 제공 TTS
@@ -714,7 +749,8 @@ and one TTS route is chosen may the work move to 보고서2:
 
 If the user approves the script and asks for CapCut, route to
 `000short-production-agent` and mark the next stage as 보고서2로 이동.
-The Tikitaka harness must also write `report1_handoff.json` with
+The Tikitaka harness must also write the legacy-compatible internal
+`report1_handoff.json` with `report=설계도` and
 `next_skill=000short-production-agent`; if it is missing, treat the package as
 not ready for a new-chat stage-2 handoff.
 
@@ -767,11 +803,11 @@ If the user asks to make the video, create SRT/layout, build CapCut, render,
 export, package upload files, or continue production, switch to
 `000short-production-agent`.
 
-If the user asks to polish an already-written script without production, switch
-to `00script-writer`.
+If the user asks to polish an already-written script without production, keep
+the work in this skill and preserve all locked timing/source fields.
 
-If the user asks about folder/root/rule policy, read `22utube-production-agent`
-as a reference only.
+For folder/root/rule policy, follow the workspace `AGENTS.md` and
+`docs/YOUTUBE_PRODUCTION_WORK_ORDER.md` directly.
 
 ## Active Root
 
@@ -800,8 +836,11 @@ Gemini alone. Mark any proposed source range as
 `PROPOSED_SOURCE_TIMECODE` until the user confirms it or a source-evidence tool
 verifies it.
 
-If source verification is needed before script confidence, use `watch` or the
-current source-evidence workflow before claiming final timing.
+If source verification is needed before script confidence, use the current
+source-evidence workflow only. The user must provide or confirm `source.mp4`
+and the required frame/STT/OCR evidence. If the media is not available, stop
+and ask the user to provide the source media or evidence manually; do not
+invoke a separate video-watching skill or invent final timing.
 
 ## Story And Production Type Gate
 
@@ -1490,3 +1529,15 @@ Hard fails:
 Keep this `SKILL.md` as the active router. Do not re-expand it with legacy
 examples, PASS templates, production reports, CapCut details, or long handoff
 instructions.
+
+## Integrated Blueprint Output Contract
+
+The human-facing artifact is always `20_script/design_blueprint.md`. Stage 1
+must create it with the exact first heading `# 설계도` and H2 sections `기본 정보`,
+`제작 판단`, `상단 고정 문구`, `조립 역할 순서`, `트랙별 타임라인`,
+`TTS 복사용 문구`, and `승인 전 점검`. The two timeline sections must be
+markdown tables and the TTS section must be non-empty.
+
+Stage 1 owns only the design portion. Stage 2 appends `## 조립도` and the
+production skill owns that section. The final section is reserved for the
+production skill's `## 업로드 패키지`.

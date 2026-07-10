@@ -18,6 +18,13 @@ JSON에 주석을 넣지 않는다.
 이 JSON은 Gemini 초벌 관찰값이다.
 최종 대본, 화자발언 확정, 컷타이밍, TTS/상황설명 배치, CapCut 제작은 Codex가 source.mp4와 STT/OCR/프레임 검증으로 확정한다.
 
+# 실행 바인딩 규칙
+
+- 메인 프롬프트의 실행 nonce를 run_nonce에 그대로 쓴다.
+- 메인 프롬프트의 요청 source_video_id를 source_video_id에 그대로 쓴다.
+- URL context에서 실제로 관찰한 영상 제목을 observed_source_title에 쓴다.
+- URL context에서 제목이나 영상을 확인하지 못하면 observed_source_title을 지어내지 말고 빈 문자열로 둔다.
+
 Gemini는 아래 4가지를 분리해서 기록한다.
 
 1. 보이는 사실
@@ -202,6 +209,9 @@ F형 기본 레이아웃은 아래처럼 판단한다.
 boolean은 true 또는 false로 쓴다.
 
 {
+  "run_nonce": "",
+  "source_video_id": "",
+  "observed_source_title": "",
   "video_url": "",
   "video_duration_sec": 0,
   "status": "GEMINI_RAW_TIMECODE_NOT_VERIFIED",
@@ -385,8 +395,4 @@ boolean은 true 또는 false로 쓴다.
 
   "final_warning_ko": "이 JSON은 Gemini 초벌 초단위 관찰값이다. 최종 대본, 화자발언 확정, 컷타이밍, TTS/상황설명 배치, CapCut 제작은 Codex가 source.mp4와 STT/OCR/프레임 검증으로 확정해야 한다."
 }
-
-# 분석할 URL
-
-여기에 분석할 URL을 붙여 넣는다.
 ```

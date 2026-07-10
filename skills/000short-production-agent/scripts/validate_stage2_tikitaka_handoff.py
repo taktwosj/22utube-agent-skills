@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import importlib.util
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +73,7 @@ READY_TTS_TIMING_STATUSES = {
 ALLOWED_RECONCILIATION_ACTIONS = {
     "",
     "none",
-    "extend_slot",
+    "extend_visual",
     "retime_segment",
     "split_segment",
     "shorten_text",
@@ -178,9 +181,9 @@ def validate_report1_handoff(
         raise GateFail("WAIT_REPORT1_HANDOFF_GATE: owner_skill must be 00-tikitaka")
     if data.get("next_skill") != "000short-production-agent":
         raise GateFail("WAIT_REPORT1_HANDOFF_GATE: next_skill must be 000short-production-agent")
-    if not handoff_or_contract_true(data, contract, "report1_approved"):
+    if data.get("report1_approved") is not True:
         raise GateFail("WAIT_REPORT1_APPROVAL_TTS_DECISION: report1_approved must be true")
-    if not handoff_or_contract_true(data, contract, "voice_audio_route_decided"):
+    if data.get("voice_audio_route_decided") is not True:
         raise GateFail("WAIT_REPORT1_APPROVAL_TTS_DECISION: voice_audio_route_decided must be true")
     return data
 
@@ -380,26 +383,330 @@ def validate_humanize_gate(root: Path) -> dict[str, Any]:
     return data
 
 
-def validate_source_presence(root: Path) -> Path:
-    manifest = root / "00_source" / "source_manifest.json"
-    if manifest.exists():
-        data = load_json(manifest, "source_manifest.json")
-        if status_value(data) == "PASS":
-            return manifest
-        raise GateFail("WAIT_SOURCE_MEDIA_REQUIRED: source_manifest status must be PASS")
-    source = root / "00_source" / "source.mp4"
-    if source.exists():
-        return source
-    raise GateFail("WAIT_SOURCE_MEDIA_REQUIRED: source_manifest.json or source.mp4 missing")
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def video_id_from_url(raw_url: str) -> str:
+    from urllib.parse import parse_qs, urlparse
+
+    parsed = urlparse(str(raw_url or "").strip())
+    parts = [part for part in parsed.path.split("/") if part]
+    host = parsed.netloc.lower().split(":", 1)[0]
+    is_youtube = host in {"youtube.com", "www.youtube.com", "m.youtube.com"}
+    if is_youtube and "shorts" in parts:
+        index = parts.index("shorts")
+        return parts[index + 1] if index + 1 < len(parts) else ""
+    if host == "youtu.be" and parts:
+        return parts[0]
+    if is_youtube:
+        return (parse_qs(parsed.query).get("v") or [""])[0]
+    return ""
+
+
+def probe_source_media(source_path: Path) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration:stream=codec_type",
+                "-of",
+                "json",
+                str(source_path),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise GateFail(f"WAIT_SOURCE_MEDIA_FFPROBE: ffprobe unavailable or timed out: {exc}") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.strip().splitlines()
+        suffix = detail[-1] if detail else "unknown ffprobe error"
+        raise GateFail(f"WAIT_SOURCE_MEDIA_FFPROBE: ffprobe failed: {suffix}")
+    try:
+        payload = json.loads(completed.stdout)
+        duration_sec = float(payload.get("format", {}).get("duration"))
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise GateFail("WAIT_SOURCE_MEDIA_FFPROBE: duration missing or invalid") from exc
+    streams = payload.get("streams")
+    if not isinstance(streams, list) or not any(
+        isinstance(stream, dict) and stream.get("codec_type") == "video" for stream in streams
+    ):
+        raise GateFail("WAIT_SOURCE_MEDIA_FFPROBE: video stream missing")
+    if duration_sec <= 0:
+        raise GateFail("WAIT_SOURCE_MEDIA_FFPROBE: duration must be positive")
+    return {"duration_sec": duration_sec, "has_video_stream": True}
+
+
+def validate_source_identity_lock(
+    root: Path,
+    contract: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    fail_token = "WAIT_SOURCE_IDENTITY_LOCK"
+    manifest_path = root / "00_source" / "source_manifest.json"
+    manifest = load_json(manifest_path, "source_manifest.json")
+    if status_value(manifest) != "PASS":
+        raise GateFail(f"{fail_token}: source_manifest status must be PASS")
+
+    lock_rel = str(manifest.get("source_identity_lock_path") or "10_analysis/source_identity_lock.json")
+    lock_path = as_path(root, lock_rel)
+    lock = load_json(lock_path, "source_identity_lock.json")
+    if status_value(lock) != "PASS":
+        raise GateFail(f"{fail_token}: source_identity_lock status must be PASS")
+
+    required = ("canonical_url", "video_id", "local_source_path", "sha256", "duration_sec")
+    missing = [field for field in required if lock.get(field) in (None, "")]
+    if missing:
+        raise GateFail(f"{fail_token}: source_identity_lock missing {', '.join(missing)}")
+    if video_id_from_url(str(lock["canonical_url"])) != str(lock["video_id"]):
+        raise GateFail(f"{fail_token}: canonical_url video id mismatch")
+    if (
+        isinstance(lock["duration_sec"], bool)
+        or not isinstance(lock["duration_sec"], (int, float))
+        or float(lock["duration_sec"]) <= 0
+    ):
+        raise GateFail(f"{fail_token}: duration_sec must be positive numeric")
+
+    source_request_path = root / "10_analysis" / "tikitaka_source_request.json"
+    source_request = load_json(source_request_path, "tikitaka_source_request.json")
+    if status_value(source_request) != "PASS":
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: Tikitaka source request status must be PASS")
+    if source_request.get("owner_skill") not in (None, "", "00-tikitaka"):
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: source request owner must be 00-tikitaka")
+    requested_url = str(source_request.get("requested_source_url") or "").strip()
+    requested_video_id = str(source_request.get("requested_video_id") or "").strip()
+    if not requested_url or not requested_video_id:
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: Tikitaka source URL/video id required")
+    if video_id_from_url(requested_url) != requested_video_id:
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: Tikitaka URL/video id mismatch")
+    if requested_video_id != str(lock["video_id"]):
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: Tikitaka request does not match source lock")
+    contract_source_url = str(
+        (contract or {}).get("requested_source_url")
+        or (contract or {}).get("source_url")
+        or ""
+    ).strip()
+    contract_video_id = video_id_from_url(contract_source_url) if contract_source_url else ""
+    if contract_video_id and contract_video_id != requested_video_id:
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: contract source does not match Tikitaka request")
+    if contract_video_id and contract_source_url != requested_url:
+        raise GateFail("WAIT_SOURCE_REQUEST_BINDING: contract source URL must exactly match Tikitaka request")
+
+    source_path = as_path(root, str(lock["local_source_path"]))
+    if not source_path.is_file() or source_path.stat().st_size <= 0:
+        raise GateFail(f"{fail_token}: local source media missing or empty: {source_path}")
+    actual_sha256 = sha256_file(source_path)
+    if actual_sha256.lower() != str(lock["sha256"]).lower():
+        raise GateFail(f"{fail_token}: source sha256 mismatch")
+    actual_probe = probe_source_media(source_path)
+    if abs(float(actual_probe["duration_sec"]) - float(lock["duration_sec"])) > 0.25:
+        raise GateFail("WAIT_SOURCE_MEDIA_FFPROBE: source duration does not match identity lock")
+
+    for field in required:
+        if manifest.get(field) != lock.get(field):
+            raise GateFail(f"{fail_token}: source_manifest {field} mismatch")
+
+    evidence_paths = {
+        "source_evidence": str(manifest.get("source_evidence_path") or "10_analysis/source_evidence.json"),
+        "crosscheck_report": str(manifest.get("crosscheck_report_path") or "10_analysis/crosscheck_report.json"),
+    }
+    verified_evidence: dict[str, str] = {}
+    for label, relative in evidence_paths.items():
+        evidence_path = as_path(root, relative)
+        evidence = load_json(evidence_path, f"{label}.json")
+        if status_value(evidence) != "PASS":
+            raise GateFail(f"WAIT_SOURCE_EVIDENCE_REQUIRED: {label} status must be PASS")
+        if str(evidence.get("video_id") or "") != str(lock["video_id"]):
+            raise GateFail(f"WAIT_SOURCE_EVIDENCE_REQUIRED: {label} video_id mismatch")
+        if str(evidence.get("source_fingerprint_sha256") or "").lower() != actual_sha256.lower():
+            raise GateFail(f"WAIT_SOURCE_EVIDENCE_REQUIRED: {label} source fingerprint mismatch")
+        if label == "source_evidence":
+            stt = evidence.get("stt")
+            if (
+                not isinstance(stt, dict)
+                or status_value(stt) != "PASS"
+                or not isinstance(stt.get("verified_ranges"), list)
+            ):
+                raise GateFail("WAIT_SOURCE_EVIDENCE_REQUIRED: stt verified_ranges are required")
+            probed_duration = evidence.get("probed_duration_sec")
+            if evidence.get("ffprobe_status") != "PASS" or evidence.get("has_video_stream") is not True:
+                raise GateFail(
+                    "WAIT_SOURCE_EVIDENCE_PROBE_REQUIRED: ffprobe PASS and video stream evidence required"
+                )
+            if isinstance(probed_duration, bool) or not isinstance(probed_duration, (int, float)):
+                raise GateFail("WAIT_SOURCE_EVIDENCE_PROBE_REQUIRED: probed_duration_sec must be numeric")
+            if abs(float(probed_duration) - float(lock["duration_sec"])) > 0.25:
+                raise GateFail("WAIT_SOURCE_EVIDENCE_PROBE_REQUIRED: probed duration mismatch")
+            if abs(float(probed_duration) - float(actual_probe["duration_sec"])) > 0.25:
+                raise GateFail("WAIT_SOURCE_EVIDENCE_PROBE_REQUIRED: evidence does not match actual ffprobe")
+        else:
+            if evidence.get("hint_vs_evidence_compared") is not True:
+                raise GateFail("WAIT_SOURCE_EVIDENCE_REQUIRED: crosscheck comparison is incomplete")
+        verified_evidence[label] = str(evidence_path)
+
+    return {
+        "source_path": source_path,
+        "source_manifest_path": manifest_path,
+        "source_identity_lock_path": lock_path,
+        "source_sha256": actual_sha256,
+        "video_id": str(lock["video_id"]),
+        "requested_video_id": requested_video_id,
+        "tikitaka_source_request_path": source_request_path,
+        "source_probe_duration_sec": actual_probe["duration_sec"],
+        **verified_evidence,
+    }
+
+
+def validate_handoff_source_fingerprints(
+    report1: dict[str, Any],
+    script_handoff: dict[str, Any],
+    timeline_design: dict[str, Any],
+    expected_sha256: str,
+) -> None:
+    expected = expected_sha256.lower()
+    for label, payload in (
+        ("report1_handoff.json", report1),
+        ("script_handoff_gate.json", script_handoff),
+        ("timeline_design.json", timeline_design),
+    ):
+        actual = str(payload.get("source_fingerprint_sha256") or "").lower()
+        if actual != expected:
+            raise GateFail(
+                f"WAIT_SOURCE_HANDOFF_FINGERPRINT: {label} source fingerprint mismatch"
+            )
+
+
+def validate_handoff_maps(root: Path, timeline_design: dict[str, Any]) -> dict[str, Any]:
+    fail_token = "WAIT_HANDOFF_MAP_COHERENCE"
+    role_map_path = root / "20_script" / "block_role_map.json"
+    if not role_map_path.exists():
+        raise GateFail(f"WAIT_BLOCK_ROLE_MAP_REQUIRED: {fail_token}: block_role_map.json missing")
+    try:
+        block_map = load_json(root / "20_script" / "block_map.json", "block_map.json")
+        role_map = load_json(role_map_path, "block_role_map.json")
+        voice_map = load_json(root / "20_script" / "block_voice_switch_map.json", "block_voice_switch_map.json")
+    except GateFail as exc:
+        raise GateFail(f"{fail_token}: {exc}") from exc
+
+    timeline_segments = [
+        item for item in timeline_design.get("segments", []) if isinstance(item, dict)
+    ]
+    timeline_ids = {str(item.get("edit_id")) for item in timeline_segments}
+    sequence = block_map.get("edit_block_sequence")
+    blocks = block_map.get("blocks")
+    roles = role_map.get("roles")
+    switches = voice_map.get("switches")
+    if not isinstance(sequence, list) or not isinstance(blocks, list):
+        raise GateFail(f"{fail_token}: block_map lists missing")
+    if not isinstance(roles, list) or not isinstance(switches, list):
+        raise GateFail(f"{fail_token}: role or voice map lists missing")
+    for label, items in (("blocks", blocks), ("roles", roles), ("switches", switches)):
+        if any(not isinstance(item, dict) or not str(item.get("edit_id") or "") for item in items):
+            raise GateFail(f"{fail_token}: {label} contains invalid edit_id")
+        edit_ids = [str(item["edit_id"]) for item in items]
+        if len(edit_ids) != len(set(edit_ids)):
+            raise GateFail(f"{fail_token}: {label} contains duplicate edit_id")
+    sequence_values = [str(value) for value in sequence]
+    if len(sequence_values) != len(set(sequence_values)):
+        raise GateFail(f"{fail_token}: edit_block_sequence contains duplicate edit_id")
+    sequence_ids = {str(value) for value in sequence}
+    block_ids = {str(item.get("edit_id")) for item in blocks if isinstance(item, dict)}
+    role_ids = {str(item.get("edit_id")) for item in roles if isinstance(item, dict)}
+    switch_ids = {str(item.get("edit_id")) for item in switches if isinstance(item, dict)}
+    if not timeline_ids or not (timeline_ids == sequence_ids == block_ids == role_ids == switch_ids):
+        raise GateFail(f"{fail_token}: edit_id coverage mismatch")
+    timeline_by_id = {str(item["edit_id"]): item for item in timeline_segments}
+    expected_sequence = [
+        str(item["edit_id"])
+        for item in sorted(
+            timeline_segments,
+            key=lambda item: (int(item.get("timeline_order", 0)), str(item["edit_id"])),
+        )
+    ]
+    if sequence_values != expected_sequence:
+        raise GateFail(f"{fail_token}: edit_block_sequence must match timeline_order")
+    for block in blocks:
+        segment = timeline_by_id[str(block["edit_id"])]
+        expected_source = str(segment.get("source_ref") or "")
+        if expected_source and str(block.get("source_block_id") or "") != expected_source:
+            raise GateFail(f"{fail_token}: source_block_id mismatch for {block['edit_id']}")
+        if "source_order" in block and block.get("source_order") != segment.get("source_order"):
+            raise GateFail(f"{fail_token}: source_order mismatch for {block['edit_id']}")
+        if "timeline_order" in block and block.get("timeline_order") != segment.get("timeline_order"):
+            raise GateFail(f"{fail_token}: timeline_order mismatch for {block['edit_id']}")
+    for role in roles:
+        edit_id = str(role["edit_id"])
+        caption_type = str(role.get("caption_type") or "")
+        if not caption_type or caption_type != str(timeline_by_id[edit_id].get("caption_type") or ""):
+            raise GateFail(f"{fail_token}: role caption_type mismatch for {edit_id}")
+    for switch in switches:
+        segment = timeline_by_id[str(switch["edit_id"])]
+        caption_type = str(segment.get("caption_type") or "")
+        expected_source_audio = "on" if caption_type == "speaker_quote" else "off"
+        expected_tts = "on" if segment_uses_narration_audio(segment) else "off"
+        if switch.get("source_audio") != expected_source_audio or switch.get("tts") != expected_tts:
+            raise GateFail(f"{fail_token}: voice switch semantics mismatch for {switch['edit_id']}")
+    return {"handoff_map_edit_ids": sorted(timeline_ids)}
+
+
+def validate_integrated_blueprint_artifact(root: Path) -> dict[str, Any]:
+    validator_path = Path(__file__).with_name("validate_integrated_blueprint.py")
+    spec = importlib.util.spec_from_file_location("integrated_blueprint_validator", validator_path)
+    if spec is None or spec.loader is None:
+        raise GateFail("FAIL_ASSEMBLY_BLUEPRINT_VALIDATOR_MISSING")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_integrated_blueprint(root / "20_script" / "design_blueprint.md", phase="production")
+    except module.BlueprintGateFail as exc:
+        raise GateFail(str(exc)) from exc
+
+
+def integrated_blueprint_status(root: Path, *, require_production: bool) -> dict[str, Any]:
+    """Validate blueprint only at the stage that owns that contract.
+
+    Stage-2 entry validates source/script handoff. Production completion owns
+    the full design+assembly+upload blueprint. Legacy handoff fixtures may not
+    have a human-facing blueprint yet, so entry reports NOT_RUN instead of
+    masking the handoff failure under a production-only requirement.
+    """
+    blueprint = root / "20_script" / "design_blueprint.md"
+    if require_production:
+        return validate_integrated_blueprint_artifact(root)
+    if not blueprint.is_file():
+        return {"status": "NOT_RUN", "path": str(blueprint)}
+    validator_path = Path(__file__).with_name("validate_integrated_blueprint.py")
+    spec = importlib.util.spec_from_file_location("integrated_blueprint_design_validator", validator_path)
+    if spec is None or spec.loader is None:
+        raise GateFail("FAIL_DESIGN_BLUEPRINT_VALIDATOR_MISSING")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_integrated_blueprint(blueprint, phase="design")
+    except module.BlueprintGateFail as exc:
+        raise GateFail(str(exc)) from exc
 
 
 def validate_stage2_tikitaka_handoff(
     root: Path,
     contract: dict[str, Any] | None = None,
+    *,
+    require_production_blueprint: bool = False,
 ) -> dict[str, Any]:
     root = Path(root)
     report1 = validate_report1_handoff(root, contract)
-    validate_script_handoff(root)
+    script_handoff = validate_script_handoff(root)
     timeline_design, has_narration_audio = validate_timeline_design(root)
     require_status_pass(
         root / "20_script" / "timeline_design_gate.json",
@@ -407,21 +714,7 @@ def validate_stage2_tikitaka_handoff(
         "WAIT_TIMELINE_DESIGN_REPAIR",
     )
     validate_humanize_gate(root)
-    require_existing_file(
-        root / "20_script" / "block_map.json",
-        "block_map.json",
-        "WAIT_SCRIPT_HANDOFF_GATE",
-    )
-    require_existing_file(
-        root / "20_script" / "block_role_map.json",
-        "block_role_map.json",
-        "WAIT_BLOCK_ROLE_MAP_REQUIRED",
-    )
-    require_existing_file(
-        root / "20_script" / "block_voice_switch_map.json",
-        "block_voice_switch_map.json",
-        "WAIT_SCRIPT_HANDOFF_GATE",
-    )
+    map_result = validate_handoff_maps(root, timeline_design)
     if has_narration_audio:
         validate_tts_timing(root, has_narration_audio)
         tts_copy = require_existing_file(
@@ -431,26 +724,53 @@ def validate_stage2_tikitaka_handoff(
         )
         if not tts_copy.read_text(encoding="utf-8-sig").strip():
             raise GateFail("WAIT_TTS_COPY_TEXT_REQUIRED: tts_copy_text.txt is empty")
-    source = validate_source_presence(root)
+    source_result = validate_source_identity_lock(root, contract)
+    if any(segment_uses_speaker_quote(item) for item in timeline_design.get("segments", [])):
+        evidence = load_json(root / "10_analysis" / "source_evidence.json", "source_evidence.json")
+        ranges = evidence.get("stt", {}).get("verified_ranges") if isinstance(evidence.get("stt"), dict) else None
+        if not isinstance(ranges, list) or not ranges:
+            raise GateFail("WAIT_SOURCE_QUOTE_EVIDENCE: verified STT range required")
+    blueprint_result = integrated_blueprint_status(
+        root,
+        require_production=require_production_blueprint,
+    )
+    validate_handoff_source_fingerprints(
+        report1,
+        script_handoff,
+        timeline_design,
+        source_result["source_sha256"],
+    )
     return {
         "stage2_tikitaka_handoff_status": "PASS",
         "stage2_tikitaka_source_of_truth": "20_script/timeline_design.json",
         "timeline_design_segment_count": len(timeline_design["segments"]),
         "report1_handoff_next_skill": report1["next_skill"],
-        "source_media_or_manifest": str(source),
+        "source_media_or_manifest": str(source_result["source_path"]),
+        **source_result,
+        **map_result,
+        "integrated_blueprint_status": blueprint_result["status"],
+        "integrated_blueprint_path": blueprint_result["path"],
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default=".")
+    parser.add_argument(
+        "--require-production-blueprint",
+        action="store_true",
+        help="Require the completed design+assembly+upload blueprint.",
+    )
     args = parser.parse_args()
     try:
-        result = validate_stage2_tikitaka_handoff(Path(args.root))
+        result = validate_stage2_tikitaka_handoff(
+            Path(args.root),
+            require_production_blueprint=args.require_production_blueprint,
+        )
     except GateFail as exc:
         print(str(exc))
         return 1
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     return 0
 
 

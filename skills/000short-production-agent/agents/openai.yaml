@@ -1,4 +1,4 @@
 interface:
   display_name: "11short Production Agent"
   short_description: "SRT, layout JSON, CapCut, 산출물 검증 전용"
-  default_prompt: "Use $000short-production-agent only when explicitly asked for production assets: SRT/subtitles, layout JSON, render plans, TTS/audio files, CapCut drafts, validation, export/upload packages, or repair. Require source/script/humanize/gate evidence; do not originate script/urakkai/hook/channel planning or rewrite existing drafts. Route script drafting to $00-tikitaka and wording-only polish to $00script-writer."
+  default_prompt: "Use $000short-production-agent only when explicitly asked for production assets: SRT/subtitles, layout JSON, render plans, TTS/audio files, CapCut drafts, validation, export/upload packages, or repair. Require source/script/gate evidence; do not originate script/urakkai/hook/channel planning or rewrite existing drafts. Route script drafting and wording-only revisions to $00-tikitaka."

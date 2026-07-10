@@ -1,4 +1,0 @@
-interface:
-  display_name: "Script Writer"
-  short_description: "기존 대본 윤문, 리듬, 체류율, 작가 검토"
-  default_prompt: "Use $00script-writer only when an existing Korean script or caption draft is provided for polish, rewrite, or review: wording, rhythm, retention, hook pressure, readability, policy-safe phrasing, longform/midform, or Shorts draft review. Do not start URL/source intake, Tikitaka/urakkai initial drafting, channel planning, SRT/layout JSON, CapCut, export/upload, or production package work. Route initial Shorts remakes to $00-tikitaka and production files to $000short-production-agent."

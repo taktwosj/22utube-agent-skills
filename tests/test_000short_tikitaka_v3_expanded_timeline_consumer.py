@@ -53,6 +53,11 @@ class TikitakaV3ExpandedTimelineConsumerTests(unittest.TestCase):
         schema = json.loads(TIMELINE_SCHEMA.read_text(encoding="utf-8"))
         item_schema = schema["properties"]["segments"]["items"]
 
+        self.assertIn("source_fingerprint_sha256", schema["required"])
+        self.assertEqual(
+            schema["properties"]["source_fingerprint_sha256"]["pattern"],
+            "^[A-Fa-f0-9]{64}$",
+        )
         self.assertLessEqual(V3_REQUIRED_SEGMENT_FIELDS, set(item_schema["required"]))
         self.assertIn("assembly_role", item_schema["properties"])
         self.assertIn("duration_basis", item_schema["properties"])

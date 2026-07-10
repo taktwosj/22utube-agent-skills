@@ -20,8 +20,4 @@ powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1"
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
 ```
 
-Single-skill update:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target all -Only 000brainstorm,111-politics-longform
-```
+The manifest installs only `00-tikitaka` and `000short-production-agent`.

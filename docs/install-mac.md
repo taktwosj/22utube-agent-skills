@@ -20,8 +20,4 @@ bash "$HOME/agent-skills/scripts/update.sh" --target claude --prune --strict
 bash "$HOME/agent-skills/scripts/verify.sh" --target claude --strict
 ```
 
-Single-skill update:
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target all --only 000brainstorm --only 111-politics-longform
-```
+The manifest installs only `00-tikitaka` and `000short-production-agent`.

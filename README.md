@@ -14,26 +14,14 @@ Runtime folders are install targets, not edit targets. Edit skills in this repo,
 
 ## Managed Skill Set
 
-Core production skills:
+Active production skills:
 
 ```text
-000brainstorm
 00-tikitaka
 000short-production-agent
-00script-writer
-111-politics-longform
 ```
 
-Conditional and support production skills:
-
-```text
-11short-reple-agent
-22utube-production-agent
-josun-historychoon-production-agent
-humanize-korean
-watch
-skil-down
-```
+No other production or support skills are managed by this repository.
 
 `manifests/skill-set.json` is the authoritative install list.
 `manifests/capcut-template-set.json` records CapCut template identities and

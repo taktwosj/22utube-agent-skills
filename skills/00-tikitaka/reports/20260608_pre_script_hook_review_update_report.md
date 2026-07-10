@@ -95,7 +95,8 @@ Use Git history and runtime target backups for rollback.
 
 ## 로컬 동기화 결과
 
-현재 Windows 로컬 런타임에는 `skil-down`으로 `00-tikitaka`만 선택 동기화했다.
+현재 Windows 로컬 런타임에는 Git 소스의 `00-tikitaka`와
+`000short-production-agent`만 동기화한다.
 
 ```text
 SYNCED 00-tikitaka

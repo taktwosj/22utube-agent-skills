@@ -69,7 +69,7 @@ visual/template, user-review, or final-lock gates.
 Allowed candidate surfaces:
 
 - Tikitaka script draft
-- polished script from `00script-writer`
+- wording-polished Tikitaka script
 - SRT or timed subtitle JSON
 - layout/render-plan JSON
 - CapCut `draft_content.json` and metadata snapshots

@@ -154,8 +154,8 @@ exist. Broad Shorts Academy wording alone does not start production. It only
 validates handed-off script decisions before SRT/layout, CapCut, harness, or
 final-report work.
 
-The gate can apply when the production job came from `00-tikitaka`,
-`00script-writer`, or a user-approved script package that contains terms such
+The gate can apply when the production job came from `00-tikitaka` or a
+user-approved script package that contains terms such
 as 쇼츠학개론, 마라하기 공식, 한계선, 돈통/에셋, 결, 가단야, 우라까이,
 일치율 0%, 벤치영상, 채널기획, ranking/TOP-N, benchmark remake, or
 channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/랭킹/유머/군림보.

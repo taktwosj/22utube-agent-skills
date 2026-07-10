@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -59,6 +61,7 @@ NARRATION_AUDIO_TTS_STATUSES = {
     "WAIT_ACTUAL_TTS_AUDIO",
 }
 ALLOWED_RECONCILIATION_ACTIONS = {
+    "none",
     "extend_visual",
     "shift_later_beats",
     "hold_frame",
@@ -341,6 +344,25 @@ def passish(block: dict[str, Any]) -> bool:
     return str(block.get("status") or "").upper() in PASS_VALUES
 
 
+def design_blueprint_status(work_dir: Path) -> dict[str, Any]:
+    blueprint = work_dir / "design_blueprint.md"
+    validator_path = Path(__file__).parents[2] / "000short-production-agent" / "scripts" / "validate_integrated_blueprint.py"
+    if not validator_path.is_file():
+        return status_block("FAILED", None, "FAIL_DESIGN_BLUEPRINT_VALIDATOR_MISSING")
+    if not blueprint.is_file():
+        return status_block("FAILED", None, "FAIL_DESIGN_BLUEPRINT_MISSING")
+    spec = importlib.util.spec_from_file_location("integrated_blueprint_validator", validator_path)
+    if spec is None or spec.loader is None:
+        return status_block("FAILED", str(blueprint), "FAIL_DESIGN_BLUEPRINT_VALIDATOR_LOAD")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_integrated_blueprint(blueprint, phase="design")
+    except module.BlueprintGateFail as exc:
+        return status_block("FAILED", str(blueprint), str(exc))
+    return status_block("PASS", str(blueprint), "design blueprint contract validated") | result
+
+
 def legacy_stage_scope_status(previous_state: dict[str, Any]) -> dict[str, Any]:
     value = str(
         previous_state.get("user_stage_decision")
@@ -467,7 +489,7 @@ def stage_scope_status(previous_state: dict[str, Any], work_dir: Path | None = N
                 "status": "PASS",
                 "decision": "stage_2_full",
                 "evidence": "job_state.json",
-                "reason": "user authorized stage 2 after 보고서1 approval and voice/audio route decision",
+                "reason": "user authorized stage 2 after 설계도 approval and voice/audio route decision",
             }
         return stage2_wait_block("job_state.json", "stage 2 intent found")
     if has_user_tts_or_srt_path(previous_state):
@@ -476,7 +498,7 @@ def stage_scope_status(previous_state: dict[str, Any], work_dir: Path | None = N
                 "status": "PASS",
                 "decision": "stage_2_full",
                 "evidence": "job_state.json",
-                "reason": "user supplied voice/audio path after 보고서1 approval and explicit route decision",
+                "reason": "user supplied voice/audio path after 설계도 approval and explicit route decision",
             }
         return stage2_wait_block("job_state.json", "voice/audio route found")
     if explicit_decision == "stage_1_script":
@@ -484,7 +506,7 @@ def stage_scope_status(previous_state: dict[str, Any], work_dir: Path | None = N
             "status": "WAIT",
             "decision": "stage_1_script",
             "evidence": "job_state.json",
-            "reason": "stage 1 script-only request; stop after 보고서1",
+            "reason": "stage 1 script-only request; stop after 설계도",
         }
     if explicit_value:
         return {
@@ -503,7 +525,7 @@ def stage_scope_status(previous_state: dict[str, Any], work_dir: Path | None = N
             "status": "WAIT",
             "decision": "stage_1_script",
             "evidence": evidence,
-            "reason": "stage 1 script-only request; stop after 보고서1",
+            "reason": "stage 1 script-only request; stop after 설계도",
         }
     return {
         "status": "WAIT",
@@ -756,6 +778,16 @@ def timeline_design_segments(work_dir: Path) -> list[dict[str, Any]]:
     return [segment for segment in segments if isinstance(segment, dict)]
 
 
+def timeline_source_fingerprint(work_dir: Path) -> str:
+    data = read_json(work_dir / SCRIPT_LOCK_PACKAGE_FILES["timeline_design"])
+    if not data or data.get("_parse_error") or data.get("_non_object"):
+        return ""
+    fingerprint = str(data.get("source_fingerprint_sha256") or "").strip()
+    if not re.fullmatch(r"[A-Fa-f0-9]{64}", fingerprint):
+        return ""
+    return fingerprint.lower()
+
+
 def timeline_design_has_narration_audio(work_dir: Path) -> bool:
     return any(segment_uses_narration_audio(segment) for segment in timeline_design_segments(work_dir))
 
@@ -769,6 +801,12 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
         return status_block("FAILED", name, "timeline_design parse failed")
     if data.get("_non_object"):
         return status_block("FAILED", name, "timeline_design json root must be an object")
+    if not timeline_source_fingerprint(work_dir):
+        return status_block(
+            "FAILED",
+            name,
+            "WAIT_SOURCE_HANDOFF_FINGERPRINT: timeline source fingerprint missing or invalid",
+        )
 
     segments = data.get("segments") or data.get("timeline_segments")
     if not isinstance(segments, list) or not segments:
@@ -1048,7 +1086,7 @@ def tts_timing_reconciliation_gate_status(work_dir: Path) -> dict[str, Any]:
         return status_block("FAILED", name, "WAIT_TTS_TIMING_RELOCK: tts_timing_reconciliation_gate status must be PASS")
     if data.get("tts_duration_status") not in {"ESTIMATED_ACCEPTED", "ACTUAL_AUDIO_LOCKED"}:
         return status_block("FAILED", name, "WAIT_TTS_TIMING_RELOCK: tts_duration_status must be ESTIMATED_ACCEPTED or ACTUAL_AUDIO_LOCKED")
-    action = data.get("allowed_reconciliation_action")
+    action = data.get("reconciliation_action")
     if action not in (None, "") and action not in ALLOWED_RECONCILIATION_ACTIONS:
         return status_block("FAILED", name, "WAIT_TTS_TIMING_RELOCK: unsupported reconciliation action")
     return status_block("PASS", name)
@@ -1073,6 +1111,7 @@ def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
             "urakkai structure delta",
         ),
         "timeline_design": timeline_design_status(work_dir),
+        "design_blueprint": design_blueprint_status(work_dir),
         "timeline_design_gate": json_status_pass_artifact_status(
             work_dir,
             SCRIPT_LOCK_PACKAGE_FILES["timeline_design_gate"],
@@ -1097,6 +1136,7 @@ def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
         "status": status,
         "generated_by": "tikitaka_harness_runner",
         "checked_at": utc_now(),
+        "source_fingerprint_sha256": timeline_source_fingerprint(work_dir),
         "script_status": "SCRIPT_LOCK_PACKAGE" if status == "PASS" else "WAIT_SCRIPT_HANDOFF_GATE",
         "capcut_allowed": status == "PASS",
         "input_files": list(SCRIPT_LOCK_PACKAGE_FILES.values()),
@@ -1137,9 +1177,11 @@ def build_report1_handoff_gate(
         "gate_name": "REPORT1_HANDOFF_GATE",
         "status": "PASS" if ready else "WAIT",
         "blocker": blocker,
-        "report": "보고서1",
+        "report": "설계도",
+        "artifact_role": "design_blueprint",
         "owner_skill": "00-tikitaka",
         "next_skill": "000short-production-agent",
+        "source_fingerprint_sha256": script_handoff_gate.get("source_fingerprint_sha256", ""),
         "next_stage": "보고서2",
         "next_gate": "CAPCUT_OPENABLE_PROJECT",
         "required_before_next": [
@@ -1154,7 +1196,7 @@ def build_report1_handoff_gate(
             "TTS before voice/audio route decision",
         ],
         "copy_to_next_chat": (
-            "Use $000short-production-agent. 보고서1 승인 + TTS/오디오 방식 결정 후 "
+            "Use $000short-production-agent. 설계도 승인 + TTS/오디오 방식 결정 후 "
             "보고서2 / CAPCUT_OPENABLE_PROJECT 단계로 진행."
         ),
     }
@@ -1176,7 +1218,7 @@ def build_stage_gate_todo(job_state: dict[str, Any]) -> str:
             "",
             f"{checked(decision != 'WAIT_USER_STAGE_DECISION')} G0: {decision} - user stage decision or request token",
             f"{checked(handoff_pass)} G1: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
-            f"{checked(handoff_pass)} G2: stage 1 STOP - 보고서1",
+            f"{checked(handoff_pass)} G2: stage 1 STOP - 설계도",
             f"{checked(stage2_pass and capcut_allowed)} G3: stage 2 entry - user_stage_decision=stage_2_full",
             f"{checked(final_allowed)} G4: final production report is production-agent owned",
             "",
@@ -1206,7 +1248,7 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
         mode = "stage_2_full"
         blocker = job_state["capcut_permission"] if status == "WAIT" else "WAIT_CAPCUT_BUILD"
     else:
-        header = "# 보고서1"
+        header = "# 설계도"
         status = "WAIT_REPORT1_APPROVAL_TTS_DECISION" if waits_for_report1 else "WAIT_USER_STAGE_DECISION"
         mode = "stage_1_script"
         blocker = "WAIT_REPORT1_APPROVAL_TTS_DECISION" if waits_for_report1 else "WAIT_USER_STAGE_DECISION"
@@ -1220,7 +1262,7 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
 
     report1_blocked = bool(report1_blockers) and not stage2_report
     if report1_blocked:
-        header = "# 보고서1 BLOCKED"
+        header = "# 설계도 BLOCKED"
         status = "FAIL_REPORT1_BODY_MISSING"
         blocker = ", ".join(report1_blockers)
 
@@ -1268,7 +1310,7 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
             "- 다음 스킬: 000short-production-agent",
             "- 다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT",
             "- 다음 채팅에 붙일 지시: Use $000short-production-agent",
-            "- 필요 조건: 보고서1 승인 + TTS/오디오 방식 결정",
+            "- 필요 조건: 설계도 승인 + TTS/오디오 방식 결정",
             "- 00-tikitaka는 보고서2를 작성하지 않는다",
             "",
             "RE-ENTRY:",

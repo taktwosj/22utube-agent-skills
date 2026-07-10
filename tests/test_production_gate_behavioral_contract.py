@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _support import load_source_module_no_bytecode
+from _support import load_source_module_no_bytecode, write_valid_source_mp4
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +31,30 @@ def write_bytes(path: Path, data: bytes) -> None:
 
 
 def write_json(path: Path, data: dict) -> None:
+    if (
+        path.name == "source_manifest.json"
+        and path.exists()
+        and data.get("status") == "PASS"
+        and "canonical_url" not in data
+    ):
+        existing = json.loads(path.read_text(encoding="utf-8"))
+        data = {**existing, **data}
+    if path.name == "draft_content.json" and data == {"materials": {}}:
+        source = path.parents[1] / "00_source" / "source.mp4"
+        if source.exists():
+            data = {
+                "materials": {
+                    "videos": [
+                        {
+                            "id": "source-video",
+                            "role": "source_video",
+                            "path": str(source),
+                            "active": True,
+                            "audio_enabled": False,
+                        }
+                    ]
+                }
+            }
     write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
 
 
@@ -38,7 +62,87 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def create_source_identity_fixture(root: Path, manifest_extra: dict | None = None) -> Path:
+    source = root / "00_source" / "source.mp4"
+    write_valid_source_mp4(source)
+    source_sha256 = sha256(source)
+    lock = {
+        "status": "PASS",
+        "canonical_url": "https://www.youtube.com/shorts/fixture123",
+        "video_id": "fixture123",
+        "local_source_path": "00_source/source.mp4",
+        "sha256": source_sha256,
+        "duration_sec": 8.0,
+    }
+    write_json(root / "10_analysis" / "source_identity_lock.json", lock)
+    write_json(
+        root / "10_analysis" / "source_evidence.json",
+        {
+            "status": "PASS",
+            "video_id": "fixture123",
+            "source_fingerprint_sha256": source_sha256,
+            "ffprobe_status": "PASS",
+            "has_video_stream": True,
+            "probed_duration_sec": 8.0,
+            "stt": {
+                "status": "PASS",
+                "verified_ranges": [{"start_sec": 3.0, "end_sec": 8.0}],
+            },
+        },
+    )
+    write_json(
+        root / "10_analysis" / "crosscheck_report.json",
+        {
+            "status": "PASS",
+            "video_id": "fixture123",
+            "source_fingerprint_sha256": source_sha256,
+            "hint_vs_evidence_compared": True,
+        },
+    )
+    manifest = {
+        **lock,
+        "source_identity_lock_path": "10_analysis/source_identity_lock.json",
+        "source_evidence_path": "10_analysis/source_evidence.json",
+        "crosscheck_report_path": "10_analysis/crosscheck_report.json",
+        **(manifest_extra or {}),
+    }
+    write_json(root / "00_source" / "source_manifest.json", manifest)
+    write_json(
+        root / "10_analysis" / "tikitaka_source_request.json",
+        {
+            "status": "PASS",
+            "owner_skill": "00-tikitaka",
+            "requested_source_url": lock["canonical_url"],
+            "requested_video_id": lock["video_id"],
+            "user_stage_decision": "stage_2_full",
+        },
+    )
+    return source
+
+
+def create_linked_draft(root: Path) -> None:
+    source = root / "00_source" / "source.mp4"
+    write_json(
+        root / "50_capcut_project" / "draft_content.json",
+        {
+            "materials": {
+                "videos": [
+                    {
+                        "id": "source-video",
+                        "role": "source_video",
+                        "path": str(source),
+                        "active": True,
+                        "audio_enabled": False,
+                    }
+                ]
+            }
+        },
+    )
+
+
 def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
+    create_source_identity_fixture(root)
+    source_sha256 = sha256(root / "00_source" / "source.mp4")
     gate = {
         "gate_name": "SCRIPT_HANDOFF_GATE",
         "status": "PASS",
@@ -46,21 +150,26 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
         "script_status": "SCRIPT_LOCK_PACKAGE",
         "capcut_allowed": True,
         "input_files": ["block_map.json"],
+        "source_fingerprint_sha256": source_sha256,
     }
     block_map = {
         "edit_block_sequence": ["E1", "E2"],
         "blocks": [
             {
                 "edit_id": "E1",
-                "source_block_id": "S1",
-                "original_order": 1,
-                "urakkai_order": 2,
+                "source_block_id": "S3",
+                "original_order": 3,
+                "urakkai_order": 1,
+                "source_order": 3,
+                "timeline_order": 1,
             },
             {
                 "edit_id": "E2",
-                "source_block_id": "S2",
-                "original_order": 2,
-                "urakkai_order": 1,
+                "source_block_id": "S1",
+                "original_order": 1,
+                "urakkai_order": 2,
+                "source_order": 1,
+                "timeline_order": 2,
             },
         ],
     }
@@ -81,6 +190,7 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
     write_json(
         root / "20_script" / "timeline_design.json",
         {
+            "source_fingerprint_sha256": source_sha256,
             "project_duration_sec": 8,
             "segments": [
                 {
@@ -167,9 +277,73 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
             "reconciliation_action": "none",
         },
     )
+    write(
+        root / "20_script" / "design_blueprint.md",
+        """# 설계도
+
+## 기본 정보
+fixture
+
+## 제작 판단
+fixture
+
+## 상단 고정 문구
+fixture
+
+## 조립 역할 순서
+| 편집 | 역할 |
+|---|---|
+| E1 | hook |
+
+## 트랙별 타임라인
+| 편집 | 시작 | 종료 |
+|---|---:|---:|
+| E1 | 00:00 | 00:03 |
+
+## TTS 복사용 문구
+테스트 나레이션
+
+## 승인 전 점검
+fixture
+
+## 조립도
+
+## 프로젝트 실체
+fixture
+
+## 설계도 반영 결과
+| 편집 | 상태 |
+|---|---|
+| E1 | PASS |
+
+## 실제 CapCut 트랙 구성
+| 트랙 | 상태 |
+|---|---|
+| V1 | PASS |
+
+## TTS 실제 길이 대조
+| 편집 | 길이 |
+|---|---:|
+| E1 | 3.0 |
+
+## 검증 결과
+PASS
+
+## 남은 사람 작업
+없음
+
+## 업로드 패키지
+제목: 테스트 쇼츠
+상세설명: 테스트
+출처: https://www.youtube.com/shorts/fixture123
+해시태그: #테스트
+추천 업로드채널: 테스트 채널
+""",
+    )
 
 
 def create_report1_handoff(root: Path, *, status: str = "PASS", next_skill: str = "000short-production-agent") -> None:
+    source_sha256 = sha256(root / "00_source" / "source.mp4")
     write_json(
         root / "20_script" / "report1_handoff.json",
         {
@@ -186,6 +360,7 @@ def create_report1_handoff(root: Path, *, status: str = "PASS", next_skill: str 
             ],
             "report1_approved": status == "PASS",
             "voice_audio_route_decided": status == "PASS",
+            "source_fingerprint_sha256": source_sha256,
         },
     )
 
@@ -265,6 +440,7 @@ def create_proof_fixture(root: Path) -> None:
 
 
 def create_full_contract(root: Path) -> dict:
+    source_path = create_source_identity_fixture(root)
     write_json(root / "render_plan.json", {"actual_render_order": ["B", "A"]})
     write_json(root / "90_reports" / "source_dialogue.json", {"status": "NO_DIALOGUE"})
     write_json(root / "30_audio_srt" / "tts_manifest.json", {"status": "PASS"})
@@ -291,7 +467,11 @@ def create_full_contract(root: Path) -> dict:
             {
                 "path": "input/source.txt",
                 "sha256": sha256(root / "input" / "source.txt"),
-            }
+            },
+            {
+                "path": "00_source/source.mp4",
+                "sha256": sha256(source_path),
+            },
         ],
         "report1_approved": True,
         "voice_audio_route_decided": True,
@@ -325,6 +505,44 @@ def trusted_stage2_job_state() -> dict:
 
 
 class ProductionGateBehavioralContractTests(unittest.TestCase):
+    def test_full_production_rejects_arbitrary_hash_without_source_media_hash(self):
+        module = load_source_module_no_bytecode("production_gate_source_hash_required", PRODUCTION_GATE)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            contract = create_full_contract(root)
+            create_proof_fixture(root)
+            contract["input_files"] = [
+                {
+                    "path": "input/source.txt",
+                    "sha256": sha256(root / "input" / "source.txt"),
+                }
+            ]
+
+            with self.assertRaisesRegex(module.GateFail, "SOURCE_MEDIA_HASH_REQUIRED"):
+                module.validate_gate(contract, root)
+
+    def test_capcut_openable_rejects_empty_unlinked_draft(self):
+        module = load_source_module_no_bytecode("production_gate_empty_draft_media", PRODUCTION_GATE)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_script_handoff(root)
+            create_report1_handoff(root)
+            write(
+                root / "50_capcut_project" / "draft_content.json",
+                json.dumps({"materials": {}}, ensure_ascii=False),
+            )
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_CAPCUT_SOURCE_MEDIA_LINK"):
+                module.validate_capcut_openable_project_entry(
+                    {
+                        "user_request": "capcut project",
+                        "report1_approved": True,
+                        "voice_audio_route_decided": True,
+                        **create_shrt_white_reference(root),
+                    },
+                    root,
+                )
+
     def test_tikitaka_harness_writes_canonical_script_lock_evidence(self):
         module = load_source_module_no_bytecode("tikitaka_harness_script_lock_evidence", TIKITAKA_HARNESS)
 

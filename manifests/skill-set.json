@@ -6,12 +6,6 @@
   "onedrive_role": "production-data-only",
   "skills": [
     {
-      "name": "000brainstorm",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
       "name": "00-tikitaka",
       "category": "22utube",
       "targets": ["codex", "claude", "hermes"],
@@ -19,54 +13,6 @@
     },
     {
       "name": "000short-production-agent",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "00script-writer",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "111-politics-longform",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "11short-reple-agent",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "22utube-production-agent",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "josun-historychoon-production-agent",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "humanize-korean",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "watch",
-      "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "skil-down",
       "category": "22utube",
       "targets": ["codex", "claude", "hermes"],
       "enabled": true
