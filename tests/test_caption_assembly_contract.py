@@ -1,7 +1,9 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from _support import load_source_module_no_bytecode
 
@@ -12,16 +14,69 @@ PRODUCTION = ROOT / "skills" / "000short-production-agent" / "SKILL.md"
 LAYOUT_CONTRACT = ROOT / "skills" / "000short-production-agent" / "03_CAPCUT_LAYOUT_CONTRACT.md"
 CAPTION_SCHEMA = ROOT / "skills" / "000short-production-agent" / "schemas" / "caption_beat_map.schema.json"
 CAPTION_VALIDATOR = ROOT / "skills" / "000short-production-agent" / "scripts" / "validate_caption_beat_map.py"
-BUILDER = (
-    ROOT.parent
-    / "OneDrive"
-    / "22utube"
-    / "22factory_20260628"
-    / "00_asset_tools"
-    / "tools"
-    / "build_capcut_from_tikitaka_v3.py"
-)
+
+
+def resolve_builder_path() -> Path:
+    candidates: list[Path] = []
+    if workspace_root := os.environ.get("WORKSPACE_ROOT"):
+        candidates.append(Path(workspace_root).expanduser())
+    for variable in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        if onedrive_root := os.environ.get(variable):
+            candidates.append(Path(onedrive_root).expanduser() / "22utube")
+    candidates.append(Path.home() / "OneDrive" / "22utube")
+    candidates.extend(path / "22utube" for path in Path.home().glob("OneDrive*"))
+    cloud_storage = Path.home() / "Library" / "CloudStorage"
+    if cloud_storage.is_dir():
+        candidates.extend(path / "22utube" for path in cloud_storage.glob("OneDrive*"))
+
+    relative = Path("22factory_20260628") / "00_asset_tools" / "tools" / "build_capcut_from_tikitaka_v3.py"
+    unique_candidates = list(dict.fromkeys(candidates))
+    for workspace in unique_candidates:
+        builder = workspace / relative
+        if builder.is_file():
+            return builder
+    return unique_candidates[0] / relative
+
+
+BUILDER = resolve_builder_path()
 TIKITAKA_HARNESS = ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
+
+
+def test_builder_resolution_prefers_workspace_root():
+    with tempfile.TemporaryDirectory() as tmp:
+        expected = (
+            Path(tmp)
+            / "22factory_20260628"
+            / "00_asset_tools"
+            / "tools"
+            / "build_capcut_from_tikitaka_v3.py"
+        )
+        expected.parent.mkdir(parents=True)
+        expected.write_text("# fixture\n", encoding="utf-8")
+        with patch.dict(os.environ, {"WORKSPACE_ROOT": tmp}):
+            assert resolve_builder_path() == expected
+
+
+def test_builder_resolution_uses_windows_onedrive_root():
+    with tempfile.TemporaryDirectory() as tmp:
+        expected = (
+            Path(tmp)
+            / "22utube"
+            / "22factory_20260628"
+            / "00_asset_tools"
+            / "tools"
+            / "build_capcut_from_tikitaka_v3.py"
+        )
+        expected.parent.mkdir(parents=True)
+        expected.write_text("# fixture\n", encoding="utf-8")
+        environment = {
+            "WORKSPACE_ROOT": "",
+            "OneDrive": tmp,
+            "OneDriveConsumer": "",
+            "OneDriveCommercial": "",
+        }
+        with patch.dict(os.environ, environment):
+            assert resolve_builder_path() == expected
 
 
 def test_tikitaka_handoff_declares_caption_beat_map_authority():
@@ -169,6 +224,12 @@ def test_caption_validator_rejects_wrong_profile_position():
 
 
 class CaptionAssemblyContractTests(unittest.TestCase):
+    def test_builder_resolution_prefers_workspace_root(self):
+        test_builder_resolution_prefers_workspace_root()
+
+    def test_builder_resolution_uses_windows_onedrive_root(self):
+        test_builder_resolution_uses_windows_onedrive_root()
+
     def test_tikitaka_handoff_declares_caption_beat_map_authority(self):
         test_tikitaka_handoff_declares_caption_beat_map_authority()
 
