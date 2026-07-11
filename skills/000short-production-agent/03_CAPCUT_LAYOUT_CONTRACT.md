@@ -231,6 +231,24 @@ Required creation mode:
 - Keep the top/bottom black bands.
 - `T1/T2`: white bold centered text inside the top black band.
 - `T3/T6`: inside the visible video-safe area; do not cover important action.
+
+## CAPTION_BEAT_MAP_LAYOUT_PROFILES
+
+The production builder consumes `caption_beat_map.json` for timed middle text.
+The profile values are fixed and are not inferred from the number of words:
+
+```text
+profile_version=caption_profiles_v2
+T3 TTS: y=-900, max_chars_per_line=10, max_lines=1
+T4/T5 speaker quote: y=-500, max_chars_per_line=10, max_lines=1
+T6 situation caption: y=700, max_chars_per_line=10, max_lines=1
+V1 source video scale: video_scale=1.20
+```
+
+The character limit includes whitespace. Text exceeding a profile is split into
+sequential non-overlapping beats; the audio and video ranges remain unchanged.
+Face placement uses `fixed_lower_safe_zone_v1`; fixed lower-safe-zone placement
+is required before manual CapCut polish.
 - Ranking/TOP-N jobs insert `랭킹중간` or the selected separator clip between rank/item sections, with 0.2~0.4 second precision for transition points.
 
 ## FFmpeg Render-Match Contract

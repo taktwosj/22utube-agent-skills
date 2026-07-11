@@ -134,6 +134,34 @@ Required Stage 2 inputs:
 20_script/tts_duration_probe.json when narration-audio exists
 20_script/tts_timing_reconciliation_gate.json when narration-audio exists
 00_source/source_manifest.json or 00_source/source.mp4
+
+20_script/caption_beat_map.json
+
+## Caption Assembly Contract
+
+`caption_beat_map.json` is required for every timed middle-caption package.
+This file is the visible-text timing authority consumed by the CapCut builder.
+If it is missing, stop with `CAPTION_BEAT_MAP_REQUIRED`.
+
+The fixed profiles are:
+
+```text
+profile_version=caption_profiles_v2
+TTS (T3): y=-900, max_chars_per_line=10, max_lines=1
+화자발언 (T4/T5): y=-500, max_chars_per_line=10, max_lines=1
+( ) 상황설명 (T6): y=700, max_chars_per_line=10, max_lines=1
+원본 영상 V1: video_scale=1.20
+```
+
+The 10-character limit includes whitespace. Every timed middle-caption beat is
+one line only. Text exceeding the profile is split into sequential,
+non-overlapping time beats. Splitting visible text must not trim, shift, or
+otherwise alter audio or video duration. Face placement uses the fixed lower
+safe-zone profile (`face_avoidance=fixed_lower_safe_zone_v1`); it is not a
+manual-only layout decision.
+
+The builder must consume `caption_beat_map.json`, apply the profile to the
+actual text segment, and write the applied profile into the assembly manifest.
 ```
 
 Primary machine-readable authority:
@@ -565,6 +593,7 @@ Before generating or repairing production assets, identify the current authority
 - canonical `20_script/block_role_map.json` and
   `20_script/block_voice_switch_map.json`.
 - `20_script/tts_copy_text.txt` when any `caption_type=tts_narration` exists.
+- `20_script/caption_beat_map.json` for every timed middle-caption row.
 - humanized final Korean text when visible text is final
 - `story_type`, `production_type`, and `template_profile` when the project is
   template-backed or when the user asks for a final CapCut project file
@@ -919,6 +948,21 @@ Do not create a separate human-facing assembly report. Read and preserve
 design sections. The assembly section must include `프로젝트 실체`,
 `설계도 반영 결과` table, `실제 CapCut 트랙 구성` table, `TTS 실제 길이 대조`
 table, `검증 결과`, and `남은 사람 작업`.
+
+The Stage 1 design portion must also contain `## 자막 레이아웃 기준` with
+`caption_beat_map.json` and the fixed TTS/speaker/situation profile values.
+The `## 조립도` section must begin with these fixed 보고서2 fields:
+
+```text
+보고서2 시작: 예
+최종보고서: 예
+상태: CAPCUT_EDIT_READY|REPORT2_REVISED|REPORT2_CLOSED_BY_USER_EXPORT
+CapCut 프로젝트명: <name>
+CapCut 열어보기 필요: 예
+사용자 확인 대기: 예
+업로드 준비 완료: 아니오
+최종 잠금: 아니오
+```
 
 After assembly, append `## 업로드 패키지` as the final H2 section. It must
 contain non-empty `제목`, `상세설명`, `출처`, `해시태그`, and

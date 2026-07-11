@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "11short caption beat map",
+  "type": "object",
+  "required": ["status", "profile_version", "video_scale", "face_avoidance", "beats"],
+  "properties": {
+    "status": { "const": "PASS" },
+    "profile_version": { "const": "caption_profiles_v2" },
+    "video_scale": { "const": 1.2 },
+    "face_avoidance": { "const": "fixed_lower_safe_zone_v1" },
+    "beats": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["beat_id", "edit_id", "text", "start_sec", "end_sec", "caption_role", "audio_basis", "max_chars_per_line", "max_lines", "y", "timing_source"],
+        "properties": {
+          "beat_id": { "type": "string", "minLength": 1 },
+          "edit_id": { "type": "string", "minLength": 1 },
+          "text": { "type": "string", "minLength": 1 },
+          "start_sec": { "type": "number", "minimum": 0 },
+          "end_sec": { "type": "number", "exclusiveMinimum": 0 },
+          "caption_role": { "enum": ["tts_narration", "tts_caption", "speaker_quote", "situation_caption"] },
+          "audio_basis": { "enum": ["tts_audio", "source_speech", "caption_only"] },
+          "max_chars_per_line": { "const": 10 },
+          "max_lines": { "const": 1 },
+          "y": { "type": "number" },
+          "timing_source": { "type": "string", "minLength": 1 },
+          "source_word_range": { "type": ["object", "null"] }
+        },
+        "allOf": [
+          { "if": { "properties": { "caption_role": { "const": "tts_narration" } } }, "then": { "properties": { "y": { "const": -900 }, "max_lines": { "const": 1 } } } },
+          { "if": { "properties": { "caption_role": { "const": "tts_caption" } } }, "then": { "properties": { "y": { "const": -900 }, "max_lines": { "const": 1 } } } },
+          { "if": { "properties": { "caption_role": { "const": "speaker_quote" } } }, "then": { "properties": { "y": { "const": -500 }, "max_lines": { "const": 1 } } } },
+          { "if": { "properties": { "caption_role": { "const": "situation_caption" } } }, "then": { "properties": { "y": { "const": 700 }, "max_lines": { "const": 1 } } } }
+        ]
+      }
+    }
+  }
+}

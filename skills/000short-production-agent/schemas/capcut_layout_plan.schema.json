@@ -22,7 +22,12 @@
     "video_tracks",
     "audio_plan",
     "semantic_audio_resolution",
-    "media_links"
+    "media_links",
+    "caption_beat_map",
+    "caption_profile_version",
+    "caption_layout_profiles",
+    "video_scale",
+    "face_avoidance"
   ],
   "properties": {
     "project_duration_sec": { "type": "number", "exclusiveMinimum": 0 },
@@ -108,6 +113,11 @@
     "media_links": {
       "type": "array",
       "items": { "type": "object" }
-    }
+    },
+    "caption_beat_map": { "const": "20_script/caption_beat_map.json" },
+    "caption_profile_version": { "const": "caption_profiles_v2" },
+    "caption_layout_profiles": { "type": "object" },
+    "video_scale": { "const": 1.2 },
+    "face_avoidance": { "const": "fixed_lower_safe_zone_v1" }
   }
 }

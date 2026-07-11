@@ -96,6 +96,33 @@ duration_basis/duration_status/audio_policy/visual_strategy
 `timeline_design_gate.json` must be PASS before the design can be treated as a
 handoff artifact.
 
+## CAPTION_BEAT_MAP_HANDOFF
+
+Every timed middle-caption row that continues to CapCut must carry a reference
+to `caption_beat_map.json`. This is the timing contract for visible text; it is
+not a TTS audio file and it does not replace `tts_duration_probe.json`.
+
+Each beat records `beat_id`, `edit_id`, `caption_role`, `audio_basis`, `text`,
+`start_sec`, `end_sec`, `timing_source`, `max_chars_per_line`, `max_lines`,
+and `y`. The design owner assigns the semantic role and the production skill
+resolves the CapCut text track. A missing beat map blocks Stage 2 with
+`CAPTION_BEAT_MAP_REQUIRED`.
+
+The handoff preserves these production profiles:
+
+```text
+profile_version=caption_profiles_v2
+TTS: y=-900, max_chars_per_line=10, max_lines=1
+speaker_quote: y=-500, max_chars_per_line=10, max_lines=1
+situation_caption: y=700, max_chars_per_line=10, max_lines=1
+video_scale=1.20
+face_avoidance=fixed_lower_safe_zone_v1
+```
+
+`audio_basis` distinguishes `tts_audio`, `source_speech`, and `caption_only`.
+The caption beat map controls visible-text timing only; it must never shorten
+source speech or TTS audio.
+
 Humanize Korean runs after the 1차설계서 is structurally fixed and before the
 handoff gate. Humanize may change wording only: visible Korean in T1/T2/TTS,
 `"" 화자발언`, and `() 상황설명`. It must not change time ranges, track rows,

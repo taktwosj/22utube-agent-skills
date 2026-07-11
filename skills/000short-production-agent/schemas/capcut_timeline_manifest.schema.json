@@ -14,12 +14,20 @@
     "duration_basis_preserved",
     "duration_status_preserved",
     "semantic_audio_resolution",
-    "implemented_segments"
+    "implemented_segments",
+    "caption_beat_map",
+    "caption_profile_version",
+    "video_scale",
+    "face_avoidance"
   ],
   "properties": {
     "draft_name": { "type": "string", "minLength": 1 },
     "template_profile": { "type": "string" },
     "source_timeline_design_path": { "type": "string" },
+    "caption_beat_map": { "const": "20_script/caption_beat_map.json" },
+    "caption_profile_version": { "const": "caption_profiles_v2" },
+    "video_scale": { "const": 1.2 },
+    "face_avoidance": { "const": "fixed_lower_safe_zone_v1" },
     "implemented_timeline_segment_count": { "type": "integer", "minimum": 1 },
     "protected_fields_preserved": { "const": true },
     "assembly_role_sequence_preserved": { "const": true },

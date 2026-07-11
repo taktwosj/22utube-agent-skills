@@ -290,6 +290,17 @@ fixture
 ## 상단 고정 문구
 fixture
 
+## 자막 레이아웃 기준
+- caption_beat_map.json: PASS
+- TTS/T3: y=-900, max_chars_per_line=10, max_lines=1
+- 화자발언/T4/T5: y=-500, max_chars_per_line=10, max_lines=1
+- 상황설명/T6: y=700, max_chars_per_line=10, max_lines=1
+- TTS T3: y=-900, max_chars_per_line=10, max_lines=1
+- Speaker quote T4/T5: y=-500, max_chars_per_line=10, max_lines=1
+- Situation caption T6: y=700, max_chars_per_line=10, max_lines=1
+- video_scale=1.20
+- face_avoidance=fixed_lower_safe_zone_v1
+
 ## 조립 역할 순서
 | 편집 | 역할 |
 |---|---|
@@ -307,6 +318,14 @@ fixture
 fixture
 
 ## 조립도
+보고서2 시작: 예
+최종보고서: 예
+상태: CAPCUT_EDIT_READY
+CapCut 프로젝트명: fixture_project
+CapCut 열어보기 필요: 예
+사용자 확인 대기: 예
+업로드 준비 완료: 아니오
+최종 잠금: 아니오
 
 ## 프로젝트 실체
 fixture

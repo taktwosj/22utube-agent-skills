@@ -1,7 +1,8 @@
-import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+
+from _support import load_source_module_no_bytecode
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "000short-production-agent" / "scripts" / "validate_integrated_blueprint.py"
@@ -10,16 +11,19 @@ SCRIPT = Path(__file__).resolve().parents[1] / "skills" / "000short-production-a
 def load_module():
     if not SCRIPT.is_file():
         raise AssertionError("integrated blueprint validator is missing")
-    spec = importlib.util.spec_from_file_location("integrated_blueprint_contract", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+    return load_source_module_no_bytecode("integrated_blueprint_contract", SCRIPT)
 
 
 VALID = """# 설계도
 ## 기본 정보
 ## 제작 판단
+## 자막 레이아웃 기준
+caption_beat_map.json
+TTS (T3): y=-900, max_chars_per_line=10, max_lines=1
+화자발언 (T4/T5): y=-500, max_chars_per_line=10, max_lines=1
+( ) 상황설명 (T6): y=700, max_chars_per_line=10, max_lines=1
+video_scale=1.20
+face_avoidance=fixed_lower_safe_zone_v1
 ## 상단 고정 문구
 ## 조립 역할 순서
 | 편집 | 원본 | 편집 구간 |
@@ -34,6 +38,14 @@ VALID = """# 설계도
 ## 승인 전 점검
 status: PASS
 ## 조립도
+보고서2 시작: 예
+최종보고서: 예
+상태: CAPCUT_EDIT_READY
+CapCut 프로젝트명: TEST_PROJECT
+CapCut 열어보기 필요: 예
+사용자 확인 대기: 예
+업로드 준비 완료: 아니오
+최종 잠금: 아니오
 ## 프로젝트 실체
 ## 설계도 반영 결과
 | 설계 편집 | 실제 CapCut 구간 |
@@ -61,6 +73,24 @@ status: PASS
 
 
 class IntegratedBlueprintContractTest(unittest.TestCase):
+    def test_assembly_report_requires_canonical_status_fields(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "design_blueprint.md"
+            path.write_text(VALID.replace("보고서2 시작: 예\n", ""), encoding="utf-8")
+            with self.assertRaises(module.BlueprintGateFail) as ctx:
+                module.validate_integrated_blueprint(path, phase="production")
+        self.assertIn("FAIL_ASSEMBLY_REPORT_FORMAT", str(ctx.exception))
+
+    def test_report_requires_fixed_caption_profile_contract(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "design_blueprint.md"
+            path.write_text(VALID.replace("video_scale=1.20\n", ""), encoding="utf-8")
+            with self.assertRaises(module.BlueprintGateFail) as ctx:
+                module.validate_integrated_blueprint(path, phase="production")
+        self.assertIn("FAIL_CAPTION_PROFILE_CONTRACT", str(ctx.exception))
+
     def test_valid_design_assembly_upload_contract_passes(self):
         module = load_module()
         with tempfile.TemporaryDirectory() as tmp:

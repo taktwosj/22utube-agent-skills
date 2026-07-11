@@ -163,6 +163,14 @@ fixture
 ## 제작 판단
 fixture
 
+## 자막 레이아웃 기준
+caption_beat_map.json
+TTS (T3): y=-900, max_chars_per_line=10, max_lines=1
+화자발언 (T4/T5): y=-500, max_chars_per_line=10, max_lines=1
+( ) 상황설명 (T6): y=700, max_chars_per_line=10, max_lines=1
+video_scale=1.20
+face_avoidance=fixed_lower_safe_zone_v1
+
 ## 상단 고정 문구
 fixture
 
@@ -228,6 +236,32 @@ fixture
         {
           "status": "PASS",
           "gate_name": "timeline_design_gate"
+        }
+        """,
+    )
+    write_json(
+        work_dir / "caption_beat_map.json",
+        """
+        {
+          "status": "PASS",
+          "profile_version": "caption_profiles_v2",
+          "video_scale": 1.2,
+          "face_avoidance": "fixed_lower_safe_zone_v1",
+          "beats": [
+            {
+              "beat_id": "E1_B01",
+              "edit_id": "E1",
+              "text": "테스트 나레이션",
+              "start_sec": 0.0,
+              "end_sec": 3.0,
+              "caption_role": "tts_narration",
+              "audio_basis": "tts_audio",
+              "max_chars_per_line": 10,
+              "max_lines": 1,
+              "y": -900,
+              "timing_source": "estimated_text"
+            }
+          ]
         }
         """,
     )
@@ -392,6 +426,28 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIs(gate["capcut_allowed"], True)
             self.assertEqual(gate["source_fingerprint_sha256"], SOURCE_FINGERPRINT)
             self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
+
+    def test_tikitaka_harness_rejects_legacy_caption_profile_values(self):
+        module = load_source_module_no_bytecode("tikitaka_harness_runner_caption_profile", TIKITAKA_HARNESS)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            beat_map_path = work_dir / "caption_beat_map.json"
+            beat_map = module.read_json(beat_map_path)
+            beat_map["beats"][0]["max_chars_per_line"] = 15
+            beat_map["beats"][0]["max_lines"] = 2
+            write_json(beat_map_path, json.dumps(beat_map, ensure_ascii=False))
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("caption_beat_map", gate["missing_or_failed"])
+            self.assertIn("FAIL_CAPTION_CHAR_LIMIT", gate["checks"]["caption_beat_map"]["reason"])
+            self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
 
     def test_tikitaka_harness_writes_report1_handoff_to_000short(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_report1_handoff", TIKITAKA_HARNESS)

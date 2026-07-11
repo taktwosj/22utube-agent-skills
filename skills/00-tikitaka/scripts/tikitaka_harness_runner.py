@@ -74,6 +74,7 @@ SCRIPT_LOCK_PACKAGE_FILES = {
     "urakkai_structure_plan": "urakkai_structure_plan.md",
     "urakkai_structure_delta": "urakkai_structure_delta.json",
     "timeline_design": "timeline_design.json",
+    "caption_beat_map": "caption_beat_map.json",
     "timeline_design_gate": "timeline_design_gate.json",
     "humanize_korean_gate": "humanize_korean_gate.json",
     "block_map": "block_map.json",
@@ -734,6 +735,51 @@ def json_status_pass_artifact_status(work_dir: Path, name: str, label: str) -> d
     return status_block("PASS", name)
 
 
+def caption_beat_map_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["caption_beat_map"]
+    data = read_json(work_dir / name)
+    if not data:
+        return status_block("MISSING", None, "CAPTION_BEAT_MAP_REQUIRED")
+    if data.get("_parse_error") or data.get("_non_object"):
+        return status_block("FAILED", name, "FAIL_CAPTION_BEAT_MAP_INVALID")
+    if data.get("status") != "PASS":
+        return status_block("FAILED", name, "FAIL_CAPTION_BEAT_MAP_STATUS")
+    if data.get("profile_version") != "caption_profiles_v2":
+        return status_block("FAILED", name, "FAIL_CAPTION_PROFILE_VERSION")
+    if data.get("video_scale") != 1.2:
+        return status_block("FAILED", name, "FAIL_VIDEO_SCALE_REQUIRED:1.20")
+    if data.get("face_avoidance") != "fixed_lower_safe_zone_v1":
+        return status_block("FAILED", name, "FAIL_FACE_AVOIDANCE_PROFILE")
+    beats = data.get("beats")
+    if not isinstance(beats, list) or not beats:
+        return status_block("FAILED", name, "FAIL_CAPTION_BEAT_MAP_BEATS_MISSING")
+    profiles = {
+        "tts_narration": {"y": -900, "max_chars_per_line": 10, "max_lines": 1},
+        "tts_caption": {"y": -900, "max_chars_per_line": 10, "max_lines": 1},
+        "speaker_quote": {"y": -500, "max_chars_per_line": 10, "max_lines": 1},
+        "situation_caption": {"y": 700, "max_chars_per_line": 10, "max_lines": 1},
+    }
+    for index, beat in enumerate(beats):
+        if not isinstance(beat, dict):
+            return status_block("FAILED", name, f"FAIL_CAPTION_BEAT_INVALID:{index}")
+        role = str(beat.get("caption_role") or "")
+        profile = profiles.get(role)
+        if profile is None:
+            return status_block("FAILED", name, f"FAIL_CAPTION_ROLE:{index}")
+        if beat.get("max_chars_per_line") != profile["max_chars_per_line"]:
+            return status_block("FAILED", name, f"FAIL_CAPTION_CHAR_LIMIT:{index}")
+        if beat.get("max_lines") != profile["max_lines"]:
+            return status_block("FAILED", name, f"FAIL_CAPTION_LINE_LIMIT:{index}")
+        if beat.get("y") != profile["y"]:
+            return status_block("FAILED", name, f"FAIL_CAPTION_Y_POSITION:{index}")
+        lines = str(beat.get("text") or "").splitlines()
+        if not lines or len(lines) > profile["max_lines"] or any(
+            not line or len(line) > profile["max_chars_per_line"] for line in lines
+        ):
+            return status_block("FAILED", name, f"FAIL_CAPTION_BEAT_TEXT_LIMIT:{index}")
+    return status_block("PASS", name)
+
+
 def visible_script_body_status(work_dir: Path) -> dict[str, Any]:
     _, source = first_nonempty_text(work_dir, SCRIPT_BODY_CANDIDATES)
     if source:
@@ -1111,6 +1157,7 @@ def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
             "urakkai structure delta",
         ),
         "timeline_design": timeline_design_status(work_dir),
+        "caption_beat_map": caption_beat_map_status(work_dir),
         "design_blueprint": design_blueprint_status(work_dir),
         "timeline_design_gate": json_status_pass_artifact_status(
             work_dir,
@@ -1300,6 +1347,8 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
             "",
             "대본 산출물:",
             "- 1차설계서 / timeline_design.json / timeline_design_gate.json",
+            "- caption_beat_map.json (TTS y=-900/1줄, 화자 y=-500/1줄, 상황 y=700/1줄, 줄당 10자)",
+            "- profile_version=caption_profiles_v2 / video_scale=1.20 / face_avoidance=fixed_lower_safe_zone_v1",
             "- 상단/중단/구간오디오정책표",
             "- 중단 TTS 글자만 복사",
             "- humanize_korean_gate.json",
