@@ -19,7 +19,18 @@ Active production skills:
 ```text
 00-tikitaka
 000short-production-agent
+111-politics-longform
 ```
+
+Bundled knowledge and planning skills:
+
+```text
+111mara
+```
+
+`111mara` is the self-contained, offline Mara/쇼츠학개론 knowledge skill. Its
+bundled canonical cards include the visually audited 1-4강 curriculum evidence;
+it does not perform live web searches.
 
 No other production or support skills are managed by this repository.
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "111mara"
+  short_description: "마라 정본 교본과 검증 카드 기반 유튜브 쇼츠 AI 조교"
+  default_prompt: "Use $111mara to answer my YouTube Shorts question from the Mara canonical curriculum with evidence."
