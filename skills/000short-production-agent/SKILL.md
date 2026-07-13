@@ -134,8 +134,8 @@ Required Stage 2 inputs:
 20_script/tts_duration_probe.json when narration-audio exists
 20_script/tts_timing_reconciliation_gate.json when narration-audio exists
 00_source/source_manifest.json or 00_source/source.mp4
-
 20_script/caption_beat_map.json
+```
 
 ## Caption Assembly Contract
 
@@ -162,7 +162,6 @@ manual-only layout decision.
 
 The builder must consume `caption_beat_map.json`, apply the profile to the
 actual text segment, and write the applied profile into the assembly manifest.
-```
 
 Primary machine-readable authority:
 
@@ -394,6 +393,10 @@ Stage 2 intent is selected only with one of:
 
 `자동모드` is explicit stage-2 wording: user says 자동모드 = stage_2_full.
 
+`AUTO_FULL_CAPCUT_PROJECT selects the target`; it does not waive report1 approval
+or the voice/audio route decision. It is a destination/mode choice, not a gate
+bypass.
+
 Stage 2 work and 보고서2 still require both:
 
 ```text
@@ -409,7 +412,7 @@ Mandatory report/checklist gates:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless stage_1_script or stage_2_full is already explicit
-G1 STAGE 1 = 1차설계서 + timeline_design.json + timeline_design_gate.json + humanize_korean_gate.json + block_map.json + block_role_map.json + block_voice_switch_map.json + tts_copy_text.txt + script_handoff_gate.json + report1_handoff.json
+G1 STAGE 1 = 1차설계서 + timeline_design.json + caption_beat_map.json + timeline_design_gate.json + humanize_korean_gate.json + block_map.json + block_role_map.json + block_voice_switch_map.json + tts_copy_text.txt + script_handoff_gate.json + report1_handoff.json
 G2 STAGE 1 STOP = 설계도 and WAIT_REPORT1_APPROVAL_TTS_DECISION until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = stage_2_full intent + report1_approved + voice_audio_route_decided
 G4 FINAL = [FINAL_LOCK 최종 보고] only after production, visual, media-settings, cleanup, and harness gates pass
@@ -541,6 +544,11 @@ For new 22utube Shorts production, read:
 ${env:WORKSPACE_ROOT}\22factory_20260628\AGENTS.md
 ```
 
+Treat `${env:WORKSPACE_ROOT}` as a portable placeholder. Resolve the active
+factory root from the opened workspace or OneDrive location and verify both
+`AGENTS.md` and `docs/YOUTUBE_PRODUCTION_WORK_ORDER.md` exist before production.
+If the root cannot be resolved, stop with `WAIT_FACTORY_ROOT_NOT_RESOLVED`.
+
 Create new Shorts episode outputs under:
 
 ```text
@@ -577,7 +585,7 @@ Before generating or repairing production assets, identify the current authority
 - script authority, usually `final_script_ko.txt` or the current Tikitaka draft
 - Tikitaka `SCRIPT_LOCK_PACKAGE` when the script came from `00-tikitaka`; this
   package is the Source of Truth for `CAPCUT_OPENABLE_PROJECT`.
-- Tikitaka v2 `timeline_design.json` when the script came from `00-tikitaka`;
+- Current Tikitaka v3 `timeline_design.json` when the script came from `00-tikitaka`;
   this is the machine-readable Stage 2 source of truth and `capcut_layout_plan`
   must be derived from it.
 - Tikitaka `timeline_design_gate.json` and `humanize_korean_gate.json`; both

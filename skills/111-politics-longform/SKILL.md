@@ -58,6 +58,12 @@ raw_capcut_sync: false
 업로드 메타데이터만 보관한다. 한 에피소드에는 active writer machine 하나만
 허용한다.
 
+`${env:WORKSPACE_ROOT}`와 `${env:UTUBE_ROOT}`는 portable placeholders다.
+현재 프로세스에 값이 있다는 가정으로 명령을 실행하지 않는다. 열린 workspace
+또는 OneDrive 위치에서 active factory root를 찾고 `AGENTS.md`와
+`docs\YOUTUBE_PRODUCTION_WORK_ORDER.md`가 모두 존재하는지 확인한다. 해결할 수
+없으면 `WAIT_FACTORY_ROOT_NOT_RESOLVED`로 중단한다.
+
 ### 시작 브리프와 진행판
 
 생산 명령을 받으면 파일을 수정하기 전에 다음 브리프를 먼저 만든다. 이
@@ -125,6 +131,10 @@ Stage 2는 Stage 1의 source video가 로컬에 실제 존재할 때만 시작�
 - `ffprobe`, JSON 미러 확인, 오디오/간격 확인, 최소 3개 프레임과 contact
   sheet 확인, 프로젝트 임시파일 정리가 끝나기 전에는 `PASS`, `FINAL`,
   `upload_ready`를 쓰지 않는다.
+- 필요한 백업은 outside the active CapCut draft tree에 저장한다. 최종 응답 전
+  활성 draft 내부의 `*.bak`, `.before_*`, `before_*`, `*_backup_*`와 임시
+  helper 파일을 확인하고 제거한다. 정리할 수 없으면
+  `WAIT_PROJECT_CLEANUP` 또는 `FAIL_PROJECT_CLEANUP`으로 중단한다.
 - 출처 재사용 권리 또는 fair-use 판단이 확인되지 않으면 업로드 준비 완료를
   주장하지 않는다.
 
@@ -278,7 +288,8 @@ Use them as examples of density and format, not as content for a new video.
 
 1. Resolve the episode and CapCut draft.
    - CapCut root usually lives under `%LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft`.
-   - For source evidence, prefer the episode folder under `22utube\11utube\yellow\episodes\...`.
+   - For new source evidence, prefer `22factory_20260628\02_politics_longform\episodes\{episode_id}`.
+   - Use `22utube\11utube\yellow\episodes\...` only as a legacy read-only fallback or explicit repair source.
    - For external-rough finishing mode, first read `handoff_to_codex.md`, `source_manifest.json`, `source_labels.json`, `edit\roughcut_edl.json`, `text\lower_t1_draft.json`, `decisions\topic_flow.json`, `upload_description_draft.md`, and `report.md` when present.
    - Also read `edit\segment_markers_hq.srt`, `source\M1\source.ko.srt`, `analysis\srt_items.json`, `upload_description.md`, and existing CapCut draft metadata when present.
 
@@ -381,10 +392,11 @@ Only the active part should be yellow in the flow strap. The other parts stay
 white/de-emphasized.
 
 6. CapCut JSON update rules.
-   - Back up `draft_content.json` and `template-2.tmp` before edits.
+   - Back up `draft_content.json` and `template-2.tmp` before edits, outside the active CapCut draft tree.
    - Patch both project root files and matching `Timelines/*/draft_content.json`, `Timelines/*/template-2.tmp` cache files.
    - Use UTF-8 Python IO. Avoid PowerShell inline Korean strings for JSON writes; store Korean text in UTF-8 JSON or patch via `apply_patch`.
    - After writing, verify segment count, first start time, last end time, gap count, and forbidden terms.
+   - Before the final response, verify the active draft contains no `*.bak`, `.before_*`, `before_*`, `*_backup_*`, or temporary helper files. Use `WAIT_PROJECT_CLEANUP` or `FAIL_PROJECT_CLEANUP` when cleanup cannot be completed.
 
 Verification pattern:
 

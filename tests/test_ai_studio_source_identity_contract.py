@@ -13,27 +13,37 @@ PRODUCTION = (ROOT / "skills" / "000short-production-agent" / "SKILL.md").read_t
 
 
 class AiStudioSourceIdentityContractTests(unittest.TestCase):
-    def test_tikitaka_runner_contract_is_fail_closed_and_run_bound(self):
+    def test_tikitaka_runner_contract_matches_sequential_youtube_attachment_flow(self):
         for token in (
             "VERIFIED_NEW_CHAT",
-            "VERIFIED_ON",
-            "promptUrlVerified=true",
-            "promptNonceVerified=true",
+            "NOT_REQUIRED_YOUTUBE_ATTACHMENT",
+            "urlStageVerified=true",
+            "mediaAttachmentStatus=VERIFIED_YOUTUBE_VIDEO",
+            "promptStageVerified=true",
+            "promptStageUrlAbsent=true",
+            "promptInputMode=SEQUENTIAL_URL_THEN_PROMPT",
             "generationStarted=true",
             "run_nonce",
-            "observed_source_title",
             "RESULT_SOURCE_MISMATCH",
             "source_identity_lock.json",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, TIKITAKA)
+        for stale_token in (
+            "urlContextStatus=VERIFIED_ON",
+            "promptUrlVerified=true",
+            "promptNonceVerified=true",
+        ):
+            with self.subTest(stale_token=stale_token):
+                self.assertNotIn(stale_token, TIKITAKA)
 
-    def test_gemini_system_prompt_has_no_manual_url_slot_and_has_binding_fields(self):
+    def test_gemini_system_prompt_has_no_runtime_binding_fields(self):
         self.assertNotIn("# 遺꾩꽍??URL", GEMINI_PROMPT)
         self.assertNotIn("?ш린??遺꾩꽍??URL??遺숈뿬 ?ｋ뒗??", GEMINI_PROMPT)
         for token in ('"run_nonce"', '"source_video_id"', '"observed_source_title"'):
             with self.subTest(token=token):
-                self.assertIn(token, GEMINI_PROMPT)
+                self.assertNotIn(token, GEMINI_PROMPT)
+        self.assertIn('"video_url"', GEMINI_PROMPT)
 
     def test_production_skill_requires_source_and_handoff_coherence_gates(self):
         for token in (

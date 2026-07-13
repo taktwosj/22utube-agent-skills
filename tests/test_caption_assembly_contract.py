@@ -42,6 +42,21 @@ BUILDER = resolve_builder_path()
 TIKITAKA_HARNESS = ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
 
 
+def section(text: str, heading: str, next_heading: str) -> str:
+    return text.split(heading, 1)[1].split(next_heading, 1)[0]
+
+
+def heading_is_inside_fence(text: str, heading: str) -> bool:
+    inside = False
+    for line in text.splitlines():
+        if line.startswith("```"):
+            inside = not inside
+            continue
+        if line == heading:
+            return inside
+    raise AssertionError(f"heading not found: {heading}")
+
+
 def test_builder_resolution_prefers_workspace_root():
     with tempfile.TemporaryDirectory() as tmp:
         expected = (
@@ -95,6 +110,20 @@ def test_tikitaka_handoff_declares_caption_beat_map_authority():
     assert "CAPTION_BEAT_MAP_REQUIRED" in harness
     assert 'data.get("profile_version") != "caption_profiles_v2"' in harness
     assert 'data.get("face_avoidance") != "fixed_lower_safe_zone_v1"' in harness
+
+
+def test_caption_beat_map_is_listed_in_every_stage_one_handoff_list():
+    text = TIKITAKA.read_text(encoding="utf-8")
+    assert "caption_beat_map.json" in section(text, "## Tikitaka Current Order", "## CAPTION_BEAT_MAP_HANDOFF")
+    assert "caption_beat_map.json" in section(text, "Mandatory gate map for URL + Gemini/source intake:", "The harness must write")
+    assert "caption_beat_map.json" in section(text, "When design repair occurs, invalidate and regenerate:", "Humanize may only change")
+    assert "caption_beat_map.json" in section(text, "`SCRIPT_LOCK_PACKAGE` must contain:", "Status wording:")
+
+
+def test_production_skill_markdown_and_tikitaka_version_are_current():
+    text = PRODUCTION.read_text(encoding="utf-8")
+    assert not heading_is_inside_fence(text, "## Caption Assembly Contract")
+    assert "Tikitaka v2" not in text
 
 
 def test_production_contract_declares_fixed_caption_profiles():

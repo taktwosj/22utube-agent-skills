@@ -68,6 +68,7 @@ tikitaka_source_request.json
 -> source_identity_lock.json + verified source_fingerprint_sha256
 -> 1차설계서
 -> timeline_design.json
+-> caption_beat_map.json
 -> timeline_design_gate.json
 -> humanize_korean_gate.json
 -> block_map.json / block_role_map.json / block_voice_switch_map.json
@@ -383,6 +384,7 @@ When design repair occurs, invalidate and regenerate:
 ```text
 1차설계서
 timeline_design.json
+caption_beat_map.json
 timeline_design_gate.json
 humanize_korean_gate.json
 block_map.json
@@ -447,10 +449,10 @@ URL 주소 주면 Gemini 분석합니다.
 When the user provides a YouTube Shorts/Reels/TikTok URL for Tikitaka intake,
 run Gemini raw analysis before writing Tikitaka script. Use the exact system
 prompt in `references/gemini_raw_intake_prompt.md`, verify the output includes
-`final_warning_ko`, and save the Gemini result as JSON/Markdown through the
-AI Studio dedicated-profile runner.
+`final_warning_ko`, and save the Gemini result as JSON/Markdown through AI
+Studio web UI automation.
 
-Codex must use the shared no-API AI Studio runner first, not manual paste:
+For unattended/background work, use the shared no-API dedicated-profile runner:
 
 ```powershell
 $env:PYTHONPATH = ""
@@ -463,15 +465,18 @@ Compatibility wrapper:
 powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\OneDrive\22utube\22factory_20260628\00_asset_tools\tools\gemini_raw_paste_run.ps1" -Url "<SHORTS_URL>"
 ```
 
-Manual/operator web-UI option:
+When the user explicitly asks to watch or control ordinary Chrome, use the
+normal-Chrome extension instead of forcing the dedicated profile:
 
 ```text
 %USERPROFILE%\OneDrive\22utube\22factory_20260628\00_asset_tools\browser_extensions\ai-studio-shorts-runner
 ```
 
-This Chrome extension is allowed because it is still AI Studio web UI only: it
-fills System instructions, inserts the Shorts URL, tries URL context, clicks Run,
-and copies the last Model JSON. The CDP runner now uses this extension artifact
+This Chrome extension is allowed because it is still AI Studio web UI only. It
+pastes the Shorts URL first, waits at least 3 seconds for the `YouTube Video`
+attachment, pastes the URL-free prompt, submits with Ctrl+Enter, and copies the
+last fresh Model JSON. URL context is not required for this attachment flow.
+The CDP runner uses this extension artifact
 automatically: it launches only the dedicated AI Studio Chrome profile with
 `--load-extension`, checks for the extension content-script marker, and if Chrome
 ignores command-line unpacked extension loading, injects the same extension files
@@ -509,12 +514,16 @@ Runner contract:
   from being treated as the new Shorts result.
 - The extension bridge result is accepted only when all run-binding fields are
   present: `playgroundStatus=VERIFIED_NEW_CHAT`,
-  `urlContextStatus=VERIFIED_ON`, `promptUrlVerified=true`,
-  `promptNonceVerified=true`, and `generationStarted=true`.
-- Generate a unique `run_nonce` per attempt. The final JSON must return the same
-  `run_nonce`, the exact requested `source_video_id`, the exact `video_url`, and
-  a non-empty `observed_source_title` that matches trusted yt-dlp metadata.
-- Missing URL metadata, title/duration/id mismatch, a stale nonce, or a bridge
+  `urlContextStatus=NOT_REQUIRED_YOUTUBE_ATTACHMENT`,
+  `urlStageVerified=true`, `mediaAttachmentStatus=VERIFIED_YOUTUBE_VIDEO`,
+  `promptStageVerified=true`, `promptStageUrlAbsent=true`,
+  `promptInputMode=SEQUENTIAL_URL_THEN_PROMPT`, and `generationStarted=true`.
+- Generate a unique internal `run_nonce` per attempt and verify it in the
+  extension bridge/run manifest. Do not inject `run_nonce`, `source_video_id`,
+  or `observed_source_title` into the Gemini prompt and do not require Gemini
+  JSON to echo them. Bind the requested URL/video id/title/duration using trusted
+  yt-dlp metadata, the verified YouTube attachment, and the saved run manifest.
+- Missing URL metadata, title/duration/id mismatch, a stale internal nonce, or a bridge
   status outside the allowlist is `RESULT_SOURCE_MISMATCH` or a WAIT blocker;
   it must never reach the save function.
 - When source media exists, bind raw intake, script handoff, and production to
@@ -627,7 +636,7 @@ Mandatory gate map for URL + Gemini/source intake:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
-G1 STAGE 1 = create 1차설계서, timeline_design.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, and script_handoff_gate.json
+G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, and script_handoff_gate.json
 G2 STAGE 1 STOP = output 설계도 and stop until report1_approved + voice_audio_route_decided
 G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
@@ -844,6 +853,12 @@ For current 22utube work, check:
 ${env:WORKSPACE_ROOT}\22factory_20260628\AGENTS.md
 ```
 
+Treat `${env:WORKSPACE_ROOT}` as a portable placeholder, not proof that the
+current process has the variable. Resolve the active factory root from the
+opened workspace or OneDrive location and verify both `AGENTS.md` and
+`docs/YOUTUBE_PRODUCTION_WORK_ORDER.md` exist before running commands. If the
+root cannot be resolved, stop with `WAIT_FACTORY_ROOT_NOT_RESOLVED`.
+
 For new Tikitaka/Shorts script work, create or use an episode folder under:
 
 ```text
@@ -987,6 +1002,7 @@ does not create CapCut, audio files, SRT, exports, or upload packages.
 - `1차설계서`: operator-facing CapCut timeline table with track/time rows.
 - `timeline_design.json`: machine-readable design with protected time, track,
   caption role, and audio policy fields.
+- `caption_beat_map.json`: timed visible-text beats and fixed layout profile.
 - `timeline_design_gate.json`: PASS before handoff.
 - `humanize_korean_gate.json`: PASS after visible Korean cleanup and before
   `script_handoff_gate.json`.
@@ -1370,22 +1386,23 @@ Use when verified `"..."` 화자발언, `()` 상황설명, and TTS are all activ
 the timeline. Every segment must lock source_audio on/off/duck, tts on/off, and
 BGM/SFX policy before handoff.
 
-## Dual Writer Mode (우라까이/와우포인트/유형 확정)
+## Dual Writer Mode (Explicit Optional Mode)
 
-When confirming wow point, urakai structure, story type, and production type,
-use two real CLI-based writer agents to debate before locking.
+Use two CLI-based writer agents only when the user explicitly asks for
+`작가모드`, `2명 토론`, `울트라 검토`, or an equivalent multi-writer review.
+Ordinary Tikitaka Stage 1 must not be blocked when either CLI is unavailable.
 
 ### CLI Tools
 
-- **Writer A (Codex CLI / GPT 5.5)**: aggressive hook, emotional escalation,
+- **Writer A (Codex CLI)**: aggressive hook, emotional escalation,
   retention-first, willing to dramatize for engagement.
   ```bash
-  codex exec "당신은 GPT 5.5 작가모드입니다. ... <분석 지시> ..." 2>&1
+  codex exec "당신은 후킹·리텐션 중심 작가입니다. ... <분석 지시> ..." 2>&1
   ```
-- **Writer B (Claude CLI / GLM 6.2)**: fact-grounded, structural balance,
+- **Writer B (Claude CLI)**: fact-grounded, structural balance,
   risk-aware, prioritizes coherence and policy safety.
   ```bash
-  claude -p --bare --dangerously-skip-permissions "당신은 GLM 6.2 작가모드입니다. ... <분석 지시> ..." 2>&1
+  claude -p --bare "당신은 사실·구조 중심 작가입니다. ... <분석 지시> ..." 2>&1
   ```
 
 ### Debate Protocol
@@ -1419,8 +1436,9 @@ preserves the strongest source-backed viewer question wins.
    source speech policy, and card asset role before the first draft.
 3. Map source notes into functional beats.
 4. Write hook candidates if requested or useful.
-5. **Run dual writer mode** to confirm wow point, urakai, story type, and
-   production type.
+5. If the user explicitly selected Dual Writer Mode, run it to review wow point,
+   urakai, story type, and production type. Otherwise continue with the single
+   Tikitaka design owner.
 6. Produce `1차설계서`: a CapCut-style time/track layout table, not an abstract
    script report.
 7. Write `timeline_design.json` from the same layout and pass
@@ -1531,7 +1549,9 @@ Hard fails:
 
 ## Required Gates Before Stronger Claims
 
-- Do not claim `SCRIPT_LOCK` from this skill alone.
+- Do not claim generic `SCRIPT_LOCK` from this skill alone. This skill may emit
+  `SCRIPT_LOCK_PACKAGE` only when `script_handoff_gate.json status=PASS` and all
+  required Stage 1 artifacts, including `caption_beat_map.json`, exist.
 - Do not claim production allowed.
 - Do not claim source-verified truth from raw Gemini notes.
 - Do not run `SCRIPT_HANDOFF_GATE` before `timeline_design_gate.json` and
