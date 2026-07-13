@@ -262,7 +262,7 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
                 self.assertIn(token, text)
 
         section_start = text.index("Tikitaka Current Order")
-        section_end = text.index("## Gemini Raw Intake First")
+        section_end = text.index("## Optional Gemini Pre-index")
         section = text[section_start:section_end]
         order = [
             "source evidence",

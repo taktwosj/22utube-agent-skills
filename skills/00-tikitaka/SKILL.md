@@ -437,20 +437,30 @@ audio.bgm
 오디오 / BGM
 ```
 
-## Gemini Raw Intake First
+## Optional Gemini Pre-index
 
-When the user says `티키타카 하자` without source notes, ask for the Shorts URL
-first:
+Gemini is an optional pre-index, not an intake gate.
 
-```text
-URL 주소 주면 Gemini 분석합니다.
-```
+Use this routing order:
 
-When the user provides a YouTube Shorts/Reels/TikTok URL for Tikitaka intake,
-run Gemini raw analysis before writing Tikitaka script. Use the exact system
-prompt in `references/gemini_raw_intake_prompt.md`, verify the output includes
-`final_warning_ko`, and save the Gemini result as JSON/Markdown through AI
-Studio web UI automation.
+1. If Gemini JSON or notes are already supplied, do not rerun Gemini. Read them
+   as an unverified candidate index for likely `T1`, `T2`, TTS, `""` speaker
+   quotes, `()` situation captions, and useful source ranges.
+2. If no Gemini result is supplied and a URL or local source is available,
+   acquire or confirm `source.mp4` and continue with direct source analysis.
+3. Run the AI Studio raw-intake path only when the user explicitly asks for Gemini,
+   AI Studio analysis, or Gemini raw notes.
+
+Do not block Tikitaka only because Gemini raw intake is absent.
+Gemini failure alone is not a WAIT condition when source media is available or can be acquired.
+Final timing, dialogue, OCR, source identity, and design decisions must come from
+`source.mp4`, ffprobe, STT, OCR, and frame checks. Gemini ranges and labels remain
+`PROPOSED_SOURCE_TIMECODE` until that verification is complete.
+
+When Gemini is explicitly requested, use the compact candidate-index prompt in
+`references/gemini_raw_intake_prompt.md`, verify the output includes
+`final_warning_ko`, and save the result as JSON/Markdown through AI Studio web
+UI automation.
 
 For unattended/background work, use the shared no-API dedicated-profile runner:
 
@@ -493,8 +503,9 @@ Runner contract:
   must not touch the user's normal Chrome profile/tabs.
 - Gemini raw intake is **web UI only** for this user. Do not ask for, suggest,
   or implement Gemini API fallback. If the web UI fails or returns source
-  mismatch, report the blocker and continue only with allowed web-UI/reset/source
-  identity checks unless the user explicitly reverses this rule.
+  mismatch, report the Gemini result as unavailable. Continue through direct
+  source analysis when `source.mp4` is available or can be acquired. Use a WAIT
+  state only when the required source evidence is also unavailable.
 - It launches real installed Chrome with the dedicated `--user-data-dir` and a
   `--remote-debugging-port`, then attaches through Playwright CDP. Do not switch
   back to Playwright `launch_persistent_context`; on this Windows PC that path
@@ -878,11 +889,10 @@ Gemini alone. Mark any proposed source range as
 `PROPOSED_SOURCE_TIMECODE` until the user confirms it or a source-evidence tool
 verifies it.
 
-If source verification is needed before script confidence, use the current
-source-evidence workflow only. The user must provide or confirm `source.mp4`
-and the required frame/STT/OCR evidence. If the media is not available, stop
-and ask the user to provide the source media or evidence manually; do not
-invoke a separate video-watching skill or invent final timing.
+For script confidence, use the current source-evidence workflow only. Acquire or
+confirm `source.mp4`, then create the required frame/STT/OCR evidence. If source
+media cannot be acquired or confirmed, stop and ask the user to provide it; do
+not invoke a separate video-watching skill or invent final timing.
 
 ## Story And Production Type Gate
 
