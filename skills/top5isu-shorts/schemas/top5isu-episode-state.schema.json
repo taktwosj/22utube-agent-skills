@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "top5isu standalone episode state",
+  "type": "object",
+  "required": [
+    "skill",
+    "standalone_factory",
+    "external_skill_handoff",
+    "style_profile",
+    "template_profile",
+    "stage",
+    "directories"
+  ],
+  "properties": {
+    "skill": {"const": "top5isu-shorts"},
+    "standalone_factory": {"const": true},
+    "external_skill_handoff": {"const": "forbidden"},
+    "style_profile": {"enum": ["top5", "gunlimbo"]},
+    "template_profile": {"const": "top5isu_v1"},
+    "stage": {"enum": ["INTAKE", "SCRIPT_DESIGN", "AUDIO_ASSETS", "CAPCUT_PROJECT", "FINAL_REPORT"]},
+    "directories": {
+      "const": ["00_source", "10_analysis", "20_script", "30_audio", "40_assets", "50_capcut_project", "90_reports"]
+    }
+  },
+  "additionalProperties": true
+}

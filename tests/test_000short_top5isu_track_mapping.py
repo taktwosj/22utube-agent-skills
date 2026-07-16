@@ -7,7 +7,7 @@ from _support import load_source_module_no_bytecode
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTION = ROOT / "skills" / "000short-production-agent"
+PRODUCTION = ROOT / "skills" / "top5isu-shorts"
 VALIDATOR = PRODUCTION / "scripts" / "validate_top5isu_track_mapping.py"
 
 
@@ -68,18 +68,16 @@ class Top5IsuTrackMappingTests(unittest.TestCase):
         with self.assertRaisesRegex(module.GateFail, "FAIL_AUDIO_TRACK_MAPPING"):
             module.validate_top5isu_track_mapping(data)
 
-    def test_adapter_and_contract_are_documented_without_replacing_default(self):
-        adapter = (PRODUCTION / "adapters" / "top5isu_v1.md").read_text(encoding="utf-8")
-        layout = (PRODUCTION / "03_CAPCUT_LAYOUT_CONTRACT.md").read_text(encoding="utf-8")
+    def test_standalone_contract_is_documented_without_generic_fallback(self):
+        production = (PRODUCTION / "references" / "production-contract.md").read_text(encoding="utf-8")
         skill = (PRODUCTION / "SKILL.md").read_text(encoding="utf-8")
 
-        self.assertIn("template_profile=top5isu_v1", adapter)
-        self.assertIn("FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN", adapter)
-        self.assertIn("image_json_transform_y=-0.15625", adapter)
-        self.assertIn("ffmpeg loudnorm", adapter)
-        self.assertIn("## top5isu_v1 Explicit Adapter", layout)
-        self.assertIn("top5isu_v1", skill)
-        self.assertIn("The default remains `shrt white`", skill)
+        self.assertIn("top5isu_v1", production)
+        self.assertIn("shrt white", production)
+        self.assertIn("-0.15625", production)
+        self.assertIn("ffmpeg loudnorm", production)
+        self.assertIn("standalone_factory=true", skill)
+        self.assertIn("external_skill_handoff=forbidden", skill)
 
 
 if __name__ == "__main__":

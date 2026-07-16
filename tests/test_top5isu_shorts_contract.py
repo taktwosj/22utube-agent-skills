@@ -21,17 +21,18 @@ class Top5IsuShortsContractTests(unittest.TestCase):
         self.assertIn("$top5isu-shorts", ui)
         self.assertIn("top5isu-shorts", {entry["name"] for entry in manifest["skills"]})
 
-    def test_skill_preserves_owner_boundaries_and_fail_closed_routing(self):
+    def test_skill_is_a_standalone_factory_with_no_external_skill_handoff(self):
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
 
-        self.assertIn("00-tikitaka", skill)
-        self.assertIn("000short-production-agent", skill)
-        self.assertIn("Stage 1", skill)
+        self.assertIn("standalone_factory=true", skill)
+        self.assertIn("external_skill_handoff=forbidden", skill)
+        for stage in ("INTAKE", "SCRIPT_DESIGN", "AUDIO_ASSETS", "CAPCUT_PROJECT", "FINAL_REPORT"):
+            self.assertIn(stage, skill)
+        self.assertNotIn("Require `00-tikitaka`", skill)
+        self.assertNotIn("Route production to `000short-production-agent`", skill)
         self.assertIn("FINAL_LOCK", skill)
         self.assertIn("FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN", skill)
         self.assertIn("fallback_allowed=false", skill)
-        self.assertIn("Do not modify `00-tikitaka`", skill)
-        self.assertIn("Do not modify `111-politics-longform`", skill)
 
     def test_skill_locks_profiles_template_coordinates_and_audio_measurement(self):
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -52,7 +53,10 @@ class Top5IsuShortsContractTests(unittest.TestCase):
             "top5-profile.md": "ranking_item",
             "gunlimbo-profile.md": "speaker_mute_forbidden",
             "top5isu-template-contract.md": "archive_sha256",
-            "handoff-contract.md": "top5isu_build_contract_v1",
+            "handoff-contract.md": "No external skill handoff",
+            "script-contract.md": "standalone_factory: true",
+            "production-contract.md": "real editable CapCut project",
+            "report-contract.md": "FINAL_LOCK",
         }
         for name, token in references.items():
             text = (SKILL_ROOT / "references" / name).read_text(encoding="utf-8")

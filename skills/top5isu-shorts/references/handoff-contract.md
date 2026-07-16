@@ -1,37 +1,31 @@
-# top5isu Handoff Contract
+# top5isu Internal Stage Contract
 
-`top5isu_build_contract_v1` extends, but never replaces, the Stage 1 Tikitaka
-handoff.
+`top5isu_build_contract_v1` is the internal production authority for the standalone factory.
 
-## Stage 1 Inputs
+## Internal Lifecycle
 
-- `report1_handoff.json`
-- `script_handoff_gate.json`
-- `timeline_design.json`
-- `block_map.json`
-- `tts_copy_text.txt`
+```text
+INTAKE -> SCRIPT_DESIGN -> AUDIO_ASSETS -> CAPCUT_PROJECT -> FINAL_REPORT
+```
 
-The script handoff must be PASS, user approval must be explicit, and the voice
-route must be decided before production.
+No external skill handoff is permitted. Every stage writes into the same episode root and preserves the selected `style_profile` and `template_profile=top5isu_v1`.
 
-## Style Extension
+## Script Inputs
 
-`top5isu_build_contract.json` adds:
+- `20_script/design_blueprint.md`
+- `20_script/script.json`
+- `20_script/tts_copy_text.txt`
+- `20_script/top5isu_build_contract.json`
 
-- `style_profile=top5|gunlimbo`
-- `template_profile=top5isu_v1`
-- immutable archive evidence
-- required tracks and visual locks
-- profile-specific audio policy
-- `ffmpeg loudnorm` measurement policy
+The blueprint and build contract must pass their validators before audio, assets, or CapCut assembly starts.
 
-The production owner may replace assets and add audio lanes but may not rewrite
-the approved script or choose another template.
+## Production Outputs
+
+- normalized narration and approved source speech under `30_audio`
+- episode-only visual assets under `40_assets`
+- real editable local CapCut clone plus snapshots under `50_capcut_project`
+- validator and final reports under `90_reports`
 
 ## Status Ownership
 
-- Stage 1 PASS: `00-tikitaka`
-- Contract PASS: `top5isu-shorts` validator
-- CapCut and final PASS: `000short-production-agent`
-
-No upstream skill may infer downstream PASS.
+The same `top5isu-shorts` skill owns all internal statuses. `FINAL_LOCK` is allowed only after every applicable static gate plus actual CapCut visual/playback review passes. Upload remains a separate explicit operator approval.
