@@ -26,6 +26,28 @@ This contract separates the script-writing role from the CapCut production role:
 - Do not recreate a selected template manually from the old normal fallback. A draft that was not based on the selected preset fails the template gate.
 - `인스타기본` is legacy/reference-only. Current factory routing uses `인스타템플릿` unless the user explicitly names a different real CapCut template.
 
+## top5isu_v1 Explicit Adapter
+
+This is an explicit profile selected by the `top5isu-shorts` build contract;
+it is not a replacement for the generic `shrt white` default.
+
+```text
+template_profile=top5isu_v1
+reference_project_name=top5isu
+derived_from_reference_project=true
+fallback_allowed=false
+required_tracks=IMAGE_EFFECT_PRESETS,TTS,T2,T1,LOGO
+image_effect_segments=7
+image_ui_y=-600
+image_json_transform_y=-0.15625
+```
+
+Clone the verified reference project, replace all sample image media, preserve
+the seven image effects and full-duration logo, and resolve TTS, source speech,
+SFX, and BGM to unique semantic audio lanes. Do not apply the `shrt white`
+A9-A12 mapping. Validate this adapter before assembly and stop with
+`FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN` if the branch changes to `shrt white`.
+
 ## CapCut T-track Contract
 
 `T1/T2/T3` are not work-stage names. They are the internal CapCut text-track order.

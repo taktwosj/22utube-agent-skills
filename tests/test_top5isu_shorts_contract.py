@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import json
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = ROOT / "skills" / "top5isu-shorts"
+
+
+class Top5IsuShortsContractTests(unittest.TestCase):
+    def test_skill_is_registered_and_has_single_entrypoint_triggers(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        ui = (SKILL_ROOT / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        manifest = json.loads((ROOT / "manifests" / "skill-set.json").read_text(encoding="utf-8"))
+
+        self.assertIn("name: top5isu-shorts", skill)
+        for token in ("top5isu", "TOP5", "군림보", "gunlimbo"):
+            self.assertIn(token, skill)
+        self.assertIn("$top5isu-shorts", ui)
+        self.assertIn("top5isu-shorts", {entry["name"] for entry in manifest["skills"]})
+
+    def test_skill_preserves_owner_boundaries_and_fail_closed_routing(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("00-tikitaka", skill)
+        self.assertIn("000short-production-agent", skill)
+        self.assertIn("Stage 1", skill)
+        self.assertIn("FINAL_LOCK", skill)
+        self.assertIn("FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN", skill)
+        self.assertIn("fallback_allowed=false", skill)
+        self.assertIn("Do not modify `00-tikitaka`", skill)
+        self.assertIn("Do not modify `111-politics-longform`", skill)
+
+    def test_skill_locks_profiles_template_coordinates_and_audio_measurement(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+
+        for token in (
+            "style_profile=top5",
+            "style_profile=gunlimbo",
+            "template_profile=top5isu_v1",
+            "image_ui_y=-600",
+            "image_json_transform_y=-0.15625",
+            "ffmpeg loudnorm",
+            "final_export_remeasure_required=true",
+        ):
+            self.assertIn(token, skill)
+
+    def test_references_and_schema_are_present_and_consistent(self):
+        references = {
+            "top5-profile.md": "ranking_item",
+            "gunlimbo-profile.md": "speaker_mute_forbidden",
+            "top5isu-template-contract.md": "archive_sha256",
+            "handoff-contract.md": "top5isu_build_contract_v1",
+        }
+        for name, token in references.items():
+            text = (SKILL_ROOT / "references" / name).read_text(encoding="utf-8")
+            self.assertIn(token, text)
+
+        schema = json.loads(
+            (SKILL_ROOT / "schemas" / "top5isu-build-contract.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        required = set(schema["required"])
+        self.assertTrue(
+            {
+                "contract_version",
+                "template_profile",
+                "style_profile",
+                "fallback_allowed",
+                "image_ui_y",
+                "image_json_transform_y",
+                "audio_normalization",
+            }.issubset(required)
+        )
+        self.assertEqual(schema["properties"]["template_profile"]["const"], "top5isu_v1")
+        self.assertEqual(schema["properties"]["fallback_allowed"]["const"], False)
+
+
+if __name__ == "__main__":
+    unittest.main()

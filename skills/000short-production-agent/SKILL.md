@@ -282,6 +282,28 @@ with `WAIT_SHRT_WHITE_BASE_REQUIRED` / `WAIT_SHRT_WHITE_BASE_MISSING` /
 project, stop with `FAIL_STALE_DERIVED_REFERENCE_BUILDER`; do not repair that
 builder into the next project.
 
+## top5isu_v1 Explicit Production Adapter
+
+The default remains `shrt white` for unrelated 11short production. When an
+approved `top5isu-shorts` contract explicitly selects
+`template_profile=top5isu_v1`, use `adapters/top5isu_v1.md` instead and clone the
+verified root project named `top5isu`.
+
+For that explicit branch only:
+
+- `fallback_allowed=false`; never substitute `shrt white`.
+- preserve the exact row order `IMAGE_EFFECT_PRESETS`, `TTS`, `T2`, `T1`,
+  `LOGO`.
+- preserve all seven image-effect preset segments while replacing sample
+  images.
+- map CapCut UI `Y=-600` to JSON `clip.transform.y=-0.15625`.
+- resolve semantic audio lanes through the adapter, not through the generic
+  `shrt white` A9-A12 row map.
+- run `scripts/validate_top5isu_track_mapping.py` before assembly, then run the
+  package and draft validators owned by `top5isu-shorts`.
+
+Any attempted fallback stops with `FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN`.
+
 ## Report 2 Contract
 
 `보고서2` starts only after `설계도 승인` and a voice/audio route decision.
