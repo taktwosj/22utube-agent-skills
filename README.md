@@ -1,6 +1,6 @@
-# 22utube Agent Skills
+# Agent Skills
 
-Git source of truth for 22utube/11utube agent and video-production skills.
+Git source of truth for 22utube/11utube production skills and selected personal workflow skills.
 
 ## Roles
 
@@ -27,6 +27,17 @@ Bundled knowledge and planning skills:
 ```text
 111mara
 ```
+
+Naver blog workflow skills:
+
+```text
+naver-blog-posting
+```
+
+`naver-blog-posting` is installed to Codex only. It resolves the separate
+`22blog` workspace from the current repository, OneDrive environment roots, or
+Windows OneDrive account settings instead of hardcoding a username or machine
+path.
 
 `111mara` is the self-contained, offline Mara/쇼츠학개론 knowledge skill. Its
 bundled canonical cards include the visually audited 1-4강 curriculum evidence;

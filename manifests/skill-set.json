@@ -1,6 +1,6 @@
 {
   "repo_name": "22utube-agent-skills",
-  "version": "2026.07.13",
+  "version": "2026.07.14",
   "source_of_truth": "git",
   "active_shorts_script_authority": "skills/00-tikitaka/shorts_script_analysis_single_source_v20260706.md",
   "onedrive_role": "production-data-only",
@@ -27,6 +27,12 @@
       "name": "111mara",
       "category": "22utube",
       "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "naver-blog-posting",
+      "category": "naver-blog",
+      "targets": ["codex"],
       "enabled": true
     }
   ]
