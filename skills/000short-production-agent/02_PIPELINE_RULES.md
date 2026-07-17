@@ -53,6 +53,13 @@ If Tikitaka v3 handoff exists, start from the locked handoff package.
 5. Confirm `voice_audio_route_decided=true`.
 6. Read `20_script/script_handoff_gate.json`.
 7. Confirm `SCRIPT_HANDOFF_GATE` PASS and `capcut_allowed=true`.
+8. Validate `10_analysis/source_voice_separation.json`.
+   - `speaker_quote` requires `SOURCE_VOICE_SEPARATION_GATE status=PASS`.
+   - Require `source_audio_ref=10_analysis/audio/vocals.wav`.
+   - Require `source_audio_provenance=demucs_full_source_vocals`.
+   - `NOT_REQUIRED_NO_SOURCE_SPEECH` is valid only when no speaker quote exists.
+   - Missing Demucs evidence is `WAIT_SOURCE_VOICE_SEPARATION`; raw or pre-cut
+     source audio is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
 8. Read `20_script/timeline_design.json`.
 9. Validate expanded segment fields:
 
@@ -88,6 +95,13 @@ audio.speaker_source -> A10
 audio.sfx            -> A11
 audio.bgm            -> A12
 ```
+
+For `audio.speaker_source`, cut Q audio only from the full-source Demucs
+`10_analysis/audio/vocals.wav`. Preserve 0.1 to 0.2 seconds of available
+context at both ends and add short fades. Do not overlap Q with narration N.
+Keep embedded source-video audio muted for the whole timeline. Run listening
+QC for music residue and robotic damage before final loudness normalization.
+Never use `no_vocals.wav`.
 
 20. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`
     while preserving source_order/timeline_order/assembly_role/duration fields.

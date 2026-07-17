@@ -4,6 +4,7 @@ import json
 import hashlib
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 from _support import load_source_module_no_bytecode, write_valid_source_mp4
@@ -33,6 +34,18 @@ def write(path: Path, text: str = "ok") -> None:
 
 def write_json(path: Path, data: dict) -> None:
     write(path, json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+
+
+def write_wav(path: Path, duration_sec: float = 8.0) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sample_rate_hz = 48000
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(
+            b"\x00\x00\x00\x00" * int(duration_sec * sample_rate_hz)
+        )
 
 
 def create_valid_tikitaka_v2_package(root: Path) -> dict:
@@ -111,6 +124,8 @@ def create_valid_tikitaka_v2_package(root: Path) -> dict:
                     "duration_status": "SOURCE_AUDIO_LOCKED",
                     "source_audio_range": {"start": "00:03", "end": "00:08"},
                     "quote_verification_status": "VERIFIED_STT",
+                    "source_audio_ref": "10_analysis/audio/vocals.wav",
+                    "source_audio_provenance": "demucs_full_source_vocals",
                     "audio_policy": "source_on_tts_off",
                     "visual_strategy": "source_visual_action",
                 },
@@ -199,6 +214,36 @@ def create_valid_tikitaka_v2_package(root: Path) -> dict:
         "duration_sec": 8.0,
     }
     write_json(root / "10_analysis" / "source_identity_lock.json", source_lock)
+    source_audio = root / "10_analysis" / "audio" / "full_source_audio.wav"
+    vocals = root / "10_analysis" / "audio" / "vocals.wav"
+    write_wav(source_audio)
+    write_wav(vocals)
+    write_json(
+        root / "10_analysis" / "source_voice_separation.json",
+        {
+            "gate_name": "SOURCE_VOICE_SEPARATION_GATE",
+            "status": "PASS",
+            "owner_skill": "00-tikitaka",
+            "source_fingerprint_sha256": source_sha256,
+            "separation_engine": "demucs",
+            "separation_model": "htdemucs",
+            "separation_scope": "FULL_SOURCE_AUDIO",
+            "source_audio_path": "10_analysis/audio/full_source_audio.wav",
+            "source_audio_sha256": hashlib.sha256(source_audio.read_bytes()).hexdigest(),
+            "demucs_input_sha256": hashlib.sha256(source_audio.read_bytes()).hexdigest(),
+            "vocals_path": "10_analysis/audio/vocals.wav",
+            "vocals_sha256": hashlib.sha256(vocals.read_bytes()).hexdigest(),
+            "source_duration_sec": 8.0,
+            "source_audio_duration_sec": 8.0,
+            "vocals_duration_sec": 8.0,
+            "duration_tolerance_sec": 0.25,
+            "sample_rate_hz": 48000,
+            "source_voice_music_removed": True,
+            "q_segment_source": "10_analysis/audio/vocals.wav",
+            "no_vocals_used": False,
+            "created_by": "prepare_source_voice.py",
+        },
+    )
     write_json(
         root / "10_analysis" / "source_evidence.json",
         {
@@ -286,6 +331,60 @@ def create_valid_tikitaka_v2_package(root: Path) -> dict:
 
 
 class TikitakaV2HandoffContractTests(unittest.TestCase):
+    def test_stage2_requires_source_voice_separation_gate(self):
+        module = load_source_module_no_bytecode(
+            "stage2_tikitaka_source_voice_missing",
+            STAGE2_VALIDATOR,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_valid_tikitaka_v2_package(root)
+            (root / "10_analysis" / "source_voice_separation.json").unlink()
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_SOURCE_VOICE_SEPARATION"):
+                module.validate_stage2_tikitaka_handoff(root)
+
+    def test_stage2_rejects_speaker_quote_not_sourced_from_demucs_vocals(self):
+        module = load_source_module_no_bytecode(
+            "stage2_tikitaka_quote_raw_source",
+            STAGE2_VALIDATOR,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_valid_tikitaka_v2_package(root)
+            path = root / "20_script" / "timeline_design.json"
+            timeline = json.loads(path.read_text(encoding="utf-8"))
+            timeline["segments"][1]["source_audio_ref"] = "00_source/source.mp4"
+            write_json(path, timeline)
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_SOURCE_VOICE_Q_PROVENANCE"):
+                module.validate_stage2_tikitaka_handoff(root)
+
+    def test_no_speech_skip_cannot_handoff_speaker_quote(self):
+        module = load_source_module_no_bytecode(
+            "stage2_tikitaka_quote_no_speech",
+            STAGE2_VALIDATOR,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            create_valid_tikitaka_v2_package(root)
+            manifest_path = root / "10_analysis" / "source_voice_separation.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = {
+                "gate_name": "SOURCE_VOICE_SEPARATION_GATE",
+                "status": "NOT_REQUIRED_NO_SOURCE_SPEECH",
+                "owner_skill": "00-tikitaka",
+                "source_fingerprint_sha256": manifest["source_fingerprint_sha256"],
+                "no_source_speech_confirmed": True,
+                "confirmation_source": "source_evidence",
+                "source_voice_music_removed": False,
+                "no_vocals_used": False,
+            }
+            write_json(manifest_path, manifest)
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_SOURCE_VOICE_Q_PROVENANCE"):
+                module.validate_stage2_tikitaka_handoff(root)
+
     def test_tikitaka_source_request_requires_pass_and_exact_owner(self):
         module = load_source_module_no_bytecode("stage2_tikitaka_source_request_status", STAGE2_VALIDATOR)
         with tempfile.TemporaryDirectory() as tmp:

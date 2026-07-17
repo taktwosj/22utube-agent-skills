@@ -76,7 +76,7 @@ class MediaLinkGateTests(unittest.TestCase):
                     Path("00_source/source.mp4"),
                 )
 
-    def test_source_video_audio_muted_by_default_except_speaker_quote(self):
+    def test_source_video_audio_is_muted_even_for_speaker_quote(self):
         module = load_source_module_no_bytecode("media_link_audio_mute", VALIDATOR)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -114,7 +114,12 @@ class MediaLinkGateTests(unittest.TestCase):
                     ]
                 },
             )
-            module.validate_capcut_media_links(root, draft_path, Path("00_source/source.mp4"))
+            with self.assertRaisesRegex(module.GateFail, "FAIL_SOURCE_VIDEO_AUDIO_NOT_MUTED"):
+                module.validate_capcut_media_links(
+                    root,
+                    draft_path,
+                    Path("00_source/source.mp4"),
+                )
 
 
 if __name__ == "__main__":

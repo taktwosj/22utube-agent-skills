@@ -45,7 +45,7 @@ V8 = 실제 영상 짜집은 source clip
 For current `shrt white` work, ignore old generic A9/A10 mappings.
 Use the shrt white canonical audio mapping only:
 A9  = narration / TTS audio
-A10 = speaker source audio / original speech
+A10 = Q speaker audio cut from full-source Demucs vocals.wav
 A11 = SFX
 A12 = BGM
 ```
@@ -261,7 +261,8 @@ Required render target:
 1080x1920
 30fps
 h264 + aac
-source audio preserved unless the plan explicitly lowers/mutes it
+source-video embedded audio muted
+speaker/Q audio added separately from full-source Demucs vocals.wav when planned
 TTS/BGM/SFX added only as audio layers
 no visible timecodes
 no bottom-caption layer
@@ -277,11 +278,29 @@ CapCut audio states.
 CapCut implementation must match each segment:
 
 ```text
-caption_type=speaker_quote        -> source video/audio audible, TTS off, BGM optional_duck
+caption_type=speaker_quote        -> source video embedded audio muted, separate Q audio audible, TTS off, BGM optional_duck
 caption_type=tts_narration        -> source video/audio muted, TTS on, BGM optional
 caption_type=situation_caption    -> source video/audio muted by default, TTS off, BGM optional
-caption_type=tts_plus_source      -> source video/audio duck/on as planned, TTS on, BGM optional_duck
-caption_type=ranking_item         -> source video/audio muted by default unless the row is a verified quote/reaction
+caption_type=tts_plus_source      -> source video embedded audio muted, separate Q audio duck/on as planned, TTS on, BGM optional_duck
+caption_type=ranking_item         -> source video embedded audio muted; verified quote/reaction uses separate Q audio
+```
+
+The source video is always visual-only in the active timeline. Its embedded
+audio must stay muted for every caption type. `speaker_quote` and verified
+reaction audio use a separate A10 material cut from
+`10_analysis/audio/vocals.wav` with
+`source_audio_provenance=demucs_full_source_vocals`.
+
+Q clip requirements:
+
+```text
+full-source Demucs before Q cutting
+0.1-0.2 second available handles
+short head/tail fades
+Q/N overlap=0 unless explicitly locked
+listening QC for residual music and robotic damage
+final loudness normalization and remeasurement
+no_vocals.wav unused
 ```
 
 The post-CapCut gate must compare actual CapCut audio/video segment volumes and
@@ -296,7 +315,7 @@ full volume.
 
 Hard fails:
 
-- speaker quote row has source video/audio volume `0`
+- speaker quote row has separate Q audio volume `0`
 - TTS narration row keeps source video/audio fully audible without
   `caption_type=tts_plus_source`
 - TTS row has no corresponding TTS audio material/track
@@ -390,11 +409,13 @@ Current 11short production forbids bottom text:
 ## Audio
 
 - All audio additions belong on A-tracks, not T-tracks.
-- If TTS is not requested, source audio can be kept.
+- If TTS is not requested, approved speaker/Q audio can remain on its separate
+  A-track; embedded source-video audio still stays muted.
 - If TTS is requested, `voiceover_body.mp3` as one continuous track fails.
 - TTS must be split by segment: `audio_000.mp3`, `audio_001.mp3`, etc.
-- `spoken_scene` original speech/emotional audio must not be covered by TTS.
-- Mixed scenes should use `keep_original` or `lower_original` unless there is a clear reason to mute.
+- `spoken_scene` separated speaker/Q audio must not be covered by TTS.
+- Mixed scenes should use `keep_speaker_q` or `lower_speaker_q`; never re-enable
+  embedded source-video audio.
 
 ## CapCut Registration
 

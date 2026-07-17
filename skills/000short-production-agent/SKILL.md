@@ -7,7 +7,9 @@ description: Use only when the user explicitly asks to create, validate, or repa
 
 ## Ownership Matrix
 
-- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00-tikitaka`: Shorts source analysis, full-source Demucs preprocessing,
+  remake script draft, hook, top/timed-middle, and script handoff. It owns the
+  analysis artifacts `full_source_audio.wav` and `vocals.wav`.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 
 ## Stage Transition And n8n Contract
@@ -159,8 +161,33 @@ Required Stage 2 inputs:
 20_script/tts_duration_probe.json when narration-audio exists
 20_script/tts_timing_reconciliation_gate.json when narration-audio exists
 00_source/source_manifest.json or 00_source/source.mp4
+10_analysis/source_voice_separation.json
+10_analysis/audio/vocals.wav when source speech exists
 20_script/caption_beat_map.json
 ```
+
+## Demucs Speaker/Q Audio Contract
+
+Stage 2 must validate `SOURCE_VOICE_SEPARATION_GATE` before asset preparation.
+For every `speaker_quote`, require:
+
+```text
+source_audio_ref=10_analysis/audio/vocals.wav
+source_audio_provenance=demucs_full_source_vocals
+source_voice_music_removed=true
+```
+
+Cut Q1/Q2/Q3 only from the full-source Demucs `vocals.wav`; never run Demucs on
+pre-cut quote ranges. Preserve 0.1 to 0.2 seconds before and after each quote
+when source bounds allow, apply short fades, and place Q and N on separate
+non-overlapping lanes. The source video remains visual-only with its embedded
+audio muted, including during `speaker_quote`.
+
+Listen to each Q clip for severe music residue and robotic damage. Weak
+voice-enhancement or noise reduction is allowed only after a defect is heard;
+do not replace the Demucs stem with raw mixed audio. Final output still requires
+loudness normalization and remeasurement. `no_vocals.wav` is never used.
+Missing or raw-video quote provenance is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
 
 ## Caption Assembly Contract
 

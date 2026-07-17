@@ -98,7 +98,13 @@
           "estimated_tts_duration_sec": { "type": "number", "minimum": 0 },
           "actual_tts_duration_sec": { "type": "number", "minimum": 0 },
           "source_audio_range": { "type": ["object", "string"] },
-          "quote_verification_status": { "type": "string", "minLength": 1 }
+          "quote_verification_status": { "type": "string", "minLength": 1 },
+          "source_audio_ref": {
+            "const": "10_analysis/audio/vocals.wav"
+          },
+          "source_audio_provenance": {
+            "const": "demucs_full_source_vocals"
+          }
         },
         "allOf": [
           {
@@ -137,7 +143,14 @@
                 { "properties": { "assembly_role": { "const": "verified_speaker_quote" } } }
               ]
             },
-            "then": { "required": ["source_audio_range", "quote_verification_status"] }
+            "then": {
+              "required": [
+                "source_audio_range",
+                "quote_verification_status",
+                "source_audio_ref",
+                "source_audio_provenance"
+              ]
+            }
           }
         ]
       }

@@ -167,6 +167,27 @@ def segment_uses_speaker_quote(segment: dict[str, Any]) -> bool:
     )
 
 
+def validate_source_voice_separation(root: Path) -> dict[str, Any]:
+    validator_path = (
+        Path(__file__).resolve().parents[2]
+        / "00-tikitaka"
+        / "scripts"
+        / "validate_source_voice_separation.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "stage2_source_voice_validator",
+        validator_path,
+    )
+    if spec is None or spec.loader is None:
+        raise GateFail("WAIT_SOURCE_VOICE_SEPARATION: validator unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_source_voice_separation(root)
+    except module.GateFail as exc:
+        raise GateFail(str(exc)) from exc
+
+
 def validate_report1_handoff(
     root: Path,
     contract: dict[str, Any] | None = None,
@@ -291,9 +312,26 @@ def validate_timeline_design(root: Path) -> tuple[dict[str, Any], bool]:
                 )
 
         if segment_uses_speaker_quote(segment):
-            for field in ("source_audio_range", "quote_verification_status"):
+            for field in (
+                "source_audio_range",
+                "quote_verification_status",
+                "source_audio_ref",
+                "source_audio_provenance",
+            ):
                 if segment.get(field) in (None, ""):
-                    raise GateFail(f"WAIT_TIMELINE_DESIGN_REPAIR: segments[{index}] missing {field}")
+                    raise GateFail(
+                        f"WAIT_SOURCE_VOICE_Q_PROVENANCE: segments[{index}] missing {field}"
+                    )
+            if (
+                segment.get("source_audio_ref")
+                != "10_analysis/audio/vocals.wav"
+                or segment.get("source_audio_provenance")
+                != "demucs_full_source_vocals"
+            ):
+                raise GateFail(
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: speaker_quote must use "
+                    "10_analysis/audio/vocals.wav from demucs_full_source_vocals"
+                )
 
     return data, has_narration_audio
 
@@ -725,7 +763,20 @@ def validate_stage2_tikitaka_handoff(
         if not tts_copy.read_text(encoding="utf-8-sig").strip():
             raise GateFail("WAIT_TTS_COPY_TEXT_REQUIRED: tts_copy_text.txt is empty")
     source_result = validate_source_identity_lock(root, contract)
-    if any(segment_uses_speaker_quote(item) for item in timeline_design.get("segments", [])):
+    source_voice_result = validate_source_voice_separation(root)
+    has_speaker_quote = any(
+        segment_uses_speaker_quote(item)
+        for item in timeline_design.get("segments", [])
+    )
+    if (
+        has_speaker_quote
+        and source_voice_result.get("source_voice_separation_status")
+        != "PASS"
+    ):
+        raise GateFail(
+            "WAIT_SOURCE_VOICE_Q_PROVENANCE: speaker_quote requires PASS Demucs vocals"
+        )
+    if has_speaker_quote:
         evidence = load_json(root / "10_analysis" / "source_evidence.json", "source_evidence.json")
         ranges = evidence.get("stt", {}).get("verified_ranges") if isinstance(evidence.get("stt"), dict) else None
         if not isinstance(ranges, list) or not ranges:
@@ -747,6 +798,7 @@ def validate_stage2_tikitaka_handoff(
         "report1_handoff_next_skill": report1["next_skill"],
         "source_media_or_manifest": str(source_result["source_path"]),
         **source_result,
+        **source_voice_result,
         **map_result,
         "integrated_blueprint_status": blueprint_result["status"],
         "integrated_blueprint_path": blueprint_result["path"],
