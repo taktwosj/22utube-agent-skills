@@ -70,6 +70,7 @@ ALLOWED_RECONCILIATION_ACTIONS = {
     "shorten_text_and_regenerate_tts",
 }
 SCRIPT_LOCK_PACKAGE_FILES = {
+    "source_voice_separation": "10_analysis/source_voice_separation.json",
     "original_structure_summary": "original_structure_summary.md",
     "urakkai_structure_plan": "urakkai_structure_plan.md",
     "urakkai_structure_delta": "urakkai_structure_delta.json",
@@ -84,6 +85,7 @@ SCRIPT_LOCK_PACKAGE_FILES = {
     "tts_duration_probe": "tts_duration_probe.json",
     "tts_timing_reconciliation_gate": "tts_timing_reconciliation_gate.json",
 }
+VMAKE_CLEAN_SOURCE_MANIFEST = "10_analysis/vmake_clean_source.json"
 SCRIPT_BODY_CANDIDATES = (
     "final_script_ko.md",
     "final_script_ko.txt",
@@ -324,6 +326,14 @@ def n8n_is_required(work_dir: Path, previous_state: dict[str, Any]) -> bool:
 
 def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]:
     required = n8n_is_required(work_dir, previous_state)
+    if not required:
+        return {
+            "status": "NOT_REQUIRED",
+            "evidence": None,
+            "reason": "n8n orchestration not selected; Codex owns the stage transition",
+            "required": False,
+        }
+
     previous = previous_state.get("n8n") if isinstance(previous_state.get("n8n"), dict) else {}
     previous_status = str(previous.get("status") or "").upper()
     previous_execution = previous.get("execution_id")
@@ -357,14 +367,6 @@ def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]
                 "reason": "",
                 "required": required,
             }
-
-    if not required:
-        return {
-            "status": "NOT_REQUIRED",
-            "evidence": None,
-            "reason": "n8n orchestration not selected; Codex owns the stage transition",
-            "required": False,
-        }
 
     return {
         "status": "NOT_RUN",
@@ -1025,15 +1027,105 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
                     f"timeline_design.segments[{index}] estimated_tts_duration_sec required",
                 )
         if segment.get("caption_type") == "speaker_quote":
-            quote_required = {"source_audio_range", "quote_verification_status"}
+            quote_required = {
+                "source_audio_range",
+                "quote_verification_status",
+                "source_audio_ref",
+                "source_audio_provenance",
+            }
             quote_missing = sorted(key for key in quote_required if segment.get(key) in (None, ""))
             if quote_missing:
                 return status_block(
                     "FAILED",
                     name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: "
                     f"timeline_design.segments[{index}] missing {', '.join(quote_missing)}",
                 )
+            if (
+                segment.get("source_audio_ref")
+                != "10_analysis/audio/vocals.wav"
+                or segment.get("source_audio_provenance")
+                != "demucs_full_source_vocals"
+            ):
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: speaker_quote must use "
+                    "10_analysis/audio/vocals.wav from demucs_full_source_vocals",
+                )
+            separation = read_json(
+                work_dir / SCRIPT_LOCK_PACKAGE_FILES["source_voice_separation"]
+            )
+            if separation.get("status") == "NOT_REQUIRED_NO_SOURCE_SPEECH":
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: no-speech source cannot contain speaker_quote",
+                )
     return status_block("PASS", name)
+
+
+def source_voice_separation_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["source_voice_separation"]
+    validator_path = Path(__file__).with_name(
+        "validate_source_voice_separation.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "tikitaka_source_voice_validator",
+        validator_path,
+    )
+    if spec is None or spec.loader is None:
+        return status_block(
+            "FAILED",
+            None,
+            "WAIT_SOURCE_VOICE_SEPARATION: validator unavailable",
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_source_voice_separation(work_dir)
+    except module.GateFail as exc:
+        return status_block("FAILED", name, str(exc))
+    actual_status = result.get("source_voice_separation_status", "")
+    return status_block("PASS", name, str(actual_status))
+
+
+def vmake_clean_source_status(
+    work_dir: Path,
+    *,
+    required: bool,
+) -> dict[str, Any]:
+    if not required:
+        return {
+            "status": "NOT_REQUIRED",
+            "evidence": None,
+            "reason": "NOT_REQUIRED_STAGE1_ONLY",
+            "required": False,
+        }
+
+    validator_path = Path(__file__).with_name("validate_vmake_clean_source.py")
+    spec = importlib.util.spec_from_file_location(
+        "tikitaka_vmake_clean_source_validator",
+        validator_path,
+    )
+    if spec is None or spec.loader is None:
+        return status_block(
+            "FAILED",
+            None,
+            "WAIT_VMAKE_CLEAN_SOURCE: validator unavailable",
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_vmake_clean_source(work_dir)
+    except module.GateFail as exc:
+        return status_block("FAILED", VMAKE_CLEAN_SOURCE_MANIFEST, str(exc))
+    return {
+        "status": "PASS",
+        "evidence": VMAKE_CLEAN_SOURCE_MANIFEST,
+        "reason": str(result.get("vmake_job_id") or ""),
+        "required": True,
+    }
 
 
 def block_map_status(work_dir: Path) -> dict[str, Any]:
@@ -1188,6 +1280,7 @@ def tts_timing_reconciliation_gate_status(work_dir: Path) -> dict[str, Any]:
 
 def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
     checks = {
+        "source_voice_separation": source_voice_separation_status(work_dir),
         "visible_script_body": visible_script_body_status(work_dir),
         "original_structure_summary": file_status(
             work_dir,
@@ -1258,16 +1351,32 @@ def build_report1_handoff_gate(
     stage_scope_gate: dict[str, Any],
     script_handoff_gate: dict[str, Any],
     capcut_permission: str,
+    vmake_clean_source: dict[str, Any],
 ) -> dict[str, Any]:
+    vmake_required = stage_scope_gate.get("decision") == "stage_2_full"
+    vmake_ready = not vmake_required or upstream_satisfied(vmake_clean_source)
     ready = (
         passish(script_handoff_gate)
         and capcut_permission == "CAPCUT_OPENABLE_PROJECT_ALLOWED"
         and report1_transition_ready(previous_state)
+        and vmake_ready
     )
     blocker = "" if ready else "WAIT_REPORT1_APPROVAL_TTS_DECISION"
     if not passish(script_handoff_gate):
         blocker = "WAIT_SCRIPT_HANDOFF_GATE"
+    elif (
+        report1_transition_ready(previous_state)
+        and vmake_required
+        and not vmake_ready
+    ):
+        blocker = "WAIT_VMAKE_CLEAN_SOURCE"
 
+    required_before_next = [
+        "report1_approved=true",
+        "voice_audio_route_decided=true",
+    ]
+    if vmake_required:
+        required_before_next.append("VMAKE_CLEAN_SOURCE_GATE=PASS")
     return {
         "gate_name": "REPORT1_HANDOFF_GATE",
         "status": "PASS" if ready else "WAIT",
@@ -1279,19 +1388,19 @@ def build_report1_handoff_gate(
         "source_fingerprint_sha256": script_handoff_gate.get("source_fingerprint_sha256", ""),
         "next_stage": "보고서2",
         "next_gate": "CAPCUT_OPENABLE_PROJECT",
-        "required_before_next": [
-            "report1_approved=true",
-            "voice_audio_route_decided=true",
-        ],
+        "required_before_next": required_before_next,
         "report1_approved": has_report1_approval(previous_state),
         "voice_audio_route_decided": has_voice_audio_route_decision(previous_state),
+        "vmake_clean_source_required": vmake_required,
+        "vmake_clean_source_status": vmake_clean_source.get("status"),
         "forbidden_next": [
             "00-tikitaka writes 보고서2",
             "CapCut before report1 approval",
             "TTS before voice/audio route decision",
         ],
         "copy_to_next_chat": (
-            "Use $000short-production-agent. 설계도 승인 + TTS/오디오 방식 결정 후 "
+            "Use $000short-production-agent. 설계도 승인 + TTS/오디오 방식 결정 + "
+            "VMAKE_CLEAN_SOURCE_GATE PASS 후 "
             "보고서2 / CAPCUT_OPENABLE_PROJECT 단계로 진행."
         ),
     }
@@ -1305,6 +1414,7 @@ def build_stage_gate_todo(job_state: dict[str, Any]) -> str:
     decision = job_state["stage_scope_gate"].get("decision") or "WAIT_USER_STAGE_DECISION"
     handoff_pass = passish(job_state["script_handoff_gate"])
     stage2_pass = passish(job_state["stage_scope_gate"])
+    vmake_pass = upstream_satisfied(job_state["vmake_clean_source"])
     capcut_allowed = job_state["capcut_permission"] == "CAPCUT_OPENABLE_PROJECT_ALLOWED"
     final_allowed = job_state["final_report_allowed"] is True
     return "\n".join(
@@ -1312,6 +1422,7 @@ def build_stage_gate_todo(job_state: dict[str, Any]) -> str:
             "# 11short Stage Gate TODO",
             "",
             f"{checked(decision != 'WAIT_USER_STAGE_DECISION')} G0: {decision} - user stage decision or request token",
+            f"{checked(vmake_pass)} G0A: Vmake clean visual - required only for stage_2_full",
             f"{checked(handoff_pass)} G1: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
             f"{checked(handoff_pass)} G2: stage 1 STOP - 설계도",
             f"{checked(stage2_pass and capcut_allowed)} G3: stage 2 entry - user_stage_decision=stage_2_full",
@@ -1444,6 +1555,7 @@ def build_visual_gate(job_state: dict[str, Any]) -> str:
             line("Script Gate", job_state["script_gate"]),
             line("Script Handoff Gate", job_state["script_handoff_gate"]),
             line("Stage Scope Gate", job_state["stage_scope_gate"]),
+            line("Vmake Clean Source", job_state["vmake_clean_source"]),
             line("Re-entry Stage", job_state["reentry_stage"]),
             f"CapCut openable permission: {job_state['capcut_permission']}",
             f"Production status: {job_state['production_status']}",
@@ -1475,17 +1587,32 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
     reentry_stage = reentry_stage_status(work_dir, previous_state)
     script_handoff_gate = build_script_handoff_gate(work_dir)
     stage_scope_gate = stage_scope_status(previous_state, work_dir)
+    vmake_required = stage_scope_gate.get("decision") == "stage_2_full"
+    vmake_clean_source = vmake_clean_source_status(
+        work_dir,
+        required=vmake_required,
+    )
     if passish(script_handoff_gate) and not passish(stage_scope_gate):
         script_handoff_gate = dict(script_handoff_gate)
         script_handoff_gate["capcut_allowed"] = False
         script_handoff_gate["capcut_blocker"] = stage_scope_gate.get("blocker") or "WAIT_USER_STAGE_DECISION"
         script_handoff_gate["stage_scope_gate"] = stage_scope_gate
+    elif (
+        passish(script_handoff_gate)
+        and vmake_required
+        and not upstream_satisfied(vmake_clean_source)
+    ):
+        script_handoff_gate = dict(script_handoff_gate)
+        script_handoff_gate["capcut_allowed"] = False
+        script_handoff_gate["capcut_blocker"] = "WAIT_VMAKE_CLEAN_SOURCE"
+        script_handoff_gate["vmake_clean_source"] = vmake_clean_source
     capcut_permission, production_status = capcut_permission_status(script_handoff_gate)
     report1_handoff_gate = build_report1_handoff_gate(
         previous_state,
         stage_scope_gate,
         script_handoff_gate,
         capcut_permission,
+        vmake_clean_source,
     )
     n8n = n8n_status(work_dir, previous_state)
 
@@ -1497,6 +1624,7 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "script_gate": script_gate,
         "script_handoff_gate": script_handoff_gate,
         "stage_scope_gate": stage_scope_gate,
+        "vmake_clean_source": vmake_clean_source,
         "n8n": n8n,
         "harness_trace": trace,
     }
@@ -1544,6 +1672,7 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "script_handoff_gate": script_handoff_gate,
         "report1_handoff_gate": report1_handoff_gate,
         "stage_scope_gate": stage_scope_gate,
+        "vmake_clean_source": vmake_clean_source,
         "reentry_stage": reentry_stage,
         "capcut_permission": capcut_permission,
         "production_status": production_status,

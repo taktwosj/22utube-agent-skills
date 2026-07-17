@@ -66,6 +66,9 @@ stage. The stage order is:
 tikitaka_source_request.json
 -> source evidence
 -> source_identity_lock.json + verified source_fingerprint_sha256
+-> SOURCE_VOICE_SEPARATION_GATE
+-> 10_analysis/audio/full_source_audio.wav
+-> 10_analysis/audio/vocals.wav
 -> 1차설계서
 -> timeline_design.json
 -> caption_beat_map.json
@@ -96,6 +99,109 @@ duration_basis/duration_status/audio_policy/visual_strategy
 
 `timeline_design_gate.json` must be PASS before the design can be treated as a
 handoff artifact.
+
+## Full-Source Demucs Preprocessing
+
+After `source_identity_lock.json` and before `1차설계서`, run:
+
+```text
+source.mp4
+-> extract the complete audio to 10_analysis/audio/full_source_audio.wav
+-> run Demucs on that complete WAV with separation_scope=FULL_SOURCE_AUDIO
+-> save the stable vocal stem as 10_analysis/audio/vocals.wav
+-> validate SOURCE_VOICE_SEPARATION_GATE
+-> identify and lock speaker ranges from vocals.wav
+```
+
+Invoke:
+
+```powershell
+py -3 skills/00-tikitaka/scripts/prepare_source_voice.py --root <episode-root> --source 00_source/source.mp4
+```
+
+This is a narrow Stage 1 source-analysis preprocessing exception. It creates
+only the full-source analysis WAV and Demucs vocal stem. It does not create Q
+clips, TTS, SRT, CapCut, render, export, upload, or other production assets.
+The harness calls `validate_source_voice_separation.py`; it never launches
+Demucs or the next skill.
+
+The only valid skip is:
+
+```text
+NOT_REQUIRED_NO_SOURCE_SPEECH
+```
+
+Use it only when the source has no audio stream or when the user/source
+evidence explicitly confirms that no human speech exists. Missing Demucs is
+`WAIT_DEMUCS_AVAILABLE`; never fall back to mixed source audio.
+
+Every `speaker_quote` must record:
+
+```json
+{
+  "source_audio_ref": "10_analysis/audio/vocals.wav",
+  "source_audio_provenance": "demucs_full_source_vocals"
+}
+```
+
+Missing or different provenance is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
+`source_audio=on` now means the separated speaker/Q lane is audible. It never
+authorizes embedded source-video audio in CapCut. `no_vocals.wav` is not used.
+
+## Vmake Clean Visual Preprocessing
+
+When the user requests `stage_2_full`, CapCut, or an automatic production run,
+prepare a second video through Vmake after `source_identity_lock.json` exists:
+
+```text
+00_source/source.mp4
+-> source identity, OCR, STT, frame checks, full-source Demucs
+
+Vmake link import
+-> 00_source/clean_source.mp4
+-> production visual only
+-> embedded_audio_policy=muted_always
+```
+
+The original `source.mp4` remains the only analysis and source-truth video.
+Never replace it with the Vmake result for OCR, STT, timing verification,
+source identity, or Demucs. The Vmake result is the later production visual;
+its embedded audio is never authorized.
+
+Read `references/vmake_clean_source_workflow.md` before browser action. Use the
+existing signed-in Chrome session and browser DOM control. Do not use OS-level
+mouse/keyboard control. The workflow covers `Import from link`, the rights
+checkbox, `Apply`, `Processing...`, `Download`, IDM/browser interception, and
+the exact signed-download recovery rule.
+
+Rights confirmation is URL-specific. Check Vmake's rights checkbox only when
+the user explicitly authorized it for the current source. Otherwise stop with:
+
+```text
+WAIT_VMAKE_RIGHTS_CONFIRMATION
+```
+
+After download, register and validate:
+
+```powershell
+py -3 skills/00-tikitaka/scripts/register_vmake_clean_source.py --root <episode-root> --download <File_from_link_*.mp4> --source-url <shorts-url> --job-id <vmake-job-id> --rights-confirmed --confirmation-source user
+py -3 skills/00-tikitaka/scripts/validate_vmake_clean_source.py --root <episode-root>
+```
+
+The validator writes no production assets. It verifies
+`VMAKE_CLEAN_SOURCE_GATE`, the locked source/video ID, the Vmake job and
+download filename, clean-file hash, duration/aspect-ratio parity, and:
+
+```text
+00_source/clean_source.mp4
+embedded_audio_policy=muted_always
+source_voice_policy=separate_demucs_q_only
+```
+
+For `stage_1_script`, this gate is `NOT_REQUIRED_STAGE1_ONLY`. For
+`stage_2_full`, missing or invalid clean visual evidence is
+`WAIT_VMAKE_CLEAN_SOURCE`. The harness validates the manifest only; it never
+opens Vmake, clicks the UI, downloads a file, or launches the next skill.
 
 ## CAPTION_BEAT_MAP_HANDOFF
 
@@ -846,9 +952,11 @@ This skill owns only Korean Shorts remake scripting:
 - timed `중단`
 - copy text that may later be used by a voice tool
 
-Voice-copy text is part of the draft script only. This skill does not create
-voice, audio files, SRT files, layout JSON, render plans, CapCut drafts, exports,
-upload packages, or production packages.
+Voice-copy text is part of the draft script only. Except for the required
+full-source analysis artifacts `full_source_audio.wav` and `vocals.wav`, plus
+the `stage_2_full` Vmake handoff visual `clean_source.mp4`, this skill does not
+create voice clips, TTS, SRT files, layout JSON, render plans, CapCut drafts,
+exports, upload packages, or production packages.
 
 ## Supertone TTS Handoff
 
@@ -915,9 +1023,15 @@ Gemini alone. Mark any proposed source range as
 verifies it.
 
 For script confidence, use the current source-evidence workflow only. Acquire or
-confirm `source.mp4`, then create the required frame/STT/OCR evidence. If source
-media cannot be acquired or confirmed, stop and ask the user to provide it; do
-not invoke a separate video-watching skill or invent final timing.
+confirm `source.mp4`, lock its identity, run full-source Demucs preprocessing,
+and then create the required frame/STT/OCR evidence and speaker ranges from
+`10_analysis/audio/vocals.wav`. If source media cannot be acquired or
+confirmed, stop and ask the user to provide it; do not invoke a separate
+video-watching skill or invent final timing.
+
+`00_source/clean_source.mp4` is never source evidence. When `stage_2_full` is
+selected, bind it to the locked original through
+`10_analysis/vmake_clean_source.json` and keep all analysis on `source.mp4`.
 
 ## Story And Production Type Gate
 
@@ -1081,6 +1195,9 @@ may start:
   `wow_overlay_text is optional`; the user may add these in CapCut manually.
 - `urakkai_order_map`: original order vs remake order, for example
   `1-2-3-4-5 -> 4-3-5-1-2-3`.
+- `10_analysis/source_voice_separation.json`: full-source Demucs gate bound to
+  the locked source fingerprint. `10_analysis/audio/vocals.wav` is required
+  when source speech exists.
 - `timeline_design.json`: canonical design table for tracks, time ranges, text
   roles, video, and audio lanes.
 - `timeline_design_gate.json`: design validation result.
@@ -1198,9 +1315,9 @@ caption_type:
 - ranking_item         = ranking/TOP-N beat
 
 source_audio:
-- on     = original/source video audio must be audible
+- on     = separated speaker/Q audio from vocals.wav must be audible
 - off    = original/source video audio must be muted
-- duck   = original/source video audio remains low under TTS/BGM
+- duck   = separated speaker/Q audio remains low under TTS/BGM
 
 tts:
 - on
@@ -1254,7 +1371,8 @@ The handoff must let production assemble separate lanes:
 narration=TTS lane
 source_audio=on/off/duck by segment
 bgm=separate optional/required lane
-source_video_audio=muted unless explicitly extracted as source_audio
+source_video_audio=muted_always
+speaker_q=separate_vocals.wav
 ```
 
 Example:

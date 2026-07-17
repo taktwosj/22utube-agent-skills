@@ -52,6 +52,21 @@ class TikitakaN8nOptionalContractTest(unittest.TestCase):
         self.assertIn("Codex", status["reason"])
         self.assertTrue(harness.upstream_satisfied(status))
 
+    def test_stale_n8n_evidence_is_ignored_when_route_is_not_selected(self):
+        harness = load_harness()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "n8n_execution_id.txt").write_text(
+                "stale-execution",
+                encoding="utf-8",
+            )
+            status = harness.n8n_status(root, {})
+
+        self.assertEqual(status["status"], "NOT_REQUIRED")
+        self.assertFalse(status["required"])
+        self.assertIsNone(status["evidence"])
+
     def test_explicit_n8n_route_still_fails_closed_without_evidence(self):
         harness = load_harness()
 

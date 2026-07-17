@@ -6,11 +6,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _support import load_source_module_no_bytecode, write_valid_source_mp4
+from _support import (
+    VALID_SOURCE_MP4_SHA256,
+    load_source_module_no_bytecode,
+    write_source_voice_separation_fixture,
+    write_valid_source_mp4,
+    write_vmake_clean_source_fixture,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_FINGERPRINT = "a" * 64
+SOURCE_FINGERPRINT = VALID_SOURCE_MP4_SHA256
 TIKITAKA_HARNESS = ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
 PRODUCTION_GATE = (
     ROOT
@@ -43,6 +49,8 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
         "duration_sec": 8.0,
     }
     write_json(root / "10_analysis" / "source_identity_lock.json", json.dumps(lock))
+    write_source_voice_separation_fixture(root, source_sha256)
+    write_vmake_clean_source_fixture(root, source_sha256)
     write_json(
         root / "10_analysis" / "source_evidence.json",
         json.dumps(
@@ -126,6 +134,22 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
 
 
 def create_tikitaka_base_evidence(work_dir: Path) -> None:
+    write_valid_source_mp4(work_dir / "00_source" / "source.mp4")
+    write_json(
+        work_dir / "10_analysis" / "source_identity_lock.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "canonical_url": "https://www.youtube.com/shorts/fixture123",
+                "video_id": "fixture123",
+                "local_source_path": "00_source/source.mp4",
+                "sha256": SOURCE_FINGERPRINT,
+                "duration_sec": 8.0,
+            }
+        ),
+    )
+    write_source_voice_separation_fixture(work_dir, SOURCE_FINGERPRINT)
+    write_vmake_clean_source_fixture(work_dir, SOURCE_FINGERPRINT)
     write(work_dir / "work_order.md")
     write(work_dir / "execution_spec.md")
     write(work_dir / "implementation_log.md")
@@ -153,6 +177,21 @@ def attach_source_fingerprint(path: Path) -> None:
 
 
 def create_script_lock_package_artifacts(work_dir: Path) -> None:
+    write_json(
+        work_dir / "10_analysis" / "source_identity_lock.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "canonical_url": "https://www.youtube.com/shorts/fixture123",
+                "video_id": "fixture123",
+                "local_source_path": "00_source/source.mp4",
+                "sha256": SOURCE_FINGERPRINT,
+                "duration_sec": 8.0,
+            }
+        ),
+    )
+    write_source_voice_separation_fixture(work_dir, SOURCE_FINGERPRINT)
+    write_vmake_clean_source_fixture(work_dir, SOURCE_FINGERPRINT)
     write(
         work_dir / "design_blueprint.md",
         """# 설계도
@@ -199,7 +238,7 @@ fixture
         work_dir / "timeline_design.json",
         """
         {
-          "source_fingerprint_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_fingerprint_sha256": "__SOURCE_FINGERPRINT__",
           "tracks": ["T1", "T2", "TTS", "speaker_quote_A", "situation_caption_A"],
           "segments": [
             {
@@ -228,7 +267,7 @@ fixture
             }
           ]
         }
-        """,
+        """.replace("__SOURCE_FINGERPRINT__", SOURCE_FINGERPRINT),
     )
     write_json(
         work_dir / "timeline_design_gate.json",
@@ -1360,6 +1399,8 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                       "duration_basis": "source_range",
                       "duration_status": "SOURCE_AUDIO_LOCKED",
                       "source_audio_range": {"start": "00:00", "end": "00:03"},
+                      "source_audio_ref": "10_analysis/audio/vocals.wav",
+                      "source_audio_provenance": "demucs_full_source_vocals",
                       "quote_verification_status": "VERIFIED_STT",
                       "audio_policy": "source_on_tts_off",
                       "visual_strategy": "source_visual_action"
