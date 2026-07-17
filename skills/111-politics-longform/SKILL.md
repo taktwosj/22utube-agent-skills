@@ -318,6 +318,67 @@ fidelity 검증은 표시 cue 텍스트를 시간순으로 정규화해 연결�
 - 이 치환은 TTS, 하단 평론, 우측 상단 주제 등 최종 화면 텍스트에 적용한다.
   원본 자막·출처 기록용 원문은 그대로 보존한다.
 
+## ChatGPT 마스터 원고 2회 검수
+
+정치평론가 마스터 원고를 만들거나 `commentary_master_script_draft.md`가 입력에
+있으면 다음 두 계약을 먼저 읽는다.
+
+```text
+references/chatgpt_project_router_instruction.md
+references/chatgpt_politics_longform_review_contract.md
+```
+
+마스터 원고와 하단 2줄 외부 검토는 별도 게이트다.
+
+```text
+MASTER_COMMENTARY_REVIEW_GATE: 마스터 원고의 ChatGPT 2회 검수
+EXTERNAL_LOWER_COMMENTARY_GATE: 시간순 하단 2줄 외부 검토
+```
+
+`MASTER_COMMENTARY_REVIEW_GATE`는
+`20_script/master_commentary_review/` 아래의 독립 파일만 사용한다.
+
+```text
+round1_packet_sent.md
+round1_manifest.json
+round1_returned.md
+round1_receipt.json
+round1_codex_decisions.json
+round2_packet_sent.md
+round2_manifest.json
+round2_returned.md
+round2_receipt.json
+master_commentary_review_gate.json
+```
+
+Round 1은 `INDEPENDENT_REVIEW`와 `REVISION_PROPOSAL`을 수행한다. Codex는 모든
+`suggestion_id`에 `ADOPTED`, `PARTIALLY_ADOPTED`, `REJECTED`,
+`PENDING_EVIDENCE` 중 exactly one 결정과 이유를 기록한다. 제안을 반영한 뒤
+Round 2를 반드시 Round 1과 같은 ChatGPT conversation에서 이어서 수행한다.
+
+Round 2 패킷은 같은 대화의 기억에 의존하지 않는다. Round 1 전체 반환문, Codex
+결정표 전체, 수정된 마스터 원고 전문, 수정된 fact map 전문, timeline segment
+순서 전체와 핵심 질문을 다시 포함한다. Round 2는 `EVIDENCE_AUDIT`와
+`FLOW_CONTINUITY_AUDIT`를 분리해 수행한다. 개별 문장뿐 아니라 앞 구간의 결론이
+다음 구간의 주장으로 자연스럽게 이어지는지, 순서 변경·중복·결론 비약이 없는지
+전체 흐름을 검수한다.
+
+외부 반환 상태는 두 회차 모두 `PENDING_CODEX_REVIEW`다.
+`PASS_RECOMMENDED`는 외부 권고일 뿐 사용자 승인이나 최종 승인 파일이 아니다.
+`REVISE_REQUIRED`, `EVIDENCE_REQUIRED`, 흐름 FAIL, 남은 blocker,
+`PENDING_EVIDENCE`가 있으면 `WAIT_CHATGPT_REVIEW_REPAIR`로 중단한다.
+
+검증 명령:
+
+```powershell
+python scripts/validate_chatgpt_two_pass_review.py --review-dir "{episode}\20_script\master_commentary_review"
+```
+
+`MASTER_COMMENTARY_REVIEW_GATE=PASS`와 사용자의 명시적 원고 승인이 모두 있기
+전에는 `commentary_master_script_approved.md`를 만들지 않는다. 하단 2줄용
+`commentary_review_packet_sent.md`와 관련 manifest, receipt, gate 파일은
+`EXTERNAL_LOWER_COMMENTARY_GATE` 전용이며 마스터 원고 검수에 재사용하지 않는다.
+
 ### 한 파일 외부 검토 패킷
 
 외부 검토 지침은 파일 맨 위에 한 번만 쓴다. 그 아래에 최종 타임라인 순서대로

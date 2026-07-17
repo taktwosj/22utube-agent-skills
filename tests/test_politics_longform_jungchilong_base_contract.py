@@ -52,17 +52,26 @@ class PoliticsLongformJungchilongBaseContractTests(unittest.TestCase):
     def setUpClass(cls):
         cls.skill_text = SKILL.read_text(encoding="utf-8-sig")
 
-    def test_jungchilong_is_the_only_default_base(self):
-        self.assertIn("Default CapCut base: jungchilong", self.skill_text)
-        self.assertIn("Never modify `jungchilong` in place", self.skill_text)
-        self.assertIn("Do not automatically fall back", self.skill_text)
+    def test_skill_uses_the_pinned_v3_root_contract(self):
+        for token in (
+            "target_profile: jungchilong_base_v3_intro15",
+            r"jungchilong\jungchilong_v3_intro15_CAPCUT_20260715.zip",
+            r"jungchilong\template_manifest_v3_intro15.json",
+            "archive_sha256: B461A07FF18E1491E837E56A0681A35CCB0A25CBF9D7BFA2B6004C6D32CC878A",
+            "packaged_file_count: 39",
+            "intro_sha256: E899A65CC6C089FF116CBB6175B6A43B8580A69C523720B093FBE259F05717B9",
+            "canvas: 1920x1080",
+            "content_start_sec=15.083333",
+            "YP007, YP005, YM007 are legacy visual references only.",
+        ):
+            self.assertIn(token, self.skill_text)
         self.assertNotIn("Default CapCut base priority 1: YP007", self.skill_text)
         self.assertNotIn("Fallback production base: YP005", self.skill_text)
 
-    def test_skill_has_fail_closed_base_codes_and_validator_command(self):
-        self.assertIn("WAIT_JUNGCHILONG_BASE_MISSING", self.skill_text)
-        self.assertIn("FAIL_JUNGCHILONG_DIRTY_BASE", self.skill_text)
-        self.assertIn("scripts/validate_clean_base.py", self.skill_text)
+    def test_skill_forbids_mutating_or_falling_back_from_the_v3_root(self):
+        self.assertIn("ZIP과 로컬 복구본을 직접 수정하지 않는다", self.skill_text)
+        self.assertIn("fallback 근본", self.skill_text)
+        self.assertIn("FAIL_ARCHIVE_INTEGRITY", self.skill_text)
 
     def test_clean_base_tools_are_shipped(self):
         self.assertTrue(SCANNER.is_file(), f"missing scanner: {SCANNER}")

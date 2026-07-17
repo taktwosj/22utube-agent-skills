@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""Validate the politics-longform ChatGPT two-pass master review chain."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+
+GATE = "MASTER_COMMENTARY_REVIEW_GATE"
+REQUIRED_FILES = (
+    "round1_packet_sent.md",
+    "round1_manifest.json",
+    "round1_returned.md",
+    "round1_receipt.json",
+    "round1_codex_decisions.json",
+    "round2_packet_sent.md",
+    "round2_manifest.json",
+    "round2_returned.md",
+    "round2_receipt.json",
+)
+ALLOWED_DECISIONS = {
+    "ADOPTED",
+    "PARTIALLY_ADOPTED",
+    "REJECTED",
+    "PENDING_EVIDENCE",
+}
+ROUND2_REQUIRED_SECTIONS = {
+    "round1_return_full",
+    "codex_decisions_full",
+    "revised_master_script_full",
+    "revised_fact_map_full",
+    "timeline_order_full",
+    "core_question",
+}
+ROUND2_REQUIRED_ANCHORS = (
+    "<!-- ROUND1_RETURN_FULL -->",
+    "<!-- CODEX_DECISIONS_FULL -->",
+    "<!-- REVISED_MASTER_SCRIPT_FULL -->",
+    "<!-- REVISED_FACT_MAP_FULL -->",
+    "<!-- TIMELINE_ORDER_FULL -->",
+    "<!-- CORE_QUESTION -->",
+)
+FORBIDDEN_EXTERNAL_APPROVAL = re.compile(
+    r"(?im)^\s*(?:final_state|approval_status)\s*:\s*"
+    r"(?:PASS|FINAL|ADOPTED)\s*$"
+)
+SUGGESTION_ID_PATTERN = re.compile(
+    r"(?im)^\s*suggestion_id\s*:\s*([A-Za-z0-9._-]+)\s*$"
+)
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def _load_json(path: Path, errors: list[dict[str, str]]) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        errors.append(
+            {
+                "code": "INVALID_JSON",
+                "severity": "FAIL",
+                "message": f"{path.name}: {exc}",
+            }
+        )
+        return {}
+    if not isinstance(payload, dict):
+        errors.append(
+            {
+                "code": "INVALID_JSON",
+                "severity": "FAIL",
+                "message": f"{path.name}: top level must be an object",
+            }
+        )
+        return {}
+    return payload
+
+
+def _add_error(
+    errors: list[dict[str, str]],
+    code: str,
+    message: str,
+    severity: str = "FAIL",
+) -> None:
+    errors.append({"code": code, "severity": severity, "message": message})
+
+
+def _resolve(review_dir: Path, relative: Any) -> Path | None:
+    if not isinstance(relative, str) or not relative.strip():
+        return None
+    return (review_dir / relative).resolve()
+
+
+def _verify_file_hash(
+    review_dir: Path,
+    payload: dict[str, Any],
+    file_key: str,
+    hash_key: str,
+    label: str,
+    errors: list[dict[str, str]],
+) -> Path | None:
+    path = _resolve(review_dir, payload.get(file_key))
+    expected = payload.get(hash_key)
+    if path is None or not isinstance(expected, str) or not expected:
+        _add_error(
+            errors,
+            "MISSING_HASH_BINDING",
+            f"{label}: {file_key} and {hash_key} are required",
+        )
+        return None
+    if not path.is_file():
+        _add_error(errors, "MISSING_ARTIFACT", f"{label}: missing {path}")
+        return None
+    actual = _sha256(path)
+    if actual != expected.upper():
+        _add_error(
+            errors,
+            "HASH_MISMATCH",
+            f"{label}: expected {expected.upper()}, actual {actual}",
+        )
+    return path
+
+
+def _clean_id_list(value: Any) -> list[str] | None:
+    if not isinstance(value, list):
+        return None
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        return None
+    return value
+
+
+def _check_round_number(
+    payload: dict[str, Any],
+    expected: int,
+    label: str,
+    errors: list[dict[str, str]],
+) -> None:
+    if payload.get("review_round") != expected:
+        _add_error(
+            errors,
+            "REVIEW_ROUND_MISMATCH",
+            f"{label}: expected review_round={expected}",
+        )
+
+
+def _check_external_return(
+    receipt: dict[str, Any],
+    returned_path: Path | None,
+    label: str,
+    errors: list[dict[str, str]],
+) -> None:
+    if receipt.get("external_review_status") != "PENDING_CODEX_REVIEW":
+        _add_error(
+            errors,
+            "FORBIDDEN_EXTERNAL_APPROVAL",
+            f"{label}: external_review_status must be PENDING_CODEX_REVIEW",
+        )
+    if returned_path is None:
+        return
+    try:
+        text = returned_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError) as exc:
+        _add_error(errors, "INVALID_RETURN_TEXT", f"{label}: {exc}")
+        return
+    if FORBIDDEN_EXTERNAL_APPROVAL.search(text):
+        _add_error(
+            errors,
+            "FORBIDDEN_EXTERNAL_APPROVAL",
+            f"{label}: external response claims final approval",
+        )
+
+
+def validate_review(review_dir: Path | str) -> dict[str, Any]:
+    review_dir = Path(review_dir).resolve()
+    errors: list[dict[str, str]] = []
+
+    if not review_dir.is_dir():
+        _add_error(errors, "MISSING_REVIEW_DIR", f"missing review dir: {review_dir}")
+        return {
+            "gate": GATE,
+            "status": "FAIL",
+            "stop_code": "WAIT_CHATGPT_REVIEW_REPAIR",
+            "review_dir": str(review_dir),
+            "errors": errors,
+        }
+
+    missing = [name for name in REQUIRED_FILES if not (review_dir / name).is_file()]
+    for name in missing:
+        _add_error(errors, "MISSING_ARTIFACT", f"missing {name}")
+    if missing:
+        return {
+            "gate": GATE,
+            "status": "FAIL",
+            "stop_code": "WAIT_CHATGPT_REVIEW_REPAIR",
+            "review_dir": str(review_dir),
+            "errors": errors,
+        }
+
+    round1_manifest = _load_json(review_dir / "round1_manifest.json", errors)
+    round1_receipt = _load_json(review_dir / "round1_receipt.json", errors)
+    decisions = _load_json(review_dir / "round1_codex_decisions.json", errors)
+    round2_manifest = _load_json(review_dir / "round2_manifest.json", errors)
+    round2_receipt = _load_json(review_dir / "round2_receipt.json", errors)
+
+    _check_round_number(round1_manifest, 1, "round1_manifest", errors)
+    _check_round_number(round1_receipt, 1, "round1_receipt", errors)
+    _check_round_number(round2_manifest, 2, "round2_manifest", errors)
+    _check_round_number(round2_receipt, 2, "round2_receipt", errors)
+
+    if round1_manifest.get("packet_id") != round1_receipt.get("packet_id"):
+        _add_error(errors, "PACKET_ID_MISMATCH", "Round 1 packet_id mismatch")
+    if round2_manifest.get("packet_id") != round2_receipt.get("packet_id"):
+        _add_error(errors, "PACKET_ID_MISMATCH", "Round 2 packet_id mismatch")
+
+    _verify_file_hash(
+        review_dir,
+        round1_manifest,
+        "sent_file",
+        "sent_sha256",
+        "Round 1 sent packet",
+        errors,
+    )
+    round1_returned = _verify_file_hash(
+        review_dir,
+        round1_receipt,
+        "returned_file",
+        "returned_sha256",
+        "Round 1 returned response",
+        errors,
+    )
+    _check_external_return(
+        round1_receipt, round1_returned, "Round 1 returned response", errors
+    )
+
+    _verify_file_hash(
+        review_dir,
+        round2_manifest,
+        "sent_file",
+        "sent_sha256",
+        "Round 2 sent packet",
+        errors,
+    )
+    for file_key, hash_key, label in (
+        ("revised_script_file", "revised_script_sha256", "Round 2 revised script"),
+        ("revised_fact_map_file", "revised_fact_map_sha256", "Round 2 fact map"),
+        ("timeline_file", "timeline_sha256", "Round 2 timeline"),
+    ):
+        _verify_file_hash(
+            review_dir, round2_manifest, file_key, hash_key, label, errors
+        )
+    round2_returned = _verify_file_hash(
+        review_dir,
+        round2_receipt,
+        "returned_file",
+        "returned_sha256",
+        "Round 2 returned response",
+        errors,
+    )
+    _check_external_return(
+        round2_receipt, round2_returned, "Round 2 returned response", errors
+    )
+
+    conversation_ids = (
+        round1_receipt.get("conversation_id"),
+        round2_manifest.get("conversation_id"),
+        round2_receipt.get("conversation_id"),
+    )
+    if (
+        not all(isinstance(item, str) and item.strip() for item in conversation_ids)
+        or len(set(conversation_ids)) != 1
+    ):
+        _add_error(
+            errors,
+            "SAME_CONVERSATION_REQUIRED",
+            "Round 1 receipt, Round 2 manifest, and Round 2 receipt "
+            "must use one conversation_id",
+        )
+
+    round1_return_hash = _sha256(review_dir / "round1_returned.md")
+    if round2_manifest.get("round1_return_sha256", "").upper() != round1_return_hash:
+        _add_error(
+            errors,
+            "HASH_MISMATCH",
+            "Round 2 parent Round 1 return hash mismatch",
+        )
+    if decisions.get("round1_return_sha256", "").upper() != round1_return_hash:
+        _add_error(
+            errors,
+            "HASH_MISMATCH",
+            "Codex decisions are not bound to the Round 1 return",
+        )
+
+    decisions_hash = _sha256(review_dir / "round1_codex_decisions.json")
+    if round2_manifest.get("round1_decisions_sha256", "").upper() != decisions_hash:
+        _add_error(
+            errors,
+            "HASH_MISMATCH",
+            "Round 2 parent Codex decisions hash mismatch",
+        )
+
+    suggestion_ids = _clean_id_list(round1_receipt.get("suggestion_ids"))
+    decision_rows = decisions.get("decisions")
+    if suggestion_ids is None or len(suggestion_ids) != len(set(suggestion_ids)):
+        _add_error(
+            errors,
+            "INVALID_SUGGESTION_IDS",
+            "Round 1 suggestion_ids must be a unique nonempty string list",
+        )
+        suggestion_ids = []
+    if round1_returned is not None:
+        try:
+            returned_text = round1_returned.read_text(encoding="utf-8-sig")
+            returned_suggestion_ids = SUGGESTION_ID_PATTERN.findall(returned_text)
+        except (OSError, UnicodeError) as exc:
+            returned_suggestion_ids = []
+            _add_error(errors, "INVALID_RETURN_TEXT", f"Round 1: {exc}")
+        if returned_suggestion_ids != suggestion_ids:
+            _add_error(
+                errors,
+                "SUGGESTION_ID_MISMATCH",
+                "Round 1 receipt suggestion_ids must exactly match the returned response",
+            )
+    if not isinstance(decision_rows, list):
+        _add_error(
+            errors,
+            "INCOMPLETE_CODEX_DECISIONS",
+            "Codex decisions must be a list",
+        )
+        decision_rows = []
+
+    decision_ids: list[str] = []
+    for index, row in enumerate(decision_rows):
+        if not isinstance(row, dict):
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                f"decision row {index} must be an object",
+            )
+            continue
+        suggestion_id = row.get("suggestion_id")
+        decision = row.get("decision")
+        reason = row.get("decision_reason")
+        if not isinstance(suggestion_id, str) or not suggestion_id:
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                f"decision row {index} has no suggestion_id",
+            )
+            continue
+        decision_ids.append(suggestion_id)
+        if decision not in ALLOWED_DECISIONS:
+            _add_error(
+                errors,
+                "INVALID_CODEX_DECISION",
+                f"{suggestion_id}: invalid decision {decision!r}",
+            )
+        if not isinstance(reason, str) or not reason.strip():
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                f"{suggestion_id}: decision_reason is required",
+            )
+        if decision == "PENDING_EVIDENCE":
+            _add_error(
+                errors,
+                "PENDING_EVIDENCE",
+                f"{suggestion_id}: evidence is still pending",
+                severity="WAIT",
+            )
+
+    if (
+        len(decision_ids) != len(set(decision_ids))
+        or set(decision_ids) != set(suggestion_ids)
+    ):
+        _add_error(
+            errors,
+            "INCOMPLETE_CODEX_DECISIONS",
+            "Round 1 suggestions and Codex decisions must be exactly one-to-one",
+        )
+
+    included_sections = round2_manifest.get("included_sections")
+    included_set = set(included_sections) if isinstance(included_sections, list) else set()
+    if not ROUND2_REQUIRED_SECTIONS.issubset(included_set):
+        _add_error(
+            errors,
+            "ROUND2_PACKET_INCOMPLETE",
+            "Round 2 manifest does not include every required full section",
+        )
+    try:
+        round2_packet_text = (review_dir / "round2_packet_sent.md").read_text(
+            encoding="utf-8-sig"
+        )
+    except (OSError, UnicodeError) as exc:
+        round2_packet_text = ""
+        _add_error(errors, "ROUND2_PACKET_INCOMPLETE", str(exc))
+    missing_anchors = [
+        anchor for anchor in ROUND2_REQUIRED_ANCHORS if anchor not in round2_packet_text
+    ]
+    if missing_anchors:
+        _add_error(
+            errors,
+            "ROUND2_PACKET_INCOMPLETE",
+            f"Round 2 packet missing anchors: {', '.join(missing_anchors)}",
+        )
+
+    order_values = (
+        _clean_id_list(round1_manifest.get("ordered_segment_ids")),
+        _clean_id_list(round2_manifest.get("ordered_segment_ids")),
+        _clean_id_list(round2_receipt.get("ordered_segment_ids")),
+    )
+    if (
+        any(value is None or not value for value in order_values)
+        or not (order_values[0] == order_values[1] == order_values[2])
+    ):
+        _add_error(
+            errors,
+            "SEGMENT_ORDER_DRIFT",
+            "Round 1, Round 2 packet, and Round 2 return segment order must match",
+        )
+
+    recommendation = round2_receipt.get("recommendation")
+    flow_status = round2_receipt.get("flow_continuity_status")
+    blockers = round2_receipt.get("remaining_blockers")
+    if recommendation not in {
+        "PASS_RECOMMENDED",
+        "REVISE_REQUIRED",
+        "EVIDENCE_REQUIRED",
+    }:
+        _add_error(
+            errors,
+            "INVALID_ROUND2_RECOMMENDATION",
+            f"invalid recommendation: {recommendation!r}",
+        )
+    if not isinstance(blockers, list):
+        _add_error(
+            errors,
+            "INVALID_ROUND2_BLOCKERS",
+            "remaining_blockers must be a list",
+        )
+        blockers = ["invalid"]
+    if (
+        recommendation != "PASS_RECOMMENDED"
+        or flow_status != "PASS"
+        or bool(blockers)
+    ):
+        _add_error(
+            errors,
+            "WAIT_CHATGPT_REVIEW_REPAIR",
+            "Round 2 requested revision/evidence, flow failed, or blockers remain",
+            severity="WAIT",
+        )
+
+    fail_count = sum(item["severity"] == "FAIL" for item in errors)
+    wait_count = sum(item["severity"] == "WAIT" for item in errors)
+    status = "FAIL" if fail_count else "WAIT" if wait_count else "PASS"
+    return {
+        "gate": GATE,
+        "status": status,
+        "stop_code": None if status == "PASS" else "WAIT_CHATGPT_REVIEW_REPAIR",
+        "review_dir": str(review_dir),
+        "conversation_id": conversation_ids[0]
+        if status == "PASS" and conversation_ids
+        else None,
+        "ordered_segment_ids": order_values[0]
+        if status == "PASS" and order_values
+        else [],
+        "errors": errors,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Validate the politics-longform ChatGPT two-pass review chain."
+    )
+    parser.add_argument("--review-dir", required=True, type=Path)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        help="Gate JSON path. Defaults to master_commentary_review_gate.json.",
+    )
+    args = parser.parse_args(argv)
+
+    result = validate_review(args.review_dir)
+    output = args.output or (
+        args.review_dir.resolve() / "master_commentary_review_gate.json"
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result["status"] == "PASS" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
