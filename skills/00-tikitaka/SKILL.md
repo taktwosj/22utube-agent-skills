@@ -615,6 +615,26 @@ completion, audio generation, SRT generation, layout JSON, or CapCut work.
 If the user already has a draft and asks only for wording, rhythm, retention,
 or review, perform that wording-only pass here without changing the story plan.
 
+## Stage Transition And n8n Contract
+
+Use this default routing contract:
+
+```text
+n8n_stage_transition=NOT_USED
+stage_transition_owner=Codex
+harness_role=VALIDATOR_ONLY
+n8n_default_status=NOT_REQUIRED
+```
+
+The harness validates artifacts and writes gate/status files. It does not launch
+the next skill. After user approval and `SCRIPT_HANDOFF_GATE` PASS, Codex reads
+`report1_handoff.json` and invokes `000short-production-agent`.
+
+Require n8n only when the current package explicitly sets `n8n_required=true`
+or selects `orchestration.route=n8n`. Without that explicit selection, record
+`n8n=NOT_REQUIRED`, not `NOT_RUN`, and do not block Stage 1, Stage 2, or final
+validation because n8n evidence is absent.
+
 ## Stage Scope Gate
 
 When the user provides a Shorts URL plus Gemini/source notes, first separate the
@@ -1045,7 +1065,10 @@ capcut_permission: CAPCUT_OPENABLE_PROJECT_ALLOWED
 production_status: WAIT_CAPCUT_OPENABLE_PROJECT
 ```
 
-`persona_mode/script_gate/n8n are FINAL_LOCK blockers`, not CAPCUT_OPENABLE_PROJECT blockers.
+`persona_mode/script_gate` are FINAL_LOCK blockers, not
+CAPCUT_OPENABLE_PROJECT blockers. n8n is a FINAL_LOCK blocker only when the
+current package explicitly sets `n8n_required=true`; otherwise its status is
+`NOT_REQUIRED`.
 `final_report_allowed=false` means the final or upload report is blocked; it
 does not block the second stage. continue to 000short-production-agent for
 `CAPCUT_OPENABLE_PROJECT` when the handoff gate is PASS.

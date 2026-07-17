@@ -303,7 +303,27 @@ def script_gate_status(work_dir: Path) -> dict[str, Any]:
     return status_block("FAILED", "script_gate_report.json", "script gate lacks pass_count>=4 or hard-veto=false")
 
 
+def n8n_is_required(work_dir: Path, previous_state: dict[str, Any]) -> bool:
+    if previous_state.get("n8n_required") is True:
+        return True
+
+    previous_n8n = previous_state.get("n8n")
+    if isinstance(previous_n8n, dict) and previous_n8n.get("required") is True:
+        return True
+
+    orchestration = previous_state.get("orchestration")
+    if isinstance(orchestration, dict):
+        if orchestration.get("n8n_required") is True:
+            return True
+        if str(orchestration.get("route") or "").strip().lower() == "n8n":
+            return True
+
+    requirement = read_json(work_dir / "n8n_requirement.json")
+    return requirement.get("required") is True
+
+
 def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]:
+    required = n8n_is_required(work_dir, previous_state)
     previous = previous_state.get("n8n") if isinstance(previous_state.get("n8n"), dict) else {}
     previous_status = str(previous.get("status") or "").upper()
     previous_execution = previous.get("execution_id")
@@ -314,6 +334,7 @@ def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]
             "execution_id": previous_execution,
             "evidence": previous_evidence,
             "reason": "carried from existing job_state.json",
+            "required": required,
         }
 
     candidates = [
@@ -329,9 +350,29 @@ def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]
             execution_id = None
             if name == "n8n_execution_id.txt":
                 execution_id = (work_dir / name).read_text(encoding="utf-8-sig").strip()
-            return {"status": "DONE", "execution_id": execution_id, "evidence": name, "reason": ""}
+            return {
+                "status": "DONE",
+                "execution_id": execution_id,
+                "evidence": name,
+                "reason": "",
+                "required": required,
+            }
 
-    return status_block("NOT_RUN", None, "no n8n execution id, callback, webhook response, or output artifact")
+    if not required:
+        return {
+            "status": "NOT_REQUIRED",
+            "evidence": None,
+            "reason": "n8n orchestration not selected; Codex owns the stage transition",
+            "required": False,
+        }
+
+    return {
+        "status": "NOT_RUN",
+        "evidence": None,
+        "blocker": "WAIT_N8N_EXECUTION_EVIDENCE",
+        "reason": "n8n_required=true but no execution id, callback, webhook response, or output artifact",
+        "required": True,
+    }
 
 
 def append_trace(work_dir: Path, job_id: str) -> dict[str, Any]:
@@ -343,6 +384,13 @@ def append_trace(work_dir: Path, job_id: str) -> dict[str, Any]:
 
 def passish(block: dict[str, Any]) -> bool:
     return str(block.get("status") or "").upper() in PASS_VALUES
+
+
+def upstream_satisfied(block: dict[str, Any]) -> bool:
+    return passish(block) or str(block.get("status") or "").upper() in {
+        "DONE",
+        "NOT_REQUIRED",
+    }
 
 
 def design_blueprint_status(work_dir: Path) -> dict[str, Any]:
@@ -1452,14 +1500,14 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "n8n": n8n,
         "harness_trace": trace,
     }
-    missing = [name for name, block in upstream.items() if not passish(block) and block.get("status") != "DONE"]
+    missing = [name for name, block in upstream.items() if not upstream_satisfied(block)]
     validation_status = "PASS" if not missing else "FAILED"
     validation = {
         "status": validation_status,
         "evidence": "validation_report.json",
         "missing_or_failed": missing,
         "checked_at": utc_now(),
-        "rule": "fail_closed",
+        "rule": "fail_closed_with_explicit_not_required",
     }
     evidence_pack = {
         "status": "PASS" if validation_status == "PASS" else "FAILED",

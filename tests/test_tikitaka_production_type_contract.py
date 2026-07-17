@@ -204,8 +204,9 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
         for token in [
             "capcut_permission: CAPCUT_OPENABLE_PROJECT_ALLOWED",
             "production_status: WAIT_CAPCUT_OPENABLE_PROJECT",
-            "persona_mode/script_gate/n8n are FINAL_LOCK blockers",
-            "not CAPCUT_OPENABLE_PROJECT blockers",
+            "`persona_mode/script_gate` are FINAL_LOCK blockers",
+            "n8n is a FINAL_LOCK blocker only when",
+            "`NOT_REQUIRED`",
             "final_report_allowed=false",
             "continue to 000short-production-agent",
         ]:

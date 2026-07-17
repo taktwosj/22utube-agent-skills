@@ -3565,9 +3565,59 @@ def validate_scenario_first_montage(
     }
 
 
+def validate_n8n_requirement(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    orchestration = contract.get("orchestration")
+    orchestration_route = ""
+    orchestration_required = False
+    if isinstance(orchestration, dict):
+        orchestration_route = str(orchestration.get("route") or "").strip().lower()
+        orchestration_required = truthy(orchestration.get("n8n_required"))
+
+    required = (
+        truthy(contract.get("n8n_required"))
+        or orchestration_required
+        or orchestration_route == "n8n"
+    )
+    if not required:
+        return {
+            "n8n_status": "NOT_REQUIRED",
+            "n8n_required": False,
+            "n8n_evidence_path": "",
+            "stage_transition_owner": "Codex",
+        }
+
+    declared = str(contract.get("n8n_evidence_path") or "").strip()
+    candidates = [
+        declared,
+        "n8n_execution_id.txt",
+        "n8n_callback.log",
+        "n8n_webhook_response.log",
+        "n8n_webhook_response.json",
+        "n8n_output_artifact.json",
+        "n8n_output_artifact.md",
+    ]
+    for raw_path in candidates:
+        if not raw_path:
+            continue
+        path = as_path(root, raw_path)
+        if path.is_file() and path.stat().st_size > 0:
+            return {
+                "n8n_status": "DONE",
+                "n8n_required": True,
+                "n8n_evidence_path": str(path),
+                "stage_transition_owner": "n8n",
+            }
+
+    raise GateFail(
+        "WAIT_N8N_EXECUTION_EVIDENCE: n8n_required=true but no execution, "
+        "callback, webhook response, or output artifact was found"
+    )
+
+
 def validate_shared_requirements(contract: dict[str, Any], root: Path) -> dict[str, Any]:
     script_handoff_result = validate_script_handoff_gate(contract, root)
     report1_handoff_result = validate_report1_handoff_gate(contract, root)
+    n8n_result = validate_n8n_requirement(contract, root)
 
     if contract.get("similarity_breaker_harness") != "PASS":
         if contract.get("similarity_breaker_harness") != "N/A_SCENARIO_FIRST_MONTAGE":
@@ -3642,6 +3692,7 @@ def validate_shared_requirements(contract: dict[str, Any], root: Path) -> dict[s
     return {
         **script_handoff_result,
         **report1_handoff_result,
+        **n8n_result,
         "validation_report_path": str(as_path(root, validation_report_path)),
         "validation_report_status": status_value(validation_report),
     }

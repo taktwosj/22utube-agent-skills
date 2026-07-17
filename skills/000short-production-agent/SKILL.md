@@ -10,6 +10,27 @@ description: Use only when the user explicitly asks to create, validate, or repa
 - `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 
+## Stage Transition And n8n Contract
+
+Use this default routing contract:
+
+```text
+n8n_stage_transition=NOT_USED
+stage_transition_owner=Codex
+harness_role=VALIDATOR_ONLY
+n8n_default_status=NOT_REQUIRED
+```
+
+`SCRIPT_HANDOFF_GATE` and `REPORT1_HANDOFF_GATE` authorize Stage 2; they do not
+launch it. Codex invokes this skill after the user approves the design and
+chooses the voice/audio route. The Stage 2 entry validator checks the handoff
+package and never requires n8n evidence.
+
+Treat n8n as a conditional FINAL_LOCK dependency only when the current package
+explicitly sets `n8n_required=true` or selects `orchestration.route=n8n`.
+Otherwise record `n8n=NOT_REQUIRED`, not `NOT_RUN`, and do not block production
+or final validation because n8n evidence is absent.
+
 ## Escalation Rule
 
 Do not start this skill from script-adjacent intent alone. Use it only when the
@@ -101,9 +122,13 @@ Use `validate_capcut_openable_project_entry` for the second stage. It validates
 `REPORT1_HANDOFF_GATE`, `SCRIPT_HANDOFF_GATE`, Tikitaka v3 timeline design
 files, role/audio maps, timing gates, and source manifest readiness for local CapCut project
 creation. `validate_shared_requirements is FINAL_LOCK only`.
-`persona_mode/script_gate/n8n are FINAL_LOCK blockers`, not CAPCUT_OPENABLE_PROJECT blockers.
+`persona_mode/script_gate` are FINAL_LOCK blockers, not
+CAPCUT_OPENABLE_PROJECT blockers. n8n is a FINAL_LOCK blocker only when the
+current package explicitly requires n8n; otherwise its status is
+`NOT_REQUIRED`.
 When the handoff gate is PASS, do not stop CapCut project creation just because
-final report, upload, writer-persona, or n8n evidence is not complete.
+final report, upload, or writer-persona evidence is not complete. Ignore missing
+n8n evidence here unless the package explicitly requires n8n.
 
 ## Stage 2 Tikitaka v3 Expanded Timeline Source of Truth
 
