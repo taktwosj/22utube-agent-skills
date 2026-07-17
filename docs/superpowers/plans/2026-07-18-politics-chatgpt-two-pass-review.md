@@ -27,26 +27,27 @@
 ### Task 1: Establish the v3 skill baseline
 
 **Files:**
-- Merge source: Git ref `agent/politics-jungchilong-root`
+- Merge source: commit `491cb6b398ec5bd9d7e0e33675764afb744f6dde`
 - Modify: `skills/111-politics-longform/SKILL.md`
 - Modify: `skills/111-politics-longform/agents/openai.yaml`
-- Test: `tests/test_politics_longform_jungchilong_base_contract.py`
 - Test: `tests/test_politics_longform_embedded_contract.py`
 
 **Interfaces:**
 - Consumes: workspace `AGENTS.md` v3 template authority
 - Produces: one Git-owned skill containing the master-commentary contract and v3 root markers
 
-- [ ] **Step 1: Integrate the existing `jungchilong` root commit**
+- [ ] **Step 1: Integrate the current v3 source contract**
 
 Run:
 
 ```powershell
-git merge --no-ff agent/politics-jungchilong-root
+git merge --no-ff origin/codex/sync-local-skills-20260630
 ```
 
-Resolve `SKILL.md` by preserving both the `jungchilong` root contract and the
-master-commentary contract.
+Confirm that the merged history contains commit
+`491cb6b398ec5bd9d7e0e33675764afb744f6dde`. Resolve `SKILL.md` by using that
+commit's v3 production contract as the baseline and then adding the
+master-commentary review contract.
 
 - [ ] **Step 2: Write failing v3 marker assertions**
 
@@ -56,9 +57,9 @@ Require these exact tokens:
 for token in (
     "target_profile: jungchilong_base_v3_intro15",
     "canvas: 1920x1080",
-    "YP007: legacy visual reference only",
+    "YP007, YP005, YM007 are legacy visual references only.",
     "jungchilong_v3_intro15_CAPCUT_20260715.zip",
-    "content_start_sec: 15.083333",
+    "content_start_sec=15.083333",
 ):
     self.assertIn(token, self.skill_text)
 ```
@@ -70,11 +71,11 @@ Run:
 ```powershell
 $env:PYTHONUTF8='1'
 $env:PYTHONDONTWRITEBYTECODE='1'
-python -m unittest tests.test_politics_longform_jungchilong_base_contract -v
+python -m unittest tests.test_politics_longform_embedded_contract -v
 ```
 
-Expected: failure because the integrated older `jungchilong` contract still
-contains the 1280x720 pre-v3 profile.
+Expected: PASS after the v3 source commit is merged. Stop if any marker is
+missing; do not reconstruct the source contract from the older 1280x720 branch.
 
 - [ ] **Step 4: Apply the minimal v3 contract**
 
@@ -223,14 +224,13 @@ Expected: all behavioral tests pass.
 
 **Interfaces:**
 - Consumes: completed Git skill source
-- Produces: matching Codex, Claude, and Hermes managed copies
+- Produces: a matching Codex managed copy for the current request
 
 - [ ] **Step 1: Run targeted tests**
 
 ```powershell
 python -m unittest `
   tests.test_politics_longform_embedded_contract `
-  tests.test_politics_longform_jungchilong_base_contract `
   tests.test_politics_longform_chatgpt_project_contract `
   tests.test_politics_longform_chatgpt_two_pass_validator -v
 ```
@@ -251,13 +251,13 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target repo
 - [ ] **Step 4: Install only this skill**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Target all -Only 111-politics-longform
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1 -Target codex -Only 111-politics-longform
 ```
 
-- [ ] **Step 5: Verify all runtime copies**
+- [ ] **Step 5: Verify the Codex runtime copy**
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target all
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target codex
 ```
 
 ### Task 6: Commit and publish only the approved scope
@@ -307,4 +307,3 @@ gh pr create --draft --fill
   publication are mapped to Tasks 1-6.
 - Placeholder scan: no `TBD`, `TODO`, or deferred implementation steps.
 - Interface consistency: artifact names and status values match the design.
-
