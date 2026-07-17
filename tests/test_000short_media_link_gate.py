@@ -121,6 +121,33 @@ class MediaLinkGateTests(unittest.TestCase):
                     Path("00_source/source.mp4"),
                 )
 
+    def test_source_video_requires_explicit_muted_audio_evidence(self):
+        module = load_source_module_no_bytecode("media_link_audio_mute_evidence", VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "00_source" / "source.mp4"
+            write(source, "video")
+            draft_path = root / "50_capcut_project" / "draft_content.json"
+            write_json(
+                draft_path,
+                {
+                    "active_materials": [
+                        {
+                            "role": "source_video",
+                            "path": "00_source/source.mp4",
+                            "active": True,
+                        }
+                    ]
+                },
+            )
+
+            with self.assertRaisesRegex(module.GateFail, "FAIL_SOURCE_VIDEO_AUDIO_MUTE_UNPROVEN"):
+                module.validate_capcut_media_links(
+                    root,
+                    draft_path,
+                    Path("00_source/source.mp4"),
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

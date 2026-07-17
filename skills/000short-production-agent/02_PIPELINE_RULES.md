@@ -60,8 +60,8 @@ If Tikitaka v3 handoff exists, start from the locked handoff package.
    - `NOT_REQUIRED_NO_SOURCE_SPEECH` is valid only when no speaker quote exists.
    - Missing Demucs evidence is `WAIT_SOURCE_VOICE_SEPARATION`; raw or pre-cut
      source audio is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
-8. Read `20_script/timeline_design.json`.
-9. Validate expanded segment fields:
+9. Read `20_script/timeline_design.json`.
+10. Validate expanded segment fields:
 
 ```text
 source_ref
@@ -75,19 +75,19 @@ duration_status
 visual_strategy
 ```
 
-10. Confirm `20_script/timeline_design_gate.json` PASS.
-11. Confirm `20_script/humanize_korean_gate.json` PASS.
-12. Read `20_script/block_map.json`.
-13. Read `20_script/block_role_map.json`.
-14. Read `20_script/block_voice_switch_map.json`.
-15. If narration-audio exists, read `20_script/tts_copy_text.txt`,
+11. Confirm `20_script/timeline_design_gate.json` PASS.
+12. Confirm `20_script/humanize_korean_gate.json` PASS.
+13. Read `20_script/block_map.json`.
+14. Read `20_script/block_role_map.json`.
+15. Read `20_script/block_voice_switch_map.json`.
+16. If narration-audio exists, read `20_script/tts_copy_text.txt`,
     `20_script/tts_duration_probe.json`, and
     `20_script/tts_timing_reconciliation_gate.json`.
-16. If only `tts_caption/audio_role=none` exists, do not require TTS timing
+17. If only `tts_caption/audio_role=none` exists, do not require TTS timing
     files and do not generate narration audio.
-17. Confirm `00_source/source_manifest.json` or `00_source/source.mp4`.
-18. Resolve template. Default is `shrt white`.
-19. Resolve semantic audio tracks:
+18. Confirm `00_source/source_manifest.json` or `00_source/source.mp4`.
+19. Resolve template. Default is `shrt white`.
+20. Resolve semantic audio tracks:
 
 ```text
 audio.narration_tts  -> A9
@@ -103,20 +103,19 @@ Keep embedded source-video audio muted for the whole timeline. Run listening
 QC for music residue and robotic damage before final loudness normalization.
 Never use `no_vocals.wav`.
 
-20. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`
+21. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`
     while preserving source_order/timeline_order/assembly_role/duration fields.
-21. Generate `cut_manifest.json`.
-22. Clone `shrt white`.
-23. Implement `timeline_design.json` into `draft_content.json`.
-24. Generate `capcut_timeline_manifest.json` proving protected field
+22. Generate `cut_manifest.json`.
+23. Clone `shrt white`.
+24. Implement `timeline_design.json` into `draft_content.json`.
+25. Generate `capcut_timeline_manifest.json` proving protected field
     preservation.
-25. Normalize draft.
-26. Run media link gate.
-27. Run T1/T2 full-duration gate.
-28. Run visible text clean gate.
-29. Run timeline implementation gate.
-30. Create `90_reports/report2_handoff.json` and report.
-27. Create `90_reports/report2_handoff.json` and 보고서2.
+26. Normalize draft.
+27. Run media link gate.
+28. Run T1/T2 full-duration gate.
+29. Run visible text clean gate.
+30. Run timeline implementation gate.
+31. Create `90_reports/report2_handoff.json` and report.
 
 `capcut_layout_plan.json` is a derived implementation plan. It is not allowed to
 override `timeline_design.json`.

@@ -90,8 +90,16 @@ def validate_capcut_media_links(
         if placeholder or "placeholder" in raw_path.lower():
             raise GateFail("FAIL_PLACEHOLDER_MEDIA_ACTIVE: template placeholder media is active")
         if is_source_video_material(material):
-            audio_enabled = material.get("audio_enabled", material.get("source_video_audio_enabled", False))
-            if audio_enabled is True:
+            if "audio_enabled" in material:
+                audio_enabled = material["audio_enabled"]
+            elif "source_video_audio_enabled" in material:
+                audio_enabled = material["source_video_audio_enabled"]
+            else:
+                raise GateFail(
+                    "FAIL_SOURCE_VIDEO_AUDIO_MUTE_UNPROVEN: source-video material "
+                    "must declare audio_enabled=false"
+                )
+            if audio_enabled is not False:
                 raise GateFail(
                     "FAIL_SOURCE_VIDEO_AUDIO_NOT_MUTED: source-video embedded audio must be muted"
                 )

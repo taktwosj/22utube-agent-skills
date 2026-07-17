@@ -4,6 +4,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 from _support import load_source_module_no_bytecode, write_valid_source_mp4
@@ -120,6 +121,46 @@ def create_source_identity_fixture(root: Path, manifest_extra: dict | None = Non
     return source
 
 
+def create_source_voice_fixture(root: Path) -> None:
+    source = root / "00_source" / "source.mp4"
+    source_fingerprint = sha256(source)
+    source_audio = root / "10_analysis" / "audio" / "full_source_audio.wav"
+    vocals = root / "10_analysis" / "audio" / "vocals.wav"
+    for path in (source_audio, vocals):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(path), "wb") as handle:
+            handle.setnchannels(2)
+            handle.setsampwidth(2)
+            handle.setframerate(48000)
+            handle.writeframes(b"\x00\x00\x00\x00" * (8 * 48000))
+    write_json(
+        root / "10_analysis" / "source_voice_separation.json",
+        {
+            "gate_name": "SOURCE_VOICE_SEPARATION_GATE",
+            "status": "PASS",
+            "owner_skill": "00-tikitaka",
+            "source_fingerprint_sha256": source_fingerprint,
+            "separation_engine": "demucs",
+            "separation_model": "htdemucs",
+            "separation_scope": "FULL_SOURCE_AUDIO",
+            "source_audio_path": "10_analysis/audio/full_source_audio.wav",
+            "source_audio_sha256": sha256(source_audio),
+            "demucs_input_sha256": sha256(source_audio),
+            "vocals_path": "10_analysis/audio/vocals.wav",
+            "vocals_sha256": sha256(vocals),
+            "source_duration_sec": 8.0,
+            "source_audio_duration_sec": 8.0,
+            "vocals_duration_sec": 8.0,
+            "duration_tolerance_sec": 0.25,
+            "sample_rate_hz": 48000,
+            "source_voice_music_removed": True,
+            "q_segment_source": "10_analysis/audio/vocals.wav",
+            "no_vocals_used": False,
+            "created_by": "prepare_source_voice.py",
+        },
+    )
+
+
 def create_linked_draft(root: Path) -> None:
     source = root / "00_source" / "source.mp4"
     write_json(
@@ -142,6 +183,7 @@ def create_linked_draft(root: Path) -> None:
 
 def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
     create_source_identity_fixture(root)
+    create_source_voice_fixture(root)
     source_sha256 = sha256(root / "00_source" / "source.mp4")
     gate = {
         "gate_name": "SCRIPT_HANDOFF_GATE",
@@ -229,6 +271,8 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
                     "duration_basis": "source_range",
                     "duration_status": "SOURCE_AUDIO_LOCKED",
                     "source_audio_range": {"start": "00:03", "end": "00:08"},
+                    "source_audio_ref": "10_analysis/audio/vocals.wav",
+                    "source_audio_provenance": "demucs_full_source_vocals",
                     "quote_verification_status": "VERIFIED_STT",
                     "audio_policy": "source_on_tts_off",
                     "visual_strategy": "source_visual_action",

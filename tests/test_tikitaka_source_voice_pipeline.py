@@ -235,6 +235,81 @@ class SourceVoiceValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(module.GateFail, "WAIT_SOURCE_VOICE_HASH_BINDING"):
                 module.validate_source_voice_separation(root)
 
+    def test_source_fingerprint_must_match_identity_lock(self):
+        module = load_source_module_no_bytecode("validate_source_voice_source_hash", VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = build_valid_voice_package(root)
+            manifest["source_fingerprint_sha256"] = "0" * 64
+            write_json(root / "10_analysis" / "source_voice_separation.json", manifest)
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_SOURCE_VOICE_HASH_BINDING"):
+                module.validate_source_voice_separation(root)
+
+    def test_full_source_scope_is_required(self):
+        module = load_source_module_no_bytecode("validate_source_voice_scope", VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = build_valid_voice_package(root)
+            manifest["separation_scope"] = "PRE_CUT_QUOTES"
+            write_json(root / "10_analysis" / "source_voice_separation.json", manifest)
+
+            with self.assertRaisesRegex(module.GateFail, "separation_scope"):
+                module.validate_source_voice_separation(root)
+
+    def test_demucs_input_hash_must_equal_full_source_audio_hash(self):
+        module = load_source_module_no_bytecode("validate_source_voice_demucs_input", VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = build_valid_voice_package(root)
+            manifest["demucs_input_sha256"] = "0" * 64
+            write_json(root / "10_analysis" / "source_voice_separation.json", manifest)
+
+            with self.assertRaisesRegex(module.GateFail, "Demucs input hash"):
+                module.validate_source_voice_separation(root)
+
+    def test_actual_wav_sample_rate_must_be_48000(self):
+        module = load_source_module_no_bytecode("validate_source_voice_sample_rate", VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = build_valid_voice_package(root)
+            source_audio = root / manifest["source_audio_path"]
+            write_wav(source_audio, sample_rate_hz=44100)
+            manifest["source_audio_sha256"] = sha256_file(source_audio)
+            manifest["demucs_input_sha256"] = sha256_file(source_audio)
+            write_json(root / "10_analysis" / "source_voice_separation.json", manifest)
+
+            with self.assertRaisesRegex(module.GateFail, "WAV sample rate"):
+                module.validate_source_voice_separation(root)
+
+    def test_duration_drift_over_tolerance_fails(self):
+        module = load_source_module_no_bytecode("validate_source_voice_duration", VALIDATOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest = build_valid_voice_package(root)
+            vocals = root / manifest["vocals_path"]
+            write_wav(vocals, duration_sec=1.5)
+            manifest["vocals_sha256"] = sha256_file(vocals)
+            write_json(root / "10_analysis" / "source_voice_separation.json", manifest)
+
+            with self.assertRaisesRegex(module.GateFail, "WAIT_SOURCE_VOICE_DURATION_PARITY"):
+                module.validate_source_voice_separation(root)
+
+    def test_pass_manifest_must_claim_music_removed_and_no_vocals_unused(self):
+        module = load_source_module_no_bytecode("validate_source_voice_policy", VALIDATOR)
+        for field, value in (
+            ("source_voice_music_removed", False),
+            ("no_vocals_used", True),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                manifest = build_valid_voice_package(root)
+                manifest[field] = value
+                write_json(root / "10_analysis" / "source_voice_separation.json", manifest)
+
+                with self.assertRaisesRegex(module.GateFail, field):
+                    module.validate_source_voice_separation(root)
+
     def test_absolute_artifact_path_is_rejected(self):
         module = load_source_module_no_bytecode("validate_source_voice_absolute", VALIDATOR)
         with tempfile.TemporaryDirectory() as tmp:
