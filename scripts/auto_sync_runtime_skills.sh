@@ -34,7 +34,9 @@ if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
   exit 0
 fi
 
-LOCK_FILE="$REPO_ROOT/.git/22utube-skill-auto-sync.lock"
+GIT_COMMON_DIR_RAW="$(git rev-parse --git-common-dir 2>/dev/null || printf '%s\n' '.git')"
+GIT_COMMON_DIR="$(cd "$GIT_COMMON_DIR_RAW" && pwd -P)"
+LOCK_FILE="$GIT_COMMON_DIR/22utube-skill-auto-sync.lock"
 if [ -e "$LOCK_FILE" ]; then
   echo "22utube skill auto-sync: skip ($HOOK_NAME, lock exists)"
   exit 0
