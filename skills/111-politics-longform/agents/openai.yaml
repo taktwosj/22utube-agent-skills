@@ -1,4 +1,4 @@
 interface:
   display_name: "111정치롱폼"
-  short_description: "민주진영 정치 롱폼 제작과 CapCut 하단 챕터 세팅"
-  default_prompt: "Use $111-politics-longform to create a 민주진영 정치 롱폼 CapCut and upload package."
+  short_description: "정치평론가 마스터 원고부터 민주진영 롱폼 제작까지"
+  default_prompt: "Use $111-politics-longform to write and review a fact-grounded political commentary master script before deriving narration, lower text, CapCut, and upload assets."

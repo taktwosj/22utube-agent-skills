@@ -49,6 +49,20 @@ class PoliticsLongformEmbeddedContractTests(unittest.TestCase):
         self.assertIn("WAIT_PROJECT_CLEANUP", self.skill_text)
         self.assertIn("FAIL_PROJECT_CLEANUP", self.skill_text)
 
+    def test_commentary_master_script_precedes_tts_lower_text_and_capcut(self):
+        for token in (
+            "## 정치평론가 마스터 원고 계약",
+            "commentary_master_script_draft.md",
+            "commentary_fact_map.json",
+            "commentary_quality_review.json",
+            "commentary_master_script_approved.md",
+            "DRAFT_USER_REVIEW",
+            "WAIT_COMMENTARY_USER_REVIEW",
+            "하단 두 줄에서 평론을 역산하지 않는다",
+            "주장 -> 근거 -> 해석 -> 반론 -> 판단",
+        ):
+            self.assertIn(token, self.skill_text)
+
     def test_skill_folder_does_not_ship_stale_duplicate_contract(self):
         duplicates = [path.name for path in SKILL_DIR.glob("SKILL*.md") if path.name != "SKILL.md"]
         self.assertEqual(duplicates, [])

@@ -1,6 +1,6 @@
 ---
 name: 111-politics-longform
-description: Use when the user says 111정치롱폼, 정치롱폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to make/update a Korean political longform CapCut draft, T1 chapter text, YouTube upload package, channel profile, keywords, or thumbnail hooks for a 민주진영 political commentary channel.
+description: Use when the user says 111정치롱폼, 정치롱폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 정치평론가 원고, 여성 평론 나레이션, or asks to make/update a Korean political longform commentary script, CapCut draft, T1 chapter text, YouTube upload package, channel profile, keywords, or thumbnail hooks.
 ---
 
 # 111 Politics Longform
@@ -284,6 +284,97 @@ For lower T1 reference text only, YP005/YM007 may contain these operator files:
 
 Use them as examples of density and format, not as content for a new video.
 
+## 정치평론가 마스터 원고 계약
+
+정치평론, 평론가형 나레이션, 여성 해설 멘트, GPT 이미지 사이의 의견 원고를
+요청받으면 이미지·TTS·자막·하단 문구·CapCut보다 이 계약을 먼저 완료한다.
+원본 발언을 길게 바꾸거나 지지층의 감정을 대신 말하는 것은 평론으로
+인정하지 않는다.
+
+### 사실과 판단의 분리
+
+`20_script/commentary_fact_map.json`에 각 논평 블록의 근거를 다음 역할로
+분리한다.
+
+```text
+source_claim: 출처와 화자가 확인되는 원본 발언
+verified_fact: 선거 결과, 직책, 날짜처럼 별도로 확인한 현재 사실
+interpretation: 사실 사이의 인과·권력·제도적 의미를 읽은 해석
+counterargument: 해당 해석에 제기할 수 있는 가장 강한 반론
+judgment: 그 반론을 통과하고도 남는 작성자의 결론
+```
+
+현재 사실은 공식 자료나 신뢰할 수 있는 보도로 다시 확인한다. 확인하지 못한
+배후, 의도, 속마음은 사실처럼 쓰지 않는다. 원본이 사건 전 발언이고 제작
+시점에 결과가 나온 경우에는 `발언 당시의 전망`과 `확인된 사후 결과`를
+구분한다.
+
+### 평론 문장 생성 순서
+
+먼저 영상 전체를 관통하는 핵심 논지 하나를 쓴다. 이어서 3-5개의 마스터
+논평 블록을 아래 순서로 작성한다.
+
+```text
+주장 -> 근거 -> 해석 -> 반론 -> 판단
+```
+
+- 주장은 이번 영상이 끝까지 설명할 정치적 문제를 한 문장으로 고정한다.
+- 근거는 원본 발언 또는 확인된 사실에 연결한다.
+- 해석은 원본을 반복하지 말고, 혼동되는 두 개념의 구분, 작동하는 인과,
+  권력의 이해관계, 제도의 효과 중 하나 이상을 새로 제시한다.
+- 반론은 약한 허수아비가 아니라 상대가 실제로 제기할 가장 강한 논거를
+  먼저 인정한다.
+- 판단은 반론을 검토한 뒤에도 근거가 남는 범위까지만 말한다.
+
+각 블록은 독립적으로 낭독할 수 있어야 하지만, 모두 같은 핵심 논지를
+전진시켜야 한다. 영웅화, 팬덤 심판, 단순 득표 합산, 근거 없는 동기 추정,
+`충격·대폭발·드디어 밝혀졌다` 같은 자동 과장, 벤치마크 영상 논평의 문장
+복사를 금지한다.
+
+### 산출물과 사용자 승인
+
+다음 순서로 저장한다.
+
+```text
+20_script/commentary_fact_map.json
+20_script/commentary_master_script_draft.md
+20_script/commentary_quality_review.json
+20_script/commentary_master_script_approved.md
+```
+
+초안 상태는 `DRAFT_USER_REVIEW`다. 품질 검토는 사실과 해석의 분리 25점,
+새 분석 25점, 인과 설명 20점, 반론 처리 15점, 구어 전달력 15점으로
+기록한다. 80점 미만은 다시 쓰고, 80점 이상도 검토 가능한 초안일 뿐 자동
+승인이 아니다.
+
+사용자의 명시적 승인을 받기 전에는
+`commentary_master_script_approved.md`를 만들지 않고
+`WAIT_COMMENTARY_USER_REVIEW`로 중단한다. 승인본에는 승인한 초안의 SHA-256과
+승인 시각을 기록한다. 출처 범위, 확인 사실, 핵심 논지 또는 논평 블록이
+바뀌면 기존 승인을 무효화하고 다시 검토받는다.
+
+### 나레이션과 하단 문구 파생
+
+하단 두 줄에서 평론을 역산하지 않는다. 먼저 승인된 마스터 평론을 완성한
+뒤 다음 표시물을 그 원고에서 파생한다.
+
+```text
+commentary narration cues
+spoken subtitles
+GPT/image evidence prompts
+lower A/B commentary
+CapCut visible text
+```
+
+파생 과정에서는 마스터 원고의 주장, 인과, 반론, 결론을 바꾸거나 누락하지
+않는다. 하단 A/B 두 줄은 화면을 보조하는 짧은 요약이며 평론 본문을 대신하지
+않는다. 전체 논증이 하단 글자 수에 맞지 않으면 하단을 더 줄이거나 생략하고,
+마스터 나레이션을 훼손하지 않는다.
+
+원본 발언을 그대로 전달하는 TTS lane과 작성자의 평론 나레이션은 역할을
+분리한다. 원본 TTS는 원문을 요약·의역하지 않고, 평론 나레이션은 승인된
+마스터 원고만 사용한다. 두 음성을 같은 시간에 겹치지 않는다.
+
 ## Workflow
 
 1. Resolve the episode and CapCut draft.
@@ -365,15 +456,18 @@ adjustment over the whole project. Random values should be deterministic enough
 to reproduce from the project package, but clips in the same video should not all
 share the exact same value.
 
-4. Write lower T1 from the actual speech.
-   - Start at `00:00`; do not leave the opening empty.
-   - Maintain continuous flow through the full roughcut unless the user asks for sparse notes.
+4. Derive lower T1 from the approved master commentary and actual speech.
+   - Do not write lower T1 until `commentary_master_script_approved.md` exists.
+   - 하단 두 줄에서 평론을 역산하지 않는다.
+   - Start at the content start defined by the approved timeline; do not create an unexplained opening gap.
+   - Maintain continuous flow through the full roughcut unless the approved design calls for sparse notes.
    - For a 15:00 cut, target about 35-40 lower T1 segments. The saved YP005 사전투표 baseline uses 38.
    - For a 20:30 cut, target about 40-50 lower T1 segments, not 8-18.
    - Use `챕터1_`, `챕터2_`, `챕터3_` labels that match viewer-facing topic sections.
-   - Each item should be 1-2 lines: first line summarizes what the speaker is saying, second line adds concise interpretation/opinion.
+   - Each item should be 1-2 lines: first line anchors the current source claim, second line condenses the approved commentary point.
+   - Do not invent a new argument, stronger accusation, or omitted counterargument while shortening the approved master script.
    - Be concrete: name the actor, claim, issue, or consequence. Avoid abstract filler such as `민심을 챙겨야 합니다`, `정치가 중요합니다`, or generic advice.
-   - Positive opinion is allowed, but keep it tied to the exact claim: `이 분석은 구조를 보게 만든다`, `이 지점은 민주당이 아프게 들어야 한다`.
+   - If the lower lane cannot carry the point without distortion, shorten or omit it rather than replacing the master narration.
 
 5. Chapter mapping examples.
    - `00:00` chapter 1: 유시민 등장, 사전투표, 선거 토론의 판 세팅.
