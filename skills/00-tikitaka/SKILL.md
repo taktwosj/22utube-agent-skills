@@ -437,15 +437,15 @@ audio.bgm
 오디오 / BGM
 ```
 
-## Optional Gemini Pre-index
+## Optional Gemini Raw Observation
 
-Gemini is an optional pre-index, not an intake gate.
+Gemini is optional raw observation, not an intake gate.
 
 Use this routing order:
 
 1. If Gemini JSON or notes are already supplied, do not rerun Gemini. Read them
-   as an unverified candidate index for likely `T1`, `T2`, TTS, `""` speaker
-   quotes, `()` situation captions, and useful source ranges.
+   as unverified raw observation notes for likely `T1`, `T2`, TTS, `""`
+   speaker quotes, `()` situation captions, and useful source ranges.
 2. If no Gemini result is supplied and a URL or local source is available,
    acquire or confirm `source.mp4` and continue with direct source analysis.
 3. Run the AI Studio raw-intake path only when the user explicitly asks for Gemini,
@@ -457,10 +457,15 @@ Final timing, dialogue, OCR, source identity, and design decisions must come fro
 `source.mp4`, ffprobe, STT, OCR, and frame checks. Gemini ranges and labels remain
 `PROPOSED_SOURCE_TIMECODE` until that verification is complete.
 
-When Gemini is explicitly requested, use the compact candidate-index prompt in
-`references/gemini_raw_intake_prompt.md`, verify the output includes
-`final_warning_ko`, and save the result as JSON/Markdown through AI Studio web
-UI automation.
+When Gemini is explicitly requested, use the complete second-by-second
+raw-observation prompt in `references/gemini_raw_intake_prompt.md`. Require this
+exact completion value before accepting the response:
+
+```text
+final_warning_ko=이 JSON은 Gemini 초벌 초단위 관찰값이다. 최종 대본, 화자발언 확정, 컷타이밍, TTS/상황설명 배치, CapCut 제작은 Codex가 source.mp4와 STT/OCR/프레임 검증으로 확정해야 한다.
+```
+
+Save the result as JSON/Markdown through AI Studio web UI automation.
 
 For unattended/background work, use the shared no-API dedicated-profile runner:
 
