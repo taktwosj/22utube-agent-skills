@@ -101,6 +101,38 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
         "duration_sec": 8.0,
     }
     write_json(root / "10_analysis" / "source_identity_lock.json", json.dumps(lock))
+    source_audio = root / "10_analysis" / "audio" / "full_source_audio.wav"
+    vocals = root / "10_analysis" / "audio" / "vocals.wav"
+    write_wav(source_audio, duration_sec=8.0)
+    write_wav(vocals, duration_sec=8.0)
+    write_json(
+        root / "10_analysis" / "source_voice_separation.json",
+        json.dumps(
+            {
+                "gate_name": "SOURCE_VOICE_SEPARATION_GATE",
+                "status": "PASS",
+                "owner_skill": "00-tikitaka",
+                "source_fingerprint_sha256": source_sha256,
+                "separation_engine": "demucs",
+                "separation_model": "htdemucs",
+                "separation_scope": "FULL_SOURCE_AUDIO",
+                "source_audio_path": "10_analysis/audio/full_source_audio.wav",
+                "source_audio_sha256": hashlib.sha256(source_audio.read_bytes()).hexdigest(),
+                "demucs_input_sha256": hashlib.sha256(source_audio.read_bytes()).hexdigest(),
+                "vocals_path": "10_analysis/audio/vocals.wav",
+                "vocals_sha256": hashlib.sha256(vocals.read_bytes()).hexdigest(),
+                "source_duration_sec": 8.0,
+                "source_audio_duration_sec": 8.0,
+                "vocals_duration_sec": 8.0,
+                "duration_tolerance_sec": 0.25,
+                "sample_rate_hz": 48000,
+                "source_voice_music_removed": True,
+                "q_segment_source": "10_analysis/audio/vocals.wav",
+                "no_vocals_used": False,
+                "created_by": "prepare_source_voice.py",
+            }
+        ),
+    )
     write_json(
         root / "10_analysis" / "source_evidence.json",
         json.dumps(
@@ -1489,6 +1521,8 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                       "duration_status": "SOURCE_AUDIO_LOCKED",
                       "source_audio_range": {"start": "00:00", "end": "00:03"},
                       "quote_verification_status": "VERIFIED_STT",
+                      "source_audio_ref": "10_analysis/audio/vocals.wav",
+                      "source_audio_provenance": "demucs_full_source_vocals",
                       "audio_policy": "source_on_tts_off",
                       "visual_strategy": "source_visual_action"
                     }

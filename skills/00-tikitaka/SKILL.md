@@ -1311,7 +1311,8 @@ The handoff must let production assemble separate lanes:
 narration=TTS lane
 source_audio=on/off/duck by segment
 bgm=separate optional/required lane
-source_video_audio=muted unless explicitly extracted as source_audio
+source_video_audio=muted_always
+speaker_q=separate_vocals.wav
 ```
 
 Example:
@@ -1411,9 +1412,10 @@ source quote, and not the TTS narration body itself.
 ### Muting Decision Rule
 
 ```text
-원본 음성 ON  → 해당 구간이 "" 화자발언으로 표기되어 있을 때
-원본 음성 OFF → "" 가 아닌 구간 (TTS/자막/BGM만 쓸 때)
-예외          → "" 구간이더라도 원본 음질이 너무 나쁘면 TTS로 대체 (작가 판단)
+분리 화자/Q ON → 해당 구간이 "" 화자발언으로 표기되어 있을 때
+분리 화자/Q OFF → "" 가 아닌 구간 (TTS/자막/BGM만 쓸 때)
+원본 영상 내장 오디오 → 항상 OFF
+예외 → "" 구간이더라도 분리 음질이 너무 나쁘면 TTS로 대체 (작가 판단)
 ```
 
 ### Per-Type Mute Detail
@@ -1423,12 +1425,13 @@ source quote, and not the TTS narration body itself.
 - **B bgm_caption_only**: TTS off. Source audio off/low unless a verified
   reaction beat is intentionally preserved.
 - **C narration_plus_speaker**: TTS explains the arc; only verified source
-  speaker lines use `speaker_quote` and source audio on/duck.
-- **D original_audio_caption**: original/source audio is the main carrier.
-  Korean captions translate, explain, or frame the source.
+  speaker lines use `speaker_quote` and separated Q audio on/duck.
+- **D original_audio_caption**: separated source-speaker audio is the main
+  carrier while embedded source-video audio stays muted. Korean captions
+  translate, explain, or frame the source.
 - **E tts_intro_original_body**: TTS only establishes context in the first 2-5s;
-  the body follows original/source audio unless a later segment explicitly
-  switches policy.
+  the body follows separated source-speaker audio unless a later segment
+  explicitly switches policy.
 - **F instagram_card_tts**: card/comment/community/story visual assets plus
   TTS/BGM. Card text uses `caption_type=situation_caption` and
   `card_asset_role=visual_situation_card`, never `speaker_quote`.

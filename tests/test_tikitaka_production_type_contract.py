@@ -173,7 +173,8 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             "narration=TTS lane",
             "source_audio=on/off/duck by segment",
             "bgm=separate optional/required lane",
-            "source_video_audio=muted unless explicitly extracted as source_audio",
+            "source_video_audio=muted_always",
+            "speaker_q=separate_vocals.wav",
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, text)
