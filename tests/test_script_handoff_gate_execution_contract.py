@@ -4,6 +4,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 from _support import load_source_module_no_bytecode, write_valid_source_mp4
@@ -28,6 +29,63 @@ def write(path: Path, text: str = "ok") -> None:
 
 def write_json(path: Path, text: str) -> None:
     write(path, text.strip() + "\n")
+
+
+def write_wav(path: Path, duration_sec: float = 1.0) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sample_rate_hz = 48000
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(2)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate_hz)
+        handle.writeframes(
+            b"\x00\x00\x00\x00" * int(duration_sec * sample_rate_hz)
+        )
+
+
+def create_source_voice_separation_pass(work_dir: Path) -> None:
+    source_audio = work_dir / "10_analysis" / "audio" / "full_source_audio.wav"
+    vocals = work_dir / "10_analysis" / "audio" / "vocals.wav"
+    write_wav(source_audio)
+    write_wav(vocals)
+    write_json(
+        work_dir / "10_analysis" / "source_identity_lock.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "sha256": SOURCE_FINGERPRINT,
+                "duration_sec": 1.0,
+            }
+        ),
+    )
+    write_json(
+        work_dir / "10_analysis" / "source_voice_separation.json",
+        json.dumps(
+            {
+                "gate_name": "SOURCE_VOICE_SEPARATION_GATE",
+                "status": "PASS",
+                "owner_skill": "00-tikitaka",
+                "source_fingerprint_sha256": SOURCE_FINGERPRINT,
+                "separation_engine": "demucs",
+                "separation_model": "htdemucs",
+                "separation_scope": "FULL_SOURCE_AUDIO",
+                "source_audio_path": "10_analysis/audio/full_source_audio.wav",
+                "source_audio_sha256": hashlib.sha256(source_audio.read_bytes()).hexdigest(),
+                "demucs_input_sha256": hashlib.sha256(source_audio.read_bytes()).hexdigest(),
+                "vocals_path": "10_analysis/audio/vocals.wav",
+                "vocals_sha256": hashlib.sha256(vocals.read_bytes()).hexdigest(),
+                "source_duration_sec": 1.0,
+                "source_audio_duration_sec": 1.0,
+                "vocals_duration_sec": 1.0,
+                "duration_tolerance_sec": 0.25,
+                "sample_rate_hz": 48000,
+                "source_voice_music_removed": True,
+                "q_segment_source": "10_analysis/audio/vocals.wav",
+                "no_vocals_used": False,
+                "created_by": "prepare_source_voice.py",
+            }
+        ),
+    )
 
 
 def create_source_identity_and_linked_draft(root: Path) -> None:
@@ -153,6 +211,7 @@ def attach_source_fingerprint(path: Path) -> None:
 
 
 def create_script_lock_package_artifacts(work_dir: Path) -> None:
+    create_source_voice_separation_pass(work_dir)
     write(
         work_dir / "design_blueprint.md",
         """# 설계도
@@ -426,6 +485,75 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertIs(gate["capcut_allowed"], True)
             self.assertEqual(gate["source_fingerprint_sha256"], SOURCE_FINGERPRINT)
             self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
+
+    def test_tikitaka_harness_blocks_missing_source_voice_separation(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_missing_source_voice",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            (work_dir / "10_analysis" / "source_voice_separation.json").unlink()
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = state["script_handoff_gate"]
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("source_voice_separation", gate["missing_or_failed"])
+            self.assertIn(
+                "WAIT_SOURCE_VOICE_SEPARATION",
+                gate["checks"]["source_voice_separation"]["reason"],
+            )
+
+    def test_tikitaka_harness_requires_demucs_vocals_provenance_for_speaker_quote(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_quote_source_voice",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            timeline_path = work_dir / "timeline_design.json"
+            timeline = module.read_json(timeline_path)
+            segment = timeline["segments"][0]
+            segment.update(
+                {
+                    "assembly_role": "verified_speaker_quote",
+                    "caption_type": "speaker_quote",
+                    "visible_text_role": "speaker_quote",
+                    "audio_role": "audio.speaker_source",
+                    "track": "audio.speaker_source",
+                    "semantic_lane": "speaker_source",
+                    "duration_basis": "source_range",
+                    "duration_status": "SOURCE_AUDIO_LOCKED",
+                    "source_audio_range": {"start_sec": 0.1, "end_sec": 0.8},
+                    "quote_verification_status": "VERIFIED",
+                }
+            )
+            for key in (
+                "tts_text_ref",
+                "planned_tts_duration_sec",
+                "estimated_tts_duration_sec",
+                "tts_duration_status",
+            ):
+                segment.pop(key, None)
+            write_json(timeline_path, json.dumps(timeline, ensure_ascii=False))
+            write_stage2_decision(work_dir)
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = state["script_handoff_gate"]
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn(
+                "WAIT_SOURCE_VOICE_Q_PROVENANCE",
+                gate["checks"]["timeline_design"]["reason"],
+            )
 
     def test_tikitaka_harness_rejects_legacy_caption_profile_values(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_caption_profile", TIKITAKA_HARNESS)

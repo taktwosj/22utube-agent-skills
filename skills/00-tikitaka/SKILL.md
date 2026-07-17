@@ -66,6 +66,9 @@ stage. The stage order is:
 tikitaka_source_request.json
 -> source evidence
 -> source_identity_lock.json + verified source_fingerprint_sha256
+-> SOURCE_VOICE_SEPARATION_GATE
+-> 10_analysis/audio/full_source_audio.wav
+-> 10_analysis/audio/vocals.wav
 -> 1차설계서
 -> timeline_design.json
 -> caption_beat_map.json
@@ -96,6 +99,54 @@ duration_basis/duration_status/audio_policy/visual_strategy
 
 `timeline_design_gate.json` must be PASS before the design can be treated as a
 handoff artifact.
+
+## Full-Source Demucs Preprocessing
+
+After `source_identity_lock.json` and before `1차설계서`, run:
+
+```text
+source.mp4
+-> extract the complete audio to 10_analysis/audio/full_source_audio.wav
+-> run Demucs on that complete WAV with separation_scope=FULL_SOURCE_AUDIO
+-> save the stable vocal stem as 10_analysis/audio/vocals.wav
+-> validate SOURCE_VOICE_SEPARATION_GATE
+-> identify and lock speaker ranges from vocals.wav
+```
+
+Invoke:
+
+```powershell
+py -3 skills/00-tikitaka/scripts/prepare_source_voice.py --root <episode-root> --source 00_source/source.mp4
+```
+
+This is a narrow Stage 1 source-analysis preprocessing exception. It creates
+only the full-source analysis WAV and Demucs vocal stem. It does not create Q
+clips, TTS, SRT, CapCut, render, export, upload, or other production assets.
+The harness calls `validate_source_voice_separation.py`; it never launches
+Demucs or the next skill.
+
+The only valid skip is:
+
+```text
+NOT_REQUIRED_NO_SOURCE_SPEECH
+```
+
+Use it only when the source has no audio stream or when the user/source
+evidence explicitly confirms that no human speech exists. Missing Demucs is
+`WAIT_DEMUCS_AVAILABLE`; never fall back to mixed source audio.
+
+Every `speaker_quote` must record:
+
+```json
+{
+  "source_audio_ref": "10_analysis/audio/vocals.wav",
+  "source_audio_provenance": "demucs_full_source_vocals"
+}
+```
+
+Missing or different provenance is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
+`source_audio=on` now means the separated speaker/Q lane is audible. It never
+authorizes embedded source-video audio in CapCut. `no_vocals.wav` is not used.
 
 ## CAPTION_BEAT_MAP_HANDOFF
 
@@ -600,7 +651,10 @@ timecode mismatch notes. Keep any unverified Gemini ranges as
 
 ## Ownership Matrix
 
-- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00-tikitaka`: Shorts source analysis, full-source Demucs analysis
+  preprocessing, remake script draft, hook, top/timed-middle, and script
+  handoff. It creates `full_source_audio.wav` and `vocals.wav`, but not final Q
+  clips or production assets.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 
 ## Escalation Rule
@@ -846,9 +900,10 @@ This skill owns only Korean Shorts remake scripting:
 - timed `중단`
 - copy text that may later be used by a voice tool
 
-Voice-copy text is part of the draft script only. This skill does not create
-voice, audio files, SRT files, layout JSON, render plans, CapCut drafts, exports,
-upload packages, or production packages.
+Voice-copy text is part of the draft script only. Except for the required
+full-source analysis artifacts `full_source_audio.wav` and `vocals.wav`, this
+skill does not create voice clips, TTS, SRT files, layout JSON, render plans,
+CapCut drafts, exports, upload packages, or production packages.
 
 ## Supertone TTS Handoff
 
@@ -915,9 +970,11 @@ Gemini alone. Mark any proposed source range as
 verifies it.
 
 For script confidence, use the current source-evidence workflow only. Acquire or
-confirm `source.mp4`, then create the required frame/STT/OCR evidence. If source
-media cannot be acquired or confirmed, stop and ask the user to provide it; do
-not invoke a separate video-watching skill or invent final timing.
+confirm `source.mp4`, lock its identity, run full-source Demucs preprocessing,
+and then create the required frame/STT/OCR evidence and speaker ranges from
+`10_analysis/audio/vocals.wav`. If source media cannot be acquired or
+confirmed, stop and ask the user to provide it; do not invoke a separate
+video-watching skill or invent final timing.
 
 ## Story And Production Type Gate
 
@@ -1198,9 +1255,9 @@ caption_type:
 - ranking_item         = ranking/TOP-N beat
 
 source_audio:
-- on     = original/source video audio must be audible
+- on     = separated speaker/Q audio from vocals.wav must be audible
 - off    = original/source video audio must be muted
-- duck   = original/source video audio remains low under TTS/BGM
+- duck   = separated speaker/Q audio remains low under TTS/BGM
 
 tts:
 - on

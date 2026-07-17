@@ -16,6 +16,31 @@ SINGLE_SOURCE = (
 
 
 class TikitakaProductionTypeContractTests(unittest.TestCase):
+    def test_tikitaka_runs_full_source_demucs_before_speaker_range_design(self):
+        skill_text = SKILL.read_text(encoding="utf-8")
+        single_source_text = SINGLE_SOURCE.read_text(encoding="utf-8")
+
+        for text in (skill_text, single_source_text):
+            for token in [
+                "SOURCE_VOICE_SEPARATION_GATE",
+                "FULL_SOURCE_AUDIO",
+                "prepare_source_voice.py",
+                "10_analysis/audio/full_source_audio.wav",
+                "10_analysis/audio/vocals.wav",
+                "NOT_REQUIRED_NO_SOURCE_SPEECH",
+                "demucs_full_source_vocals",
+                "WAIT_DEMUCS_AVAILABLE",
+                "WAIT_SOURCE_VOICE_Q_PROVENANCE",
+            ]:
+                with self.subTest(document=text[:20], token=token):
+                    self.assertIn(token, text)
+
+        source_identity_position = skill_text.index("source_identity_lock.json")
+        separation_position = skill_text.index("SOURCE_VOICE_SEPARATION_GATE")
+        design_position = skill_text.index("1차설계서", source_identity_position)
+        self.assertLess(source_identity_position, separation_position)
+        self.assertLess(separation_position, design_position)
+
     def test_tikitaka_decides_story_and_production_type_before_draft(self):
         text = SKILL.read_text(encoding="utf-8")
 

@@ -70,6 +70,7 @@ ALLOWED_RECONCILIATION_ACTIONS = {
     "shorten_text_and_regenerate_tts",
 }
 SCRIPT_LOCK_PACKAGE_FILES = {
+    "source_voice_separation": "10_analysis/source_voice_separation.json",
     "original_structure_summary": "original_structure_summary.md",
     "urakkai_structure_plan": "urakkai_structure_plan.md",
     "urakkai_structure_delta": "urakkai_structure_delta.json",
@@ -1025,15 +1026,67 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
                     f"timeline_design.segments[{index}] estimated_tts_duration_sec required",
                 )
         if segment.get("caption_type") == "speaker_quote":
-            quote_required = {"source_audio_range", "quote_verification_status"}
+            quote_required = {
+                "source_audio_range",
+                "quote_verification_status",
+                "source_audio_ref",
+                "source_audio_provenance",
+            }
             quote_missing = sorted(key for key in quote_required if segment.get(key) in (None, ""))
             if quote_missing:
                 return status_block(
                     "FAILED",
                     name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: "
                     f"timeline_design.segments[{index}] missing {', '.join(quote_missing)}",
                 )
+            if (
+                segment.get("source_audio_ref")
+                != "10_analysis/audio/vocals.wav"
+                or segment.get("source_audio_provenance")
+                != "demucs_full_source_vocals"
+            ):
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: speaker_quote must use "
+                    "10_analysis/audio/vocals.wav from demucs_full_source_vocals",
+                )
+            separation = read_json(
+                work_dir / SCRIPT_LOCK_PACKAGE_FILES["source_voice_separation"]
+            )
+            if separation.get("status") == "NOT_REQUIRED_NO_SOURCE_SPEECH":
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: no-speech source cannot contain speaker_quote",
+                )
     return status_block("PASS", name)
+
+
+def source_voice_separation_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["source_voice_separation"]
+    validator_path = Path(__file__).with_name(
+        "validate_source_voice_separation.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "tikitaka_source_voice_validator",
+        validator_path,
+    )
+    if spec is None or spec.loader is None:
+        return status_block(
+            "FAILED",
+            None,
+            "WAIT_SOURCE_VOICE_SEPARATION: validator unavailable",
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_source_voice_separation(work_dir)
+    except module.GateFail as exc:
+        return status_block("FAILED", name, str(exc))
+    actual_status = result.get("source_voice_separation_status", "")
+    return status_block("PASS", name, str(actual_status))
 
 
 def block_map_status(work_dir: Path) -> dict[str, Any]:
@@ -1188,6 +1241,7 @@ def tts_timing_reconciliation_gate_status(work_dir: Path) -> dict[str, Any]:
 
 def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
     checks = {
+        "source_voice_separation": source_voice_separation_status(work_dir),
         "visible_script_body": visible_script_body_status(work_dir),
         "original_structure_summary": file_status(
             work_dir,

@@ -64,6 +64,23 @@ Allowed alias:
 
 Current Tikitaka output is not only source reorder.
 
+Before speaker-range design, complete this source-analysis order:
+
+```text
+source_identity_lock.json
+-> prepare_source_voice.py
+-> 10_analysis/audio/full_source_audio.wav
+-> Demucs FULL_SOURCE_AUDIO separation
+-> 10_analysis/audio/vocals.wav
+-> SOURCE_VOICE_SEPARATION_GATE
+-> speaker range design
+```
+
+The only valid skip is `NOT_REQUIRED_NO_SOURCE_SPEECH`, supported by a source
+with no audio stream or explicit user/source-evidence confirmation. Missing
+Demucs is `WAIT_DEMUCS_AVAILABLE`; do not use raw mixed audio as a fallback.
+`no_vocals.wav` is not used.
+
 `timeline_design.json` must describe a new Shorts assembly design with:
 
 ```text
@@ -93,9 +110,21 @@ only when narration is explicit, such as `caption_type=tts_narration` or
 
 Production must implement the locked assembly design without reinterpretation.
 
+Every `speaker_quote` must use:
+
+```text
+source_audio_ref=10_analysis/audio/vocals.wav
+source_audio_provenance=demucs_full_source_vocals
+```
+
+Any raw-video, pre-cut-before-separation, or missing source is
+`WAIT_SOURCE_VOICE_Q_PROVENANCE`. In the handoff, `source_audio=on` means the
+separate speaker/Q lane, never embedded source-video audio.
+
 ## Production Boundary
 
-`00-tikitaka` may write draft script text and script handoff information. It
-must not create voice files, SRT files, layout JSON, CapCut drafts, exports, or
-upload packages. Production assets belong to `000short-production-agent` after
-the user explicitly requests that stage.
+`00-tikitaka` may write draft script text, script handoff information, and the
+two required source-analysis WAV artifacts created by `prepare_source_voice.py`.
+It must not create Q clips, TTS voice files, SRT files, layout JSON, CapCut
+drafts, exports, or upload packages. Production assets belong to
+`000short-production-agent` after the user explicitly requests that stage.
