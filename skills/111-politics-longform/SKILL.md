@@ -375,6 +375,56 @@ CapCut visible text
 분리한다. 원본 TTS는 원문을 요약·의역하지 않고, 평론 나레이션은 승인된
 마스터 원고만 사용한다. 두 음성을 같은 시간에 겹치지 않는다.
 
+### ChatGPT 프로젝트 대본 검수 왕복
+
+사용자가 ChatGPT 프로젝트 `쇼츠대본분석`에 정치 롱폼 검수를 요청하면
+먼저 다음 두 계약을 읽는다.
+
+```text
+references/chatgpt_project_router_instruction.md
+references/chatgpt_politics_longform_review_contract.md
+```
+
+프로젝트 지침에는 공통 라우터를 두고, 기존 쇼츠 소스
+`shorts_script_analysis_single_source_v20260706.md`는 수정하지 않는다.
+정치 롱폼 검수에는 별도 소스
+`chatgpt_politics_longform_review_contract.md`를 적용한다. `111-politics-longform`
+안에 쇼츠 작성 규칙을 복제하거나 두 출력 계약을 합치지 않는다.
+
+외부 검수에는 원고만 보내지 않는다. 다음 자료를 한 개의 시간순 패킷
+`20_script/commentary_review_packet_sent.md`로 묶는다.
+
+```text
+content_type: politics_longform
+packet_id
+sent_packet_sha256
+episode_id / core_question / target_duration_sec
+source_manifest.json의 출처·날짜·URL·근거 역할
+원문 발언과 source_id / segment_id / 타임코드
+commentary_fact_map.json의 claim_id별 사실·해석·반론·판단
+commentary_master_script_draft.md
+timeline_design_draft.json 또는 장별 순서
+미확인 항목과 fact lock
+```
+
+발송본의 파일 목록과 해시는
+`20_script/commentary_review_packet_manifest.json`에 고정한다. ChatGPT의
+원문 응답은 발송본을 덮어쓰지 않고
+`20_script/commentary_review_packet_returned.md`로 별도 저장한다. 반환 상태는
+항상 `PENDING_CODEX_REVIEW`다. 외부 모델은 `ADOPTED`나 최종 승인을 결정하지
+않는다.
+
+Codex는 반환안의 `suggestion_id`, `claim_id`, `segment_id`,
+`derived_from`, 인용, 날짜, 숫자와 출처를 다시 대조한다. Stage 2에서만
+`ADOPTED`, `PARTIALLY_ADOPTED`, `REJECTED`, `PENDING_EVIDENCE`를 기록할 수
+있다. 출처 범위, 원문, 핵심 질문, fact map 또는 발송 패킷 해시가 바뀌면
+기존 외부 검토를 무효화하고 관련 검증 게이트를 `WAIT`로 되돌린다.
+
+사용자가 실제 ChatGPT 전송을 요청하거나 승인한 경우에만 로그인된 프로젝트에
+패킷을 전송한다. 프로젝트에 영구 보관하는 것은 공통 지침과 두 유형의 계약
+소스뿐이다. 에피소드별 기사·자막·원고는 해당 검수 대화에만 첨부해 다른
+에피소드의 자료가 섞이지 않게 한다.
+
 ## Workflow
 
 1. Resolve the episode and CapCut draft.
