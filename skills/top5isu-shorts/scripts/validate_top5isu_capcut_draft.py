@@ -32,6 +32,7 @@ def validate_top5isu_capcut_draft(
     draft_dir: Path,
     style_profile: str,
     audio_manifest: dict[str, Any] | None,
+    manual_edit_expected: bool = False,
 ) -> dict[str, Any]:
     draft_dir = Path(draft_dir)
     content_path = draft_dir / "draft_content.json"
@@ -41,12 +42,31 @@ def validate_top5isu_capcut_draft(
     if style_profile not in {"top5", "gunlimbo"}:
         fail("FAIL_TOP5ISU_DRAFT", "unknown style profile")
     tracks = content.get("tracks") or []
+    if not isinstance(tracks, list) or not tracks or not all(isinstance(track, dict) for track in tracks):
+        fail("FAIL_TOP5ISU_DRAFT", "current draft must contain readable tracks")
     names = [track.get("name") for track in tracks]
-    if names != EXPECTED_TRACKS:
-        fail("FAIL_TOP5ISU_TRACK_MAPPING", f"unexpected tracks: {names}")
     canvas = content.get("canvas_config") or {}
+
+    if manual_edit_expected:
+        duration = content.get("duration")
+        if not isinstance(duration, (int, float)) or duration <= 0 or not isinstance(canvas, dict) or not canvas:
+            fail("FAIL_TOP5ISU_DRAFT", "current edited draft is unreadable or missing core metadata")
+        return {
+            "top5isu_capcut_draft_status": "PASS_MANUAL_EDIT_EXPECTED",
+            "style_profile": style_profile,
+            "current_draft_reread": True,
+            "manual_edit_expected": True,
+            "manual_edit_difference_is_failure": False,
+            "observed_tracks": names,
+            "observed_duration": content.get("duration"),
+            "observed_canvas": canvas,
+            "note": "Operator CapCut edits are expected; snapshot differences are not failures.",
+        }
+
     if canvas.get("width") != 1080 or canvas.get("height") != 1920:
         fail("FAIL_TOP5ISU_DRAFT", "canvas must be 1080x1920")
+    if names != EXPECTED_TRACKS:
+        fail("FAIL_TOP5ISU_TRACK_MAPPING", f"unexpected tracks: {names}")
 
     image_segments = tracks[0].get("segments") or []
     if len(image_segments) != 7:
@@ -97,10 +117,16 @@ def main() -> int:
     parser.add_argument("draft_dir")
     parser.add_argument("--style-profile", required=True, choices=("top5", "gunlimbo"))
     parser.add_argument("--audio-manifest", default="")
+    parser.add_argument("--manual-edit-expected", action="store_true")
     args = parser.parse_args()
     try:
         audio_manifest = read_object(Path(args.audio_manifest)) if args.audio_manifest else None
-        result = validate_top5isu_capcut_draft(Path(args.draft_dir), args.style_profile, audio_manifest)
+        result = validate_top5isu_capcut_draft(
+            Path(args.draft_dir),
+            args.style_profile,
+            audio_manifest,
+            manual_edit_expected=args.manual_edit_expected,
+        )
     except (GateFail, OSError, json.JSONDecodeError) as exc:
         print(str(exc))
         return 1

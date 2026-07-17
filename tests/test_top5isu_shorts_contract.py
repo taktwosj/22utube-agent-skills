@@ -48,6 +48,24 @@ class Top5IsuShortsContractTests(unittest.TestCase):
         ):
             self.assertIn(token, skill)
 
+    def test_skill_locks_rework_manual_edit_and_final_project_report(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        report = (SKILL_ROOT / "references" / "report-contract.md").read_text(encoding="utf-8")
+        production = (SKILL_ROOT / "references" / "production-contract.md").read_text(encoding="utf-8")
+
+        for token in (
+            "CLEAN_VIDEO_REWORK",
+            "MANUAL_EDIT_EXPECTED",
+            "manual_edit_difference_is_failure=false",
+            "current_draft_reread_required=true",
+            "validate_top5isu_assembly_report.py",
+        ):
+            self.assertIn(token, skill)
+        self.assertIn("CapCut 프로젝트 파일 이름", report)
+        self.assertIn("## 캣컵복사하기", report)
+        self.assertIn("clean_video_rework", production)
+        self.assertIn("WAIT_CLEAN_VIDEO_REVIEW", production)
+
     def test_references_and_schema_are_present_and_consistent(self):
         references = {
             "top5-profile.md": "ranking_item",

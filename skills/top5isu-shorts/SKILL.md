@@ -79,6 +79,23 @@ Create an episode with `scripts/create_top5isu_episode.py`. Fixed directories:
 - Do not invent rankings, prices, revenue, dates, quotes, or source facts.
 - Resolve the active factory root before writing an episode.
 
+#### CLEAN_VIDEO_REWORK
+
+When the operator supplies a clean video derived from an existing Short after
+captions, subtitles, or other text overlays were removed, keep it in this skill
+as `intake_mode=clean_video_rework`. Do not treat it as an unrelated new source.
+
+1. Save `source_short_ref`, `derived_from_existing_short=true`, and the clean
+   video path in `10_analysis/clean_video_rework_manifest.json`.
+2. Require `captions_removed=true`, `text_overlays_removed=true`, actual visual
+   review, OCR overlay check, and playable-media ffprobe.
+3. Run `scripts/validate_top5isu_rework_intake.py`.
+4. If visual/OCR cleanliness is not proven, stop at
+   `WAIT_CLEAN_VIDEO_REVIEW`; do not silently reject or replace the supplied
+   clean source.
+5. After PASS, reuse the existing episode intent and rebuild script, audio,
+   assets, and CapCut project from the supplied clean video.
+
 ### SCRIPT_DESIGN
 
 Read `references/script-contract.md` and create:
@@ -139,6 +156,24 @@ IMAGE_EFFECT_PRESETS,TTS,T2,T1,LOGO
 9. Register/open the local draft and perform actual visual/playback review.
 10. Do not claim project completion from static JSON alone.
 
+#### Operator Manual Edit Policy
+
+After the operator opens CapCut, manual edits, duration changes, track additions,
+text corrections, and timing adjustments are normal production work:
+
+```text
+manual_edit_policy=MANUAL_EDIT_EXPECTED
+manual_edit_difference_is_failure=false
+current_draft_reread_required=true
+```
+
+Do not compare the edited project to an old snapshot and raise a problem merely
+because values changed. Re-read the current `draft_content.json` and current
+project metadata. Use `validate_top5isu_capcut_draft.py --manual-edit-expected`
+to report the observed current state without failing on user-created structural
+differences. Only unreadable/missing project data or an explicit new safety
+blocker may stop re-entry.
+
 Any attempt to use `shrt white` stops with
 `FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN`.
 
@@ -155,6 +190,16 @@ Read `references/report-contract.md`. `FINAL_LOCK` requires:
 - actual visual/playback review
 - no sample media or `.bak` residue
 - final export loudness measurement when an export exists
+- `90_reports/assembly_report.md` with `# 조립도 보고서`
+- exact `CapCut 프로젝트명`, project folder name, and local project path
+- final `## 캣컵복사하기` block whose last non-empty line is the exact project name
+- `scripts/validate_top5isu_assembly_report.py` PASS
+
+The assembly report is written after CapCut assembly and must end with the exact
+CapCut project file/folder name so the operator can copy it directly. Later
+operator edits are `MANUAL_EDIT_EXPECTED` and do not invalidate the report solely
+because duration, tracks, text, or timing changed; re-read the current draft and
+issue a revised report only when requested.
 
 Upload, publish, schedule, and delete actions always require explicit operator
 approval. A project file is not an upload approval.
@@ -197,13 +242,15 @@ fresh_timeline_id_required=true
 ## Validation Order
 
 ```text
-1. validate_top5isu_blueprint.py
-2. validate_top5isu_contract.py
-3. validate_top5isu_package.py
-4. validate_top5isu_track_mapping.py
-5. validate_top5isu_capcut_draft.py
-6. actual CapCut visual/playback review
-7. final export loudness measurement when applicable
+1. validate_top5isu_rework_intake.py when a clean-video rework manifest exists
+2. validate_top5isu_blueprint.py
+3. validate_top5isu_contract.py
+4. validate_top5isu_package.py
+5. validate_top5isu_track_mapping.py
+6. validate_top5isu_capcut_draft.py
+7. actual CapCut visual/playback review
+8. validate_top5isu_assembly_report.py
+9. final export loudness measurement when applicable
 ```
 
 Static validation is not visual validation. An openable draft is not upload
