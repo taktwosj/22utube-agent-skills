@@ -46,6 +46,21 @@ media differences from the generated snapshot are not failures by themselves.
 Use `manual_edit_policy=MANUAL_EDIT_EXPECTED` and never restore old values unless
 explicitly requested.
 
+## Assembly Report
+
+After CapCut assembly, write `90_reports/assembly_report.md`. It must include the
+exact existing CapCut project name, folder name, file name, and local path. The
+last non-empty line must be the exact project name under `## 캣컵복사하기`.
+Run `scripts/validate_top5isu_assembly_report.py`; a text-only or nonexistent
+project path is not production evidence.
+
+## Secret Handling
+
+Never print, serialize, persist, or report API keys, access tokens, cookies,
+authentication files, or session credentials. Read approved credentials only
+from the configured environment at execution time. Validator reports and
+assembly reports must contain no secret values.
+
 ## Evidence
 
 A project claim requires the local project path, current draft JSON, validator reports, and actual CapCut visual/playback review. Static JSON alone is not project completion.

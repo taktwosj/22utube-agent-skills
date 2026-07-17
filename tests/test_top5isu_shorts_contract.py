@@ -65,6 +65,9 @@ class Top5IsuShortsContractTests(unittest.TestCase):
         self.assertIn("## 캣컵복사하기", report)
         self.assertIn("clean_video_rework", production)
         self.assertIn("WAIT_CLEAN_VIDEO_REVIEW", production)
+        self.assertIn("90_reports/assembly_report.md", production)
+        self.assertIn("last non-empty line", production)
+        self.assertIn("Never print, serialize, persist, or report API keys", production)
 
     def test_references_and_schema_are_present_and_consistent(self):
         references = {
