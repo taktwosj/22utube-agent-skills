@@ -4,6 +4,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 from _support import load_source_module_no_bytecode, write_valid_source_mp4
@@ -12,6 +13,9 @@ from _support import load_source_module_no_bytecode, write_valid_source_mp4
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_FINGERPRINT = "a" * 64
 TIKITAKA_HARNESS = ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
+CHATGPT_REVIEW_WORKFLOW = (
+    ROOT / "skills" / "00-tikitaka" / "scripts" / "chatgpt_review_workflow.py"
+)
 PRODUCTION_GATE = (
     ROOT
     / "skills"
@@ -150,6 +154,141 @@ def attach_source_fingerprint(path: Path) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["source_fingerprint_sha256"] = SOURCE_FINGERPRINT
     write_json(path, json.dumps(payload))
+
+
+def write_voice_separation_pass(work_dir: Path) -> None:
+    duration_sec = 0.1
+    frame_count = 4800
+    lock = {
+        "status": "PASS",
+        "sha256": SOURCE_FINGERPRINT,
+        "duration_sec": duration_sec,
+    }
+    write_json(
+        work_dir / "10_analysis" / "source_identity_lock.json",
+        json.dumps(lock),
+    )
+
+    audio_dir = work_dir / "10_analysis" / "audio"
+    audio_dir.mkdir(parents=True, exist_ok=True)
+    source_audio = audio_dir / "full_source_audio.wav"
+    vocals = audio_dir / "vocals.wav"
+    for path in (source_audio, vocals):
+        with wave.open(str(path), "wb") as handle:
+            handle.setnchannels(2)
+            handle.setsampwidth(2)
+            handle.setframerate(48000)
+            handle.writeframes(b"\x00\x00\x00\x00" * frame_count)
+
+    source_audio_sha = hashlib.sha256(source_audio.read_bytes()).hexdigest()
+    vocals_sha = hashlib.sha256(vocals.read_bytes()).hexdigest()
+    manifest = {
+        "gate_name": "SOURCE_VOICE_SEPARATION_GATE",
+        "status": "PASS",
+        "owner_skill": "00-tikitaka",
+        "source_fingerprint_sha256": SOURCE_FINGERPRINT,
+        "separation_engine": "demucs",
+        "separation_scope": "FULL_SOURCE_AUDIO",
+        "source_audio_path": "10_analysis/audio/full_source_audio.wav",
+        "source_audio_sha256": source_audio_sha,
+        "demucs_input_sha256": source_audio_sha,
+        "vocals_path": "10_analysis/audio/vocals.wav",
+        "vocals_sha256": vocals_sha,
+        "source_duration_sec": duration_sec,
+        "source_audio_duration_sec": duration_sec,
+        "vocals_duration_sec": duration_sec,
+        "duration_tolerance_sec": 0.25,
+        "sample_rate_hz": 48000,
+        "channels": 2,
+        "source_voice_music_removed": True,
+        "q_segment_source": "10_analysis/audio/vocals.wav",
+        "no_vocals_used": False,
+        "created_by": "prepare_source_voice.py",
+    }
+    write_json(
+        work_dir / "10_analysis" / "source_voice_separation.json",
+        json.dumps(manifest),
+    )
+
+
+def write_chatgpt_review_pass(work_dir: Path) -> None:
+    workflow = load_source_module_no_bytecode(
+        "tikitaka_chatgpt_review_workflow_fixture",
+        CHATGPT_REVIEW_WORKFLOW,
+    )
+    cycle_id = "fixture-cycle"
+    round1 = workflow.build_round1(work_dir, cycle_id)
+    round1_response = "\n".join(
+        [
+            "ROUTE=SHORTS",
+            "review_round: 1",
+            f"review_cycle_id: {cycle_id}",
+            f"packet_id: {round1['packet_id']}",
+            f"sent_packet_sha256: {round1['sent_packet_sha256']}",
+            "suggestion_id: S1",
+            "external_review_status: PENDING_CODEX_REVIEW",
+            "",
+        ]
+    )
+    round1_input = work_dir / "round1_fixture_response.md"
+    write(round1_input, round1_response)
+    workflow.record_response(work_dir, 1, round1_input)
+    round1_input.unlink()
+
+    write_json(
+        work_dir / "chatgpt_review" / "round1_codex_decisions.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "all_suggestions_dispositioned": True,
+                "decisions": [
+                    {
+                        "suggestion_id": "S1",
+                        "disposition": "ADOPTED",
+                    }
+                ],
+            }
+        ),
+    )
+    round2 = workflow.build_round2(work_dir, cycle_id)
+    round2_response = "\n".join(
+        [
+            "ROUTE=SHORTS",
+            "review_round: 2",
+            f"review_cycle_id: {cycle_id}",
+            f"packet_id: {round2['packet_id']}",
+            f"sent_packet_sha256: {round2['sent_packet_sha256']}",
+            "recommendation: PASS_RECOMMENDED",
+            "external_review_status: PENDING_CODEX_REVIEW",
+            "",
+        ]
+    )
+    round2_input = work_dir / "round2_fixture_response.md"
+    write(round2_input, round2_response)
+    workflow.record_response(work_dir, 2, round2_input)
+    round2_input.unlink()
+    workflow.finalize_gate(work_dir)
+
+
+def write_vmake_reuse_pass(work_dir: Path) -> None:
+    write(work_dir / "00_source" / "clean_source.mp4", "user-confirmed-clean")
+    write_json(
+        work_dir / "10_analysis" / "vmake_clean_source.json",
+        json.dumps(
+            {
+                "gate_name": "VMAKE_CLEAN_SOURCE_GATE",
+                "status": "USER_CONFIRMED_VMAKE_REUSE",
+                "owner_skill": "00-tikitaka",
+                "vmake_reuse_mode": "USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST",
+                "user_vmake_confirmation": True,
+                "analysis_authority": "original_sources",
+                "timeline_authority": "existing_approved_design",
+                "clean_visual_review_status": "USER_CONFIRMED",
+                "clean_visual_paths": ["00_source/clean_source.mp4"],
+                "embedded_audio_policy": "muted_always",
+            }
+        ),
+    )
 
 
 def create_script_lock_package_artifacts(work_dir: Path) -> None:
@@ -339,6 +478,9 @@ fixture
         """,
     )
     write_humanize_gate_pass(work_dir)
+    write_voice_separation_pass(work_dir)
+    write_chatgpt_review_pass(work_dir)
+    write_vmake_reuse_pass(work_dir)
 
 
 def write_humanize_gate_pass(work_dir: Path) -> None:
@@ -1019,6 +1161,11 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
 
             self.assertEqual(state["stage_scope_gate"]["status"], "PASS")
             self.assertEqual(state["stage_scope_gate"]["decision"], "stage_2_full")
+            self.assertEqual(state["vmake_clean_source"]["status"], "PASS")
+            self.assertEqual(
+                state["vmake_clean_source"]["reason"],
+                "USER_CONFIRMED_VMAKE_REUSE",
+            )
             self.assertEqual(state["capcut_permission"], "CAPCUT_OPENABLE_PROJECT_ALLOWED")
             report = (work_dir / "stage_scope_report.md").read_text(encoding="utf-8")
             self.assertIn("# 2단계 인계 보고", report)
@@ -1026,6 +1173,27 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertNotIn("[FINAL_LOCK 최종 보고]", report)
             self.assertIn("다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT", report)
             self.assertNotIn("# 보고서2", report)
+
+    def test_tikitaka_harness_blocks_missing_user_confirmed_vmake_file(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_missing_vmake_reuse",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_script_lock_package_artifacts(work_dir)
+            write_stage2_decision(work_dir)
+            (work_dir / "00_source" / "clean_source.mp4").unlink()
+
+            state = module.audit(work_dir, "job-test")
+
+            self.assertEqual(state["vmake_clean_source"]["status"], "FAILED")
+            self.assertIn(
+                "WAIT_EXISTING_VMAKE_CLEAN_FILE",
+                state["vmake_clean_source"]["reason"],
+            )
+            self.assertEqual(state["capcut_permission"], "WAIT_VMAKE_CLEAN_SOURCE")
 
     def test_tikitaka_harness_rejects_bare_script_lock_report(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_bare_script_lock", TIKITAKA_HARNESS)
