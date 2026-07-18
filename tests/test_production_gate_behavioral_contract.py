@@ -409,19 +409,11 @@ def create_shared_fixture(root: Path, script_lock: dict | None = None) -> dict:
     script_lock = script_lock or {
         "status": "SCRIPT_LOCK",
         "source": "tikitaka_harness_runner",
-        "writer_persona_pass_count": 4,
-        "hard_veto": False,
     }
     write_json(root / "20_script" / "script_lock_evidence.json", script_lock)
 
     return {
         "similarity_breaker_harness": "PASS",
-        "writer_agent_source": "REAL_AGENT",
-        "writer_agent_mode_status": "REAL_RUN",
-        "writer_persona_total": 5,
-        "writer_persona_pass_count": 4,
-        "writer_agent_evidence_files": ["20_script/writer_evidence.md"],
-        "hard_veto": False,
         "script_lock_evidence_path": "20_script/script_lock_evidence.json",
         "watch_direct_frame_status": "PASS",
         "watch_direct_frame_report": "10_analysis/watch_direct_frame.json",
@@ -524,6 +516,13 @@ def trusted_stage2_job_state() -> dict:
 
 
 class ProductionGateBehavioralContractTests(unittest.TestCase):
+    def test_result_serializer_handles_path_values(self):
+        module = load_source_module_no_bytecode("production_gate_path_serializer", PRODUCTION_GATE)
+
+        output = module.serialize_result({"source_path": Path("C:/tmp/source.mp4")})
+
+        self.assertEqual(json.loads(output)["source_path"], str(Path("C:/tmp/source.mp4")))
+
     def test_full_production_rejects_arbitrary_hash_without_source_media_hash(self):
         module = load_source_module_no_bytecode("production_gate_source_hash_required", PRODUCTION_GATE)
         with tempfile.TemporaryDirectory() as tmp:
@@ -582,8 +581,6 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
 
             self.assertEqual(evidence["status"], "SCRIPT_LOCK")
             self.assertEqual(evidence["source"], "tikitaka_harness_runner")
-            self.assertGreaterEqual(evidence["writer_persona_pass_count"], 4)
-            self.assertIs(evidence["hard_veto"], False)
 
     def test_validate_shared_requirements_rejects_phantom_script_lock_source(self):
         module = load_source_module_no_bytecode("production_gate_phantom_lock_source", PRODUCTION_GATE)
@@ -595,8 +592,6 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
                 {
                     "status": "SCRIPT_LOCK",
                     "source": "validate_writer_agent",
-                    "writer_persona_pass_count": 4,
-                    "hard_veto": False,
                 },
             )
 
@@ -613,8 +608,6 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
                 {
                     "status": "SCRIPT_LOCKED",
                     "source": "tikitaka_harness_runner",
-                    "writer_persona_pass_count": 4,
-                    "hard_veto": False,
                 },
             )
 

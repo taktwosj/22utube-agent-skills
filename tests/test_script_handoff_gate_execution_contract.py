@@ -133,20 +133,6 @@ def create_tikitaka_base_evidence(work_dir: Path) -> None:
     write(work_dir / "work_order.md")
     write(work_dir / "execution_spec.md")
     write(work_dir / "implementation_log.md")
-    persona_dir = work_dir / "persona_outputs"
-    persona_dir.mkdir(parents=True)
-    for index in range(5):
-        write(persona_dir / f"persona_{index}.md")
-    write_json(
-        work_dir / "script_gate_report.json",
-        """
-        {
-          "status": "SCRIPT_LOCK",
-          "writer_persona_pass_count": 4,
-          "writer_persona_hard_veto": false
-        }
-        """,
-    )
     write(work_dir / "n8n_execution_id.txt", "n8n-ok")
 
 
@@ -1195,22 +1181,6 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             )
             self.assertEqual(state["capcut_permission"], "WAIT_VMAKE_CLEAN_SOURCE")
 
-    def test_tikitaka_harness_rejects_bare_script_lock_report(self):
-        module = load_source_module_no_bytecode("tikitaka_harness_runner_bare_script_lock", TIKITAKA_HARNESS)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            work_dir = Path(tmp)
-            create_tikitaka_base_evidence(work_dir)
-            create_script_lock_package_artifacts(work_dir)
-            write_json(work_dir / "script_gate_report.json", '{"status":"SCRIPT_LOCK"}')
-            write_stage2_decision(work_dir)
-
-            state = module.audit(work_dir, "job-test")
-
-            self.assertEqual(state["script_gate"]["status"], "FAILED")
-            self.assertEqual(state["final_report_allowed"], False)
-            self.assertNotEqual(state["status"], "SCRIPT_LOCK")
-
     def test_tikitaka_harness_reentry_classifies_existing_capcut_package(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_reentry_capcut", TIKITAKA_HARNESS)
 
@@ -1588,7 +1558,6 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(result["status"], "CAPCUT_OPENABLE_PROJECT_ALLOWED")
             self.assertEqual(result["script_status"], "SCRIPT_LOCK_PACKAGE")
             self.assertEqual(result["next_gate"], "ASSET_PREP_GATE")
-            self.assertNotIn("writer_persona_total", result)
 
 
 if __name__ == "__main__":

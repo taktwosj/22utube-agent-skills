@@ -1234,13 +1234,8 @@ capcut_permission: CAPCUT_OPENABLE_PROJECT_ALLOWED
 production_status: WAIT_CAPCUT_OPENABLE_PROJECT
 ```
 
-`persona_mode/script_gate` are FINAL_LOCK blockers, not
-CAPCUT_OPENABLE_PROJECT blockers. n8n is a FINAL_LOCK blocker only when the
-current package explicitly sets `n8n_required=true`; otherwise its status is
-`NOT_REQUIRED`.
-Compatibility summary: `persona_mode/script_gate/n8n are FINAL_LOCK blockers`,
-`not CAPCUT_OPENABLE_PROJECT blockers`; the n8n clause applies only when
-`n8n_required=true`.
+n8n is a FINAL_LOCK blocker only when the current package explicitly sets
+`n8n_required=true`; otherwise its status is `NOT_REQUIRED`.
 `final_report_allowed=false` means the final or upload report is blocked; it
 does not block the second stage. continue to 000short-production-agent for
 `CAPCUT_OPENABLE_PROJECT` when the handoff gate is PASS.

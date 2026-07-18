@@ -275,51 +275,6 @@ def file_status(work_dir: Path, name: str, label: str | None = None) -> dict[str
     return status_block("MISSING", None, f"{label or name} missing")
 
 
-def persona_status(work_dir: Path) -> dict[str, Any]:
-    persona_dir = work_dir / "persona_outputs"
-    if not persona_dir.exists() or not persona_dir.is_dir():
-        return status_block("NOT_RUN", None, "persona_outputs/ missing")
-    outputs = sorted(p for p in persona_dir.glob("*.md") if nonempty(p))
-    if len(outputs) < 5:
-        return status_block("NOT_RUN", "persona_outputs/", f"only {len(outputs)} persona outputs found")
-    return {
-        "status": "PASS",
-        "evidence": "persona_outputs/",
-        "count": len(outputs),
-        "files": [p.name for p in outputs],
-    }
-
-
-def script_gate_status(work_dir: Path) -> dict[str, Any]:
-    path = work_dir / "script_gate_report.json"
-    data = read_json(path)
-    if not data:
-        return status_block("NOT_RUN", None, "script_gate_report.json missing")
-    if data.get("_parse_error"):
-        return status_block("FAILED", "script_gate_report.json", "script_gate_report.json parse failed")
-
-    raw_status = str(data.get("status") or data.get("script_lock_status") or "").upper()
-    pass_count = data.get("writer_persona_pass_count")
-    hard_veto = data.get("writer_persona_hard_veto")
-    hard_veto_personas = data.get("hard_veto_personas") or []
-
-    pass_count_ok = isinstance(pass_count, int) and pass_count >= 4
-    hard_veto_ok = hard_veto is False and not hard_veto_personas
-    explicit_pass = raw_status in PASS_VALUES
-    explicit_fail = raw_status in FAIL_VALUES
-
-    if explicit_fail:
-        return status_block("FAILED", "script_gate_report.json", f"script gate status={raw_status}")
-    if explicit_pass and pass_count_ok and hard_veto_ok:
-        return {
-            "status": "PASS",
-            "evidence": "script_gate_report.json",
-            "writer_persona_pass_count": pass_count,
-            "writer_persona_hard_veto": hard_veto,
-        }
-    return status_block("FAILED", "script_gate_report.json", "script gate lacks pass_count>=4 or hard-veto=false")
-
-
 def n8n_is_required(work_dir: Path, previous_state: dict[str, Any]) -> bool:
     if previous_state.get("n8n_required") is True:
         return True
@@ -1811,8 +1766,6 @@ def build_visual_gate(job_state: dict[str, Any]) -> str:
             line("요청 원문 보존", job_state["work_order"]),
             line("Work Order", job_state["work_order"]),
             line("Execution Spec", job_state["execution_spec"]),
-            line("5작가 모드", job_state["persona_mode"]),
-            line("Script Gate", job_state["script_gate"]),
             line("ChatGPT Two-Pass Review", job_state["chatgpt_review_gate"]),
             line("Script Handoff Gate", job_state["script_handoff_gate"]),
             line("Stage Scope Gate", job_state["stage_scope_gate"]),
@@ -1843,8 +1796,6 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
     work_order = file_status(work_dir, "work_order.md", "work order")
     execution_spec = file_status(work_dir, "execution_spec.md", "execution spec")
     implementation_log = file_status(work_dir, "implementation_log.md", "implementation log")
-    personas = persona_status(work_dir)
-    script_gate = script_gate_status(work_dir)
     reentry_stage = reentry_stage_status(work_dir, previous_state)
     script_handoff_gate = build_script_handoff_gate(work_dir)
     chatgpt_review_gate = script_handoff_gate["checks"]["chatgpt_review_gate"]
@@ -1882,8 +1833,6 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "work_order": work_order,
         "execution_spec": execution_spec,
         "implementation_log": implementation_log,
-        "persona_mode": personas,
-        "script_gate": script_gate,
         "chatgpt_review_gate": chatgpt_review_gate,
         "script_handoff_gate": script_handoff_gate,
         "stage_scope_gate": stage_scope_gate,
@@ -1913,8 +1862,6 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "reason": "all required evidence present" if final_allowed else ", ".join(missing) + " missing or failed",
         "source": "tikitaka_harness_runner",
         "generated_by": "tikitaka_harness_runner",
-        "writer_persona_pass_count": personas.get("count", 0),
-        "hard_veto": script_gate.get("writer_persona_hard_veto", True),
         "script_handoff_gate_status": script_handoff_gate["status"],
         "capcut_allowed": capcut_permission == "CAPCUT_OPENABLE_PROJECT_ALLOWED",
         "capcut_blocker": (
@@ -1930,8 +1877,6 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "work_order": work_order,
         "execution_spec": execution_spec,
         "implementation_log": implementation_log,
-        "persona_mode": personas,
-        "script_gate": script_gate,
         "chatgpt_review_gate": chatgpt_review_gate,
         "script_handoff_gate": script_handoff_gate,
         "report1_handoff_gate": report1_handoff_gate,

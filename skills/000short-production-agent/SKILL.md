@@ -101,9 +101,10 @@ Use `validate_capcut_openable_project_entry` for the second stage. It validates
 `REPORT1_HANDOFF_GATE`, `SCRIPT_HANDOFF_GATE`, Tikitaka v3 timeline design
 files, role/audio maps, timing gates, and source manifest readiness for local CapCut project
 creation. `validate_shared_requirements is FINAL_LOCK only`.
-`persona_mode/script_gate/n8n are FINAL_LOCK blockers`, not CAPCUT_OPENABLE_PROJECT blockers.
+n8n is a FINAL_LOCK blocker only when `n8n_required=true`, not a
+CAPCUT_OPENABLE_PROJECT blocker.
 When the handoff gate is PASS, do not stop CapCut project creation just because
-final report, upload, writer-persona, or n8n evidence is not complete.
+final report, upload, or optional n8n evidence is not complete.
 
 ## Stage 2 Tikitaka v3 Expanded Timeline Source of Truth
 

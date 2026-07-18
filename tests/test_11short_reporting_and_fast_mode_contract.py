@@ -501,8 +501,8 @@ class ReportingAndFastModeContractTests(unittest.TestCase):
         required = [
             "validate_capcut_openable_project_entry",
             "validate_shared_requirements is FINAL_LOCK only",
-            "persona_mode/script_gate/n8n are FINAL_LOCK blockers",
-            "not CAPCUT_OPENABLE_PROJECT blockers",
+            "n8n is a FINAL_LOCK blocker only when `n8n_required=true`",
+            "CAPCUT_OPENABLE_PROJECT blocker",
             "do not stop CapCut project creation",
             "next_gate: ASSET_PREP_GATE",
         ]
