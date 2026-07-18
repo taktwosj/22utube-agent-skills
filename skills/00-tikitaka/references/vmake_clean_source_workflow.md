@@ -22,6 +22,32 @@ Never run OCR, STT, source identity, or Demucs against `clean_source.mp4`.
 Never use the embedded audio from either video in CapCut. Audible speaker/Q
 segments come only from the full-source Demucs `vocals.wav`.
 
+## User-Confirmed Existing Result
+
+Use this branch only when the user explicitly confirms that the named Vmake
+results are already complete and says not to download or test them again.
+
+```text
+vmake_reuse_mode=USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST
+user_vmake_confirmation=true
+analysis_authority=original_sources
+timeline_authority=existing_approved_design
+clean_visual_review_status=USER_CONFIRMED
+```
+
+- Do not run Vmake again and do not download or re-download the confirmed files.
+- Do not run ffprobe duration parity, aspect-ratio parity, OCR, STT, frame analysis, or visual quality review
+  on the confirmed clean files.
+- Do not run the registration or validation scripts for this reuse branch.
+- Use the original analysis and timeline unchanged. Substitute the named clean
+  files one-for-one as muted production visuals in the existing source order.
+- Forward the exact clean-file paths and user confirmation to the production
+  owner. If a named path is missing or inaccessible, stop with
+  `WAIT_EXISTING_VMAKE_CLEAN_FILE`; do not silently start a new Vmake job.
+
+This branch records user confirmation without claiming a new agent-validated
+`VMAKE_CLEAN_SOURCE_GATE=PASS`.
+
 ## Chrome Automation
 
 Open:

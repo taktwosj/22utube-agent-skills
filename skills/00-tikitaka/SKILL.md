@@ -174,6 +174,45 @@ Never replace it with the Vmake result for OCR, STT, timing verification,
 source identity, or Demucs. The Vmake result is the later production visual;
 its embedded audio is never authorized.
 
+### User-Confirmed Existing Vmake Result
+
+Use `USER_CONFIRMED_VMAKE_REUSE` only when the user explicitly says the Vmake
+result is already complete or confirmed and also says not to download or test
+it again. This current-request instruction overrides the default Vmake browser,
+download, registration, and validation steps below for the named existing clean
+files.
+
+- Do not open Vmake, download or re-download, replay, inspect, or re-analyze the
+  confirmed clean files.
+- Do not run `register_vmake_clean_source.py` or `validate_vmake_clean_source.py`.
+  Do not run ffprobe duration/aspect-ratio
+  parity, OCR, STT, frame analysis, or visual quality review on those files.
+- Keep the original-source analysis, timing, edit order, captions, and audio plan unchanged.
+  The clean files replace only the production visuals, one-for-one
+  and in the already approved order.
+- Keep every clean file's embedded audio muted. Use only the separately approved
+  narration/source-audio lanes.
+- Place the user-specified narration at the first scene when the user requests
+  that placement. Do not redesign later beats merely because the visual file was
+  cleaned.
+- Pass the existing clean paths and this reuse state to
+  `000short-production-agent`; `00-tikitaka` still does not build CapCut.
+
+Record:
+
+```text
+vmake_reuse_mode=USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST
+user_vmake_confirmation=true
+analysis_authority=original_sources
+timeline_authority=existing_approved_design
+clean_visual_review_status=USER_CONFIRMED
+```
+
+This is a user-confirmed reuse state, not a newly agent-validated
+`VMAKE_CLEAN_SOURCE_GATE=PASS`. If any named existing clean file is missing or
+inaccessible, stop with `WAIT_EXISTING_VMAKE_CLEAN_FILE`; do not start a new
+Vmake download unless the user asks.
+
 Read `references/vmake_clean_source_workflow.md` before browser action. Use the
 existing signed-in Chrome session and browser DOM control. Do not use OS-level
 mouse/keyboard control. The workflow covers `Import from link`, the rights
@@ -796,7 +835,7 @@ Mandatory gate map for URL + Gemini/source intake:
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
 G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, ChatGPT Project Round 1, Codex decisions, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, ChatGPT Project Round 2, chatgpt_review_gate.json, and script_handoff_gate.json
 G2 STAGE 1 STOP = output 설계도 and stop until report1_approved + voice_audio_route_decided
-G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved, voice_audio_route_decided, and VMAKE_CLEAN_SOURCE_GATE PASS
+G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved, voice_audio_route_decided, and either VMAKE_CLEAN_SOURCE_GATE PASS for a new Vmake run or USER_CONFIRMED_VMAKE_REUSE for named existing clean files
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
 ```
 

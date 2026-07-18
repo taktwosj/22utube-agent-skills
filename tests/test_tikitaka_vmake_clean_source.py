@@ -78,6 +78,36 @@ def create_download(path: Path) -> Path:
 
 
 class TikitakaVmakeCleanSourceTests(unittest.TestCase):
+    def test_skill_documents_user_confirmed_vmake_reuse_without_retest(self) -> None:
+        skill = SKILL.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+
+        for token in [
+            "USER_CONFIRMED_VMAKE_REUSE",
+            "vmake_reuse_mode=USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST",
+            "user_vmake_confirmation=true",
+            "WAIT_EXISTING_VMAKE_CLEAN_FILE",
+            "Do not open Vmake, download or re-download",
+            "Do not run `register_vmake_clean_source.py` or "
+            "`validate_vmake_clean_source.py`",
+            "Keep the original-source analysis, timing, edit order, captions, "
+            "and audio plan unchanged",
+            "Place the user-specified narration at the first scene",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, skill)
+
+        for token in [
+            "User-Confirmed Existing Result",
+            "USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST",
+            "Do not run Vmake again",
+            "Do not run ffprobe duration parity, aspect-ratio parity, OCR, STT, "
+            "frame analysis, or visual quality review",
+            "Use the original analysis and timeline unchanged",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, workflow)
+
     def test_skill_documents_original_analysis_and_vmake_clean_visual_split(self) -> None:
         skill = SKILL.read_text(encoding="utf-8")
         workflow = WORKFLOW.read_text(encoding="utf-8")
