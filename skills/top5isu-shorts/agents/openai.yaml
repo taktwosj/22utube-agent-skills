@@ -1,0 +1,4 @@
+interface:
+  display_name: "top5isu Shorts"
+  short_description: "TOP5·군림보 쇼츠 스타일 관제와 제작 계약"
+  default_prompt: "Use $top5isu-shorts to route this TOP5 or 군림보 Shorts request through script design and the top5isu CapCut production contract."

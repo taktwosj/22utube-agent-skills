@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "top5isu-build-contract.schema.json",
+  "title": "top5isu build contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "template_profile",
+    "style_profile",
+    "fallback_allowed",
+    "clone_required",
+    "root_template_mutation",
+    "fresh_project_id_required",
+    "fresh_timeline_id_required",
+    "archive_file",
+    "archive_sha256",
+    "manifest_sha256",
+    "packaged_file_count",
+    "required_tracks",
+    "image_effect_count_required",
+    "image_ui_y",
+    "image_json_transform_y",
+    "logo_full_duration",
+    "sample_media_policy",
+    "audio_policy",
+    "audio_normalization",
+    "portable_manifest_paths",
+    "bak_allowed_in_portable_package"
+  ],
+  "properties": {
+    "contract_version": {"const": "top5isu_build_contract_v1"},
+    "template_profile": {"const": "top5isu_v1"},
+    "style_profile": {"enum": ["top5", "gunlimbo"]},
+    "fallback_allowed": {"const": false},
+    "clone_required": {"const": true},
+    "root_template_mutation": {"const": false},
+    "fresh_project_id_required": {"const": true},
+    "fresh_timeline_id_required": {"const": true},
+    "archive_file": {"type": "string", "minLength": 1},
+    "archive_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "packaged_file_count": {"type": "integer", "minimum": 1},
+    "required_tracks": {
+      "const": ["IMAGE_EFFECT_PRESETS", "TTS", "T2", "T1", "LOGO"]
+    },
+    "image_effect_count_required": {"const": 7},
+    "image_ui_y": {"const": -600},
+    "image_json_transform_y": {"const": -0.15625},
+    "logo_full_duration": {"const": true},
+    "sample_media_policy": {"const": "replace_all"},
+    "audio_policy": {
+      "type": "object",
+      "required": ["speaker_segments_preserved", "speaker_mute_forbidden"],
+      "properties": {
+        "speaker_segments_preserved": {"type": "boolean"},
+        "speaker_mute_forbidden": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "audio_normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "target_integrated_lufs",
+        "preimport_measurement_required",
+        "final_export_remeasure_required"
+      ],
+      "properties": {
+        "method": {"const": "ffmpeg_loudnorm"},
+        "target_integrated_lufs": {"const": -14},
+        "preimport_measurement_required": {"const": true},
+        "final_export_remeasure_required": {"const": true}
+      }
+    },
+    "portable_manifest_paths": {"const": true},
+    "bak_allowed_in_portable_package": {"const": false}
+  }
+}
