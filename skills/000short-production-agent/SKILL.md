@@ -7,7 +7,9 @@ description: Use only when the user explicitly asks to create, validate, or repa
 
 ## Ownership Matrix
 
-- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00-tikitaka`: Shorts source analysis, full-source Demucs preprocessing,
+  remake script draft, hook, top/timed-middle, and script handoff. It owns the
+  analysis artifacts `full_source_audio.wav` and `vocals.wav`.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
 
 ## Stage Transition And n8n Contract
@@ -159,8 +161,33 @@ Required Stage 2 inputs:
 20_script/tts_duration_probe.json when narration-audio exists
 20_script/tts_timing_reconciliation_gate.json when narration-audio exists
 00_source/source_manifest.json or 00_source/source.mp4
+10_analysis/source_voice_separation.json
+10_analysis/audio/vocals.wav when source speech exists
 20_script/caption_beat_map.json
 ```
+
+## Demucs Speaker/Q Audio Contract
+
+Stage 2 must validate `SOURCE_VOICE_SEPARATION_GATE` before asset preparation.
+For every `speaker_quote`, require:
+
+```text
+source_audio_ref=10_analysis/audio/vocals.wav
+source_audio_provenance=demucs_full_source_vocals
+source_voice_music_removed=true
+```
+
+Cut Q1/Q2/Q3 only from the full-source Demucs `vocals.wav`; never run Demucs on
+pre-cut quote ranges. Preserve 0.1 to 0.2 seconds before and after each quote
+when source bounds allow, apply short fades, and place Q and N on separate
+non-overlapping lanes. The source video remains visual-only with its embedded
+audio muted, including during `speaker_quote`.
+
+Listen to each Q clip for severe music residue and robotic damage. Weak
+voice-enhancement or noise reduction is allowed only after a defect is heard;
+do not replace the Demucs stem with raw mixed audio. Final output still requires
+loudness normalization and remeasurement. `no_vocals.wav` is never used.
+Missing or raw-video quote provenance is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
 
 ## Caption Assembly Contract
 
@@ -651,10 +678,23 @@ contract/status file cannot supply missing approval.
 `WAIT_SOURCE_HANDOFF_FINGERPRINT`.
 
 Before `CAPCUT_OPENABLE_PROJECT`, run the active media-link validator and prove
-that the real source path is present in active draft materials. Empty or
-source-unlinked materials are `WAIT_CAPCUT_SOURCE_MEDIA_LINK`. Before production
-PASS, the actual source media must be included in declared SHA256 inputs;
-otherwise stop with `SOURCE_MEDIA_HASH_REQUIRED`.
+that the real source path is present in active draft materials. Validate the
+actual local CapCut project's `draft_content.json` and sibling
+`draft_meta_info.json`, not only the episode snapshot. `local_capcut_path` and
+both runtime JSON files are mandatory; snapshot-only validation cannot authorize
+`CAPCUT_OPENABLE_PROJECT`. Treat the declared local project as runtime even when
+its folder happens to be inside the episode root. External media paths must be
+absolute or resolve from the local CapCut project folder; paths that resolve only
+from the episode root are `FAIL_CAPCUT_RUNTIME_MEDIA_LINK`. Resolve native video
+activity through `tracks[*].segments[*].material_id` and require
+source/clean-visual segment `volume=0`. Every `speaker_quote` edit in
+`timeline_design.json` must have a unique, exact matching hashed
+`speaker_q_lane` entry, and every declared Q asset must be used by exactly one
+audible active audio-track segment for that edit. Empty or source-unlinked
+materials are
+`WAIT_CAPCUT_SOURCE_MEDIA_LINK`. Before production PASS, the actual source media
+must be included in declared SHA256 inputs; otherwise stop with
+`SOURCE_MEDIA_HASH_REQUIRED`.
 
 If the script came from Tikitaka and timed `중단` blocks exist, missing segment
 audio policy is a hard stop:

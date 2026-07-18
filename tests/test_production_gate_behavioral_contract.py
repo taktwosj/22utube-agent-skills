@@ -6,7 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _support import load_source_module_no_bytecode, write_valid_source_mp4
+from _support import (
+    load_source_module_no_bytecode,
+    write_source_voice_separation_fixture,
+    write_valid_source_mp4,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -75,6 +79,7 @@ def create_source_identity_fixture(root: Path, manifest_extra: dict | None = Non
         "duration_sec": 8.0,
     }
     write_json(root / "10_analysis" / "source_identity_lock.json", lock)
+    write_source_voice_separation_fixture(root, source_sha256)
     write_json(
         root / "10_analysis" / "source_evidence.json",
         {
@@ -122,22 +127,93 @@ def create_source_identity_fixture(root: Path, manifest_extra: dict | None = Non
 
 def create_linked_draft(root: Path) -> None:
     source = root / "00_source" / "source.mp4"
+    separation = json.loads(
+        (root / "10_analysis" / "source_voice_separation.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    q_asset = root / "30_audio_srt" / "speaker_q" / "E2.wav"
+    write(q_asset, "speaker-q")
+    write_json(
+        root / "30_audio_srt" / "audio_asset_manifest.json",
+        {
+            "status": "PASS",
+            "speaker_q_lane": [
+                {
+                    "edit_id": "E2",
+                    "path": "30_audio_srt/speaker_q/E2.wav",
+                    "source_audio_ref": separation["vocals_path"],
+                    "source_audio_provenance": "demucs_full_source_vocals",
+                    "source_voice_vocals_sha256": separation["vocals_sha256"],
+                    "asset_sha256": sha256(q_asset),
+                }
+            ],
+        },
+    )
     write_json(
         root / "50_capcut_project" / "draft_content.json",
         {
-            "materials": {
-                "videos": [
-                    {
-                        "id": "source-video",
-                        "role": "source_video",
-                        "path": str(source),
-                        "active": True,
-                        "audio_enabled": False,
-                    }
-                ]
-            }
+            "active_materials": [
+                {
+                    "id": "source-video",
+                    "role": "source_video",
+                    "path": str(source),
+                    "active": True,
+                    "audio_enabled": False,
+                },
+                {
+                    "id": "speaker-q-E2",
+                    "role": "speaker_q_E2",
+                    "path": "30_audio_srt/speaker_q/E2.wav",
+                    "active": True,
+                },
+            ]
         },
     )
+
+
+def create_local_capcut_project(root: Path, project_dir: Path) -> Path:
+    source = root / "00_source" / "source.mp4"
+    q_asset = root / "30_audio_srt" / "speaker_q" / "E2.wav"
+    copied_source = project_dir / "00_source" / "source.mp4"
+    copied_q = project_dir / "30_audio_srt" / "speaker_q" / "E2.wav"
+    write_bytes(copied_source, source.read_bytes())
+    write_bytes(copied_q, q_asset.read_bytes())
+    write_json(
+        project_dir / "draft_content.json",
+        {
+            "active_materials": [
+                {
+                    "id": "source-video",
+                    "role": "source_video",
+                    "path": "00_source/source.mp4",
+                    "active": True,
+                    "audio_enabled": False,
+                },
+                {
+                    "id": "speaker-q-E2",
+                    "role": "speaker_q_E2",
+                    "path": "30_audio_srt/speaker_q/E2.wav",
+                    "active": True,
+                },
+            ]
+        },
+    )
+    write_json(
+        project_dir / "draft_meta_info.json",
+        {
+            "draft_materials": [
+                {
+                    "type": 0,
+                    "value": [
+                        {"file_Path": "00_source/source.mp4"},
+                        {"file_Path": "30_audio_srt/speaker_q/E2.wav"},
+                    ],
+                }
+            ]
+        },
+    )
+    return project_dir
 
 
 def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
@@ -229,6 +305,8 @@ def create_script_handoff(root: Path, *, inline_voice_map: bool = True) -> None:
                     "duration_basis": "source_range",
                     "duration_status": "SOURCE_AUDIO_LOCKED",
                     "source_audio_range": {"start": "00:03", "end": "00:08"},
+                    "source_audio_ref": "10_analysis/audio/vocals.wav",
+                    "source_audio_provenance": "demucs_full_source_vocals",
                     "quote_verification_status": "VERIFIED_STT",
                     "audio_policy": "source_on_tts_off",
                     "visual_strategy": "source_visual_action",
@@ -562,6 +640,195 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
                     root,
                 )
 
+    def test_capcut_openable_validates_the_actual_local_project_media_paths(self):
+        module = load_source_module_no_bytecode(
+            "production_gate_local_capcut_runtime_media",
+            PRODUCTION_GATE,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "episode"
+            capcut_project = Path(tmp) / "capcut-project"
+            create_script_handoff(root)
+            create_report1_handoff(root)
+            create_linked_draft(root)
+            write_json(
+                capcut_project / "draft_content.json",
+                {
+                    "active_materials": [
+                        {
+                            "role": "source_video",
+                            "path": "00_source/source.mp4",
+                            "active": True,
+                            "audio_enabled": False,
+                        }
+                    ]
+                },
+            )
+            write_json(capcut_project / "draft_meta_info.json", {"draft_materials": []})
+
+            with self.assertRaisesRegex(
+                module.GateFail,
+                "FAIL_CAPCUT_RUNTIME_MEDIA_LINK",
+            ):
+                module.validate_capcut_openable_project_entry(
+                    {
+                        "user_request": "capcut project",
+                        "report1_approved": True,
+                        "voice_audio_route_decided": True,
+                        "local_capcut_path": str(capcut_project),
+                        **create_shrt_white_reference(root),
+                    },
+                    root,
+                )
+
+    def test_capcut_openable_requires_local_project_and_both_runtime_json_files(self):
+        module = load_source_module_no_bytecode(
+            "production_gate_local_capcut_runtime_required",
+            PRODUCTION_GATE,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "episode"
+            create_script_handoff(root)
+            create_report1_handoff(root)
+            create_linked_draft(root)
+            contract = {
+                "user_request": "capcut project",
+                "report1_approved": True,
+                "voice_audio_route_decided": True,
+                **create_shrt_white_reference(root),
+            }
+
+            with self.assertRaisesRegex(
+                module.GateFail,
+                "WAIT_LOCAL_CAPCUT_PROJECT_PATH",
+            ):
+                module.validate_capcut_openable_project_entry(contract, root)
+
+            capcut_project = Path(tmp) / "capcut-project"
+            source = root / "00_source" / "source.mp4"
+            write_bytes(capcut_project / "00_source" / "source.mp4", source.read_bytes())
+            write_json(
+                capcut_project / "draft_content.json",
+                {
+                    "active_materials": [
+                        {
+                            "role": "source_video",
+                            "path": "00_source/source.mp4",
+                            "active": True,
+                            "audio_enabled": False,
+                        }
+                    ]
+                },
+            )
+            contract["local_capcut_path"] = str(capcut_project)
+            with self.assertRaisesRegex(
+                module.GateFail,
+                "local CapCut draft_meta_info",
+            ):
+                module.validate_capcut_openable_project_entry(contract, root)
+
+    def test_local_project_inside_episode_still_uses_project_relative_runtime_paths(self):
+        module = load_source_module_no_bytecode(
+            "production_gate_nested_local_capcut_runtime",
+            PRODUCTION_GATE,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "episode"
+            local_project = root / "local-capcut-project"
+            create_script_handoff(root)
+            create_report1_handoff(root)
+            create_linked_draft(root)
+            write_json(
+                local_project / "draft_content.json",
+                {
+                    "active_materials": [
+                        {
+                            "role": "source_video",
+                            "path": "00_source/source.mp4",
+                            "active": True,
+                            "audio_enabled": False,
+                        },
+                        {
+                            "role": "speaker_q_E2",
+                            "path": "30_audio_srt/speaker_q/E2.wav",
+                            "active": True,
+                        }
+                    ]
+                },
+            )
+            write_json(local_project / "draft_meta_info.json", {"draft_materials": []})
+
+            with self.assertRaisesRegex(
+                module.GateFail,
+                "FAIL_CAPCUT_RUNTIME_MEDIA_LINK",
+            ):
+                module.validate_capcut_openable_project_entry(
+                    {
+                        "user_request": "capcut project",
+                        "report1_approved": True,
+                        "voice_audio_route_decided": True,
+                        "local_capcut_path": str(local_project),
+                        **create_shrt_white_reference(root),
+                    },
+                    root,
+                )
+
+    def test_capcut_openable_keeps_snapshot_semantic_media_validation(self):
+        module = load_source_module_no_bytecode(
+            "production_gate_snapshot_and_runtime_media",
+            PRODUCTION_GATE,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "episode"
+            capcut_project = Path(tmp) / "capcut-project"
+            create_script_handoff(root)
+            create_report1_handoff(root)
+            source = root / "00_source" / "source.mp4"
+            write_json(
+                root / "50_capcut_project" / "draft_content.json",
+                {
+                    "active_materials": [
+                        {
+                            "role": "source_video",
+                            "path": str(source),
+                            "active": True,
+                            "audio_enabled": True,
+                        }
+                    ]
+                },
+            )
+            copied_source = capcut_project / "00_source" / "source.mp4"
+            write_bytes(copied_source, source.read_bytes())
+            write_json(
+                capcut_project / "draft_content.json",
+                {
+                    "active_materials": [
+                        {
+                            "role": "source_video",
+                            "path": "00_source/source.mp4",
+                            "active": True,
+                            "audio_enabled": False,
+                        }
+                    ]
+                },
+            )
+            write_json(capcut_project / "draft_meta_info.json", {"draft_materials": []})
+
+            with self.assertRaisesRegex(
+                module.GateFail,
+                "FAIL_SOURCE_VIDEO_AUDIO_NOT_MUTED",
+            ):
+                module.validate_capcut_openable_project_entry(
+                    {
+                        "user_request": "capcut project",
+                        "report1_approved": True,
+                        "voice_audio_route_decided": True,
+                        "local_capcut_path": str(capcut_project),
+                        **create_shrt_white_reference(root),
+                    },
+                    root,
+                )
+
     def test_tikitaka_harness_writes_canonical_script_lock_evidence(self):
         module = load_source_module_no_bytecode("tikitaka_harness_script_lock_evidence", TIKITAKA_HARNESS)
 
@@ -771,6 +1038,8 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
             reference_path.mkdir(parents=True)
             create_script_handoff(root)
             create_report1_handoff(root)
+            create_linked_draft(root)
+            create_local_capcut_project(root, root / "local-capcut-project")
             write_json(
                 root / "00_source" / "source_manifest.json",
                 {
@@ -780,7 +1049,6 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
                     "source_url": "https://example.com/source",
                 },
             )
-            write_json(root / "50_capcut_project" / "draft_content.json", {"materials": {}})
 
             result = module.validate_capcut_openable_project_entry(
                 {
@@ -793,6 +1061,7 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
                     "reference_project_path": str(reference_path),
                     "derived_from_reference_project": True,
                     "capcut_project_name": "SH_20260708_t_fdf0wfjg_character_comments_base_v2",
+                    "local_capcut_path": str(root / "local-capcut-project"),
                 },
                 root,
             )
@@ -894,8 +1163,9 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
             root = Path(tmp)
             create_script_handoff(root)
             create_report1_handoff(root)
+            create_linked_draft(root)
+            create_local_capcut_project(root, root / "local-capcut-project")
             write_json(root / "00_source" / "source_manifest.json", {"status": "PASS"})
-            write_json(root / "50_capcut_project" / "draft_content.json", {"materials": {}})
             write_json(
                 root / "status.json",
                 trusted_stage2_job_state(),
@@ -908,12 +1178,14 @@ class ProductionGateBehavioralContractTests(unittest.TestCase):
                     "upload_title": "테스트 쇼츠 제목",
                     "upload_description": "테스트 쇼츠 설명\n출처: https://example.com/source\n#shorts",
                     "source_url": "https://example.com/source",
+                    "local_capcut_path": str(root / "local-capcut-project"),
                     **create_shrt_white_reference(root),
                 },
                 root,
             )
 
             self.assertEqual(result["status"], "CAPCUT_OPENABLE_PROJECT_ALLOWED")
+            json.dumps(result, ensure_ascii=False)
             self.assertIn("# 보고서2", result["report2"])
             self.assertIn("보고서2 시작: 예", result["report2"])
             self.assertIn("최종보고서: 예", result["report2"])

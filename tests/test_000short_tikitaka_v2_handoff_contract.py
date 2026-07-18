@@ -6,7 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from _support import load_source_module_no_bytecode, write_valid_source_mp4
+from _support import (
+    load_source_module_no_bytecode,
+    write_source_voice_separation_fixture,
+    write_valid_source_mp4,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -110,6 +114,8 @@ def create_valid_tikitaka_v2_package(root: Path) -> dict:
                     "duration_basis": "source_range",
                     "duration_status": "SOURCE_AUDIO_LOCKED",
                     "source_audio_range": {"start": "00:03", "end": "00:08"},
+                    "source_audio_ref": "10_analysis/audio/vocals.wav",
+                    "source_audio_provenance": "demucs_full_source_vocals",
                     "quote_verification_status": "VERIFIED_STT",
                     "audio_policy": "source_on_tts_off",
                     "visual_strategy": "source_visual_action",
@@ -199,6 +205,7 @@ def create_valid_tikitaka_v2_package(root: Path) -> dict:
         "duration_sec": 8.0,
     }
     write_json(root / "10_analysis" / "source_identity_lock.json", source_lock)
+    write_source_voice_separation_fixture(root, source_sha256)
     write_json(
         root / "10_analysis" / "source_evidence.json",
         {

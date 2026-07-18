@@ -1469,6 +1469,8 @@ def validate_capcut_media_link_gate(
     root: Path,
     draft_content_path: Path,
     source_path: Path,
+    *,
+    runtime_project: bool = False,
 ) -> dict[str, Any]:
     validator_path = Path(__file__).with_name("validate_capcut_media_links.py")
     spec = importlib.util.spec_from_file_location("_capcut_media_links", validator_path)
@@ -1477,7 +1479,12 @@ def validate_capcut_media_link_gate(
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     try:
-        return module.validate_capcut_media_links(root, draft_content_path, source_path)
+        return module.validate_capcut_media_links(
+            root,
+            draft_content_path,
+            source_path,
+            runtime_project=runtime_project,
+        )
     except Exception as exc:
         raise GateFail(f"WAIT_CAPCUT_SOURCE_MEDIA_LINK: {exc}") from exc
 
@@ -1826,13 +1833,36 @@ def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path)
     )
     draft_content_path = require_file(root, draft_content_rel_path, "draft_content")
     load_json(draft_content_path)
+    capcut_project_name = first_status_value(sources, ("capcut_project_name", "project_name"))
+    local_capcut_path = first_status_value(sources, ("local_capcut_path", "capcut_local_path"))
     media_link_result = validate_capcut_media_link_gate(
         root,
         draft_content_path,
         Path(stage2_tikitaka_handoff_result["source_path"]),
     )
-    capcut_project_name = first_status_value(sources, ("capcut_project_name", "project_name"))
-    local_capcut_path = first_status_value(sources, ("local_capcut_path", "capcut_local_path"))
+    if not isinstance(local_capcut_path, str) or not local_capcut_path.strip():
+        raise GateFail(
+            "WAIT_LOCAL_CAPCUT_PROJECT_PATH: local_capcut_path is required before "
+            "CAPCUT_OPENABLE_PROJECT can pass"
+        )
+    local_project_dir = as_path(root, local_capcut_path.strip())
+    local_draft_content_path = require_file(
+        local_project_dir,
+        "draft_content.json",
+        "local CapCut draft_content",
+    )
+    require_file(
+        local_project_dir,
+        "draft_meta_info.json",
+        "local CapCut draft_meta_info",
+    )
+    runtime_media_link_result = validate_capcut_media_link_gate(
+        root,
+        local_draft_content_path,
+        Path(stage2_tikitaka_handoff_result["source_path"]),
+        runtime_project=True,
+    )
+    media_link_result.update(runtime_media_link_result)
     upload_title = first_report_field(
         sources,
         source_manifest,
