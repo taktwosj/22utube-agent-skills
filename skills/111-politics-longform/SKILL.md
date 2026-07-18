@@ -441,6 +441,43 @@ preassembly 검증은 모든 조립 호출에 강제되며 공개 우회 옵션�
 외부 검토 게이트, speech lock, locked EDL·라벨·클립 중 하나라도 실패하면 조립을
 시작하지 않는다.
 
+### 골 기능 실행 모드
+
+사용자가 `골 기능으로`, `너무 세밀하다`, `언제 끝나`처럼 범위를 줄이면 선택적
+패키징을 붙잡지 말고 실제 산출물 완성 경로로 즉시 전환한다.
+
+1. 우선순위는 `native CapCut 폴더 생성 → root registry 등록 → 콘텐츠 무간격 →
+   오디오 0 → JSON 미러 동일 → 미디어 존재`다.
+2. 렌더·업로드가 범위 밖이면 썸네일, 설명, 해시태그, YouTube API 프로필 같은
+   후속 메타데이터 누락으로 이미 통과한 CapCut 조립을 롤백하지 않는다.
+3. 이때 조립은 `PASS_CORE_ASSEMBLY`, 후속 산출물은
+   `DEFERRED_CORE_ASSEMBLY_ONLY`, `final_gate: BLOCKED`,
+   `upload_ready: false`로 분리한다. 렌더·업로드 완료로 확대해석하지 않는다.
+4. 보고는 결론과 프로젝트명부터 짧게 쓴다. 폴더 생성, registry 등록, GUI
+   열림/미리보기, 렌더, 업로드는 서로 다른 상태로 한 줄씩만 명시한다.
+5. false-positive 검사를 고치느라 승인 원문을 바꾸지 않는다. 승인 문구가 정상
+   시청자 문장이라면 검사 범위를 내부 표식으로 좁힌다.
+
+Windows Stage 2 조립의 경로 길이, 마이크로초 정규화, 핵심 검증 패턴은
+`references/stage2-core-assembly.md`를 참고한다.
+
+### 잠금된 Stage 1의 Stage 2 이행
+
+Stage 1 잠금본이 현행 preassembly 계약에 실패하면 승인 원본을 직접 고치지 않는다.
+
+1. `validate-stage1`, `validate-external`, `validate-preassembly`를 분리 실행하고
+   실행 전후 `design_lock_manifest.json.required_files` 해시를 대조한다.
+2. 검증 CLI가 보고서 JSON을 다시 쓸 수 있으면 원본이 아니라 임시 복사본에서
+   실행한다.
+3. 서명된 외부검토 메타데이터, 결정 필드, portable media path 같은 호환 차이는
+   동기화 트리 밖의 disposable Stage 2 runtime copy에서만 정규화한다.
+4. 각 locked clip은 기존 SHA-256과 실제 ffprobe를 다시 검증한다.
+5. runtime 호환본을 원래 Stage 1 잠금 위로 복사하지 않는다.
+6. 결과 보고에는 `source_stage1_mutated: false`, preassembly 결과, native project
+   생성·등록, GUI·렌더·업로드 상태를 각각 남긴다.
+
+상세 절차는 `references/locked-stage1-to-stage2-migration.md`를 참고한다.
+
 ## Stage 2 — speech lock과 locked clips
 
 CapCut보다 먼저 다음을 만든다.
@@ -508,7 +545,9 @@ fixed overlays/effects: jungchilong 근본의 배치와 리소스 보존
 ```
 
 출처와 날짜는 소스 전환마다 나누고 해당 소스 구간 전체에 정확히 맞춘다.
-내부 id, `roughcut`, `edl`, `진입`을 화면에 노출하지 않는다.
+내부 id, `roughcut`, `edl`, mojibake와 U+FFFD는 화면에 노출하지 않는다.
+`진입` 같은 일반 한국어 단어를 전역 금칙어로 두지 않는다. 승인된 시청자 문구
+`마지막 쟁점 진입`은 허용하고, 명백한 내부 workflow marker일 때만 차단한다.
 
 ### 오디오 계약
 

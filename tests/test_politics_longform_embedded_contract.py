@@ -220,6 +220,27 @@ class PoliticsLongformEmbeddedContractTests(unittest.TestCase):
         ):
             self.assertIn(token, self.skill_text)
 
+    def test_core_assembly_and_locked_stage1_runtime_migration_contracts(self):
+        for token in (
+            "### 골 기능 실행 모드",
+            "PASS_CORE_ASSEMBLY",
+            "DEFERRED_CORE_ASSEMBLY_ONLY",
+            "source_stage1_mutated: false",
+            "references/stage2-core-assembly.md",
+            "references/locked-stage1-to-stage2-migration.md",
+        ):
+            self.assertIn(token, self.skill_text)
+        for relative in (
+            "references/stage2-core-assembly.md",
+            "references/locked-stage1-to-stage2-migration.md",
+        ):
+            self.assertTrue((SKILL_DIR / relative).is_file())
+
+    def test_visible_term_gate_does_not_ban_normal_korean_word_globally(self):
+        self.assertIn("`마지막 쟁점 진입`은 허용", self.skill_text)
+        self.assertIn("명백한 내부 workflow marker일 때만 차단", self.skill_text)
+        self.assertNotIn("`roughcut`, `edl`, `진입`을 화면에 노출하지 않는다", self.skill_text)
+
     def test_skill_folder_does_not_ship_stale_duplicate_contract(self):
         duplicates = [path.name for path in SKILL_DIR.glob("SKILL*.md") if path.name != "SKILL.md"]
         self.assertEqual(duplicates, [])
