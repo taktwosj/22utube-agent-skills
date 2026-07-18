@@ -240,9 +240,15 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             "1차설계서",
             "timeline_design.json",
             "timeline_design_gate.json",
+            "chatgpt_review/round1_review_packet.md",
+            "chatgpt_review/round1_chatgpt_raw.md",
+            "chatgpt_review/round1_codex_decisions.json",
             "humanize_korean_gate.json",
             "block_role_map.json",
             "tts_copy_text.txt",
+            "chatgpt_review/round2_audit_packet.md",
+            "chatgpt_review/round2_chatgpt_raw.md",
+            "chatgpt_review_gate.json",
             "shorts_design_type",
             "Allowed values:",
             "SD1",
@@ -271,14 +277,93 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
             "1차설계서",
             "timeline_design.json",
             "timeline_design_gate.json",
+            "chatgpt_review/round1_review_packet.md",
+            "chatgpt_review/round1_chatgpt_raw.md",
+            "chatgpt_review/round1_codex_decisions.json",
             "humanize_korean_gate.json",
             "block_role_map.json",
             "tts_copy_text.txt",
+            "chatgpt_review/round2_audit_packet.md",
+            "chatgpt_review/round2_chatgpt_raw.md",
+            "chatgpt_review_gate.json",
             "script_handoff_gate.json",
             "report1_handoff.json",
         ]
         positions = [section.index(token) for token in order]
         self.assertEqual(positions, sorted(positions))
+
+    def test_single_source_contains_chatgpt_shorts_two_pass_review_contract(self):
+        text = SINGLE_SOURCE.read_text(encoding="utf-8")
+
+        for token in [
+            "ChatGPT Project Two-Pass Review Contract",
+            "content_type: shorts",
+            "review_round: 1",
+            "review_round: 2",
+            "INDEPENDENT_REVIEW",
+            "REVISION_PROPOSAL",
+            "EVIDENCE_AUDIT",
+            "PENDING_CODEX_REVIEW",
+            "PASS_RECOMMENDED",
+            "REVISE_REQUIRED",
+            "EVIDENCE_REQUIRED",
+            "ADOPTED",
+            "PARTIALLY_ADOPTED",
+            "REJECTED",
+            "PENDING_EVIDENCE",
+            "DESIGN_REOPEN_REQUIRED",
+            "first top-level hash metadata line removed",
+            "normalizing line endings to LF",
+            "Embedded Round 1 response text",
+            "complete saved packet file",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_single_source_contains_browser_assisted_automation_sequence(self):
+        text = SINGLE_SOURCE.read_text(encoding="utf-8")
+
+        for token in [
+            "Browser-Assisted Automation Sequence",
+            "chatgpt_review_workflow.py build-round1",
+            "chatgpt_review_workflow.py record-response",
+            "chatgpt_review_workflow.py build-round2",
+            "chatgpt_review_workflow.py finalize-gate",
+            "SOURCE_CONTRACT_MISSING",
+            "쇼츠대본분석",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, text)
+
+    def test_chatgpt_review_artifacts_are_required_and_invalidated_by_design_repair(self):
+        text = SKILL.read_text(encoding="utf-8")
+
+        revision_start = text.index("## User Design Revision Loop")
+        revision_end = text.index("## timeline_design.json audio track", revision_start)
+        revision_section = text[revision_start:revision_end]
+        for token in [
+            "chatgpt_review/round1_review_packet.md",
+            "chatgpt_review/round1_chatgpt_raw.md",
+            "chatgpt_review/round1_codex_decisions.json",
+            "chatgpt_review/round2_audit_packet.md",
+            "chatgpt_review/round2_chatgpt_raw.md",
+            "chatgpt_review_gate.json",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, revision_section)
+
+        required_start = text.index("Required handoff files")
+        required_end = text.index("`block_map.json` must keep", required_start)
+        required_section = text[required_start:required_end]
+        self.assertIn("chatgpt_review_gate.json", required_section)
+        self.assertIn("both ChatGPT project review rounds", required_section)
+
+        self.assertIn(
+            "G1 STAGE 1 = create 1차설계서, timeline_design.json, "
+            "caption_beat_map.json, timeline_design_gate.json, "
+            "ChatGPT Project Round 1",
+            text,
+        )
 
     def test_tikitaka_v2_wording_uses_canonical_handoff_artifact_names(self):
         text = SKILL.read_text(encoding="utf-8")
@@ -308,7 +393,11 @@ class TikitakaProductionTypeContractTests(unittest.TestCase):
         self.assertNotIn("`block_role_map`,", hard_fails_section)
         self.assertNotIn("`tts_copy_text`,", hard_fails_section)
         self.assertIn(
-            "G1: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
+            "G1A: ChatGPT project review - Round 1 + Codex decisions + Round 2",
+            harness_text,
+        )
+        self.assertIn(
+            "G1B: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
             harness_text,
         )
 

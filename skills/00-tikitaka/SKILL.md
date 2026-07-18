@@ -73,11 +73,17 @@ tikitaka_source_request.json
 -> timeline_design.json
 -> caption_beat_map.json
 -> timeline_design_gate.json
+-> chatgpt_review/round1_review_packet.md
+-> chatgpt_review/round1_chatgpt_raw.md
+-> chatgpt_review/round1_codex_decisions.json
 -> humanize_korean_gate.json
 -> block_map.json / block_role_map.json / block_voice_switch_map.json
 -> tts_copy_text.txt
 -> tts_duration_probe.json
 -> tts_timing_reconciliation_gate.json
+-> chatgpt_review/round2_audit_packet.md
+-> chatgpt_review/round2_chatgpt_raw.md
+-> chatgpt_review_gate.json
 -> script_handoff_gate.json
 -> report1_handoff.json
 ```
@@ -499,6 +505,12 @@ block_voice_switch_map.json
 tts_copy_text.txt
 tts_duration_probe.json
 tts_timing_reconciliation_gate.json
+chatgpt_review/round1_review_packet.md
+chatgpt_review/round1_chatgpt_raw.md
+chatgpt_review/round1_codex_decisions.json
+chatgpt_review/round2_audit_packet.md
+chatgpt_review/round2_chatgpt_raw.md
+chatgpt_review_gate.json
 script_handoff_gate.json
 report1_handoff.json
 ```
@@ -706,20 +718,12 @@ timecode mismatch notes. Keep any unverified Gemini ranges as
 
 ## Ownership Matrix
 
-- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00-tikitaka`: Shorts source analysis, full-source Demucs analysis
+  preprocessing, remake script draft, hook, top/timed-middle, and script
+  handoff. It creates `full_source_audio.wav` and `vocals.wav`; for an approved
+  `stage_2_full` route it also registers `clean_source.mp4` as a production
+  visual handoff. It does not create final Q clips or other production assets.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
-
-## Escalation Rule
-
-Do not move to the next owner unless the user explicitly asks for that owner's
-stage.
-
-Adjacent intent is not permission to escalate. A Tikitaka request does not imply
-production, `production_allowed`, `SCRIPT_LOCK`, `PASS`, export, upload,
-completion, audio generation, SRT generation, layout JSON, or CapCut work.
-
-If the user already has a draft and asks only for wording, rhythm, retention,
-or review, perform that wording-only pass here without changing the story plan.
 
 ## Stage Transition And n8n Contract
 
@@ -740,6 +744,18 @@ Require n8n only when the current package explicitly sets `n8n_required=true`
 or selects `orchestration.route=n8n`. Without that explicit selection, record
 `n8n=NOT_REQUIRED`, not `NOT_RUN`, and do not block Stage 1, Stage 2, or final
 validation because n8n evidence is absent.
+
+## Escalation Rule
+
+Do not move to the next owner unless the user explicitly asks for that owner's
+stage.
+
+Adjacent intent is not permission to escalate. A Tikitaka request does not imply
+production, `production_allowed`, `SCRIPT_LOCK`, `PASS`, export, upload,
+completion, audio generation, SRT generation, layout JSON, or CapCut work.
+
+If the user already has a draft and asks only for wording, rhythm, retention,
+or review, perform that wording-only pass here without changing the story plan.
 
 ## Stage Scope Gate
 
@@ -778,9 +794,9 @@ Mandatory gate map for URL + Gemini/source intake:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
-G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, and script_handoff_gate.json
+G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, ChatGPT Project Round 1, Codex decisions, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, ChatGPT Project Round 2, chatgpt_review_gate.json, and script_handoff_gate.json
 G2 STAGE 1 STOP = output 설계도 and stop until report1_approved + voice_audio_route_decided
-G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
+G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved, voice_audio_route_decided, and VMAKE_CLEAN_SOURCE_GATE PASS
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
 ```
 
@@ -1214,6 +1230,9 @@ may start:
 - `tts_duration_probe.json`: required only when narration audio is planned.
 - `tts_timing_reconciliation_gate.json`: required only when narration audio is
   planned.
+- `chatgpt_review_gate.json`: proves both ChatGPT project review rounds
+  completed, Round 1 suggestions were dispositioned by Codex, Round 2 returned
+  `PASS_RECOMMENDED`, and packet/response hashes match the preserved files.
 - `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
 
 Legacy aliases without extensions are accepted only for old packages.
@@ -1275,7 +1294,8 @@ roles, and audio switches are locked:
 Hard fails:
 
 - `original_block_map`, `wow_point_map`, `urakkai_order_map`,
-  `timeline_design.json`, `timeline_design_gate.json`,
+  `10_analysis/source_voice_separation.json`, `timeline_design.json`,
+  `timeline_design_gate.json`,
   `humanize_korean_gate.json`, `edit_block_sequence`, `block_map.json`,
   `block_role_map.json`, `block_voice_switch_map.json`, `tts_copy_text.txt`, or
   `script_handoff_gate.json` is missing when production handoff is requested.
@@ -1284,9 +1304,13 @@ Hard fails:
   `duration_status`, or `visual_strategy`.
 - narration-audio segment exists but `tts_duration_probe.json` or
   `tts_timing_reconciliation_gate.json` is missing.
+- `chatgpt_review_gate.json status=PASS` is missing, either ChatGPT project
+  review round is missing, or Round 2 is not `PASS_RECOMMENDED`.
 - actual narration duration exceeds the planned visual slot without an allowed
   reconciliation action; use `WAIT_TTS_TIMING_RELOCK`.
 - `speaker_quote` has no verified or explicitly proposed source range.
+- `speaker_quote` does not reference `10_analysis/audio/vocals.wav` with
+  `source_audio_provenance=demucs_full_source_vocals`.
 - `tts_narration` keeps `source_audio=on`.
 - `situation_caption` has `tts=on` without an `exception_reason`.
 - `capcut_allowed=true` appears before role and voice switch maps are locked.
@@ -1542,47 +1566,110 @@ Use when verified `"..."` 화자발언, `()` 상황설명, and TTS are all activ
 the timeline. Every segment must lock source_audio on/off/duck, tts on/off, and
 BGM/SFX policy before handoff.
 
-## Dual Writer Mode (Explicit Optional Mode)
+## ChatGPT Project Two-Pass Review (Required)
 
-Use two CLI-based writer agents only when the user explicitly asks for
-`작가모드`, `2명 토론`, `울트라 검토`, or an equivalent multi-writer review.
-Ordinary Tikitaka Stage 1 must not be blocked when either CLI is unavailable.
+Every new Tikitaka Stage 1 design must be reviewed twice in the existing
+ChatGPT project `쇼츠대본분석`:
 
-### CLI Tools
+```text
+https://chatgpt.com/g/g-p-6a245b804c2c8191907088f317842a55-syoceudaebonbunseog/project
+```
 
-- **Writer A (Codex CLI)**: aggressive hook, emotional escalation,
-  retention-first, willing to dramatize for engagement.
-  ```bash
-  codex exec "당신은 후킹·리텐션 중심 작가입니다. ... <분석 지시> ..." 2>&1
-  ```
-- **Writer B (Claude CLI)**: fact-grounded, structural balance,
-  risk-aware, prioritizes coherence and policy safety.
-  ```bash
-  claude -p --bare "당신은 사실·구조 중심 작가입니다. ... <분석 지시> ..." 2>&1
-  ```
+Use one new project chat per episode and keep both review rounds in that same
+chat. Use the logged-in normal Chrome session through available Chrome/browser
+control. Do not substitute a generic ChatGPT chat, API call, Claude CLI, or a
+different project. If the project cannot be opened, login is unavailable, or a
+fresh response cannot be copied, stop with:
 
-### Debate Protocol
+```text
+WAIT_CHATGPT_PROJECT_REVIEW
+```
 
-1. **Round 1**: Both CLIs receive the same video context independently.
-   Each outputs: type recommendation, wow point, urakai, disagreement point.
-2. **Round 2**: Share Round 1 outputs cross-wise. Each CLI responds:
-   동의/부분동의/유지 with reasoning.
-3. **Synthesis**: The orchestrator resolves cross-convergence (both writers
-   moving to each other's position = middle ground) into a final decision.
+Read the complete Shorts two-pass contract in
+`shorts_script_analysis_single_source_v20260706.md` before creating either
+packet. The ChatGPT project's common instructions must match
+`references/chatgpt_project_router_instruction.md`; if the live project router
+does not require `content_type: shorts` and `review_round: 1|2`, stop with
+`WAIT_CHATGPT_PROJECT_ROUTER_UPDATE`.
 
-Both writers must output:
-- recommended `story_type` (S1-S7) with reasoning
-- recommended `production_type` (A-F canonical code) with reasoning
-- recommended `shorts_design_type` (`SD1`, `SD2`, `SD3`, `SD4`, or `unknown`)
-  with reasoning
-- wow point confirmation or correction
-- urakai structure recommendation
-- one concrete disagreement point
+Round 1 occurs only after `timeline_design_gate.json status=PASS`:
 
-The final decision is the synthesis of both perspectives. If they disagree on
-production type, the higher-audio-fidelity type wins unless the source has no
-usable speech at all. If they disagree on story type, the type that best
-preserves the strongest source-backed viewer question wins.
+```yaml
+content_type: shorts
+review_round: 1
+```
+
+Save the exact sent packet and unedited response:
+
+```text
+chatgpt_review/round1_review_packet.md
+chatgpt_review/round1_chatgpt_raw.md
+```
+
+ChatGPT performs `INDEPENDENT_REVIEW` and `REVISION_PROPOSAL`. Its result always
+remains `PENDING_CODEX_REVIEW`. Codex then verifies every suggestion against
+source evidence and records one of `ADOPTED`, `PARTIALLY_ADOPTED`, `REJECTED`,
+or `PENDING_EVIDENCE` in:
+
+```text
+chatgpt_review/round1_codex_decisions.json
+```
+
+Apply accepted changes and rerun invalidated design, caption, Humanize, and TTS
+timing gates.
+
+Round 2 occurs after the revised candidate, Humanize, block maps, TTS copy, and
+TTS timing reconciliation are ready, but before `SCRIPT_HANDOFF_GATE`:
+
+```yaml
+content_type: shorts
+review_round: 2
+```
+
+Save:
+
+```text
+chatgpt_review/round2_audit_packet.md
+chatgpt_review/round2_chatgpt_raw.md
+```
+
+Round 2 performs `EVIDENCE_AUDIT` and returns one external recommendation:
+`PASS_RECOMMENDED`, `REVISE_REQUIRED`, or `EVIDENCE_REQUIRED`. All responses
+still end in `PENDING_CODEX_REVIEW`; ChatGPT cannot make the final adoption or
+handoff decision.
+
+Codex may write `chatgpt_review_gate.json status=PASS` only when both exact
+packets and raw responses are preserved, every Round 1 suggestion is
+dispositioned, Round 2 says `PASS_RECOMMENDED`, the source fingerprint matches,
+and no protected field changed silently. The gate name is:
+
+```text
+CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE
+```
+
+`REVISE_REQUIRED`, `EVIDENCE_REQUIRED`, a missing response, a mismatched packet
+hash, or a different project blocks `SCRIPT_HANDOFF_GATE`.
+
+### Browser-Assisted Automation Sequence
+
+Use `scripts/chatgpt_review_workflow.py` for deterministic packets, response
+checks, and gate creation. Use the signed-in normal Chrome session only to send
+the packets and copy fresh responses from project `쇼츠대본분석`.
+
+```powershell
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py build-round1 --work-dir <20_script-dir> --review-cycle-id <cycle-id>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py record-response --work-dir <20_script-dir> --round 1 --input <copied-round1-response.md>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py build-round2 --work-dir <20_script-dir> --review-cycle-id <cycle-id>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py record-response --work-dir <20_script-dir> --round 2 --input <copied-round2-response.md>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py finalize-gate --work-dir <20_script-dir>
+```
+
+If the project returns `SOURCE_CONTRACT_MISSING`, attach only
+`shorts_script_analysis_single_source_v20260706.md` to the project sources,
+keep the common instructions from
+`references/chatgpt_project_router_instruction.md`, and rerun the same packet
+in a fresh episode chat. Do not use Computer Use or an OS-level mouse/keyboard
+fallback.
 
 ## Draft Workflow
 
@@ -1592,19 +1679,22 @@ preserves the strongest source-backed viewer question wins.
    source speech policy, and card asset role before the first draft.
 3. Map source notes into functional beats.
 4. Write hook candidates if requested or useful.
-5. If the user explicitly selected Dual Writer Mode, run it to review wow point,
-   urakai, story type, and production type. Otherwise continue with the single
-   Tikitaka design owner.
-6. Produce `1차설계서`: a CapCut-style time/track layout table, not an abstract
+5. Produce `1차설계서`: a CapCut-style time/track layout table, not an abstract
    script report.
-7. Write `timeline_design.json` from the same layout and pass
+6. Write `timeline_design.json` from the same layout and pass
    `timeline_design_gate.json`.
+7. Send ChatGPT Project Round 1, save the raw response, adjudicate every
+   suggestion, and rerun invalidated design gates.
 8. Run Humanize Korean on visible text only and record
    `humanize_korean_gate.json` before handoff.
 9. Produce `상단 + timed 중단`, `block_map.json`, `block_role_map.json`,
    `block_voice_switch_map.json`, and `tts_copy_text.txt` from
    `중단 TTS 글자만 복사`.
-10. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
+10. Complete the TTS duration probe and timing reconciliation when narration
+    audio is planned.
+11. Send ChatGPT Project Round 2 and pass
+    `CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE`.
+12. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
     user explicitly asks for the next owner.
 
 ## Shorts TTS Storytelling Mode
@@ -1712,6 +1802,11 @@ Hard fails:
 - Do not claim source-verified truth from raw Gemini notes.
 - Do not run `SCRIPT_HANDOFF_GATE` before `timeline_design_gate.json` and
   `humanize_korean_gate.json` are PASS.
+- Do not run `SCRIPT_HANDOFF_GATE` before
+  `chatgpt_review_gate.json status=PASS` proves both required ChatGPT project
+  review rounds completed.
+- Do not replace a missing ChatGPT project review with Claude, a generic chat,
+  an API call, or Codex self-review.
 - Do not skip human Korean cleanup before any final visible Korean text.
 - Do not proceed past missing source evidence when the script depends on exact
   timing, OCR, or dialogue.
@@ -1723,8 +1818,12 @@ Hard fails:
 
 - Active Shorts script analysis authority is
   `shorts_script_analysis_single_source_v20260706.md`; apply it before any
-  reference file below.
+  reference file below. This same file is the single Shorts contract attached
+  to the ChatGPT project and contains the two-pass review protocol.
 - For hook review, read `references/pre_script_hook_review.md`.
+- When configuring or auditing the ChatGPT project, read
+  `references/chatgpt_project_router_instruction.md` and use it as the complete
+  common project instruction.
 - For Shorts craft rules, read `references/shorts-academy.md`.
 - For old contract details or legacy repair only, read
   `references/archived-full-skill-20260629.md`.

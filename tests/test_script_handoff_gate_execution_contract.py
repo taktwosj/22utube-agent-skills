@@ -36,6 +36,36 @@ def write_json(path: Path, text: str) -> None:
     write(path, text.strip() + "\n")
 
 
+def canonical_review_packet_hash(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = normalized.splitlines(keepends=True)
+    removed = False
+    kept: list[str] = []
+    for line in lines:
+        candidate = line[:-1] if line.endswith("\n") else line
+        if not removed and candidate.startswith("sent_packet_sha256:"):
+            removed = True
+            continue
+        kept.append(line)
+    if not removed:
+        raise AssertionError("review packet hash metadata missing")
+    return hashlib.sha256("".join(kept).encode("utf-8")).hexdigest()
+
+
+def review_packet(round_number: int) -> tuple[str, str, str]:
+    packet_id = f"cycle-fixture-round{round_number}"
+    template = (
+        "content_type: shorts\n"
+        f"review_round: {round_number}\n"
+        "review_cycle_id: cycle-fixture\n"
+        f"packet_id: {packet_id}\n"
+        "sent_packet_sha256: __PENDING__\n"
+        f"source_fingerprint_sha256: {SOURCE_FINGERPRINT}\n"
+    )
+    sent_hash = canonical_review_packet_hash(template)
+    return template.replace("__PENDING__", sent_hash, 1), packet_id, sent_hash
+
+
 def create_source_identity_and_linked_draft(root: Path) -> None:
     source = root / "00_source" / "source.mp4"
     write_valid_source_mp4(source)
@@ -51,6 +81,33 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
     write_json(root / "10_analysis" / "source_identity_lock.json", json.dumps(lock))
     write_source_voice_separation_fixture(root, source_sha256)
     write_vmake_clean_source_fixture(root, source_sha256)
+    separation = json.loads(
+        (root / "10_analysis" / "source_voice_separation.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    speaker_q = root / "30_audio_srt" / "speaker_q" / "E1.wav"
+    write(speaker_q, "speaker-q")
+    write_json(
+        root / "30_audio_srt" / "audio_asset_manifest.json",
+        json.dumps(
+            {
+                "status": "PASS",
+                "speaker_q_lane": [
+                    {
+                        "edit_id": "E1",
+                        "path": "30_audio_srt/speaker_q/E1.wav",
+                        "source_audio_ref": separation["vocals_path"],
+                        "source_audio_provenance": "demucs_full_source_vocals",
+                        "source_voice_vocals_sha256": separation["vocals_sha256"],
+                        "asset_sha256": hashlib.sha256(
+                            speaker_q.read_bytes()
+                        ).hexdigest(),
+                    }
+                ],
+            }
+        ),
+    )
     write_json(
         root / "10_analysis" / "source_evidence.json",
         json.dumps(
@@ -106,6 +163,22 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
         root / "50_capcut_project" / "draft_content.json",
         json.dumps(
             {
+                "active_materials": [
+                    {
+                        "id": "source-video",
+                        "role": "source_video",
+                        "path": str(source),
+                        "active": True,
+                        "audio_enabled": False,
+                    },
+                    {
+                        "id": "speaker-q-E1",
+                        "role": "speaker_q_E1",
+                        "edit_id": "E1",
+                        "path": "30_audio_srt/speaker_q/E1.wav",
+                        "active": True,
+                    },
+                ],
                 "materials": {
                     "videos": [
                         {
@@ -115,7 +188,16 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
                             "active": True,
                             "audio_enabled": False,
                         }
-                    ]
+                    ],
+                    "audios": [
+                        {
+                            "id": "speaker-q-E1",
+                            "role": "speaker_q_E1",
+                            "edit_id": "E1",
+                            "path": "30_audio_srt/speaker_q/E1.wav",
+                            "active": True,
+                        }
+                    ],
                 }
             }
         ),
@@ -131,6 +213,58 @@ def create_source_identity_and_linked_draft(root: Path) -> None:
         payload = json.loads(path.read_text(encoding="utf-8"))
         payload["source_fingerprint_sha256"] = source_sha256
         write_json(path, json.dumps(payload))
+
+
+def create_local_capcut_project_fixture(root: Path) -> Path:
+    project_dir = root / "local-capcut-project"
+    source = root / "00_source" / "source.mp4"
+    speaker_q = root / "30_audio_srt" / "speaker_q" / "E1.wav"
+    copied_source = project_dir / "00_source" / "source.mp4"
+    copied_q = project_dir / "30_audio_srt" / "speaker_q" / "E1.wav"
+    copied_source.parent.mkdir(parents=True, exist_ok=True)
+    copied_q.parent.mkdir(parents=True, exist_ok=True)
+    copied_source.write_bytes(source.read_bytes())
+    copied_q.write_bytes(speaker_q.read_bytes())
+    write_json(
+        project_dir / "draft_content.json",
+        json.dumps(
+            {
+                "active_materials": [
+                    {
+                        "id": "source-video",
+                        "role": "source_video",
+                        "path": "00_source/source.mp4",
+                        "active": True,
+                        "audio_enabled": False,
+                    },
+                    {
+                        "id": "speaker-q-E1",
+                        "role": "speaker_q_E1",
+                        "edit_id": "E1",
+                        "path": "30_audio_srt/speaker_q/E1.wav",
+                        "active": True,
+                    },
+                ]
+            }
+        ),
+    )
+    write_json(
+        project_dir / "draft_meta_info.json",
+        json.dumps(
+            {
+                "draft_materials": [
+                    {
+                        "type": 0,
+                        "value": [
+                            {"file_Path": "00_source/source.mp4"},
+                            {"file_Path": "30_audio_srt/speaker_q/E1.wav"},
+                        ],
+                    }
+                ]
+            }
+        ),
+    )
+    return project_dir
 
 
 def create_tikitaka_base_evidence(work_dir: Path) -> None:
@@ -378,6 +512,7 @@ fixture
         """,
     )
     write_humanize_gate_pass(work_dir)
+    write_chatgpt_review_pass(work_dir)
 
 
 def write_humanize_gate_pass(work_dir: Path) -> None:
@@ -392,6 +527,87 @@ def write_humanize_gate_pass(work_dir: Path) -> None:
           "protected_fields_changed": false
         }
         """,
+    )
+
+
+def write_chatgpt_review_pass(work_dir: Path) -> None:
+    review_dir = work_dir / "chatgpt_review"
+    round1_packet = review_dir / "round1_review_packet.md"
+    round1_response = review_dir / "round1_chatgpt_raw.md"
+    round1_decisions = review_dir / "round1_codex_decisions.json"
+    round2_packet = review_dir / "round2_audit_packet.md"
+    round2_response = review_dir / "round2_chatgpt_raw.md"
+
+    round1_packet_text, round1_packet_id, round1_sent_hash = review_packet(1)
+    round2_packet_text, round2_packet_id, round2_sent_hash = review_packet(2)
+    write(round1_packet, round1_packet_text)
+    write(
+        round1_response,
+        "ROUTE=SHORTS\n"
+        "review_round: 1\n"
+        "review_cycle_id: cycle-fixture\n"
+        f"packet_id: {round1_packet_id}\n"
+        f"sent_packet_sha256: {round1_sent_hash}\n"
+        "external_review_status: PENDING_CODEX_REVIEW\n",
+    )
+    write_json(
+        round1_decisions,
+        json.dumps(
+            {
+                "status": "PASS",
+                "all_suggestions_dispositioned": True,
+                "decisions": [],
+            }
+        ),
+    )
+    write(round2_packet, round2_packet_text)
+    write(
+        round2_response,
+        "ROUTE=SHORTS\n"
+        "review_round: 2\n"
+        "review_cycle_id: cycle-fixture\n"
+        f"packet_id: {round2_packet_id}\n"
+        f"sent_packet_sha256: {round2_sent_hash}\n"
+        "recommendation: PASS_RECOMMENDED\n"
+        "external_review_status: PENDING_CODEX_REVIEW\n",
+    )
+    write_json(
+        work_dir / "chatgpt_review_gate.json",
+        json.dumps(
+            {
+                "gate_name": "CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE",
+                "status": "PASS",
+                "project_id": "g-p-6a245b804c2c8191907088f317842a55-syoceudaebonbunseog",
+                "content_type": "shorts",
+                "review_cycle_id": "cycle-fixture",
+                "source_fingerprint_sha256": SOURCE_FINGERPRINT,
+                "round1": {
+                    "review_round": 1,
+                    "review_cycle_id": "cycle-fixture",
+                    "packet_id": round1_packet_id,
+                    "sent_packet_sha256": round1_sent_hash,
+                    "external_review_status": "PENDING_CODEX_REVIEW",
+                    "packet_sha256": hashlib.sha256(round1_packet.read_bytes()).hexdigest(),
+                    "response_sha256": hashlib.sha256(round1_response.read_bytes()).hexdigest(),
+                },
+                "codex_decisions": {
+                    "status": "PASS",
+                    "all_suggestions_dispositioned": True,
+                },
+                "round2": {
+                    "review_round": 2,
+                    "review_cycle_id": "cycle-fixture",
+                    "packet_id": round2_packet_id,
+                    "sent_packet_sha256": round2_sent_hash,
+                    "external_review_status": "PENDING_CODEX_REVIEW",
+                    "recommendation": "PASS_RECOMMENDED",
+                    "packet_sha256": hashlib.sha256(round2_packet.read_bytes()).hexdigest(),
+                    "response_sha256": hashlib.sha256(round2_response.read_bytes()).hexdigest(),
+                },
+                "protected_fields_changed_after_round2": False,
+                "final_decision_owner": "Codex",
+            }
+        ),
     )
 
 
@@ -464,7 +680,131 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
             self.assertEqual(gate["script_status"], "SCRIPT_LOCK_PACKAGE")
             self.assertIs(gate["capcut_allowed"], True)
             self.assertEqual(gate["source_fingerprint_sha256"], SOURCE_FINGERPRINT)
+            self.assertEqual(gate["checks"]["chatgpt_review_gate"]["status"], "PASS")
             self.assertEqual(state["script_handoff_gate"]["status"], "PASS")
+
+    def test_tikitaka_harness_blocks_handoff_without_chatgpt_two_pass_review(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_chatgpt_review_required",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_stage2_decision(work_dir)
+            (work_dir / "chatgpt_review_gate.json").unlink()
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("chatgpt_review_gate", gate["missing_or_failed"])
+            self.assertEqual(
+                gate["checks"]["chatgpt_review_gate"]["reason"],
+                "WAIT_CHATGPT_PROJECT_REVIEW",
+            )
+            self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
+
+    def test_tikitaka_harness_blocks_tampered_chatgpt_round_two_response(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_chatgpt_review_hash",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_stage2_decision(work_dir)
+            write(
+                work_dir / "chatgpt_review" / "round2_chatgpt_raw.md",
+                "ROUTE=SHORTS\nreview_round: 2\n"
+                "recommendation: REVISE_REQUIRED\n"
+                "external_review_status: PENDING_CODEX_REVIEW\n",
+            )
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn("chatgpt_review_gate", gate["missing_or_failed"])
+            self.assertIn(
+                "round 2 response hash mismatch",
+                gate["checks"]["chatgpt_review_gate"]["reason"],
+            )
+            self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
+
+    def test_tikitaka_harness_rejects_round1_cycle_mismatch_even_when_hash_updated(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_chatgpt_cycle_echo",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_stage2_decision(work_dir)
+            response_path = work_dir / "chatgpt_review" / "round1_chatgpt_raw.md"
+            response = response_path.read_text(encoding="utf-8").replace(
+                "review_cycle_id: cycle-fixture",
+                "review_cycle_id: wrong-cycle",
+                1,
+            )
+            write(response_path, response)
+            gate_path = work_dir / "chatgpt_review_gate.json"
+            review_gate = json.loads(gate_path.read_text(encoding="utf-8"))
+            review_gate["round1"]["response_sha256"] = hashlib.sha256(
+                response_path.read_bytes()
+            ).hexdigest()
+            write_json(gate_path, json.dumps(review_gate))
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn(
+                "review_cycle_id mismatch",
+                gate["checks"]["chatgpt_review_gate"]["reason"],
+            )
+            self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
+
+    def test_tikitaka_harness_rejects_nonpassing_round2_raw_recommendation(self):
+        module = load_source_module_no_bytecode(
+            "tikitaka_harness_runner_chatgpt_raw_recommendation",
+            TIKITAKA_HARNESS,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            work_dir = Path(tmp)
+            create_tikitaka_base_evidence(work_dir)
+            create_script_lock_package_artifacts(work_dir)
+            write_stage2_decision(work_dir)
+            response_path = work_dir / "chatgpt_review" / "round2_chatgpt_raw.md"
+            response = response_path.read_text(encoding="utf-8").replace(
+                "recommendation: PASS_RECOMMENDED",
+                "recommendation: REVISE_REQUIRED",
+                1,
+            )
+            write(response_path, response)
+            gate_path = work_dir / "chatgpt_review_gate.json"
+            review_gate = json.loads(gate_path.read_text(encoding="utf-8"))
+            review_gate["round2"]["response_sha256"] = hashlib.sha256(
+                response_path.read_bytes()
+            ).hexdigest()
+            write_json(gate_path, json.dumps(review_gate))
+
+            state = module.audit(work_dir, "job-test")
+
+            gate = module.read_json(work_dir / "script_handoff_gate.json")
+            self.assertEqual(gate["status"], "FAIL")
+            self.assertIn(
+                "REVISE_REQUIRED",
+                gate["checks"]["chatgpt_review_gate"]["reason"],
+            )
+            self.assertEqual(state["script_handoff_gate"]["status"], "FAIL")
 
     def test_tikitaka_harness_rejects_legacy_caption_profile_values(self):
         module = load_source_module_no_bytecode("tikitaka_harness_runner_caption_profile", TIKITAKA_HARNESS)
@@ -1442,6 +1782,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                 """,
             )
             create_source_identity_and_linked_draft(root)
+            local_project = create_local_capcut_project_fixture(root)
             reference_path = root / "capcut_refs" / "shrt white"
             reference_path.mkdir(parents=True)
 
@@ -1454,6 +1795,7 @@ class ScriptHandoffGateExecutionContractTests(unittest.TestCase):
                     "reference_project_name": "shrt white",
                     "reference_project_path": str(reference_path),
                     "derived_from_reference_project": True,
+                    "local_capcut_path": str(local_project),
                 },
                 root,
             )
