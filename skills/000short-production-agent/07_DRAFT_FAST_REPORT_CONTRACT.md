@@ -289,8 +289,8 @@ The modern validator may record this as `pre_capcut_script_package_status`, but 
 - `DRAFT_FAST` creates a reviewable CapCut draft and runs only the fast draft checks: template-copy basis, `template_profile_match`, placeholder media removal, real source video link, T1-T6 role order, `middle_caption_format_match`, bottom-layer ban, mandatory CapCut media settings, Korean text gate, media path/openability, `reference_visual_preview_match`, visual preview sanity, and `active_draft_cleanup_gate`.
 - `AUTO_FULL_CAPCUT_PROJECT` creates a complete local project-file candidate and runs the same script authority, source, SRT/layout, CapCut, visual/template, media-settings, cleanup, and report gates needed for a user-reviewable project file.
 - `INTERACTIVE_SCRIPT_APPROVAL` pauses before production at the urakkai/script/template checkpoints selected by the user.
-- `FINAL_LOCK` runs full writer/persona gates, policy/safety, `SCRIPT_LOCK`, production gate, post-CapCut gate, harness `all`, upload copy, and upload readiness.
-- Any older gate that requires `SCRIPT_LOCK`, 5-persona approval, `production_gate_result.json`, `post_capcut_timeline_gate_result.json`, `--stage all`, or upload text is `FINAL_LOCK only` unless this document says it is part of the DRAFT_FAST fast-check list.
+- `FINAL_LOCK` runs policy/safety, `SCRIPT_LOCK`, production gate, post-CapCut gate, harness `all`, upload copy, and upload readiness.
+- Any older gate that requires `SCRIPT_LOCK`, `production_gate_result.json`, `post_capcut_timeline_gate_result.json`, `--stage all`, or upload text is `FINAL_LOCK only` unless this document says it is part of the DRAFT_FAST fast-check list.
 
 ## DRAFT_FAST_COST_BUDGET
 

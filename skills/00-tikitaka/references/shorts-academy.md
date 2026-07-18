@@ -256,7 +256,7 @@ User channel families:
 | `연예인/팬튜브` | Idol, celebrity, fan moment, behind clip | Fandom context -> moment -> reaction | Rumor, private life, minors, and harassment risk are high. |
 | `군림보` | Photo/still-image explainer, personality/background summary, list-style image narration | Continuous TTS explanation over photos/images; simple visual support | Treat as `photo_tts_explainer`; do not force dialogue or heavy `(상황설명)` when the source is just photos plus TTS. |
 | `군사` | Military, weapon, soldier, tactics, defense story | Object/capability -> tension -> result | Weapon/geopolitical claims need high factual discipline. |
-| `동기부여/명언` | Motivation, quote, mindset, success/failure lesson | One memory anchor + one takeaway | Weak ceiling unless the figure, pain, or visual proof is strong. |
+| `동기부여/명언` | Motivation, quote, mindset, success/failure lesson | One concrete takeaway | Weak ceiling unless the figure, pain, or visual proof is strong. |
 | `게임` | Game ranking, player legend, patch, funny bug, gaming incident | Setup -> mechanic/conflict -> payoff | Use exact game terms; avoid claims unsupported by source/community evidence. |
 | `랭킹` | Ranked list, TOP-N, best/worst, compilation | Count/list pressure, strongest payoff last | Ranking order must be remixed; set `source_order_allowed=false`. |
 | `유머` | Funny clip, skit, absurd moment, fail, reaction | Setup -> beat -> laugh/reaction | Do not over-explain the joke; cut timing is part of the rewrite. |
@@ -283,8 +283,7 @@ order.
   Keep jokes restrained.
 - `관찰/리액션형`: explain what the viewer should notice with
   `(현장상황설명)`. Do not replace visible evidence with narrator opinion.
-- `지식/설명형`: turn abstract information into one concrete object, number, or
-  visual memory anchor.
+- `지식/설명형`: turn abstract information into one concrete object or number.
 
 ## Pre-Draft Checklist
 
