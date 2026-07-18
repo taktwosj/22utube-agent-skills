@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import re
@@ -70,6 +71,7 @@ ALLOWED_RECONCILIATION_ACTIONS = {
     "shorten_text_and_regenerate_tts",
 }
 SCRIPT_LOCK_PACKAGE_FILES = {
+    "source_voice_separation": "10_analysis/source_voice_separation.json",
     "original_structure_summary": "original_structure_summary.md",
     "urakkai_structure_plan": "urakkai_structure_plan.md",
     "urakkai_structure_delta": "urakkai_structure_delta.json",
@@ -83,7 +85,18 @@ SCRIPT_LOCK_PACKAGE_FILES = {
     "tts_copy_text": "tts_copy_text.txt",
     "tts_duration_probe": "tts_duration_probe.json",
     "tts_timing_reconciliation_gate": "tts_timing_reconciliation_gate.json",
+    "chatgpt_review_gate": "chatgpt_review_gate.json",
 }
+VMAKE_CLEAN_SOURCE_MANIFEST = "10_analysis/vmake_clean_source.json"
+CHATGPT_PROJECT_ID = "g-p-6a245b804c2c8191907088f317842a55-syoceudaebonbunseog"
+CHATGPT_REVIEW_FILES = {
+    "round1_packet": "chatgpt_review/round1_review_packet.md",
+    "round1_response": "chatgpt_review/round1_chatgpt_raw.md",
+    "round1_decisions": "chatgpt_review/round1_codex_decisions.json",
+    "round2_packet": "chatgpt_review/round2_audit_packet.md",
+    "round2_response": "chatgpt_review/round2_chatgpt_raw.md",
+}
+CHATGPT_REVIEW_WORKFLOW = Path(__file__).with_name("chatgpt_review_workflow.py")
 SCRIPT_BODY_CANDIDATES = (
     "final_script_ko.md",
     "final_script_ko.txt",
@@ -237,6 +250,10 @@ def nonempty(path: Path) -> bool:
     return path.exists() and path.is_file() and path.stat().st_size > 0
 
 
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def read_json(path: Path) -> dict[str, Any]:
     if not nonempty(path):
         return {}
@@ -303,7 +320,35 @@ def script_gate_status(work_dir: Path) -> dict[str, Any]:
     return status_block("FAILED", "script_gate_report.json", "script gate lacks pass_count>=4 or hard-veto=false")
 
 
+def n8n_is_required(work_dir: Path, previous_state: dict[str, Any]) -> bool:
+    if previous_state.get("n8n_required") is True:
+        return True
+
+    previous_n8n = previous_state.get("n8n")
+    if isinstance(previous_n8n, dict) and previous_n8n.get("required") is True:
+        return True
+
+    orchestration = previous_state.get("orchestration")
+    if isinstance(orchestration, dict):
+        if orchestration.get("n8n_required") is True:
+            return True
+        if str(orchestration.get("route") or "").strip().lower() == "n8n":
+            return True
+
+    requirement = read_json(work_dir / "n8n_requirement.json")
+    return requirement.get("required") is True
+
+
 def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]:
+    required = n8n_is_required(work_dir, previous_state)
+    if not required:
+        return {
+            "status": "NOT_REQUIRED",
+            "evidence": None,
+            "reason": "n8n orchestration not selected; Codex owns the stage transition",
+            "required": False,
+        }
+
     previous = previous_state.get("n8n") if isinstance(previous_state.get("n8n"), dict) else {}
     previous_status = str(previous.get("status") or "").upper()
     previous_execution = previous.get("execution_id")
@@ -314,6 +359,7 @@ def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]
             "execution_id": previous_execution,
             "evidence": previous_evidence,
             "reason": "carried from existing job_state.json",
+            "required": required,
         }
 
     candidates = [
@@ -329,9 +375,21 @@ def n8n_status(work_dir: Path, previous_state: dict[str, Any]) -> dict[str, Any]
             execution_id = None
             if name == "n8n_execution_id.txt":
                 execution_id = (work_dir / name).read_text(encoding="utf-8-sig").strip()
-            return {"status": "DONE", "execution_id": execution_id, "evidence": name, "reason": ""}
+            return {
+                "status": "DONE",
+                "execution_id": execution_id,
+                "evidence": name,
+                "reason": "",
+                "required": required,
+            }
 
-    return status_block("NOT_RUN", None, "no n8n execution id, callback, webhook response, or output artifact")
+    return {
+        "status": "NOT_RUN",
+        "evidence": None,
+        "blocker": "WAIT_N8N_EXECUTION_EVIDENCE",
+        "reason": "n8n_required=true but no execution id, callback, webhook response, or output artifact",
+        "required": True,
+    }
 
 
 def append_trace(work_dir: Path, job_id: str) -> dict[str, Any]:
@@ -343,6 +401,13 @@ def append_trace(work_dir: Path, job_id: str) -> dict[str, Any]:
 
 def passish(block: dict[str, Any]) -> bool:
     return str(block.get("status") or "").upper() in PASS_VALUES
+
+
+def upstream_satisfied(block: dict[str, Any]) -> bool:
+    return passish(block) or str(block.get("status") or "").upper() in {
+        "DONE",
+        "NOT_REQUIRED",
+    }
 
 
 def design_blueprint_status(work_dir: Path) -> dict[str, Any]:
@@ -977,15 +1042,169 @@ def timeline_design_status(work_dir: Path) -> dict[str, Any]:
                     f"timeline_design.segments[{index}] estimated_tts_duration_sec required",
                 )
         if segment.get("caption_type") == "speaker_quote":
-            quote_required = {"source_audio_range", "quote_verification_status"}
+            quote_required = {
+                "source_audio_range",
+                "quote_verification_status",
+                "source_audio_ref",
+                "source_audio_provenance",
+            }
             quote_missing = sorted(key for key in quote_required if segment.get(key) in (None, ""))
             if quote_missing:
                 return status_block(
                     "FAILED",
                     name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: "
                     f"timeline_design.segments[{index}] missing {', '.join(quote_missing)}",
                 )
+            if (
+                segment.get("source_audio_ref")
+                != "10_analysis/audio/vocals.wav"
+                or segment.get("source_audio_provenance")
+                != "demucs_full_source_vocals"
+            ):
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: speaker_quote must use "
+                    "10_analysis/audio/vocals.wav from demucs_full_source_vocals",
+                )
+            separation = read_json(
+                work_dir / SCRIPT_LOCK_PACKAGE_FILES["source_voice_separation"]
+            )
+            if separation.get("status") == "NOT_REQUIRED_NO_SOURCE_SPEECH":
+                return status_block(
+                    "FAILED",
+                    name,
+                    "WAIT_SOURCE_VOICE_Q_PROVENANCE: no-speech source cannot contain speaker_quote",
+                )
     return status_block("PASS", name)
+
+
+def source_voice_separation_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["source_voice_separation"]
+    validator_path = Path(__file__).with_name(
+        "validate_source_voice_separation.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "tikitaka_source_voice_validator",
+        validator_path,
+    )
+    if spec is None or spec.loader is None:
+        return status_block(
+            "FAILED",
+            None,
+            "WAIT_SOURCE_VOICE_SEPARATION: validator unavailable",
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_source_voice_separation(work_dir)
+    except module.GateFail as exc:
+        return status_block("FAILED", name, str(exc))
+    actual_status = result.get("source_voice_separation_status", "")
+    return status_block("PASS", name, str(actual_status))
+
+
+def vmake_clean_source_status(
+    work_dir: Path,
+    *,
+    required: bool,
+) -> dict[str, Any]:
+    if not required:
+        return {
+            "status": "NOT_REQUIRED",
+            "evidence": None,
+            "reason": "NOT_REQUIRED_STAGE1_ONLY",
+            "required": False,
+        }
+
+    manifest_path = work_dir / VMAKE_CLEAN_SOURCE_MANIFEST
+    manifest = read_json(manifest_path)
+    if manifest.get("status") == "USER_CONFIRMED_VMAKE_REUSE":
+        expected = {
+            "gate_name": "VMAKE_CLEAN_SOURCE_GATE",
+            "owner_skill": "00-tikitaka",
+            "vmake_reuse_mode": "USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST",
+            "user_vmake_confirmation": True,
+            "analysis_authority": "original_sources",
+            "timeline_authority": "existing_approved_design",
+            "clean_visual_review_status": "USER_CONFIRMED",
+            "embedded_audio_policy": "muted_always",
+        }
+        mismatched = [
+            field
+            for field, expected_value in expected.items()
+            if manifest.get(field) != expected_value
+        ]
+        if mismatched:
+            return status_block(
+                "FAILED",
+                VMAKE_CLEAN_SOURCE_MANIFEST,
+                "WAIT_EXISTING_VMAKE_CLEAN_FILE: invalid user-confirmed reuse "
+                + ", ".join(mismatched),
+            )
+
+        raw_paths = manifest.get("clean_visual_paths")
+        if not isinstance(raw_paths, list) or not raw_paths:
+            single_path = manifest.get("clean_visual_path")
+            raw_paths = [single_path] if single_path else []
+        resolved_paths: list[str] = []
+        for raw_path in raw_paths:
+            relative = Path(str(raw_path or "").strip())
+            if not str(raw_path or "").strip() or relative.is_absolute():
+                return status_block(
+                    "FAILED",
+                    VMAKE_CLEAN_SOURCE_MANIFEST,
+                    "WAIT_EXISTING_VMAKE_CLEAN_FILE: clean path must be episode-relative",
+                )
+            resolved = (work_dir / relative).resolve()
+            try:
+                resolved.relative_to(work_dir.resolve())
+            except ValueError:
+                return status_block(
+                    "FAILED",
+                    VMAKE_CLEAN_SOURCE_MANIFEST,
+                    "WAIT_EXISTING_VMAKE_CLEAN_FILE: clean path escapes episode root",
+                )
+            if not nonempty(resolved):
+                return status_block(
+                    "FAILED",
+                    VMAKE_CLEAN_SOURCE_MANIFEST,
+                    f"WAIT_EXISTING_VMAKE_CLEAN_FILE: missing {relative.as_posix()}",
+                )
+            resolved_paths.append(relative.as_posix())
+        return {
+            "status": "PASS",
+            "evidence": VMAKE_CLEAN_SOURCE_MANIFEST,
+            "reason": "USER_CONFIRMED_VMAKE_REUSE",
+            "required": True,
+            "validation_authority": "user_confirmation",
+            "clean_visual_paths": resolved_paths,
+        }
+
+    validator_path = Path(__file__).with_name("validate_vmake_clean_source.py")
+    spec = importlib.util.spec_from_file_location(
+        "tikitaka_vmake_clean_source_validator",
+        validator_path,
+    )
+    if spec is None or spec.loader is None:
+        return status_block(
+            "FAILED",
+            None,
+            "WAIT_VMAKE_CLEAN_SOURCE: validator unavailable",
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.validate_vmake_clean_source(work_dir)
+    except module.GateFail as exc:
+        return status_block("FAILED", VMAKE_CLEAN_SOURCE_MANIFEST, str(exc))
+    return {
+        "status": "PASS",
+        "evidence": VMAKE_CLEAN_SOURCE_MANIFEST,
+        "reason": str(result.get("vmake_job_id") or ""),
+        "required": True,
+    }
 
 
 def block_map_status(work_dir: Path) -> dict[str, Any]:
@@ -1138,8 +1357,186 @@ def tts_timing_reconciliation_gate_status(work_dir: Path) -> dict[str, Any]:
     return status_block("PASS", name)
 
 
+def chatgpt_review_gate_status(work_dir: Path) -> dict[str, Any]:
+    name = SCRIPT_LOCK_PACKAGE_FILES["chatgpt_review_gate"]
+    gate_path = work_dir / name
+    wait_reason = "WAIT_CHATGPT_PROJECT_REVIEW"
+    if not nonempty(gate_path):
+        return status_block("MISSING", None, wait_reason)
+
+    gate = read_json(gate_path)
+    if gate.get("_parse_error") or gate.get("_non_object") or not gate:
+        return status_block("FAILED", name, f"{wait_reason}: review gate parse failed")
+    if gate.get("gate_name") != "CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE":
+        return status_block("FAILED", name, f"{wait_reason}: wrong gate_name")
+    if gate.get("status") != "PASS":
+        return status_block("FAILED", name, wait_reason)
+    if gate.get("project_id") != CHATGPT_PROJECT_ID:
+        return status_block("FAILED", name, f"{wait_reason}: wrong ChatGPT project")
+    if gate.get("content_type") != "shorts":
+        return status_block("FAILED", name, f"{wait_reason}: content_type must be shorts")
+    if not gate.get("review_cycle_id"):
+        return status_block("FAILED", name, f"{wait_reason}: review_cycle_id missing")
+    if gate.get("source_fingerprint_sha256") != timeline_source_fingerprint(work_dir):
+        return status_block("FAILED", name, f"{wait_reason}: source fingerprint mismatch")
+
+    for label, relative in CHATGPT_REVIEW_FILES.items():
+        if not nonempty(work_dir / relative):
+            return status_block("FAILED", name, f"{wait_reason}: missing {label}")
+
+    round1 = gate.get("round1")
+    round2 = gate.get("round2")
+    decisions = gate.get("codex_decisions")
+    if not isinstance(round1, dict) or not isinstance(round2, dict):
+        return status_block("FAILED", name, f"{wait_reason}: both review rounds required")
+    if not isinstance(decisions, dict):
+        return status_block("FAILED", name, f"{wait_reason}: Codex decisions missing")
+
+    expected_rounds = (
+        (
+            round1,
+            1,
+            CHATGPT_REVIEW_FILES["round1_packet"],
+            CHATGPT_REVIEW_FILES["round1_response"],
+        ),
+        (
+            round2,
+            2,
+            CHATGPT_REVIEW_FILES["round2_packet"],
+            CHATGPT_REVIEW_FILES["round2_response"],
+        ),
+    )
+    for round_data, round_number, packet_relative, response_relative in expected_rounds:
+        if round_data.get("review_round") != round_number:
+            return status_block(
+                "FAILED",
+                name,
+                f"{wait_reason}: review_round {round_number} missing",
+            )
+        if round_data.get("external_review_status") != "PENDING_CODEX_REVIEW":
+            return status_block(
+                "FAILED",
+                name,
+                f"{wait_reason}: round {round_number} external status invalid",
+            )
+        packet_path = work_dir / packet_relative
+        response_path = work_dir / response_relative
+        if round_data.get("packet_sha256") != sha256_file(packet_path):
+            return status_block(
+                "FAILED",
+                name,
+                f"{wait_reason}: round {round_number} packet hash mismatch",
+            )
+        if round_data.get("response_sha256") != sha256_file(response_path):
+            return status_block(
+                "FAILED",
+                name,
+                f"{wait_reason}: round {round_number} response hash mismatch",
+            )
+        response_text = response_path.read_text(encoding="utf-8-sig")
+        if "ROUTE=SHORTS" not in response_text or "PENDING_CODEX_REVIEW" not in response_text:
+            return status_block(
+                "FAILED",
+                name,
+                f"{wait_reason}: round {round_number} response contract missing",
+            )
+
+    if not CHATGPT_REVIEW_WORKFLOW.is_file():
+        return status_block(
+            "FAILED",
+            name,
+            f"{wait_reason}: ChatGPT review workflow validator missing",
+        )
+    spec = importlib.util.spec_from_file_location(
+        "tikitaka_chatgpt_review_workflow_validator",
+        CHATGPT_REVIEW_WORKFLOW,
+    )
+    if spec is None or spec.loader is None:
+        return status_block(
+            "FAILED",
+            name,
+            f"{wait_reason}: ChatGPT review workflow validator load failed",
+        )
+    workflow = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(workflow)
+    try:
+        validated_round1 = workflow.validate_response(
+            work_dir / CHATGPT_REVIEW_FILES["round1_packet"],
+            work_dir / CHATGPT_REVIEW_FILES["round1_response"],
+            1,
+        )
+        validated_round2 = workflow.validate_response(
+            work_dir / CHATGPT_REVIEW_FILES["round2_packet"],
+            work_dir / CHATGPT_REVIEW_FILES["round2_response"],
+            2,
+        )
+        workflow.validate_codex_decisions(
+            work_dir / CHATGPT_REVIEW_FILES["round1_decisions"],
+            work_dir / CHATGPT_REVIEW_FILES["round1_response"],
+        )
+    except workflow.ReviewWorkflowError as exc:
+        return status_block(
+            "FAILED",
+            name,
+            f"{wait_reason}: {exc}",
+        )
+
+    for round_data, validated, round_number in (
+        (round1, validated_round1, 1),
+        (round2, validated_round2, 2),
+    ):
+        for key in (
+            "review_cycle_id",
+            "packet_id",
+            "sent_packet_sha256",
+        ):
+            if round_data.get(key) != validated.get(key):
+                return status_block(
+                    "FAILED",
+                    name,
+                    f"{wait_reason}: round {round_number} {key} mismatch",
+                )
+    if gate.get("review_cycle_id") != validated_round1.get("review_cycle_id"):
+        return status_block(
+            "FAILED",
+            name,
+            f"{wait_reason}: review_cycle_id mismatch",
+        )
+    if validated_round2.get("recommendation") != "PASS_RECOMMENDED":
+        return status_block(
+            "FAILED",
+            name,
+            f"{wait_reason}: Round 2 returned {validated_round2.get('recommendation')}",
+        )
+    if round2.get("recommendation") != validated_round2.get("recommendation"):
+        return status_block(
+            "FAILED",
+            name,
+            f"{wait_reason}: Round 2 recommendation mismatch",
+        )
+
+    decisions_path = work_dir / CHATGPT_REVIEW_FILES["round1_decisions"]
+    decisions_payload = read_json(decisions_path)
+    if (
+        decisions.get("status") != "PASS"
+        or decisions.get("all_suggestions_dispositioned") is not True
+        or decisions_payload.get("status") != "PASS"
+        or decisions_payload.get("all_suggestions_dispositioned") is not True
+    ):
+        return status_block("FAILED", name, f"{wait_reason}: Codex decisions incomplete")
+    if round2.get("recommendation") != "PASS_RECOMMENDED":
+        return status_block("FAILED", name, f"{wait_reason}: Round 2 did not recommend pass")
+    if gate.get("protected_fields_changed_after_round2") is not False:
+        return status_block("FAILED", name, f"{wait_reason}: protected fields changed")
+    if gate.get("final_decision_owner") != "Codex":
+        return status_block("FAILED", name, f"{wait_reason}: final decision owner must be Codex")
+
+    return status_block("PASS", name)
+
+
 def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
     checks = {
+        "source_voice_separation": source_voice_separation_status(work_dir),
         "visible_script_body": visible_script_body_status(work_dir),
         "original_structure_summary": file_status(
             work_dir,
@@ -1170,6 +1567,7 @@ def build_script_handoff_gate(work_dir: Path) -> dict[str, Any]:
         "block_voice_switch_map": block_voice_switch_map_status(work_dir),
         "tts_duration_probe": tts_duration_probe_status(work_dir),
         "tts_timing_reconciliation_gate": tts_timing_reconciliation_gate_status(work_dir),
+        "chatgpt_review_gate": chatgpt_review_gate_status(work_dir),
         "tts_copy_text": file_status(
             work_dir,
             SCRIPT_LOCK_PACKAGE_FILES["tts_copy_text"],
@@ -1210,16 +1608,32 @@ def build_report1_handoff_gate(
     stage_scope_gate: dict[str, Any],
     script_handoff_gate: dict[str, Any],
     capcut_permission: str,
+    vmake_clean_source: dict[str, Any],
 ) -> dict[str, Any]:
+    vmake_required = stage_scope_gate.get("decision") == "stage_2_full"
+    vmake_ready = not vmake_required or upstream_satisfied(vmake_clean_source)
     ready = (
         passish(script_handoff_gate)
         and capcut_permission == "CAPCUT_OPENABLE_PROJECT_ALLOWED"
         and report1_transition_ready(previous_state)
+        and vmake_ready
     )
     blocker = "" if ready else "WAIT_REPORT1_APPROVAL_TTS_DECISION"
     if not passish(script_handoff_gate):
         blocker = "WAIT_SCRIPT_HANDOFF_GATE"
+    elif (
+        report1_transition_ready(previous_state)
+        and vmake_required
+        and not vmake_ready
+    ):
+        blocker = "WAIT_VMAKE_CLEAN_SOURCE"
 
+    required_before_next = [
+        "report1_approved=true",
+        "voice_audio_route_decided=true",
+    ]
+    if vmake_required:
+        required_before_next.append("VMAKE_CLEAN_SOURCE_GATE=PASS")
     return {
         "gate_name": "REPORT1_HANDOFF_GATE",
         "status": "PASS" if ready else "WAIT",
@@ -1231,19 +1645,19 @@ def build_report1_handoff_gate(
         "source_fingerprint_sha256": script_handoff_gate.get("source_fingerprint_sha256", ""),
         "next_stage": "보고서2",
         "next_gate": "CAPCUT_OPENABLE_PROJECT",
-        "required_before_next": [
-            "report1_approved=true",
-            "voice_audio_route_decided=true",
-        ],
+        "required_before_next": required_before_next,
         "report1_approved": has_report1_approval(previous_state),
         "voice_audio_route_decided": has_voice_audio_route_decision(previous_state),
+        "vmake_clean_source_required": vmake_required,
+        "vmake_clean_source_status": vmake_clean_source.get("status"),
         "forbidden_next": [
             "00-tikitaka writes 보고서2",
             "CapCut before report1 approval",
             "TTS before voice/audio route decision",
         ],
         "copy_to_next_chat": (
-            "Use $000short-production-agent. 설계도 승인 + TTS/오디오 방식 결정 후 "
+            "Use $000short-production-agent. 설계도 승인 + TTS/오디오 방식 결정 + "
+            "VMAKE_CLEAN_SOURCE_GATE PASS 후 "
             "보고서2 / CAPCUT_OPENABLE_PROJECT 단계로 진행."
         ),
     }
@@ -1255,8 +1669,10 @@ def checked(flag: bool) -> str:
 
 def build_stage_gate_todo(job_state: dict[str, Any]) -> str:
     decision = job_state["stage_scope_gate"].get("decision") or "WAIT_USER_STAGE_DECISION"
+    chatgpt_review_pass = passish(job_state["chatgpt_review_gate"])
     handoff_pass = passish(job_state["script_handoff_gate"])
     stage2_pass = passish(job_state["stage_scope_gate"])
+    vmake_pass = upstream_satisfied(job_state["vmake_clean_source"])
     capcut_allowed = job_state["capcut_permission"] == "CAPCUT_OPENABLE_PROJECT_ALLOWED"
     final_allowed = job_state["final_report_allowed"] is True
     return "\n".join(
@@ -1264,6 +1680,8 @@ def build_stage_gate_todo(job_state: dict[str, Any]) -> str:
             "# 11short Stage Gate TODO",
             "",
             f"{checked(decision != 'WAIT_USER_STAGE_DECISION')} G0: {decision} - user stage decision or request token",
+            f"{checked(vmake_pass)} G0A: Vmake clean visual - required only for stage_2_full",
+            f"{checked(chatgpt_review_pass)} G1A: ChatGPT project review - Round 1 + Codex decisions + Round 2",
             f"{checked(handoff_pass)} G1: stage 1 artifacts - timeline_design + humanize + block maps + tts_copy + script_handoff_gate",
             f"{checked(handoff_pass)} G2: stage 1 STOP - 설계도",
             f"{checked(stage2_pass and capcut_allowed)} G3: stage 2 entry - user_stage_decision=stage_2_full",
@@ -1354,6 +1772,7 @@ def build_stage_scope_report(job_state: dict[str, Any], work_dir: Path) -> str:
             "- humanize_korean_gate.json",
             "- block_map.json / block_role_map.json / block_voice_switch_map.json",
             "- tts_copy_text.txt",
+            "- chatgpt_review Round 1 / Codex decisions / Round 2 / chatgpt_review_gate.json",
             "",
             "handoff:",
             "- 다음 스킬: 000short-production-agent",
@@ -1394,8 +1813,10 @@ def build_visual_gate(job_state: dict[str, Any]) -> str:
             line("Execution Spec", job_state["execution_spec"]),
             line("5작가 모드", job_state["persona_mode"]),
             line("Script Gate", job_state["script_gate"]),
+            line("ChatGPT Two-Pass Review", job_state["chatgpt_review_gate"]),
             line("Script Handoff Gate", job_state["script_handoff_gate"]),
             line("Stage Scope Gate", job_state["stage_scope_gate"]),
+            line("Vmake Clean Source", job_state["vmake_clean_source"]),
             line("Re-entry Stage", job_state["reentry_stage"]),
             f"CapCut openable permission: {job_state['capcut_permission']}",
             f"Production status: {job_state['production_status']}",
@@ -1426,18 +1847,34 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
     script_gate = script_gate_status(work_dir)
     reentry_stage = reentry_stage_status(work_dir, previous_state)
     script_handoff_gate = build_script_handoff_gate(work_dir)
+    chatgpt_review_gate = script_handoff_gate["checks"]["chatgpt_review_gate"]
     stage_scope_gate = stage_scope_status(previous_state, work_dir)
+    vmake_required = stage_scope_gate.get("decision") == "stage_2_full"
+    vmake_clean_source = vmake_clean_source_status(
+        work_dir,
+        required=vmake_required,
+    )
     if passish(script_handoff_gate) and not passish(stage_scope_gate):
         script_handoff_gate = dict(script_handoff_gate)
         script_handoff_gate["capcut_allowed"] = False
         script_handoff_gate["capcut_blocker"] = stage_scope_gate.get("blocker") or "WAIT_USER_STAGE_DECISION"
         script_handoff_gate["stage_scope_gate"] = stage_scope_gate
+    elif (
+        passish(script_handoff_gate)
+        and vmake_required
+        and not upstream_satisfied(vmake_clean_source)
+    ):
+        script_handoff_gate = dict(script_handoff_gate)
+        script_handoff_gate["capcut_allowed"] = False
+        script_handoff_gate["capcut_blocker"] = "WAIT_VMAKE_CLEAN_SOURCE"
+        script_handoff_gate["vmake_clean_source"] = vmake_clean_source
     capcut_permission, production_status = capcut_permission_status(script_handoff_gate)
     report1_handoff_gate = build_report1_handoff_gate(
         previous_state,
         stage_scope_gate,
         script_handoff_gate,
         capcut_permission,
+        vmake_clean_source,
     )
     n8n = n8n_status(work_dir, previous_state)
 
@@ -1447,19 +1884,21 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "implementation_log": implementation_log,
         "persona_mode": personas,
         "script_gate": script_gate,
+        "chatgpt_review_gate": chatgpt_review_gate,
         "script_handoff_gate": script_handoff_gate,
         "stage_scope_gate": stage_scope_gate,
+        "vmake_clean_source": vmake_clean_source,
         "n8n": n8n,
         "harness_trace": trace,
     }
-    missing = [name for name, block in upstream.items() if not passish(block) and block.get("status") != "DONE"]
+    missing = [name for name, block in upstream.items() if not upstream_satisfied(block)]
     validation_status = "PASS" if not missing else "FAILED"
     validation = {
         "status": validation_status,
         "evidence": "validation_report.json",
         "missing_or_failed": missing,
         "checked_at": utc_now(),
-        "rule": "fail_closed",
+        "rule": "fail_closed_with_explicit_not_required",
     }
     evidence_pack = {
         "status": "PASS" if validation_status == "PASS" else "FAILED",
@@ -1493,9 +1932,11 @@ def audit(work_dir: Path, job_id: str) -> dict[str, Any]:
         "implementation_log": implementation_log,
         "persona_mode": personas,
         "script_gate": script_gate,
+        "chatgpt_review_gate": chatgpt_review_gate,
         "script_handoff_gate": script_handoff_gate,
         "report1_handoff_gate": report1_handoff_gate,
         "stage_scope_gate": stage_scope_gate,
+        "vmake_clean_source": vmake_clean_source,
         "reentry_stage": reentry_stage,
         "capcut_permission": capcut_permission,
         "production_status": production_status,

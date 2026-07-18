@@ -1,6 +1,6 @@
 ---
 name: 111-politics-longform
-description: Use when the user says 111정치롱폼, 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to design, review, assemble, validate, or package a Korean political longform video, lower two-line commentary, jungchilong CapCut project, upload copy, API upload, or thumbnail hooks.
+description: Use when the user says 111정치롱폼, 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to design, review, assemble, validate, or package a Korean political longform video, lower two-line commentary, 1-3 derived political Shorts, 45-70 second source candidates, jungchilong CapCut project, upload copy, API upload, or thumbnail hooks.
 ---
 
 # 111 Politics Longform
@@ -270,7 +270,9 @@ subscribe와 첫 locked clip은 모두 `content_start_sec`에서 시작한다.
 - 구간은 반개구간 `[start,end)`로 연속이어야 한다. 예:
   `00:00-00:20`, `00:20-00:43`, `00:43-01:00`.
 - 약 20초를 목표로 하되 발언 단락과 출처 전환에 따라 10~35초를 허용한다.
-- 1줄은 실제 발언·사실 요약, 2줄은 논리적으로 이어지는 해석·평론이다.
+- 하단 두 줄은 화면 배치를 위한 형식일 뿐, 1줄과 2줄에 고정된 의미 역할을
+  부여하지 않는다. 두 줄 전체가 하나의 자연스러운 생각으로 읽히게 나누며,
+  같은 뜻을 두 번 반복하지 않는다.
 - 원본에 없는 사실, 결론 비약, 추상적 구호, 인접 중복을 피한다.
 
 ### TTS 원본자막 텍스트 트랙
@@ -351,17 +353,29 @@ round2_receipt.json
 master_commentary_review_gate.json
 ```
 
-Round 1은 `INDEPENDENT_REVIEW`와 `REVISION_PROPOSAL`을 수행한다. Codex는 모든
-`suggestion_id`에 `ADOPTED`, `PARTIALLY_ADOPTED`, `REJECTED`,
-`PENDING_EVIDENCE` 중 exactly one 결정과 이유를 기록한다. 제안을 반영한 뒤
-Round 2를 반드시 Round 1과 같은 ChatGPT conversation에서 이어서 수행한다.
+Round 1은 `INDEPENDENT_REVIEW`와 `REVISION_PROPOSAL`을 수행한다. 외부 응답은
+JSON이나 YAML이 아니라 사람이 읽는 마크다운으로 받는다. 기본 입력은 마스터
+원고, fact map, 조사 자료이며 직접 인용·날짜·숫자·법원·수사·범죄 관련 검증에
+필요한 원문과 출처만 조건부로 추가한다. Round 1은 총평, 중심 명제, 블록별 진단,
+강한 문장·약한 문장 최대 5개, 정치적 균형, 근거 부족 목록, 번호가 붙은
+문장·블록 단위 수정안을 포함한다. 원고 전문을 다시 쓰지 않는다.
 
-Round 2 패킷은 같은 대화의 기억에 의존하지 않는다. Round 1 전체 반환문, Codex
-결정표 전체, 수정된 마스터 원고 전문, 수정된 fact map 전문, timeline segment
-순서 전체와 핵심 질문을 다시 포함한다. Round 2는 `EVIDENCE_AUDIT`와
-`FLOW_CONTINUITY_AUDIT`를 분리해 수행한다. 개별 문장뿐 아니라 앞 구간의 결론이
-다음 구간의 주장으로 자연스럽게 이어지는지, 순서 변경·중복·결론 비약이 없는지
-전체 흐름을 검수한다.
+Codex는 각 외부 제안을 내부 `suggestion_id`로 연결하고 `ADOPTED`,
+`PARTIALLY_ADOPTED`, `REJECTED`, `PENDING_EVIDENCE` 중 exactly one 결정과
+이유를 기록한다. 제안을 반영한 뒤 Round 2를 반드시 Round 1과 같은 ChatGPT
+conversation에서 이어서 수행한다. packet ID, 해시, manifest, receipt와
+conversation ID는 자동화 계층에서만 관리하고 ChatGPT에 반환하도록 요구하지
+않는다.
+근거 검증은 품질 검수를 대체하지 않으며, 차분하지만 단호한 구어체·구체적인
+인물과 행동·자연스러운 문장 리듬을 함께 검수한다.
+
+Round 2에는 Round 1 검수 결과, 제안별 결정표, 수정 원고, 수정 fact map, 변경
+요약과 짧은 핵심 질문·블록 순서를 보낸다. timeline JSON 전문이나 내부 HTML
+앵커를 ChatGPT 프롬프트에 노출하지 않는다. Round 2는 `EVIDENCE_AUDIT`와
+`FLOW_CONTINUITY_AUDIT`를 분리해 수행하고 오탈자·띄어쓰기·고유명사·분리 자모·
+U+FFFD·`<<`·`<d>` 같은 편집 잔여 기호를 `문자 품질 감사`로 검사한다. 이 검사는
+시청자에게 보이거나 들리는 문장에 적용하며 URL·JSON·해시·내부 ID는 제외한다.
+Round 2는 수정된 원고를 전면 재작성하지 않고 남은 문제와 위치만 반환한다.
 
 외부 반환 상태는 두 회차 모두 `PENDING_CODEX_REVIEW`다.
 `PASS_RECOMMENDED`는 외부 권고일 뿐 사용자 승인이나 최종 승인 파일이 아니다.
@@ -378,6 +392,35 @@ python scripts/validate_chatgpt_two_pass_review.py --review-dir "{episode}\20_sc
 전에는 `commentary_master_script_approved.md`를 만들지 않는다. 하단 2줄용
 `commentary_review_packet_sent.md`와 관련 manifest, receipt, gate 파일은
 `EXTERNAL_LOWER_COMMENTARY_GATE` 전용이며 마스터 원고 검수에 재사용하지 않는다.
+
+## 정치 롱폼 파생 숏폼 후보
+
+승인된 정치 롱폼에서 파생 숏폼을 요청하면 다음 계약을 읽는다.
+
+```text
+references/chatgpt_project_router_instruction.md
+references/chatgpt_politics_shortform_review_contract.md
+```
+
+`111-politics-longform`이 먼저 약 45~70초의 연속 원본 구간을 1~3개 선별한다.
+후보는 하나의 `source_id`와 연속 `segment_id`만 사용한다. 원문 타임코드,
+첫 3초 원본 발화, 핵심 인용, 앞뒤 맥락, fact map 근거를 함께 기록한다.
+유효 후보가 적으면 3개를 강제로 채우지 않는다.
+
+후보 산출물:
+
+```text
+20_script/politics_shortform/politics_shortform_candidates.md
+```
+
+후보 선별 단계에서는 상단, timed 중단, TTS 문안, 우라까이, 원본 순서 변경,
+여러 구간 재조립을 만들지 않는다. Codex와 사용자가 후보 범위를 선택한 뒤에만
+`00-tikitaka`가 쇼츠 설계를 시작한다. Tikitaka가 원본 범위를 바꿔야 하면
+`DESIGN_REOPEN_REQUIRED`로 이 단계에 반환한다.
+
+기존 `20_script/shorts/SH01~SH03`이 있어도 최신 승인 원고보다 오래됐거나
+제목·훅·평론이 최신 fact map과 충돌하면 승인 상태를 재사용하지 않는다.
+후보·쇼츠 문구를 바꾸면 Stage 1 승인과 해시를 다시 만든다.
 
 ### 한 파일 외부 검토 패킷
 
@@ -459,7 +502,7 @@ final_line2: required
 
 1. 실제 발언과 일치하는가.
 2. 앞뒤 맥락을 왜곡하지 않는가.
-3. 1줄에서 2줄로 논리가 이어지는가.
+3. 두 줄 전체가 하나의 자연스러운 생각으로 이어지는가.
 4. 주어·쟁점·결과가 분명한가.
 5. 근거 없는 단정, 반복, 모순, 상투어가 없는가.
 6. 노출 시간 안에 읽을 수 있는가.
@@ -501,6 +544,43 @@ DESIGN_APPROVED=PASS
 preassembly 검증은 모든 조립 호출에 강제되며 공개 우회 옵션이 없다. 승인 설계,
 외부 검토 게이트, speech lock, locked EDL·라벨·클립 중 하나라도 실패하면 조립을
 시작하지 않는다.
+
+### 골 기능 실행 모드
+
+사용자가 `골 기능으로`, `너무 세밀하다`, `언제 끝나`처럼 범위를 줄이면 선택적
+패키징을 붙잡지 말고 실제 산출물 완성 경로로 즉시 전환한다.
+
+1. 우선순위는 `native CapCut 폴더 생성 → root registry 등록 → 콘텐츠 무간격 →
+   오디오 0 → JSON 미러 동일 → 미디어 존재`다.
+2. 렌더·업로드가 범위 밖이면 썸네일, 설명, 해시태그, YouTube API 프로필 같은
+   후속 메타데이터 누락으로 이미 통과한 CapCut 조립을 롤백하지 않는다.
+3. 이때 조립은 `PASS_CORE_ASSEMBLY`, 후속 산출물은
+   `DEFERRED_CORE_ASSEMBLY_ONLY`, `final_gate: BLOCKED`,
+   `upload_ready: false`로 분리한다. 렌더·업로드 완료로 확대해석하지 않는다.
+4. 보고는 결론과 프로젝트명부터 짧게 쓴다. 폴더 생성, registry 등록, GUI
+   열림/미리보기, 렌더, 업로드는 서로 다른 상태로 한 줄씩만 명시한다.
+5. false-positive 검사를 고치느라 승인 원문을 바꾸지 않는다. 승인 문구가 정상
+   시청자 문장이라면 검사 범위를 내부 표식으로 좁힌다.
+
+Windows Stage 2 조립의 경로 길이, 마이크로초 정규화, 핵심 검증 패턴은
+`references/stage2-core-assembly.md`를 참고한다.
+
+### 잠금된 Stage 1의 Stage 2 이행
+
+Stage 1 잠금본이 현행 preassembly 계약에 실패하면 승인 원본을 직접 고치지 않는다.
+
+1. `validate-stage1`, `validate-external`, `validate-preassembly`를 분리 실행하고
+   실행 전후 `design_lock_manifest.json.required_files` 해시를 대조한다.
+2. 검증 CLI가 보고서 JSON을 다시 쓸 수 있으면 원본이 아니라 임시 복사본에서
+   실행한다.
+3. 서명된 외부검토 메타데이터, 결정 필드, portable media path 같은 호환 차이는
+   동기화 트리 밖의 disposable Stage 2 runtime copy에서만 정규화한다.
+4. 각 locked clip은 기존 SHA-256과 실제 ffprobe를 다시 검증한다.
+5. runtime 호환본을 원래 Stage 1 잠금 위로 복사하지 않는다.
+6. 결과 보고에는 `source_stage1_mutated: false`, preassembly 결과, native project
+   생성·등록, GUI·렌더·업로드 상태를 각각 남긴다.
+
+상세 절차는 `references/locked-stage1-to-stage2-migration.md`를 참고한다.
 
 ## Stage 2 — speech lock과 locked clips
 
@@ -569,7 +649,9 @@ fixed overlays/effects: jungchilong 근본의 배치와 리소스 보존
 ```
 
 출처와 날짜는 소스 전환마다 나누고 해당 소스 구간 전체에 정확히 맞춘다.
-내부 id, `roughcut`, `edl`, `진입`을 화면에 노출하지 않는다.
+내부 id, `roughcut`, `edl`, mojibake와 U+FFFD는 화면에 노출하지 않는다.
+`진입` 같은 일반 한국어 단어를 전역 금칙어로 두지 않는다. 승인된 시청자 문구
+`마지막 쟁점 진입`은 허용하고, 명백한 내부 workflow marker일 때만 차단한다.
 
 ### 오디오 계약
 

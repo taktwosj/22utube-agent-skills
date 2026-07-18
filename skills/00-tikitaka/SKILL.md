@@ -66,15 +66,24 @@ stage. The stage order is:
 tikitaka_source_request.json
 -> source evidence
 -> source_identity_lock.json + verified source_fingerprint_sha256
+-> SOURCE_VOICE_SEPARATION_GATE
+-> 10_analysis/audio/full_source_audio.wav
+-> 10_analysis/audio/vocals.wav
 -> 1차설계서
 -> timeline_design.json
 -> caption_beat_map.json
 -> timeline_design_gate.json
+-> chatgpt_review/round1_review_packet.md
+-> chatgpt_review/round1_chatgpt_raw.md
+-> chatgpt_review/round1_codex_decisions.json
 -> humanize_korean_gate.json
 -> block_map.json / block_role_map.json / block_voice_switch_map.json
 -> tts_copy_text.txt
 -> tts_duration_probe.json
 -> tts_timing_reconciliation_gate.json
+-> chatgpt_review/round2_audit_packet.md
+-> chatgpt_review/round2_chatgpt_raw.md
+-> chatgpt_review_gate.json
 -> script_handoff_gate.json
 -> report1_handoff.json
 ```
@@ -96,6 +105,148 @@ duration_basis/duration_status/audio_policy/visual_strategy
 
 `timeline_design_gate.json` must be PASS before the design can be treated as a
 handoff artifact.
+
+## Full-Source Demucs Preprocessing
+
+After `source_identity_lock.json` and before `1차설계서`, run:
+
+```text
+source.mp4
+-> extract the complete audio to 10_analysis/audio/full_source_audio.wav
+-> run Demucs on that complete WAV with separation_scope=FULL_SOURCE_AUDIO
+-> save the stable vocal stem as 10_analysis/audio/vocals.wav
+-> validate SOURCE_VOICE_SEPARATION_GATE
+-> identify and lock speaker ranges from vocals.wav
+```
+
+Invoke:
+
+```powershell
+py -3 skills/00-tikitaka/scripts/prepare_source_voice.py --root <episode-root> --source 00_source/source.mp4
+```
+
+This is a narrow Stage 1 source-analysis preprocessing exception. It creates
+only the full-source analysis WAV and Demucs vocal stem. It does not create Q
+clips, TTS, SRT, CapCut, render, export, upload, or other production assets.
+The harness calls `validate_source_voice_separation.py`; it never launches
+Demucs or the next skill.
+
+The only valid skip is:
+
+```text
+NOT_REQUIRED_NO_SOURCE_SPEECH
+```
+
+Use it only when the source has no audio stream or when the user/source
+evidence explicitly confirms that no human speech exists. Missing Demucs is
+`WAIT_DEMUCS_AVAILABLE`; never fall back to mixed source audio.
+
+Every `speaker_quote` must record:
+
+```json
+{
+  "source_audio_ref": "10_analysis/audio/vocals.wav",
+  "source_audio_provenance": "demucs_full_source_vocals"
+}
+```
+
+Missing or different provenance is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
+`source_audio=on` now means the separated speaker/Q lane is audible. It never
+authorizes embedded source-video audio in CapCut. `no_vocals.wav` is not used.
+
+## Vmake Clean Visual Preprocessing
+
+When the user requests `stage_2_full`, CapCut, or an automatic production run,
+prepare a second video through Vmake after `source_identity_lock.json` exists:
+
+```text
+00_source/source.mp4
+-> source identity, OCR, STT, frame checks, full-source Demucs
+
+Vmake link import
+-> 00_source/clean_source.mp4
+-> production visual only
+-> embedded_audio_policy=muted_always
+```
+
+The original `source.mp4` remains the only analysis and source-truth video.
+Never replace it with the Vmake result for OCR, STT, timing verification,
+source identity, or Demucs. The Vmake result is the later production visual;
+its embedded audio is never authorized.
+
+### User-Confirmed Existing Vmake Result
+
+Use `USER_CONFIRMED_VMAKE_REUSE` only when the user explicitly says the Vmake
+result is already complete or confirmed and also says not to download or test
+it again. This current-request instruction overrides the default Vmake browser,
+download, registration, and validation steps below for the named existing clean
+files.
+
+- Do not open Vmake, download or re-download, replay, inspect, or re-analyze the
+  confirmed clean files.
+- Do not run `register_vmake_clean_source.py` or `validate_vmake_clean_source.py`.
+  Do not run ffprobe duration/aspect-ratio
+  parity, OCR, STT, frame analysis, or visual quality review on those files.
+- Keep the original-source analysis, timing, edit order, captions, and audio plan unchanged.
+  The clean files replace only the production visuals, one-for-one
+  and in the already approved order.
+- Keep every clean file's embedded audio muted. Use only the separately approved
+  narration/source-audio lanes.
+- Place the user-specified narration at the first scene when the user requests
+  that placement. Do not redesign later beats merely because the visual file was
+  cleaned.
+- Pass the existing clean paths and this reuse state to
+  `000short-production-agent`; `00-tikitaka` still does not build CapCut.
+
+Record:
+
+```text
+vmake_reuse_mode=USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST
+user_vmake_confirmation=true
+analysis_authority=original_sources
+timeline_authority=existing_approved_design
+clean_visual_review_status=USER_CONFIRMED
+```
+
+This is a user-confirmed reuse state, not a newly agent-validated
+`VMAKE_CLEAN_SOURCE_GATE=PASS`. If any named existing clean file is missing or
+inaccessible, stop with `WAIT_EXISTING_VMAKE_CLEAN_FILE`; do not start a new
+Vmake download unless the user asks.
+
+Read `references/vmake_clean_source_workflow.md` before browser action. Use the
+existing signed-in Chrome session and browser DOM control. Do not use OS-level
+mouse/keyboard control. The workflow covers `Import from link`, the rights
+checkbox, `Apply`, `Processing...`, `Download`, IDM/browser interception, and
+the exact signed-download recovery rule.
+
+Rights confirmation is URL-specific. Check Vmake's rights checkbox only when
+the user explicitly authorized it for the current source. Otherwise stop with:
+
+```text
+WAIT_VMAKE_RIGHTS_CONFIRMATION
+```
+
+After download, register and validate:
+
+```powershell
+py -3 skills/00-tikitaka/scripts/register_vmake_clean_source.py --root <episode-root> --download <File_from_link_*.mp4> --source-url <shorts-url> --job-id <vmake-job-id> --rights-confirmed --confirmation-source user
+py -3 skills/00-tikitaka/scripts/validate_vmake_clean_source.py --root <episode-root>
+```
+
+The validator writes no production assets. It verifies
+`VMAKE_CLEAN_SOURCE_GATE`, the locked source/video ID, the Vmake job and
+download filename, clean-file hash, duration/aspect-ratio parity, and:
+
+```text
+00_source/clean_source.mp4
+embedded_audio_policy=muted_always
+source_voice_policy=separate_demucs_q_only
+```
+
+For `stage_1_script`, this gate is `NOT_REQUIRED_STAGE1_ONLY`. For
+`stage_2_full`, missing or invalid clean visual evidence is
+`WAIT_VMAKE_CLEAN_SOURCE`. The harness validates the manifest only; it never
+opens Vmake, clicks the UI, downloads a file, or launches the next skill.
 
 ## CAPTION_BEAT_MAP_HANDOFF
 
@@ -393,6 +544,12 @@ block_voice_switch_map.json
 tts_copy_text.txt
 tts_duration_probe.json
 tts_timing_reconciliation_gate.json
+chatgpt_review/round1_review_packet.md
+chatgpt_review/round1_chatgpt_raw.md
+chatgpt_review/round1_codex_decisions.json
+chatgpt_review/round2_audit_packet.md
+chatgpt_review/round2_chatgpt_raw.md
+chatgpt_review_gate.json
 script_handoff_gate.json
 report1_handoff.json
 ```
@@ -600,8 +757,32 @@ timecode mismatch notes. Keep any unverified Gemini ranges as
 
 ## Ownership Matrix
 
-- `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.
+- `00-tikitaka`: Shorts source analysis, full-source Demucs analysis
+  preprocessing, remake script draft, hook, top/timed-middle, and script
+  handoff. It creates `full_source_audio.wav` and `vocals.wav`; for an approved
+  `stage_2_full` route it also registers `clean_source.mp4` as a production
+  visual handoff. It does not create final Q clips or other production assets.
 - `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
+
+## Stage Transition And n8n Contract
+
+Use this default routing contract:
+
+```text
+n8n_stage_transition=NOT_USED
+stage_transition_owner=Codex
+harness_role=VALIDATOR_ONLY
+n8n_default_status=NOT_REQUIRED
+```
+
+The harness validates artifacts and writes gate/status files. It does not launch
+the next skill. After user approval and `SCRIPT_HANDOFF_GATE` PASS, Codex reads
+`report1_handoff.json` and invokes `000short-production-agent`.
+
+Require n8n only when the current package explicitly sets `n8n_required=true`
+or selects `orchestration.route=n8n`. Without that explicit selection, record
+`n8n=NOT_REQUIRED`, not `NOT_RUN`, and do not block Stage 1, Stage 2, or final
+validation because n8n evidence is absent.
 
 ## Escalation Rule
 
@@ -652,9 +833,9 @@ Mandatory gate map for URL + Gemini/source intake:
 
 ```text
 G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
-G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, and script_handoff_gate.json
+G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, ChatGPT Project Round 1, Codex decisions, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, ChatGPT Project Round 2, chatgpt_review_gate.json, and script_handoff_gate.json
 G2 STAGE 1 STOP = output 설계도 and stop until report1_approved + voice_audio_route_decided
-G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved and voice_audio_route_decided
+G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved, voice_audio_route_decided, and either VMAKE_CLEAN_SOURCE_GATE PASS for a new Vmake run or USER_CONFIRMED_VMAKE_REUSE for named existing clean files
 G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
 ```
 
@@ -826,9 +1007,11 @@ This skill owns only Korean Shorts remake scripting:
 - timed `중단`
 - copy text that may later be used by a voice tool
 
-Voice-copy text is part of the draft script only. This skill does not create
-voice, audio files, SRT files, layout JSON, render plans, CapCut drafts, exports,
-upload packages, or production packages.
+Voice-copy text is part of the draft script only. Except for the required
+full-source analysis artifacts `full_source_audio.wav` and `vocals.wav`, plus
+the `stage_2_full` Vmake handoff visual `clean_source.mp4`, this skill does not
+create voice clips, TTS, SRT files, layout JSON, render plans, CapCut drafts,
+exports, upload packages, or production packages.
 
 ## Supertone TTS Handoff
 
@@ -895,9 +1078,15 @@ Gemini alone. Mark any proposed source range as
 verifies it.
 
 For script confidence, use the current source-evidence workflow only. Acquire or
-confirm `source.mp4`, then create the required frame/STT/OCR evidence. If source
-media cannot be acquired or confirmed, stop and ask the user to provide it; do
-not invoke a separate video-watching skill or invent final timing.
+confirm `source.mp4`, lock its identity, run full-source Demucs preprocessing,
+and then create the required frame/STT/OCR evidence and speaker ranges from
+`10_analysis/audio/vocals.wav`. If source media cannot be acquired or
+confirmed, stop and ask the user to provide it; do not invoke a separate
+video-watching skill or invent final timing.
+
+`00_source/clean_source.mp4` is never source evidence. When `stage_2_full` is
+selected, bind it to the locked original through
+`10_analysis/vmake_clean_source.json` and keep all analysis on `source.mp4`.
 
 ## Story And Production Type Gate
 
@@ -1045,7 +1234,13 @@ capcut_permission: CAPCUT_OPENABLE_PROJECT_ALLOWED
 production_status: WAIT_CAPCUT_OPENABLE_PROJECT
 ```
 
-`persona_mode/script_gate/n8n are FINAL_LOCK blockers`, not CAPCUT_OPENABLE_PROJECT blockers.
+`persona_mode/script_gate` are FINAL_LOCK blockers, not
+CAPCUT_OPENABLE_PROJECT blockers. n8n is a FINAL_LOCK blocker only when the
+current package explicitly sets `n8n_required=true`; otherwise its status is
+`NOT_REQUIRED`.
+Compatibility summary: `persona_mode/script_gate/n8n are FINAL_LOCK blockers`,
+`not CAPCUT_OPENABLE_PROJECT blockers`; the n8n clause applies only when
+`n8n_required=true`.
 `final_report_allowed=false` means the final or upload report is blocked; it
 does not block the second stage. continue to 000short-production-agent for
 `CAPCUT_OPENABLE_PROJECT` when the handoff gate is PASS.
@@ -1058,6 +1253,9 @@ may start:
   `wow_overlay_text is optional`; the user may add these in CapCut manually.
 - `urakkai_order_map`: original order vs remake order, for example
   `1-2-3-4-5 -> 4-3-5-1-2-3`.
+- `10_analysis/source_voice_separation.json`: full-source Demucs gate bound to
+  the locked source fingerprint. `10_analysis/audio/vocals.wav` is required
+  when source speech exists.
 - `timeline_design.json`: canonical design table for tracks, time ranges, text
   roles, video, and audio lanes.
 - `timeline_design_gate.json`: design validation result.
@@ -1074,6 +1272,9 @@ may start:
 - `tts_duration_probe.json`: required only when narration audio is planned.
 - `tts_timing_reconciliation_gate.json`: required only when narration audio is
   planned.
+- `chatgpt_review_gate.json`: proves both ChatGPT project review rounds
+  completed, Round 1 suggestions were dispositioned by Codex, Round 2 returned
+  `PASS_RECOMMENDED`, and packet/response hashes match the preserved files.
 - `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
 
 Legacy aliases without extensions are accepted only for old packages.
@@ -1135,7 +1336,8 @@ roles, and audio switches are locked:
 Hard fails:
 
 - `original_block_map`, `wow_point_map`, `urakkai_order_map`,
-  `timeline_design.json`, `timeline_design_gate.json`,
+  `10_analysis/source_voice_separation.json`, `timeline_design.json`,
+  `timeline_design_gate.json`,
   `humanize_korean_gate.json`, `edit_block_sequence`, `block_map.json`,
   `block_role_map.json`, `block_voice_switch_map.json`, `tts_copy_text.txt`, or
   `script_handoff_gate.json` is missing when production handoff is requested.
@@ -1144,9 +1346,13 @@ Hard fails:
   `duration_status`, or `visual_strategy`.
 - narration-audio segment exists but `tts_duration_probe.json` or
   `tts_timing_reconciliation_gate.json` is missing.
+- `chatgpt_review_gate.json status=PASS` is missing, either ChatGPT project
+  review round is missing, or Round 2 is not `PASS_RECOMMENDED`.
 - actual narration duration exceeds the planned visual slot without an allowed
   reconciliation action; use `WAIT_TTS_TIMING_RELOCK`.
 - `speaker_quote` has no verified or explicitly proposed source range.
+- `speaker_quote` does not reference `10_analysis/audio/vocals.wav` with
+  `source_audio_provenance=demucs_full_source_vocals`.
 - `tts_narration` keeps `source_audio=on`.
 - `situation_caption` has `tts=on` without an `exception_reason`.
 - `capcut_allowed=true` appears before role and voice switch maps are locked.
@@ -1175,9 +1381,9 @@ caption_type:
 - ranking_item         = ranking/TOP-N beat
 
 source_audio:
-- on     = original/source video audio must be audible
+- on     = separated speaker/Q audio from vocals.wav must be audible
 - off    = original/source video audio must be muted
-- duck   = original/source video audio remains low under TTS/BGM
+- duck   = separated speaker/Q audio remains low under TTS/BGM
 
 tts:
 - on
@@ -1231,8 +1437,19 @@ The handoff must let production assemble separate lanes:
 narration=TTS lane
 source_audio=on/off/duck by segment
 bgm=separate optional/required lane
+source_video_audio=muted_always
+speaker_q=separate_vocals.wav
+```
+
+Legacy compatibility wording:
+
+```text
 source_video_audio=muted unless explicitly extracted as source_audio
 ```
+
+Here, `explicitly extracted as source_audio` means the separately approved
+Demucs speaker/Q lane. It never authorizes embedded source-video audio; the
+production video itself remains `muted_always`.
 
 Example:
 
@@ -1430,6 +1647,7 @@ Ordinary Tikitaka Stage 1 must not be blocked when either CLI is unavailable.
    moving to each other's position = middle ground) into a final decision.
 
 Both writers must output:
+
 - recommended `story_type` (S1-S7) with reasoning
 - recommended `production_type` (A-F canonical code) with reasoning
 - recommended `shorts_design_type` (`SD1`, `SD2`, `SD3`, `SD4`, or `unknown`)
@@ -1442,6 +1660,112 @@ The final decision is the synthesis of both perspectives. If they disagree on
 production type, the higher-audio-fidelity type wins unless the source has no
 usable speech at all. If they disagree on story type, the type that best
 preserves the strongest source-backed viewer question wins.
+
+## ChatGPT Project Two-Pass Review (Required)
+
+Every new Tikitaka Stage 1 design must be reviewed twice in the existing
+ChatGPT project `쇼츠대본분석`:
+
+```text
+https://chatgpt.com/g/g-p-6a245b804c2c8191907088f317842a55-syoceudaebonbunseog/project
+```
+
+Use one new project chat per episode and keep both review rounds in that same
+chat. Use the logged-in normal Chrome session through available Chrome/browser
+control. Do not substitute a generic ChatGPT chat, API call, Claude CLI, or a
+different project. If the project cannot be opened, login is unavailable, or a
+fresh response cannot be copied, stop with:
+
+```text
+WAIT_CHATGPT_PROJECT_REVIEW
+```
+
+Read the complete Shorts two-pass contract in
+`shorts_script_analysis_single_source_v20260706.md` before creating either
+packet. The ChatGPT project's Shorts-only instructions must match
+`references/chatgpt_project_router_instruction.md`; if the live project router
+does not require `content_type: shorts` and `review_round: 1|2`, or still
+contains a `politics_longform`/`politics_shortform` route or political review
+contract, stop with `WAIT_CHATGPT_PROJECT_ROUTER_UPDATE`.
+
+Round 1 occurs only after `timeline_design_gate.json status=PASS`:
+
+```yaml
+content_type: shorts
+review_round: 1
+```
+
+Save the exact sent packet and unedited response:
+
+```text
+chatgpt_review/round1_review_packet.md
+chatgpt_review/round1_chatgpt_raw.md
+```
+
+ChatGPT performs `INDEPENDENT_REVIEW` and `REVISION_PROPOSAL`. Its result always
+remains `PENDING_CODEX_REVIEW`. Codex then verifies every suggestion against
+source evidence and records one of `ADOPTED`, `PARTIALLY_ADOPTED`, `REJECTED`,
+or `PENDING_EVIDENCE` in:
+
+```text
+chatgpt_review/round1_codex_decisions.json
+```
+
+Apply accepted changes and rerun invalidated design, caption, Humanize, and TTS
+timing gates.
+
+Round 2 occurs after the revised candidate, Humanize, block maps, TTS copy, and
+TTS timing reconciliation are ready, but before `SCRIPT_HANDOFF_GATE`:
+
+```yaml
+content_type: shorts
+review_round: 2
+```
+
+Save:
+
+```text
+chatgpt_review/round2_audit_packet.md
+chatgpt_review/round2_chatgpt_raw.md
+```
+
+Round 2 performs `EVIDENCE_AUDIT` and returns one external recommendation:
+`PASS_RECOMMENDED`, `REVISE_REQUIRED`, or `EVIDENCE_REQUIRED`. All responses
+still end in `PENDING_CODEX_REVIEW`; ChatGPT cannot make the final adoption or
+handoff decision.
+
+Codex may write `chatgpt_review_gate.json status=PASS` only when both exact
+packets and raw responses are preserved, every Round 1 suggestion is
+dispositioned, Round 2 says `PASS_RECOMMENDED`, the source fingerprint matches,
+and no protected field changed silently. The gate name is:
+
+```text
+CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE
+```
+
+`REVISE_REQUIRED`, `EVIDENCE_REQUIRED`, a missing response, a mismatched packet
+hash, or a different project blocks `SCRIPT_HANDOFF_GATE`.
+
+### Browser-Assisted Automation Sequence
+
+Use `scripts/chatgpt_review_workflow.py` for deterministic packets, response
+checks, and gate creation. Use the signed-in normal Chrome session only to send
+the packets and copy fresh responses from project `쇼츠대본분석`.
+
+```powershell
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py build-round1 --work-dir <20_script-dir> --review-cycle-id <cycle-id>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py record-response --work-dir <20_script-dir> --round 1 --input <copied-round1-response.md>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py build-round2 --work-dir <20_script-dir> --review-cycle-id <cycle-id>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py record-response --work-dir <20_script-dir> --round 2 --input <copied-round2-response.md>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py finalize-gate --work-dir <20_script-dir>
+```
+
+If the project returns `SOURCE_CONTRACT_MISSING`, attach only
+`shorts_script_analysis_single_source_v20260706.md` to the project sources,
+remove any political review contract, keep the Shorts-only instructions from
+`references/chatgpt_project_router_instruction.md`, and rerun the same packet
+in a fresh episode chat. Do not use Computer Use or an OS-level mouse/keyboard
+fallback.
 
 ## Draft Workflow
 
@@ -1458,12 +1782,18 @@ preserves the strongest source-backed viewer question wins.
    script report.
 7. Write `timeline_design.json` from the same layout and pass
    `timeline_design_gate.json`.
-8. Run Humanize Korean on visible text only and record
+8. Send ChatGPT Project Round 1, save the raw response, adjudicate every
+   suggestion, and rerun invalidated design gates.
+9. Run Humanize Korean on visible text only and record
    `humanize_korean_gate.json` before handoff.
-9. Produce `상단 + timed 중단`, `block_map.json`, `block_role_map.json`,
+10. Produce `상단 + timed 중단`, `block_map.json`, `block_role_map.json`,
    `block_voice_switch_map.json`, and `tts_copy_text.txt` from
    `중단 TTS 글자만 복사`.
-10. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
+11. Complete the TTS duration probe and timing reconciliation when narration
+    audio is planned.
+12. Send ChatGPT Project Round 2 and pass
+    `CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE`.
+13. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
     user explicitly asks for the next owner.
 
 ## Shorts TTS Storytelling Mode
@@ -1571,6 +1901,11 @@ Hard fails:
 - Do not claim source-verified truth from raw Gemini notes.
 - Do not run `SCRIPT_HANDOFF_GATE` before `timeline_design_gate.json` and
   `humanize_korean_gate.json` are PASS.
+- Do not run `SCRIPT_HANDOFF_GATE` before
+  `chatgpt_review_gate.json status=PASS` proves both required ChatGPT project
+  review rounds completed.
+- Do not replace a missing ChatGPT project review with Claude, a generic chat,
+  an API call, or Codex self-review.
 - Do not skip human Korean cleanup before any final visible Korean text.
 - Do not proceed past missing source evidence when the script depends on exact
   timing, OCR, or dialogue.
@@ -1582,8 +1917,12 @@ Hard fails:
 
 - Active Shorts script analysis authority is
   `shorts_script_analysis_single_source_v20260706.md`; apply it before any
-  reference file below.
+  reference file below. This same file is the single Shorts contract attached
+  to the ChatGPT project and contains the two-pass review protocol.
 - For hook review, read `references/pre_script_hook_review.md`.
+- When configuring or auditing the ChatGPT project, read
+`references/chatgpt_project_router_instruction.md` and use it as the complete
+  Shorts-only project instruction.
 - For Shorts craft rules, read `references/shorts-academy.md`.
 - For old contract details or legacy repair only, read
   `references/archived-full-skill-20260629.md`.

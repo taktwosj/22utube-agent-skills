@@ -31,6 +31,13 @@ ALLOWED_DECISIONS = {
     "PENDING_EVIDENCE",
 }
 ROUND2_REQUIRED_SECTIONS = {
+    "round1_review",
+    "decision_table",
+    "revised_script",
+    "revised_fact_map",
+    "change_summary",
+}
+ROUND2_LEGACY_SECTIONS = {
     "round1_return_full",
     "codex_decisions_full",
     "revised_master_script_full",
@@ -38,20 +45,17 @@ ROUND2_REQUIRED_SECTIONS = {
     "timeline_order_full",
     "core_question",
 }
-ROUND2_REQUIRED_ANCHORS = (
-    "<!-- ROUND1_RETURN_FULL -->",
-    "<!-- CODEX_DECISIONS_FULL -->",
-    "<!-- REVISED_MASTER_SCRIPT_FULL -->",
-    "<!-- REVISED_FACT_MAP_FULL -->",
-    "<!-- TIMELINE_ORDER_FULL -->",
-    "<!-- CORE_QUESTION -->",
-)
 FORBIDDEN_EXTERNAL_APPROVAL = re.compile(
     r"(?im)^\s*(?:final_state|approval_status)\s*:\s*"
     r"(?:PASS|FINAL|ADOPTED)\s*$"
 )
 SUGGESTION_ID_PATTERN = re.compile(
-    r"(?im)^\s*suggestion_id\s*:\s*([A-Za-z0-9._-]+)\s*$"
+    r"(?im)^\s*(?:suggestion_id\s*:\s*|제안\s+)([A-Za-z0-9._-]+)\s*$"
+)
+TEXT_HYGIENE_PATTERNS = (
+    ("U+FFFD replacement character", re.compile("\ufffd")),
+    ("isolated Hangul jamo", re.compile(r"[\u3131-\u318e]")),
+    ("editor artifact", re.compile(r"<<|>>|<\s*[A-Za-z]\s*>", re.IGNORECASE)),
 )
 
 
@@ -177,6 +181,36 @@ def _check_external_return(
         )
 
 
+def _check_text_hygiene(
+    script_path: Path | None,
+    errors: list[dict[str, str]],
+) -> None:
+    if script_path is None:
+        return
+    try:
+        text = script_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError) as exc:
+        _add_error(errors, "FAIL_TEXT_HYGIENE", f"revised script: {exc}")
+        return
+    audience_text = "\n".join(
+        line
+        for line in text.splitlines()
+        if not re.match(r"^\s*원문 근거(?:\s|\()", line)
+    )
+    findings = [
+        label
+        for label, pattern in TEXT_HYGIENE_PATTERNS
+        if pattern.search(audience_text)
+    ]
+    if findings:
+        _add_error(
+            errors,
+            "FAIL_TEXT_HYGIENE",
+            "revised script contains audience-visible text corruption: "
+            + ", ".join(findings),
+        )
+
+
 def validate_review(review_dir: Path | str) -> dict[str, Any]:
     review_dir = Path(review_dir).resolve()
     errors: list[dict[str, str]] = []
@@ -247,8 +281,16 @@ def validate_review(review_dir: Path | str) -> dict[str, Any]:
         "Round 2 sent packet",
         errors,
     )
+    revised_script = _verify_file_hash(
+        review_dir,
+        round2_manifest,
+        "revised_script_file",
+        "revised_script_sha256",
+        "Round 2 revised script",
+        errors,
+    )
+    _check_text_hygiene(revised_script, errors)
     for file_key, hash_key, label in (
-        ("revised_script_file", "revised_script_sha256", "Round 2 revised script"),
         ("revised_fact_map_file", "revised_fact_map_sha256", "Round 2 fact map"),
         ("timeline_file", "timeline_sha256", "Round 2 timeline"),
     ):
@@ -387,27 +429,14 @@ def validate_review(review_dir: Path | str) -> dict[str, Any]:
 
     included_sections = round2_manifest.get("included_sections")
     included_set = set(included_sections) if isinstance(included_sections, list) else set()
-    if not ROUND2_REQUIRED_SECTIONS.issubset(included_set):
+    has_current_sections = ROUND2_REQUIRED_SECTIONS.issubset(included_set)
+    has_legacy_sections = ROUND2_LEGACY_SECTIONS.issubset(included_set)
+    if not (has_current_sections or has_legacy_sections):
         _add_error(
             errors,
             "ROUND2_PACKET_INCOMPLETE",
-            "Round 2 manifest does not include every required full section",
-        )
-    try:
-        round2_packet_text = (review_dir / "round2_packet_sent.md").read_text(
-            encoding="utf-8-sig"
-        )
-    except (OSError, UnicodeError) as exc:
-        round2_packet_text = ""
-        _add_error(errors, "ROUND2_PACKET_INCOMPLETE", str(exc))
-    missing_anchors = [
-        anchor for anchor in ROUND2_REQUIRED_ANCHORS if anchor not in round2_packet_text
-    ]
-    if missing_anchors:
-        _add_error(
-            errors,
-            "ROUND2_PACKET_INCOMPLETE",
-            f"Round 2 packet missing anchors: {', '.join(missing_anchors)}",
+            "Round 2 manifest does not include the current human-readable "
+            "bundles or the complete legacy self-contained bundle",
         )
 
     order_values = (
@@ -427,6 +456,13 @@ def validate_review(review_dir: Path | str) -> dict[str, Any]:
 
     recommendation = round2_receipt.get("recommendation")
     flow_status = round2_receipt.get("flow_continuity_status")
+    text_hygiene_status = round2_receipt.get("text_hygiene_status")
+    if text_hygiene_status is None:
+        text_hygiene_status = (
+            "FAIL"
+            if any(item.get("code") == "FAIL_TEXT_HYGIENE" for item in errors)
+            else "PASS"
+        )
     blockers = round2_receipt.get("remaining_blockers")
     if recommendation not in {
         "PASS_RECOMMENDED",
@@ -445,9 +481,17 @@ def validate_review(review_dir: Path | str) -> dict[str, Any]:
             "remaining_blockers must be a list",
         )
         blockers = ["invalid"]
+    if text_hygiene_status != "PASS":
+        _add_error(
+            errors,
+            "WAIT_TEXT_HYGIENE_REPAIR",
+            "Round 2 text hygiene audit must pass before the review gate",
+            severity="WAIT",
+        )
     if (
         recommendation != "PASS_RECOMMENDED"
         or flow_status != "PASS"
+        or text_hygiene_status != "PASS"
         or bool(blockers)
     ):
         _add_error(
