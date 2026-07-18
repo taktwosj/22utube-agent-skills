@@ -213,7 +213,8 @@ def test_builder_applies_video_scale_and_caption_y():
     assert video["clip"]["scale"] == {"x": 1.2, "y": 1.2}
     text = {"clip": {"transform": {"x": 0, "y": 0}}}
     module.apply_caption_layout(text, module.caption_layout_profile("speaker_quote"))
-    assert text["clip"]["transform"]["y"] == -500
+    assert text["clip"]["transform"]["y"] == module.capcut_transform_y(-500)
+    assert text["caption_layout"]["y"] == -500
 
 
 def test_caption_validator_rejects_wrong_profile_position():
