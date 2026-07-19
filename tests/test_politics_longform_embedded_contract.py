@@ -57,6 +57,38 @@ class PoliticsLongformEmbeddedContractTests(unittest.TestCase):
         self.assertNotIn("Default CapCut base priority 1: YP007", self.skill_text)
         self.assertNotIn("canvas: 1280x720", self.skill_text)
 
+    def test_derived_politics_shorts_use_shrtjungchi_and_locked_stage_one_plans(self):
+        for token in (
+            "## 파생 정치 쇼츠 계약",
+            "SHRTJUNGCHI",
+            "canvas: 1080x1920",
+            "60~100초",
+            "target_shorts_count=3",
+            "valid_shorts_count=0~3",
+            "갈등 → 분석 → 결론",
+            "longform_entry_point",
+            "20_script/shorts/SHxx/edit_plan_approved.json",
+            "design_lock_manifest.json",
+            "approved_short_ids",
+            "WAIT_SHRTJUNGCHI_ROOT_REQUIRED",
+            "근본 무결성",
+            "CapCut 화면",
+            "하네스",
+        ):
+            self.assertIn(token, self.skill_text)
+        self.assertIn(
+            "Stage 2는 SHRTJUNGCHI를 승인된 쇼츠마다 복제",
+            self.skill_text,
+        )
+        self.assertIn(
+            "일반 `shrt white`를 정치 롱폼 파생 쇼츠의 근본으로 사용하지 않는다",
+            self.skill_text,
+        )
+        self.assertIn(
+            "`jungchilong_base_v3_intro15`는 롱폼 근본이며 쇼츠 근본이 아니다",
+            self.skill_text,
+        )
+
     def test_stage_one_owns_rough_design_and_one_review_packet(self):
         for token in (
             "source_manifest.json",

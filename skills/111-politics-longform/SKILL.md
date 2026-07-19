@@ -70,6 +70,47 @@ archive 이름·SHA-256, manifest 이름·SHA-256과 결합한다. archive verif
 이 증거 파일과 `status=PASS`, `gui_opened=true`, `timeline_visible=true`를 직접
 검사해야 하며 `promotion_state=READY` 상수만으로 통과시키지 않는다.
 
+## 파생 정치 쇼츠 계약
+
+정치 롱폼 파생 쇼츠의 CapCut 근본은 `SHRTJUNGCHI`다.
+`jungchilong_base_v3_intro15`는 롱폼 근본이며 쇼츠 근본이 아니다.
+일반 `shrt white`를 정치 롱폼 파생 쇼츠의 근본으로 사용하지 않는다.
+
+```text
+root_project: SHRTJUNGCHI
+restore_target: %LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft\SHRTJUNGCHI
+canvas: 1080x1920
+default_duration: 60~100초
+target_shorts_count=3
+valid_shorts_count=0~3
+editorial_arc: 갈등 → 분석 → 결론
+purpose: longform_entry_point
+```
+
+Stage 1에서 롱폼과 같은 원본·맥락을 유지한 채 최대 3개를 함께 설계한다.
+약한 후보를 숫자 맞추기로 승인하지 않는다. 0개면
+`SKIPPED_NO_VALID_CANDIDATE`를 명시적으로 승인한다. 승인된 후보마다 다음 파일을
+만들고, 최종 권위인 `design_lock_manifest.json`에 해시로 고정한다.
+
+```text
+20_script/shorts/SHxx/edit_plan_approved.json
+20_script/design_lock_manifest.json
+approved_short_ids
+longform_entry_point
+```
+
+`edit_plan_approved.json`은 원본 범위와 경계, 편집 순서, 훅, T1/T2, 화자 색상,
+자막 줄바꿈, 제목·설명과 롱폼 진입 지점을 확정한다. Stage 2는 SHRTJUNGCHI를 승인된 쇼츠마다 복제해
+조립하고, `approved_short_ids`에 없는 후보는 만들지 않는다. Stage 2에서 구간 재선정, 순서 변경, 훅·자막 축약,
+제목·설명 재작성 또는 새 쇼츠 추가를 하지 않는다.
+
+현재 active writer machine에서 실제 `SHRTJUNGCHI` 폴더와 레지스트리 연결을
+다시 확인한다. 오래된 `root_meta_info.json` 기록만으로 존재를 주장하지 않는다.
+근본 무결성, CapCut 화면, 하네스는 서로 다른 게이트이며 실행하지 않은 항목은
+`NOT RUN`이다. 근본 폴더가 없거나 무결성을 검증할 수 없으면
+`WAIT_SHRTJUNGCHI_ROOT_REQUIRED`로 중단한다. 이때 `shrt white`, jungchilong,
+과거 파생 프로젝트 또는 JSON 스냅샷으로 대체 조립하지 않는다.
+
 ## 정치 롱폼 공통 제작 계약
 
 ### 작업 루트와 소유권

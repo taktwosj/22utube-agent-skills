@@ -123,6 +123,18 @@ class ReportingAndFastModeContractTests(unittest.TestCase):
         self.assertIn("tts_caption/audio_role=none", layout)
         self.assertNotIn("verified_speaker_1", layout)
 
+    def test_politics_longform_derivatives_defer_to_shrtjungchi_contract(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        for token in (
+            "politics_longform_derived",
+            "SHRTJUNGCHI",
+            "111-politics-longform",
+            "edit_plan_approved.json",
+            "design_lock_manifest.json",
+            "WAIT_SHRTJUNGCHI_ROOT_REQUIRED",
+        ):
+            self.assertIn(token, skill)
+
     def test_shrt_white_base_contract_preserves_operator_row_order(self):
         layout = LAYOUT_CONTRACT.read_text(encoding="utf-8")
         harness = HARNESS_REQUIREMENTS.read_text(encoding="utf-8")

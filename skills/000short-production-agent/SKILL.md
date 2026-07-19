@@ -245,6 +245,20 @@ FAIL_ACTIVE_GATE_ACCEPTS_OLD_TIMELINE_DESIGN
 This rule has higher priority than any episode-local builder script, old report,
 or previous CapCut output.
 
+For `production_type=politics_longform_derived`, do not apply the normal
+`shrt white` default. Defer to `111-politics-longform` and require:
+
+```text
+reference_project_name=SHRTJUNGCHI
+20_script/shorts/SHxx/edit_plan_approved.json
+20_script/design_lock_manifest.json
+```
+
+If the current active writer machine cannot prove the actual `SHRTJUNGCHI`
+folder, registry link, and locked plan hashes, stop with
+`WAIT_SHRTJUNGCHI_ROOT_REQUIRED`. Do not substitute `shrt white`, a longform
+`jungchilong` project, an earlier derived project, or a JSON snapshot.
+
 Unless the user explicitly names another root CapCut template and provides
 template-root proof, every normal/current 11short CapCut build or repair must
 start by cloning the local CapCut draft named exactly:
