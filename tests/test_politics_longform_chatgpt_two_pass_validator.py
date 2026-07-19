@@ -200,6 +200,71 @@ def build_valid_review(root: Path) -> Path:
     return review
 
 
+def build_compact_review(root: Path) -> Path:
+    review = root / "20_script" / "master_commentary_review"
+    script = root / "20_script" / "commentary_master_script_draft.md"
+    fact_map = root / "20_script" / "commentary_fact_map.json"
+    timeline = root / "10_analysis" / "timeline_design_draft.json"
+    round1 = review / "round1_returned.md"
+    decisions = review / "round1_codex_decisions.json"
+    round2 = review / "round2_returned.md"
+    write_text(
+        script,
+        "# 검수 원고\n\n## N001. 시작\n문제 제기\n\n## N002. 결론\n최종 판단\n",
+    )
+    write_json(fact_map, {"claims": [{"claim_id": "FM01"}]})
+    write_json(timeline, {"ordered_segment_ids": ["N001", "N002"]})
+    write_text(
+        round1,
+        "# Round 1\n\n### R1-01\n문제: 근거 범위가 넓다.\n\n"
+        "### R1-02\n문제: 결론이 빠르다.\n",
+    )
+    write_json(
+        decisions,
+        {
+            "conversation_id": "CHAT-COMPACT",
+            "decisions": [
+                {
+                    "suggestion_id": "R1-01",
+                    "decision": "ADOPTED",
+                    "decision_reason": "근거 범위를 좁혔다.",
+                },
+                {
+                    "suggestion_id": "R1-02",
+                    "decision": "PARTIALLY_ADOPTED",
+                    "decision_reason": "결론 강도만 낮췄다.",
+                },
+            ],
+        },
+    )
+    write_text(round2, "# Round 2\n\n권고: PASS_RECOMMENDED\n")
+    write_json(
+        review / "review_manifest.json",
+        {
+            "schema_version": "politics-chatgpt-two-pass-human-readable-v1",
+            "conversation_id": "CHAT-COMPACT",
+            "round1_returned_file": "round1_returned.md",
+            "round1_returned_sha256": sha256(round1),
+            "decisions_file": "round1_codex_decisions.json",
+            "decisions_sha256": sha256(decisions),
+            "round2_returned_file": "round2_returned.md",
+            "round2_returned_sha256": sha256(round2),
+            "revised_script_file": "../commentary_master_script_draft.md",
+            "revised_script_sha256": sha256(script),
+            "revised_fact_map_file": "../commentary_fact_map.json",
+            "revised_fact_map_sha256": sha256(fact_map),
+            "timeline_file": "../../10_analysis/timeline_design_draft.json",
+            "timeline_sha256": sha256(timeline),
+            "ordered_segment_ids": ["N001", "N002"],
+            "recommendation": "PASS_RECOMMENDED",
+            "flow_continuity_status": "PASS",
+            "text_hygiene_status": "PASS",
+            "remaining_blockers": [],
+        },
+    )
+    return review
+
+
 def error_codes(result: dict) -> set[str]:
     return {item["code"] for item in result["errors"]}
 
@@ -217,6 +282,22 @@ class PoliticsLongformChatGptTwoPassValidatorTests(unittest.TestCase):
             result = self.validate(build_valid_review(Path(tmp)))
         self.assertEqual(result["status"], "PASS", result)
         self.assertEqual(result["gate"], "MASTER_COMMENTARY_REVIEW_GATE")
+
+    def test_compact_human_readable_review_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self.validate(build_compact_review(Path(tmp)))
+        self.assertEqual(result["status"], "PASS", result)
+        self.assertEqual(
+            result["contract"],
+            "politics-chatgpt-two-pass-human-readable-v1",
+        )
+
+    def test_compact_review_hash_drift_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            review = build_compact_review(Path(tmp))
+            write_text(review / "round2_returned.md", "tampered\n")
+            result = self.validate(review)
+        self.assertIn("HASH_MISMATCH", error_codes(result))
 
     def test_missing_round_two_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

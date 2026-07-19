@@ -338,20 +338,20 @@ EXTERNAL_LOWER_COMMENTARY_GATE: 시간순 하단 2줄 외부 검토
 ```
 
 `MASTER_COMMENTARY_REVIEW_GATE`는
-`20_script/master_commentary_review/` 아래의 독립 파일만 사용한다.
+`20_script/master_commentary_review/` 아래의 독립 파일만 사용한다. 기본 계약은
+사람이 읽는 세 문서와 Codex 결정표를 하나의 내부 해시 매니페스트로 묶는 방식이다.
 
 ```text
-round1_packet_sent.md
-round1_manifest.json
 round1_returned.md
-round1_receipt.json
 round1_codex_decisions.json
-round2_packet_sent.md
-round2_manifest.json
 round2_returned.md
-round2_receipt.json
+round2_repair_returned.md  # 필요한 경우만
+review_manifest.json       # 자동화 계층 전용
 master_commentary_review_gate.json
 ```
+
+과거 9파일 packet/manifest/receipt 체계는 기존 에피소드 검증용으로만 호환한다.
+새 작업에서는 검수자에게 packet ID, SHA-256, manifest, receipt를 작성시키지 않는다.
 
 Round 1은 `INDEPENDENT_REVIEW`와 `REVISION_PROPOSAL`을 수행한다. 외부 응답은
 JSON이나 YAML이 아니라 사람이 읽는 마크다운으로 받는다. 기본 입력은 마스터
@@ -471,18 +471,12 @@ PASS가 나와서는 안 된다.
 `review_origin=user_return|external_model`, 모델명, timezone 포함 ISO-8601 시각,
 `recorded_by=user|external_adapter`, 발송 매니페스트 SHA-256, 회신 SHA-256,
 raw response SHA-256을 기록한다. Stage 1의 발송 매니페스트에 이 값을 덧씌우지
-않는다. 회신 수신기는 사용자 메시지 이벤트면 `authority_event_id=user_message:*`,
-외부 모델 호출이면 `authority_event_id=adapter_call:*`을 기록하고, 수신기 전용
-Ed25519 private key로 영수증 canonical JSON을 서명한다. 검증기는
-`POLITICS_EXTERNAL_REVIEW_PUBLIC_KEY`의 공개키를 사용하되, 그 파일 SHA-256이
-writer가 바꿀 수 없는 pipeline 상수 `EXTERNAL_REVIEW_PUBLIC_KEY_SHA256`에 pin된
-지문과 정확히 일치할 때만 `authority_signature`를 확인한다. 운영 지문이 아직
-설정되지 않았으면 `WAIT_EXTERNAL_REVIEW_AUTHORITY_KEY_PIN`으로 차단한다. 수신기
-서명자는 전달받은 값을 그대로 서명하지 않고 append-only 사용자 메시지 또는
-adapter 호출 저장소에서 `authority_event_id`를 다시 찾고 실제 raw response의
-SHA-256을 독립 계산한 뒤 서명한다.
-서명이 없거나 불일치하면 FAIL이며 writer 에이전트는 private key를 소유하지
-않는다. `recorded_by=agent_self`는 항상 FAIL이다. 빈 외부 슬롯은 검토 PASS가
+않는다. 기본 스키마는 `politics-external-review-hash-receipt-v1`이며 개인키나
+공개키를 요구하지 않는다. 검증기는 Stage 1 발송 매니페스트, 현재 회신 파일,
+영수증에 기록된 SHA-256을 서로 대조한다. `authority_event_id`는 사용자 메시지면
+`user_message:*`, 외부 모델 호출이면 `adapter_call:*`을 기록한다. 기존 Ed25519
+영수증은 과거 에피소드 호환용으로만 검증한다.
+`recorded_by=agent_self`는 항상 FAIL이다. 빈 외부 슬롯은 검토 PASS가
 아니며, 에이전트가 직접 만든 문장을 `user_return`으로 표시하지 않는다. 화면 반영 문장은 각 줄
 공백 제외 최대 15자이고 가운데점 `·`을 쓰지 않는다.
 

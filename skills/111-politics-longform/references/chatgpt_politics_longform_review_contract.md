@@ -1,33 +1,97 @@
 # ChatGPT 정치 롱폼 마스터 원고 2회 검수 계약
 
-이 계약은 정치 롱폼의 `commentary_master_script_draft.md`를 ChatGPT 프로젝트에서
-두 번 검수할 때 적용한다. 하단 2줄 평론용 외부 검토 계약과 쇼츠 계약을 섞지
-않는다.
+이 계약은 정치 롱폼 마스터 원고의 내용·근거·흐름·문자 품질을 두 번에 나눠
+검사한다. 검수 결과는 사람이 바로 읽을 수 있는 Markdown으로 작성한다.
 
-## 1. 게이트 분리
+검수자에게 packet ID, SHA-256, manifest, receipt, 내부 경로를 작성시키지 않는다.
+해시와 파일 연결은 Codex 자동화 계층이 별도로 관리한다.
 
-```text
-MASTER_COMMENTARY_REVIEW_GATE: 마스터 원고의 2회 ChatGPT 검수
-EXTERNAL_LOWER_COMMENTARY_GATE: 하단 2줄 평론의 시간순 외부 검토
+## 공통 원칙
+
+- 원문, fact map, 1차 자료를 우선한다.
+- 사실, 인용, 날짜, 숫자, 화자, 법원·수사 판단과 해석을 구분한다.
+- 자료가 부족하면 문장을 완성해 추정하지 말고 `NEEDS_EVIDENCE`로 표시한다.
+- 원고의 블록 ID와 순서를 임의로 바꾸지 않는다.
+- 보고서형 추상어보다 사람·행동·충돌·숫자·직접 질문을 우선한다.
+- 전체 원고를 새로 쓰지 않는다. 문제가 있는 위치와 필요한 수정만 제안한다.
+- 외부 검수자는 `FINAL`, `PASS`, `ADOPTED`, `SCRIPT_LOCK`을 선언하지 않는다.
+- 모든 제안은 Codex 검증 전까지 `PENDING_CODEX_REVIEW`다.
+
+## Round 1
+
+입력 맨 위에 다음을 적는다.
+
+```yaml
+content_type: politics_longform
+review_round: 1
 ```
 
-`MASTER_COMMENTARY_REVIEW_GATE`의 파일은 모두
-`20_script/master_commentary_review/` 아래에 둔다.
-`EXTERNAL_LOWER_COMMENTARY_GATE`가 사용하는
-`commentary_review_packet_sent.md`,
-`commentary_review_packet_manifest.json`,
-`commentary_review_packet_returned.md`,
-`commentary_review_receipt.json`, `external_review_gate.json`은 재사용하지 않는다.
-두 게이트의 PASS는 서로를 대신하지 않는다.
+### 기본 입력
 
-## 2. 권한
+- 마스터 원고
+- commentary fact map
+- 조사 자료
+- 중심 질문 또는 중심 명제
+- 변경 금지 항목과 블록 순서
 
-ChatGPT는 독립 검수자다. 외부 모델은 최종 승인 파일을 만들지 않는다.
-두 회차의 모든 반환 상태는 `PENDING_CODEX_REVIEW`다. ChatGPT의
-`PASS_RECOMMENDED`는 검수 권고일 뿐 `PASS`, `FINAL`, `ADOPTED` 또는
-`commentary_master_script_approved.md` 생성을 뜻하지 않는다.
+원문 발언, source manifest, 추가 자료는 사실 확인에 필요한 경우에만 더한다.
 
-Codex는 Round 1의 모든 `suggestion_id`에 exactly one 결정을 기록한다.
+### 역할
+
+Round 1은 진단과 수정 제안만 수행한다.
+
+- 중심 명제가 끝까지 증명되는지
+- 사실과 해석이 섞였는지
+- 근거 없는 인과·의도 추론·과장이 있는지
+- 중요한 반론을 피하고 있는지
+- AI식 일반론과 추상명사가 반복되는지
+- 실제 발언의 감정과 문장 온도가 어긋나는지
+- 오탈자, OCR 오인식, 고유명사·법률용어 오류가 있는지
+- 깨진 특수문자, `<< d>>`, `�`, 깨진 자모, 중복 구두점이 있는지
+
+### 출력
+
+첫 줄:
+
+```text
+ROUTE=POLITICS_LONGFORM
+```
+
+이어서 다음 순서로 작성한다.
+
+1. 총평
+2. 중심 명제 판정
+3. 블록별 진단
+4. 강한 문장
+5. 약한 문장
+6. 정치적 균형과 반론
+7. `NEEDS_EVIDENCE`
+8. 번호가 붙은 수정 제안
+9. 문자·오탈자 교정 목록
+
+수정 제안은 다음 정도의 정보만 있으면 된다.
+
+```text
+### R1-01
+대상: N003
+문제: 선거 결과와 출연자의 해석이 사실상 동일시돼 있다.
+수정 방향: “입증했다”를 “해석에 힘을 실었다”로 제한한다.
+근거: fact map F07, 반론 C02
+근거 상태: 충분
+```
+
+한 제안에 수십 개 필드를 만들거나 JSON으로 반환하지 않는다.
+
+마지막 줄:
+
+```text
+PENDING_CODEX_REVIEW
+```
+
+## Codex 중간 결정
+
+Codex는 Round 1 제안을 원문과 자료에 다시 대조하고 제안마다 정확히 하나를
+결정한다.
 
 ```text
 ADOPTED
@@ -36,221 +100,75 @@ REJECTED
 PENDING_EVIDENCE
 ```
 
-각 결정에는 `decision_reason`이 필요하다. `PENDING_EVIDENCE`가 하나라도 남으면
-Round 2를 보내거나 마스터 검수 게이트를 통과시키지 않는다. 사용자의 명시적
-승인 전에는 `commentary_master_script_approved.md`를 만들지 않는다.
+결정표에는 제안 ID, 결정, 이유, 실제 반영 위치만 기록한다. 채택한 내용만 원고와
+fact map에 반영한다. `PENDING_EVIDENCE`가 남아 있으면 Round 2로 넘어가지 않는다.
 
-## 3. 공통 근거
+## Round 2
 
-두 회차는 다음 내용을 근거로 삼는다.
+Round 1과 같은 ChatGPT 대화에서 이어서 진행한다.
 
-- `core_question`: 영상 전체가 답할 핵심 질문
-- `commentary_master_script_draft.md`: 마스터 원고 전문
-- `commentary_fact_map.json`: `claim_id`별 사실, 해석, 반론, 판단
-- `source_manifest.json`: 실제 출처, 날짜, URL과 근거 역할
-- 원문 발언: `source_id`, `segment_id`, 타임코드와 정확한 문장
-- timeline의 전체 `ordered_segment_ids`
-- 아직 확인되지 않은 fact lock과 제작자가 이미 고정한 사실
-
-필수 근거가 없으면 추정으로 채우지 않고 `CONTEXT_REQUIRED`,
-`FACT_CHECK_REQUIRED`, `SOURCE_MISMATCH`, `FACT_LOCK_CONFLICT`,
-`NEEDS_EVIDENCE` 중 하나로 표시한다.
-
-근거 충돌 시 권한 순서는 원본 1차 자료, 기관 원문, 출처와 날짜가 확인되는 보도,
-fact map, 검토 대상 원고, 외부 모델의 추론 순서다.
-
-## 4. ROUND_1
-
-입력 헤더:
-
-```yaml
-content_type: politics_longform
-review_round: 1
-packet_id: 고유 ID
-sent_packet_sha256: Round 1 발송문 SHA-256
-episode_id: 에피소드 ID
-core_question: 영상 전체의 핵심 질문
-target_duration_sec: 목표 길이
-```
-
-Round 1은 다음 두 역할만 수행한다.
-
-1. `INDEPENDENT_REVIEW`: 초안을 고치기 전에 논증, 근거, 반론, 맥락을 진단한다.
-2. `REVISION_PROPOSAL`: 진단된 문제에 한해서 수정안을 제시한다.
-
-제안마다 다음 필드를 사용한다.
-
-```yaml
-suggestion_id:
-segment_id:
-claim_id:
-source_id:
-before:
-after:
-revision_type:
-reason:
-evidence:
-counterargument:
-derived_from:
-inference_type:
-confidence:
-factual_impact:
-risk:
-verification_state:
-```
-
-`suggestion_id`는 회차 안에서 중복할 수 없다. 직접 인용과 작성자의 해석을
-구분하고, 원문에 없는 의도나 배후를 사실처럼 추가하지 않는다. 원고 전체를
-취향대로 재창작하지 않는다.
-
-Round 1 반환 형식:
-
-```text
-ROUTE=POLITICS_LONGFORM
-review_round: 1
-packet_id: ...
-sent_packet_sha256: ...
-
-## INDEPENDENT_REVIEW
-segment_id와 claim_id별 진단
-
-## REVISION_PROPOSAL
-suggestion_id별 수정 제안
-
-## HARD_BLOCKERS
-없으면 NONE, 있으면 필요한 근거
-
-final_state: PENDING_CODEX_REVIEW
-```
-
-Round 1 직후 Codex는 원문, 출처, 날짜, 숫자와 fact lock을 다시 대조하고
-`round1_codex_decisions.json`에 제안별 결정을 기록한다. 채택한 제안만 반영해
-마스터 원고와 fact map을 수정한다.
-
-## 5. ROUND_2
-
-Round 2는 반드시 Round 1을 수행한 same conversation에서 이어간다.
+입력 맨 위에 다음을 적는다.
 
 ```yaml
 content_type: politics_longform
 review_round: 2
-same_conversation_id: required
-packet_id: 새 고유 ID
-parent_round1_return_sha256: Round 1 반환문 SHA-256
-parent_decisions_sha256: Codex 결정표 SHA-256
 ```
 
-새 대화, 갈라진 대화, 대화 ID가 확인되지 않는 경우
-`SAME_CONVERSATION_REQUIRED`로 중단한다. 같은 대화라는 이유로 이전 첨부를
-암묵적으로 기억한다고 가정하지 않는다. Round 2 패킷 자체에 다음 전문을 모두
-다시 넣어 self-contained 상태로 만든다.
+### 입력
 
-1. Round 1 전체 반환문
-2. Codex 결정표 전체
-3. 수정된 마스터 원고 전문
-4. 수정된 fact map 전문
-5. timeline segment 순서 전체
-6. 핵심 질문
+- Round 1 검수 결과
+- Codex 제안별 결정표
+- 수정 원고
+- 수정 fact map
+- 변경 요약
+- 유지해야 할 블록 순서와 중심 질문
 
-패킷에는 다음 앵커를 각각 한 번 넣는다.
+### 역할
 
-```text
-<!-- ROUND1_RETURN_FULL -->
-<!-- CODEX_DECISIONS_FULL -->
-<!-- REVISED_MASTER_SCRIPT_FULL -->
-<!-- REVISED_FACT_MAP_FULL -->
-<!-- TIMELINE_ORDER_FULL -->
-<!-- CORE_QUESTION -->
-```
+Round 2는 새 창작이나 전면 개작이 아니라 수정 후 감사다.
 
-Round 2는 다음 두 역할을 수행한다.
+- Round 1 문제가 실제로 해결됐는지
+- 채택·부분 채택·기각 범위를 지켰는지
+- 수정하면서 새로운 사실 오류가 생기지 않았는지
+- 숫자, 날짜, 인용, 출처, 화자 귀속이 유지됐는지
+- 해석이나 가능성을 확인 사실로 바꾸지 않았는지
+- 문장별 수정 때문에 전체 논증과 결론이 무너지지 않았는지
+- 오탈자, OCR, 깨진 문자와 특수기호가 남지 않았는지
 
-1. `EVIDENCE_AUDIT`: 채택된 수정의 사실, 인용, 날짜, 숫자, 해석을 다시 검증한다.
-2. `FLOW_CONTINUITY_AUDIT`: 원고 전문이 핵심 질문을 향해 자연스럽게 이어지는지
-   전체 흐름으로 검수한다.
+### 출력
 
-`FLOW_CONTINUITY_AUDIT`는 최소한 다음을 확인한다.
-
-- `ordered_segment_ids`가 Round 1과 동일하고 segment order drift가 없는가
-- 각 구간의 마지막 문장이 다음 구간의 첫 주장으로 논리적으로 이어지는가
-- 같은 주장을 반복하거나 반론을 두 번 처리하지 않는가
-- 수정 때문에 주어, 시점, 출처 또는 핵심 질문이 바뀌지 않았는가
-- 인트로, 본론, 반론, 판단의 역할과 강도가 자연스럽게 상승하는가
-- 개별 문장은 좋아졌지만 전체 결론이 비약하는 문제가 없는가
-
-Round 2 반환 형식:
+첫 줄:
 
 ```text
 ROUTE=POLITICS_LONGFORM
-review_round: 2
-packet_id: ...
-same_conversation_id: ...
-
-## EVIDENCE_AUDIT
-채택된 수정의 근거 재검증
-
-## FLOW_CONTINUITY_AUDIT
-구간 전환과 전체 논리 흐름 검수
-
-recommendation: PASS_RECOMMENDED|REVISE_REQUIRED|EVIDENCE_REQUIRED
-flow_continuity_status: PASS|FAIL
-remaining_blockers: []
-final_state: PENDING_CODEX_REVIEW
 ```
 
-`REVISE_REQUIRED`, `EVIDENCE_REQUIRED`, 흐름 FAIL 또는 남은 blocker가 있으면
-`WAIT_CHATGPT_REVIEW_REPAIR`다. 원고를 수정한 뒤 필요한 검수 회차를 다시 만들고
-해시를 갱신한다.
+이어서 다음 순서로 작성한다.
 
-## 6. 불변 파일 계약
+1. Round 1 지적 해결 여부
+2. 사실·숫자·출처 감사
+3. 새로 생긴 오류
+4. 전체 흐름 감사
+5. 문자·오탈자 감사
+6. 남은 blocker
+7. 검수 권고
+
+검수 권고는 다음 셋 중 하나만 사용한다.
 
 ```text
-20_script/master_commentary_review/
-├─ round1_packet_sent.md
-├─ round1_manifest.json
-├─ round1_returned.md
-├─ round1_receipt.json
-├─ round1_codex_decisions.json
-├─ round2_packet_sent.md
-├─ round2_manifest.json
-├─ round2_returned.md
-├─ round2_receipt.json
-└─ master_commentary_review_gate.json
+PASS_RECOMMENDED
+REVISE_REQUIRED
+EVIDENCE_REQUIRED
 ```
 
-발송문과 반환문을 덮어쓰지 않는다. 각 manifest와 receipt는 실제 파일의 SHA-256을
-고정한다. Round 2 manifest는 Round 1 반환문과 Codex 결정표의 SHA-256을 부모
-해시로 고정한다. Round 1 receipt, Round 2 manifest, Round 2 receipt의
-`conversation_id`는 모두 같아야 한다.
+마지막 줄:
 
-Round 1 manifest의 불변 권위는 원고와 fact map 전문을 포함한
-`round1_packet_sent.md`다. Round 1 이후 수정되는 작업용
-`commentary_master_script_draft.md`와 `commentary_fact_map.json`의 과거 해시를
-현재 파일에 다시 요구하지 않는다. Round 2 manifest는 수정된 현재 원고, fact
-map과 timeline의 파일 경로·SHA-256을 별도로 고정한다.
-
-Round 1 receipt의 `suggestion_ids`와 Codex 결정표는 정확히 일대일이어야 한다.
-누락, 중복, 알 수 없는 제안 ID, 빈 `decision_reason`은 실패다.
-Round 1 manifest, Round 2 manifest, Round 2 receipt의
-`ordered_segment_ids`가 하나라도 다르면 `SEGMENT_ORDER_DRIFT`다.
-
-검증 명령:
-
-```powershell
-python scripts/validate_chatgpt_two_pass_review.py --review-dir "{episode}\20_script\master_commentary_review"
+```text
+PENDING_CODEX_REVIEW
 ```
 
-검증기가 만든 `MASTER_COMMENTARY_REVIEW_GATE=PASS`는 2회 검수 파일과 해시 연결이
-정상이라는 뜻이다. 사용자 승인, 하단 2줄 외부 검토, 설계 승인 또는 CapCut 조립
-PASS를 대신하지 않는다.
+## Codex 최종 판단
 
-## 7. 금지
-
-- Round 1과 Round 2를 한 응답에서 동시에 수행했다고 주장하지 않는다.
-- Round 2를 새 대화에서 시작하지 않는다.
-- Round 1 제안을 Codex 결정 없이 자동 채택하지 않는다.
-- 하단 2줄 외부 검토 파일을 마스터 원고 2회 검수 파일로 재사용하지 않는다.
-- 외부 반환문에 `final_state: FINAL`, `approval_status: PASS`,
-  `commentary_master_script_approved.md` 생성 완료를 쓰지 않는다.
-- 직접 인용 왜곡, 날짜·숫자 오류, 직책 오류, 미확인 범죄 단정이 있으면
-  권고 PASS를 내지 않는다.
+외부 권고를 받은 뒤 Codex가 원문, fact map, 결정표, 수정 원고를 다시 대조한다.
+외부 모델의 `PASS_RECOMMENDED`는 최종 승인이나 제작 잠금이 아니다. 근거·흐름·문자
+품질에 blocker가 없을 때만 별도 내부 게이트가 다음 제작 단계로 넘긴다.

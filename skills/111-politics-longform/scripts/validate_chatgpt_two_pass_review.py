@@ -50,7 +50,8 @@ FORBIDDEN_EXTERNAL_APPROVAL = re.compile(
     r"(?:PASS|FINAL|ADOPTED)\s*$"
 )
 SUGGESTION_ID_PATTERN = re.compile(
-    r"(?im)^\s*(?:suggestion_id\s*:\s*|제안\s+)([A-Za-z0-9._-]+)\s*$"
+    r"(?im)^\s*(?:suggestion_id\s*:\s*|제안\s+|#{2,4}\s+)"
+    r"([A-Za-z]+\d+(?:-\d+)?)\s*$"
 )
 TEXT_HYGIENE_PATTERNS = (
     ("U+FFFD replacement character", re.compile("\ufffd")),
@@ -211,6 +212,211 @@ def _check_text_hygiene(
         )
 
 
+def _validate_human_readable_review(
+    review_dir: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Validate the compact Markdown-first two-pass review contract."""
+    errors: list[dict[str, str]] = []
+    manifest = _load_json(manifest_path, errors)
+    expected_schema = "politics-chatgpt-two-pass-human-readable-v1"
+    if manifest.get("schema_version") != expected_schema:
+        _add_error(
+            errors,
+            "INVALID_SCHEMA",
+            f"review_manifest.json schema_version must be {expected_schema}",
+        )
+
+    bindings = (
+        ("round1_returned_file", "round1_returned_sha256", "Round 1 return"),
+        ("decisions_file", "decisions_sha256", "Codex decisions"),
+        ("round2_returned_file", "round2_returned_sha256", "Round 2 return"),
+        ("revised_script_file", "revised_script_sha256", "revised script"),
+        ("revised_fact_map_file", "revised_fact_map_sha256", "revised fact map"),
+        ("timeline_file", "timeline_sha256", "timeline"),
+    )
+    resolved: dict[str, Path | None] = {}
+    for file_key, hash_key, label in bindings:
+        resolved[file_key] = _verify_file_hash(
+            review_dir,
+            manifest,
+            file_key,
+            hash_key,
+            label,
+            errors,
+        )
+    if (
+        manifest.get("round2_repair_returned_file") is not None
+        or manifest.get("round2_repair_returned_sha256") is not None
+    ):
+        resolved["round2_repair_returned_file"] = _verify_file_hash(
+            review_dir,
+            manifest,
+            "round2_repair_returned_file",
+            "round2_repair_returned_sha256",
+            "Round 2 repair return",
+            errors,
+        )
+
+    conversation_id = manifest.get("conversation_id")
+    if not isinstance(conversation_id, str) or not conversation_id.strip():
+        _add_error(
+            errors,
+            "SAME_CONVERSATION_REQUIRED",
+            "one nonblank ChatGPT conversation_id is required",
+        )
+
+    for key, label in (
+        ("round1_returned_file", "Round 1 return"),
+        ("round2_returned_file", "Round 2 return"),
+        ("round2_repair_returned_file", "Round 2 repair return"),
+    ):
+        path = resolved.get(key)
+        if path is not None:
+            _check_external_return(
+                {"external_review_status": "PENDING_CODEX_REVIEW"},
+                path,
+                label,
+                errors,
+            )
+
+    script_path = resolved.get("revised_script_file")
+    _check_text_hygiene(script_path, errors)
+    ordered_segment_ids = _clean_id_list(manifest.get("ordered_segment_ids"))
+    if ordered_segment_ids is None or not ordered_segment_ids:
+        _add_error(
+            errors,
+            "SEGMENT_ORDER_DRIFT",
+            "ordered_segment_ids must be a nonempty string list",
+        )
+        ordered_segment_ids = []
+    elif len(ordered_segment_ids) != len(set(ordered_segment_ids)):
+        _add_error(
+            errors,
+            "SEGMENT_ORDER_DRIFT",
+            "ordered_segment_ids contains duplicates",
+        )
+    if script_path is not None:
+        try:
+            script_text = script_path.read_text(encoding="utf-8-sig")
+            actual_order = re.findall(r"(?m)^##\s+([A-Za-z]+\d+)\.", script_text)
+        except (OSError, UnicodeError) as exc:
+            actual_order = []
+            _add_error(errors, "INVALID_RETURN_TEXT", f"revised script: {exc}")
+        if actual_order != ordered_segment_ids:
+            _add_error(
+                errors,
+                "SEGMENT_ORDER_DRIFT",
+                "revised script section order differs from ordered_segment_ids",
+            )
+
+    decisions_path = resolved.get("decisions_file")
+    round1_path = resolved.get("round1_returned_file")
+    decisions = _load_json(decisions_path, errors) if decisions_path else {}
+    decision_rows = decisions.get("decisions")
+    if not isinstance(decision_rows, list):
+        _add_error(
+            errors,
+            "INCOMPLETE_CODEX_DECISIONS",
+            "Codex decisions must be a list",
+        )
+        decision_rows = []
+    decision_ids: list[str] = []
+    for index, row in enumerate(decision_rows):
+        if not isinstance(row, dict):
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                f"decision row {index} must be an object",
+            )
+            continue
+        suggestion_id = row.get("suggestion_id")
+        decision = row.get("decision")
+        reason = row.get("decision_reason")
+        if not isinstance(suggestion_id, str) or not suggestion_id.strip():
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                f"decision row {index} has no suggestion_id",
+            )
+            continue
+        decision_ids.append(suggestion_id)
+        if decision not in ALLOWED_DECISIONS:
+            _add_error(
+                errors,
+                "INVALID_CODEX_DECISION",
+                f"{suggestion_id}: invalid decision {decision!r}",
+            )
+        if not isinstance(reason, str) or not reason.strip():
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                f"{suggestion_id}: decision_reason is required",
+            )
+        if decision == "PENDING_EVIDENCE":
+            _add_error(
+                errors,
+                "PENDING_EVIDENCE",
+                f"{suggestion_id}: evidence is still pending",
+                severity="WAIT",
+            )
+    if len(decision_ids) != len(set(decision_ids)):
+        _add_error(
+            errors,
+            "INCOMPLETE_CODEX_DECISIONS",
+            "Codex decision suggestion IDs must be unique",
+        )
+    if round1_path is not None:
+        try:
+            suggestion_ids = SUGGESTION_ID_PATTERN.findall(
+                round1_path.read_text(encoding="utf-8-sig")
+            )
+        except (OSError, UnicodeError) as exc:
+            suggestion_ids = []
+            _add_error(errors, "INVALID_RETURN_TEXT", f"Round 1 return: {exc}")
+        if suggestion_ids != decision_ids:
+            _add_error(
+                errors,
+                "INCOMPLETE_CODEX_DECISIONS",
+                "Round 1 suggestions and Codex decisions must be exactly one-to-one",
+            )
+
+    blockers = manifest.get("remaining_blockers")
+    if not isinstance(blockers, list):
+        _add_error(
+            errors,
+            "INVALID_ROUND2_BLOCKERS",
+            "remaining_blockers must be a list",
+        )
+        blockers = ["invalid"]
+    if (
+        manifest.get("recommendation") != "PASS_RECOMMENDED"
+        or manifest.get("flow_continuity_status") != "PASS"
+        or manifest.get("text_hygiene_status") != "PASS"
+        or bool(blockers)
+    ):
+        _add_error(
+            errors,
+            "WAIT_CHATGPT_REVIEW_REPAIR",
+            "Round 2 recommendation, flow, text hygiene, or blockers require repair",
+            severity="WAIT",
+        )
+
+    fail_count = sum(item["severity"] == "FAIL" for item in errors)
+    wait_count = sum(item["severity"] == "WAIT" for item in errors)
+    status = "FAIL" if fail_count else "WAIT" if wait_count else "PASS"
+    return {
+        "gate": GATE,
+        "status": status,
+        "stop_code": None if status == "PASS" else "WAIT_CHATGPT_REVIEW_REPAIR",
+        "review_dir": str(review_dir),
+        "contract": expected_schema,
+        "conversation_id": conversation_id if status == "PASS" else None,
+        "ordered_segment_ids": ordered_segment_ids if status == "PASS" else [],
+        "errors": errors,
+    }
+
+
 def validate_review(review_dir: Path | str) -> dict[str, Any]:
     review_dir = Path(review_dir).resolve()
     errors: list[dict[str, str]] = []
@@ -224,6 +430,10 @@ def validate_review(review_dir: Path | str) -> dict[str, Any]:
             "review_dir": str(review_dir),
             "errors": errors,
         }
+
+    compact_manifest = review_dir / "review_manifest.json"
+    if compact_manifest.is_file():
+        return _validate_human_readable_review(review_dir, compact_manifest)
 
     missing = [name for name in REQUIRED_FILES if not (review_dir / name).is_file()]
     for name in missing:
