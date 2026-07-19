@@ -199,6 +199,19 @@ Stage 1은 형식을 빠짐없이 채우되 내용은 `STAGE1_DRAFT`, `CANDIDATE
 `NEEDS_REVIEW` 상태로 둔다. CapCut draft, speech lock, locked clips, export,
 `FINAL_DESIGN`, `upload_ready`를 만들거나 주장하지 않는다.
 
+### 미드롱폼 채널 게이트
+
+트렌드헌터 미드롱폼 탭이나 자동 탐색으로 원본 후보를 고를 때는 먼저
+`references/midlongform-channel-policy.md`를 읽고 고정된 허용 채널 24개와
+블랙리스트 1개를 적용한다. 채널 이름이 아니라 YouTube 채널 ID를 우선 대조한다.
+블랙리스트가 허용 목록보다 우선하며 `MBC 라디오 시사`는 자동 후보와 원본
+소스에서 제외한다.
+
+허용 목록에 없는 채널은 자동 채택하지 않고 `WAIT_CHANNEL_NOT_ALLOWLISTED`로
+보고한다. 사용자가 특정 URL을 직접 원본으로 지정한 경우에만 명시적 예외로
+검토할 수 있으며, 이때도 출처·맥락·권리 게이트를 그대로 적용한다. 채널 허용은
+`rights/fair-use=PASS`, 사실 검증 PASS 또는 제작 승인을 뜻하지 않는다.
+
 ### 소스 증거
 
 YouTube 소스는 FHD/1080-first로 확보하되 원본 입력 해상도는 1080p와 720p를
