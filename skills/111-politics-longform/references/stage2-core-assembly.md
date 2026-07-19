@@ -17,8 +17,8 @@ A core assembly is complete only when all are true:
 7. all referenced video media exists;
 8. no build-staging directory remains.
 
-GUI opened, timeline visible, render complete, and upload complete remain separate
-states. Never infer them from JSON registration.
+Render complete and upload complete remain separate states. Never infer them
+from JSON registration.
 
 ## Exact microsecond timeline normalization
 

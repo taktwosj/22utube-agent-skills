@@ -31,7 +31,6 @@ class PoliticsLongformEmbeddedContractTests(unittest.TestCase):
             "external_review_gate.json",
             "commentary_decisions.json",
             "timeline_design_approved.json",
-            "jungchilong_gui_restore_gate.json",
             "speech_boundary_lock.json",
             "roughcut_edl_locked.json",
             "source_labels_locked.json",
@@ -154,9 +153,8 @@ class PoliticsLongformEmbeddedContractTests(unittest.TestCase):
             "원본 송신 SHA-256",
             "공개 우회 옵션이 없다",
             "POLITICS_WRITER_MACHINE",
-            "gui_opened=true",
-            "timeline_visible=true",
-            "status=DEFERRED_TO_USER",
+            "CapCut GUI 열림, 타임라인 표시, CapCut 프로세스 종료 여부는 자동 확인하지",
+            "사용자가 프로젝트 문제를 알린 경우에만 해당 문제를 진단",
             "원래 바이트로 원복",
             "개수와 간격만 맞는 다른 문장은 FAIL",
         ):
@@ -186,11 +184,18 @@ class PoliticsLongformEmbeddedContractTests(unittest.TestCase):
             "INTRO_TEXT_COVERAGE=PASS",
             "OVERLAY_OFFSET=PASS",
             "NO_FOREIGN_ABSOLUTE_PATHS=PASS",
-            "CapCut을 완전히 종료",
+            "새 근본 승격은 별도 staging 사본에서 수행",
             "*.bak",
             "Resources/media",
         ):
             self.assertIn(token, self.skill_text)
+        for removed in (
+            "jungchilong_gui_restore_gate.json",
+            "gui_opened=true",
+            "timeline_visible=true",
+            "status=DEFERRED_TO_USER",
+        ):
+            self.assertNotIn(removed, self.skill_text)
         self.assertNotIn("intro jounchilong.mp4", self.skill_text)
 
     def test_intro_copy_is_reviewed_in_stage_two_and_printed_in_final_outputs(self):

@@ -83,8 +83,8 @@ remove the temporary link after investigation.
 - Keep locked historical `50_capcut_project` snapshots untouched.
 - Store new snapshots, manifests, and harness reports in an additive Stage 2
   output area.
-- Report separately: folder created, registry entry written, GUI opened, timeline
-  visible, harness passed, render completed, upload completed.
+- Report separately: folder created, registry entry written, harness passed,
+  render completed, upload completed.
 
 ## Completion gate
 
@@ -96,4 +96,4 @@ Do not claim Stage 2 completion until all are real and verified:
 4. root and timeline mirrors byte-consistent;
 5. audio/gap/frame/cleanup harnesses PASS;
 6. additive final design, assembly, and upload-package artifacts exist;
-7. GUI/render/upload status stated separately and honestly.
+7. render/upload status stated separately and honestly.

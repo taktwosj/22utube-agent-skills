@@ -32,7 +32,6 @@ archive_sha256: B461A07FF18E1491E837E56A0681A35CCB0A25CBF9D7BFA2B6004C6D32CC878A
 packaged_file_count: 39
 intro_sha256: E899A65CC6C089FF116CBB6175B6A43B8580A69C523720B093FBE259F05717B9
 restore_target: %LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft\jungchilong
-gui_gate: 90_reports\jungchilong_gui_restore_gate.json
 canvas: 1920x1080
 content_start_sec=15.083333
 intro_asset: jungchilong/Resources/media/123123.mp4
@@ -52,23 +51,17 @@ YP007, YP005, YM007 are legacy visual references only. 이 프로젝트들을 �
 fallback 근본, 새 에피소드의 복제 원본으로 사용하지 않는다. 과거 하단 평론의
 밀도나 레이아웃을 참고할 때만 읽는다.
 
-아카이브 무결성 PASS와 현재 머신의 CapCut GUI 열림 PASS는 별도 게이트다.
-매니페스트의 `gui_restore_test_on_second_machine=WAIT_USER_RESTORE`는
-`LOCAL_GUI_RESTORE=PASS`가 아니다.
-새 근본 승격은 CapCut을 완전히 종료한 뒤 별도 staging 사본에서만 수행한다.
-`.bak`, 임시 파일, orphan media, 외부 사용자 경로를 제거하고 인트로를
+CapCut GUI 열림, 타임라인 표시, CapCut 프로세스 종료 여부는 자동 확인하지
+않는다. 사용자가 프로젝트 문제를 알린 경우에만 해당 문제를 진단한다.
+새 근본 승격은 별도 staging 사본에서 수행한다. `.bak`, 임시 파일, orphan
+media, 외부 사용자 경로를 제거하고 인트로를
 `Resources/media`에 내장한 다음 root·`template-2.tmp`·`Timelines/*` 미러를
 일치시킨다. `INTRO_MEDIA_FFPROBE=PASS`, `INTRO_MEDIA_SHA256=PASS`,
 `INTRO_TEXT_COVERAGE=PASS`, `OVERLAY_OFFSET=PASS`,
 `NO_FOREIGN_ABSOLUTE_PATHS=PASS`, 복구 validator PASS가 모두 확인된 새 ZIP과
-매니페스트 및 `V3_LOCAL_GUI_RESTORE=PASS`(`gui_opened=true`,
-`timeline_visible=true`)가 모두 확인되어야 `jungchilong_base_v3_intro15`로
-승격한다. 구조 validator만으로는 승격하지 않는다. 파일 수·ZIP SHA는 승격
-결과를 매니페스트와 코드에 함께 pin하며 이전 37개 값을 재사용하지 않는다.
-승격 증거는 `v3_local_gui_restore_gate.json`에 기록하고 template profile,
-archive 이름·SHA-256, manifest 이름·SHA-256과 결합한다. archive verifier는
-이 증거 파일과 `status=PASS`, `gui_opened=true`, `timeline_visible=true`를 직접
-검사해야 하며 `promotion_state=READY` 상수만으로 통과시키지 않는다.
+매니페스트가 확인되어야 `jungchilong_base_v3_intro15`로 승격한다. 파일 수·ZIP
+SHA는 승격 결과를 매니페스트와 코드에 함께 pin하며 이전 37개 값을 재사용하지
+않는다.
 
 ## 파생 정치 쇼츠 계약
 
@@ -174,7 +167,7 @@ A. 설계·검토
 B. 조립
 01 speech boundary lock        NOT RUN/PASS/FAIL
 02 locked clips + ffprobe      NOT RUN/PASS/FAIL
-03 jungchilong 로컬 GUI 복구    NOT RUN/PASS/FAIL
+03 jungchilong 로컬 근본 검증    NOT RUN/PASS/FAIL
 04 에피소드 복제본 조립         NOT RUN/PASS/FAIL
 05 CapCut JSON 미러            NOT RUN/PASS/FAIL
 06 오디오·간격 검증             NOT RUN/PASS/FAIL
@@ -605,8 +598,8 @@ preassembly 검증은 모든 조립 호출에 강제되며 공개 우회 옵션�
 3. 이때 조립은 `PASS_CORE_ASSEMBLY`, 후속 산출물은
    `DEFERRED_CORE_ASSEMBLY_ONLY`, `final_gate: BLOCKED`,
    `upload_ready: false`로 분리한다. 렌더·업로드 완료로 확대해석하지 않는다.
-4. 보고는 결론과 프로젝트명부터 짧게 쓴다. 폴더 생성, registry 등록, GUI
-   열림/미리보기, 렌더, 업로드는 서로 다른 상태로 한 줄씩만 명시한다.
+4. 보고는 결론과 프로젝트명부터 짧게 쓴다. 폴더 생성, registry 등록, 렌더,
+   업로드는 서로 다른 상태로 한 줄씩만 명시한다.
 5. false-positive 검사를 고치느라 승인 원문을 바꾸지 않는다. 승인 문구가 정상
    시청자 문장이라면 검사 범위를 내부 표식으로 좁힌다.
 
@@ -626,7 +619,7 @@ Stage 1 잠금본이 현행 preassembly 계약에 실패하면 승인 원본을 
 4. 각 locked clip은 기존 SHA-256과 실제 ffprobe를 다시 검증한다.
 5. runtime 호환본을 원래 Stage 1 잠금 위로 복사하지 않는다.
 6. 결과 보고에는 `source_stage1_mutated: false`, preassembly 결과, native project
-   생성·등록, GUI·렌더·업로드 상태를 각각 남긴다.
+   생성·등록, 렌더·업로드 상태를 각각 남긴다.
 
 상세 절차는 `references/locked-stage1-to-stage2-migration.md`를 참고한다.
 
@@ -659,22 +652,13 @@ ffprobe PASS, video/audio duration을 기록한다. 오디오는
    manifest `PASS_ARCHIVE_INTEGRITY`, 복원본 전 파일의 archive 대비 SHA-256
    일치를 확인한다. 현재 v3는 `promotion_state=READY`지만 실검증이 실패하면
    이 단계는 BLOCKED다.
-3. `POLITICS_WRITER_MACHINE`과 승인 설계 소유권이 일치하는지 확인하고,
-   active writer machine의 GUI 게이트를 검증한다. 게이트에는 `status=PASS`,
-   `project=jungchilong`, `active_writer_machine`, `lock_owner`, archive SHA-256,
-   template profile, `verified_by`, ISO-8601 `verified_at`, `capcut_version`,
-   `gui_opened=true`, `timeline_visible=true`가 모두 필요하다.
-   단, 사용자가 CapCut 눈검수를 직접 맡겠다고 명시하면 GUI 게이트는
-   `status=DEFERRED_TO_USER`, `gui_opened=false`, `timeline_visible=false`,
-   `user_review_pending=true`로 사실대로 기록할 수 있다. 이 경우 JSON 조립은
-   진행할 수 있지만 사람의 시각 검증과 `upload_ready`는 계속 BLOCKED다.
-4. CapCut이 완전히 종료됐는지 확인한다.
-5. 로컬 `jungchilong`을 새 에피소드 프로젝트명으로 전체 복제한다.
-6. 복제본의 root와 `Timelines/*` JSON 미러를 함께 패치한다.
-7. `timeline_design_approved.json`과 locked clips만 화면 타임라인에 적용한다.
+3. `POLITICS_WRITER_MACHINE`과 승인 설계 소유권이 일치하는지 확인한다.
+4. 로컬 `jungchilong`을 새 에피소드 프로젝트명으로 전체 복제한다.
+5. 복제본의 root와 `Timelines/*` JSON 미러를 함께 패치한다.
+6. `timeline_design_approved.json`과 locked clips만 화면 타임라인에 적용한다.
    `design_blueprint_approved.json`, `commentary_decisions.json`, 승인 timeline의
    구간·최종 문장·결정·flow가 정확히 같아야 한다.
-8. 조립은 트랜잭션으로 처리한다. 레지스트리를 먼저 읽고 검증하며, 프로젝트
+7. 조립은 트랜잭션으로 처리한다. 레지스트리를 먼저 읽고 검증하며, 프로젝트
    rename 뒤 어떤 단계라도 실패하면 새 프로젝트 폴더를 제거하고
    `root_meta_info.json`을 원래 바이트로 원복한다.
 
@@ -999,7 +983,7 @@ REMOTE_METADATA_VERIFY=NOT RUN|PASS|FAIL
 ```
 
 하나의 PASS가 다음 PASS를 자동으로 뜻하지 않는다. source reuse 권리 또는
-fair-use 판단, GUI 확인, 렌더와 업로드 패키지가 남아 있으면
+fair-use 판단, 렌더와 업로드 패키지가 남아 있으면
 `upload_ready=false`다. harness나 n8n을 실행하지 않았으면 `NOT RUN`으로
 보고한다.
 
