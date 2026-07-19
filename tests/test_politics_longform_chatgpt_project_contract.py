@@ -39,25 +39,23 @@ class PoliticsLongformChatGptProjectContractTests(unittest.TestCase):
 
     def test_contract_separates_round_one_and_round_two_roles(self):
         for token in (
-            "ROUND_1",
-            "INDEPENDENT_REVIEW",
-            "REVISION_PROPOSAL",
-            "ROUND_2",
-            "EVIDENCE_AUDIT",
-            "FLOW_CONTINUITY_AUDIT",
-            "same_conversation_id: required",
+            "## Round 1",
+            "진단과 수정 제안만 수행",
+            "## Round 2",
+            "수정 후 감사",
+            "같은 ChatGPT 대화",
         ):
             self.assertIn(token, self.contract_text)
 
     def test_round_two_is_self_contained_and_audits_the_revised_full_flow(self):
         for token in (
-            "Round 1 전체 반환문",
-            "Codex 결정표 전체",
-            "수정된 마스터 원고 전문",
-            "수정된 fact map 전문",
-            "timeline segment 순서 전체",
-            "핵심 질문",
-            "segment order drift",
+            "Round 1 검수 결과",
+            "Codex 제안별 결정표",
+            "수정 원고",
+            "수정 fact map",
+            "변경 요약",
+            "유지해야 할 블록 순서와 중심 질문",
+            "전체 흐름 감사",
         ):
             self.assertIn(token, self.contract_text)
 
@@ -67,9 +65,9 @@ class PoliticsLongformChatGptProjectContractTests(unittest.TestCase):
             "PARTIALLY_ADOPTED",
             "REJECTED",
             "PENDING_EVIDENCE",
-            "suggestion_id",
-            "decision_reason",
-            "exactly one",
+            "제안마다 정확히 하나",
+            "제안 ID",
+            "이유",
         ):
             self.assertIn(token, self.contract_text)
 
@@ -79,31 +77,31 @@ class PoliticsLongformChatGptProjectContractTests(unittest.TestCase):
             "PASS_RECOMMENDED",
             "REVISE_REQUIRED",
             "EVIDENCE_REQUIRED",
-            "WAIT_CHATGPT_REVIEW_REPAIR",
-            "commentary_master_script_approved.md",
+            "Codex 최종 판단",
+            "최종 승인이나 제작 잠금이 아니다",
         ):
             self.assertIn(token, self.contract_text)
-        self.assertIn("외부 모델은 최종 승인 파일을 만들지 않는다", self.contract_text)
 
-    def test_master_review_artifacts_are_separate_from_lower_commentary_review(self):
+    def test_human_review_contract_hides_system_packet_fields(self):
         for token in (
-            "MASTER_COMMENTARY_REVIEW_GATE",
-            "EXTERNAL_LOWER_COMMENTARY_GATE",
-            "20_script/master_commentary_review/",
+            "packet ID",
+            "SHA-256",
+            "manifest",
+            "receipt",
+            "검수자에게",
+            "작성시키지 않는다",
+            "자동화 계층",
+        ):
+            self.assertIn(token, self.contract_text)
+        for forbidden in (
             "round1_packet_sent.md",
             "round1_manifest.json",
-            "round1_returned.md",
             "round1_receipt.json",
-            "round1_codex_decisions.json",
             "round2_packet_sent.md",
             "round2_manifest.json",
-            "round2_returned.md",
             "round2_receipt.json",
-            "master_commentary_review_gate.json",
-            "commentary_review_packet_sent.md",
-            "재사용하지 않는다",
         ):
-            self.assertIn(token, self.contract_text)
+            self.assertNotIn(forbidden, self.contract_text)
 
     def test_skill_routes_two_pass_review_and_ships_validator(self):
         for token in (
