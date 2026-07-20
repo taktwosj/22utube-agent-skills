@@ -172,6 +172,7 @@ def rebuild_state(events: Iterable[dict]) -> dict:
     }
 
     last_passed_idx = -1
+    final_qc_passed = False
     for ev in events:
         et = ev.get("event_type")
         gate = ev.get("gate")
@@ -208,8 +209,16 @@ def rebuild_state(events: Iterable[dict]) -> dict:
             state["next_user_action"] = None
         elif et == "USER_VISUAL_PASS":
             state["next_user_action"] = None
+        elif et == "FINAL_QC_PASS":
+            # Mark that G90 final QC has passed. Release still requires a
+            # subsequent UPLOAD_APPROVED event; FINAL_QC_PASS alone does NOT
+            # flip release_allowed.
+            final_qc_passed = True
         elif et == "UPLOAD_APPROVED":
-            state["release_allowed"] = True
+            # RW-P03-02: release requires BOTH FINAL_QC_PASS and UPLOAD_APPROVED.
+            # An UPLOAD_APPROVED before FINAL_QC_PASS does not release.
+            if final_qc_passed:
+                state["release_allowed"] = True
         state["projection_of_ledger_event_id"] = ev.get("event_id")
 
     return state
@@ -276,6 +285,17 @@ class ForbiddenAdvanceClass(Exception):
         self.auto_advance_class = auto_advance_class
 
 
+class PassWithErrorsForbidden(Exception):
+    """Raised when a caller asks validate_gate to emit PASS while the errors
+    list is non-empty. PASS is the deterministic validator's positive verdict
+    and must never coexist with recorded errors."""
+
+    def __init__(self):
+        super().__init__(
+            "PASS_WITH_ERRORS_FORBIDDEN: status=PASS requires empty errors"
+        )
+
+
 def validate_gate(
     *,
     lane: str,
@@ -296,16 +316,24 @@ def validate_gate(
     The validator itself never executes any next action; the runner does.
     The runner must reject any result whose auto_advance_class requests
     automatic LLM, paid, or upload work.
+
+    Authority rule: if `errors` is non-empty the status can never be PASS.
+    An explicit status=PASS with non-empty errors raises
+    PassWithErrorsForbidden. When status is None, it is derived as FAIL
+    when errors exist and PASS otherwise.
     """
     if auto_advance_class in FORBIDDEN_AUTO_ADVANCE_CLASSES:
         raise ForbiddenAdvanceClass(auto_advance_class)
     if auto_advance_class not in ALLOWED_AUTO_ADVANCE_CLASSES:
         raise ForbiddenAdvanceClass(auto_advance_class)
 
-    # If errors are present the status cannot be PASS.
+    has_errors = bool(errors)
+    if status == "PASS" and has_errors:
+        raise PassWithErrorsForbidden()
+
     derived_status = status
     if derived_status is None:
-        derived_status = "FAIL" if errors else "PASS"
+        derived_status = "FAIL" if has_errors else "PASS"
 
     result = {
         "schema_version": SCHEMA_VERSION,
@@ -571,12 +599,16 @@ def render_markdown(canonical: dict) -> str:
 def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
     """Compare a hand-edited MD against the canonical JSON projection.
 
-    Strategy: re-render the canonical, then verify that every tracked
-    scalar field's rendered form is still present in the human MD. If any
-    field is missing or changed beyond whitespace, raise
-    HumanMdCanonicalJsonMismatch.
+    Strategy (RW-P04-03 structural-path comparison):
+    - For every tracked scalar field, render its canonical line and require
+      that exact line (key + value) to appear in the human MD. A field is
+      matched by its structural path (e.g. `title_a`), not by whether its
+      value happens to appear anywhere else in the document.
+    - If any tracked field's rendered line is absent or carries a different
+      value, raise HumanMdCanonicalJsonMismatch.
 
-    Returns a reconciliation report when all tracked fields are intact.
+    This prevents a deleted duplicate-value field from being misclassified
+    as a cosmetic diff: each `path: value` pair must be present on its own.
     """
     rendered = render_markdown(canonical)
     if human_md.strip() == rendered.strip():
@@ -585,18 +617,32 @@ def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
             "action": "NONE",
         }
 
-    # The MD differs. Determine whether the divergence is a tracked-field
-    # change or merely cosmetic (whitespace / formatting). We do this by
-    # checking each tracked scalar field's value still appears in the MD.
     tracked = _extract_tracked_scalars(canonical)
-    normalized_human = " ".join(human_md.split())
+    normalized_human_lines = [
+        " ".join(line.split())
+        for line in human_md.splitlines()
+    ]
+
     for path, value in tracked.items():
+        # The rendered form for a scalar is `- `key`: <value>` possibly
+        # nested under parents. We compare the canonical leaf-line token.
+        leaf_key = path.split(".")[-1]
+        # Strip array-index suffix for display key (segment lists).
+        if "[" in leaf_key:
+            leaf_key = leaf_key.split("[", 1)[0]
         token = str(value)
-        if token and token not in normalized_human:
+        # Require a line whose tail matches "`leaf_key`: token" so the value
+        # is bound to the right field, not to any other field.
+        expected_tail = f"`{leaf_key}`: {token}".replace(" ", "")
+        found = any(
+            expected_tail in line.replace(" ", "")
+            for line in normalized_human_lines
+        )
+        if not found:
             raise HumanMdCanonicalJsonMismatch(path, value, "<absent-or-changed>")
 
-    # All tracked fields present; the diff is cosmetic. Treat as reconciled
-    # but flag for explicit re-render.
+    # All tracked structural field paths are intact; any remaining diff is
+    # cosmetic (whitespace, comment order).
     return {
         "status": "COSMETIC_DIFF_ONLY",
         "action": "RE_RENDER_RECOMMENDED",
@@ -944,10 +990,19 @@ def plan_cache_invalidation(
 ) -> dict:
     """Decide which layers to invalidate when inputs change.
 
-    Rule:
-    - source_sha256 change => invalidate every layer (full rebuild).
-    - tool_versions.<x> change => invalidate layers depending on tool <x>.
-    - sampling_policy change => invalidate layers depending on sampling.
+    Cache-key components (all trigger full invalidation when changed):
+    - source_sha256
+    - duration_us
+    - resolution
+    - selected_range
+    - profile_version
+
+    Per-layer inputs (trigger only dependent layers):
+    - tool_versions.<x>
+    - sampling_policy.<key>
+
+    RW-P04-02: every cache-key component change must invalidate all layers,
+    because the cache key itself is no longer valid.
     """
     current_source = current_manifest.get("source_sha256")
     new_source = new_inputs.get("source_sha256")
@@ -956,6 +1011,16 @@ def plan_cache_invalidation(
             "invalidate": sorted(current_manifest.get("layers", {}).keys()),
             "reason": "SOURCE_SHA256_CHANGED",
         }
+
+    # Any cache-key component change invalidates every layer (the cache key
+    # itself changed, so no cached layer is reusable).
+    cache_key_fields = ("duration_us", "resolution", "selected_range", "profile_version")
+    for field in cache_key_fields:
+        if current_manifest.get(field) != new_inputs.get(field):
+            return {
+                "invalidate": sorted(current_manifest.get("layers", {}).keys()),
+                "reason": f"CACHE_KEY_FIELD_CHANGED:{field}",
+            }
 
     invalidate: set[str] = set()
     current_tools = current_manifest.get("tool_versions", {})
@@ -988,6 +1053,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = 'B6D341B906456E141ADF08AAFB16C342779813ED9D28948F942CA6E11EC59A0D'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = '505DDFE2AC392C98F4B1068413ED22075280DD255C3866C6A63EC9726E19AEA4'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py
-

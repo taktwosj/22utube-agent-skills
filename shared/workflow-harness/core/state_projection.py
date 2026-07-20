@@ -83,6 +83,7 @@ def rebuild_state(events: Iterable[dict]) -> dict:
     }
 
     last_passed_idx = -1
+    final_qc_passed = False
     for ev in events:
         et = ev.get("event_type")
         gate = ev.get("gate")
@@ -119,8 +120,16 @@ def rebuild_state(events: Iterable[dict]) -> dict:
             state["next_user_action"] = None
         elif et == "USER_VISUAL_PASS":
             state["next_user_action"] = None
+        elif et == "FINAL_QC_PASS":
+            # Mark that G90 final QC has passed. Release still requires a
+            # subsequent UPLOAD_APPROVED event; FINAL_QC_PASS alone does NOT
+            # flip release_allowed.
+            final_qc_passed = True
         elif et == "UPLOAD_APPROVED":
-            state["release_allowed"] = True
+            # RW-P03-02: release requires BOTH FINAL_QC_PASS and UPLOAD_APPROVED.
+            # An UPLOAD_APPROVED before FINAL_QC_PASS does not release.
+            if final_qc_passed:
+                state["release_allowed"] = True
         state["projection_of_ledger_event_id"] = ev.get("event_id")
 
     return state

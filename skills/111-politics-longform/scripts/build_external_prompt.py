@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 SHARED_CORE = REPO_ROOT / "shared" / "workflow-harness" / "core" / "prompt_factory.py"
 SKILL_TEMPLATES = REPO_ROOT / "skills" / "111-politics-longform" / "prompt_templates"
 SHARED_TEMPLATES = REPO_ROOT / "shared" / "workflow-harness" / "prompt_templates"

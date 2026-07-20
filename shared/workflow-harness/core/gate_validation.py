@@ -46,6 +46,17 @@ class ForbiddenAdvanceClass(Exception):
         self.auto_advance_class = auto_advance_class
 
 
+class PassWithErrorsForbidden(Exception):
+    """Raised when a caller asks validate_gate to emit PASS while the errors
+    list is non-empty. PASS is the deterministic validator's positive verdict
+    and must never coexist with recorded errors."""
+
+    def __init__(self):
+        super().__init__(
+            "PASS_WITH_ERRORS_FORBIDDEN: status=PASS requires empty errors"
+        )
+
+
 def validate_gate(
     *,
     lane: str,
@@ -66,16 +77,24 @@ def validate_gate(
     The validator itself never executes any next action; the runner does.
     The runner must reject any result whose auto_advance_class requests
     automatic LLM, paid, or upload work.
+
+    Authority rule: if `errors` is non-empty the status can never be PASS.
+    An explicit status=PASS with non-empty errors raises
+    PassWithErrorsForbidden. When status is None, it is derived as FAIL
+    when errors exist and PASS otherwise.
     """
     if auto_advance_class in FORBIDDEN_AUTO_ADVANCE_CLASSES:
         raise ForbiddenAdvanceClass(auto_advance_class)
     if auto_advance_class not in ALLOWED_AUTO_ADVANCE_CLASSES:
         raise ForbiddenAdvanceClass(auto_advance_class)
 
-    # If errors are present the status cannot be PASS.
+    has_errors = bool(errors)
+    if status == "PASS" and has_errors:
+        raise PassWithErrorsForbidden()
+
     derived_status = status
     if derived_status is None:
-        derived_status = "FAIL" if errors else "PASS"
+        derived_status = "FAIL" if has_errors else "PASS"
 
     result = {
         "schema_version": SCHEMA_VERSION,

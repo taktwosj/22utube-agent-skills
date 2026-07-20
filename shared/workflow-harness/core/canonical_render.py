@@ -107,12 +107,16 @@ def render_markdown(canonical: dict) -> str:
 def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
     """Compare a hand-edited MD against the canonical JSON projection.
 
-    Strategy: re-render the canonical, then verify that every tracked
-    scalar field's rendered form is still present in the human MD. If any
-    field is missing or changed beyond whitespace, raise
-    HumanMdCanonicalJsonMismatch.
+    Strategy (RW-P04-03 structural-path comparison):
+    - For every tracked scalar field, render its canonical line and require
+      that exact line (key + value) to appear in the human MD. A field is
+      matched by its structural path (e.g. `title_a`), not by whether its
+      value happens to appear anywhere else in the document.
+    - If any tracked field's rendered line is absent or carries a different
+      value, raise HumanMdCanonicalJsonMismatch.
 
-    Returns a reconciliation report when all tracked fields are intact.
+    This prevents a deleted duplicate-value field from being misclassified
+    as a cosmetic diff: each `path: value` pair must be present on its own.
     """
     rendered = render_markdown(canonical)
     if human_md.strip() == rendered.strip():
@@ -121,18 +125,32 @@ def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
             "action": "NONE",
         }
 
-    # The MD differs. Determine whether the divergence is a tracked-field
-    # change or merely cosmetic (whitespace / formatting). We do this by
-    # checking each tracked scalar field's value still appears in the MD.
     tracked = _extract_tracked_scalars(canonical)
-    normalized_human = " ".join(human_md.split())
+    normalized_human_lines = [
+        " ".join(line.split())
+        for line in human_md.splitlines()
+    ]
+
     for path, value in tracked.items():
+        # The rendered form for a scalar is `- `key`: <value>` possibly
+        # nested under parents. We compare the canonical leaf-line token.
+        leaf_key = path.split(".")[-1]
+        # Strip array-index suffix for display key (segment lists).
+        if "[" in leaf_key:
+            leaf_key = leaf_key.split("[", 1)[0]
         token = str(value)
-        if token and token not in normalized_human:
+        # Require a line whose tail matches "`leaf_key`: token" so the value
+        # is bound to the right field, not to any other field.
+        expected_tail = f"`{leaf_key}`: {token}".replace(" ", "")
+        found = any(
+            expected_tail in line.replace(" ", "")
+            for line in normalized_human_lines
+        )
+        if not found:
             raise HumanMdCanonicalJsonMismatch(path, value, "<absent-or-changed>")
 
-    # All tracked fields present; the diff is cosmetic. Treat as reconciled
-    # but flag for explicit re-render.
+    # All tracked structural field paths are intact; any remaining diff is
+    # cosmetic (whitespace, comment order).
     return {
         "status": "COSMETIC_DIFF_ONLY",
         "action": "RE_RENDER_RECOMMENDED",

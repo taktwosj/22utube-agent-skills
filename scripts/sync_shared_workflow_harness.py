@@ -87,7 +87,7 @@ def build_canonical_bundle() -> tuple[str, str, str]:
     header = (
         f"\n# WORKFLOW_HARNESS_SOURCE_VERSION = {source_version!r}\n"
         f"# WORKFLOW_HARNESS_SOURCE_SHA256 = {source_sha256!r}\n"
-        "# DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py\n"
+        "# DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py"
     )
     parts.append(header)
     bundle = "\n".join(parts) + "\n"

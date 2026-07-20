@@ -338,10 +338,19 @@ def plan_cache_invalidation(
 ) -> dict:
     """Decide which layers to invalidate when inputs change.
 
-    Rule:
-    - source_sha256 change => invalidate every layer (full rebuild).
-    - tool_versions.<x> change => invalidate layers depending on tool <x>.
-    - sampling_policy change => invalidate layers depending on sampling.
+    Cache-key components (all trigger full invalidation when changed):
+    - source_sha256
+    - duration_us
+    - resolution
+    - selected_range
+    - profile_version
+
+    Per-layer inputs (trigger only dependent layers):
+    - tool_versions.<x>
+    - sampling_policy.<key>
+
+    RW-P04-02: every cache-key component change must invalidate all layers,
+    because the cache key itself is no longer valid.
     """
     current_source = current_manifest.get("source_sha256")
     new_source = new_inputs.get("source_sha256")
@@ -350,6 +359,16 @@ def plan_cache_invalidation(
             "invalidate": sorted(current_manifest.get("layers", {}).keys()),
             "reason": "SOURCE_SHA256_CHANGED",
         }
+
+    # Any cache-key component change invalidates every layer (the cache key
+    # itself changed, so no cached layer is reusable).
+    cache_key_fields = ("duration_us", "resolution", "selected_range", "profile_version")
+    for field in cache_key_fields:
+        if current_manifest.get(field) != new_inputs.get(field):
+            return {
+                "invalidate": sorted(current_manifest.get("layers", {}).keys()),
+                "reason": f"CACHE_KEY_FIELD_CHANGED:{field}",
+            }
 
     invalidate: set[str] = set()
     current_tools = current_manifest.get("tool_versions", {})
