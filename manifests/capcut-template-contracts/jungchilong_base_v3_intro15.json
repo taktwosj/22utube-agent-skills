@@ -24,8 +24,9 @@
       "layer_index": 10,
       "track_order": 0,
       "source_duration_us": 15083000,
-      "media_fingerprint": 9,
+      "media_fingerprint": null,
       "file_path": "C:/Users/정상준/AppData/Local/CapCut/User Data/Projects/com.lveditor.draft/jungchilong/Resources/media/123123.mp4",
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 0,
       "clip_duration": 15083333,
       "transform_x": 0.0,
@@ -67,6 +68,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -113,6 +115,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -159,6 +162,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -205,6 +209,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -251,6 +256,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 6983333
@@ -297,6 +303,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 6983333,
         "duration": 8383333
@@ -343,6 +350,7 @@
       "background_width": 0.0,
       "background_height": 0.0,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -389,6 +397,7 @@
       "background_width": 0.0,
       "background_height": 0.0,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -435,6 +444,7 @@
       "background_width": 0.0,
       "background_height": 0.0,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 15366666,
         "duration": 32566667
@@ -458,7 +468,16 @@
     }
   ],
   "material_classifications": {
-    "C:/Users/정상준/AppData/Local/CapCut/User Data/Projects/com.lveditor.draft/jungchilong/Resources/media/123123.mp4": "REPLACE_REQUIRED"
+    "99F61401-F88B-4826-B55E-8F1A46A24B8A": "REPLACE_REQUIRED",
+    "D1368653-B7FD-49ab-96C6-E756BAB26393": "REPLACE_REQUIRED",
+    "E2BD0524-C49D-4d6a-9D20-06A3383B7367": "REPLACE_REQUIRED",
+    "50CF8756-BBA2-4ce7-9DD5-2362F63ECFB5": "REPLACE_REQUIRED",
+    "EDFD15BC-5AD5-4149-A35B-D1AA05CB9CFB": "REPLACE_REQUIRED",
+    "CC23638E-2344-462e-85FA-0AB6E2175969": "REPLACE_REQUIRED",
+    "B81E7DED-55B3-4cd9-B72A-E9DFC6EE1D46": "REPLACE_REQUIRED",
+    "684FE1D7-AF50-4470-8735-299184179235": "REPLACE_REQUIRED",
+    "2BA2DD84-CA48-4908-9D4F-A4DEBF458963": "REPLACE_REQUIRED",
+    "64953B35-8137-4300-A8CE-168294C67EE1": "REPLACE_REQUIRED"
   },
   "locked_fields_policy": {
     "text": [

@@ -24,8 +24,9 @@
       "layer_index": 6,
       "track_order": 1,
       "source_duration_us": 15083333,
-      "media_fingerprint": 9,
+      "media_fingerprint": null,
       "file_path": "##_draftpath_placeholder_F68E5B1A-E076-4BF8-AC2D-B080F0FFC899_##/Resources/media/INTROJUNGCHI.mp4",
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 0,
       "clip_duration": 15083333,
       "transform_x": 0.0,
@@ -48,8 +49,9 @@
       "layer_index": 5,
       "track_order": 2,
       "source_duration_us": 10800000000,
-      "media_fingerprint": 9,
+      "media_fingerprint": null,
       "file_path": "##_draftpath_placeholder_F68E5B1A-E076-4BF8-AC2D-B080F0FFC899_##/Resources/media/JUNGSHT.png",
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 0,
       "clip_duration": 59216666,
       "transform_x": 0.0,
@@ -91,6 +93,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 5433333,
         "duration": 3000000
@@ -137,6 +140,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 2916666,
         "duration": 3000000
@@ -183,6 +187,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 3000000
@@ -229,6 +234,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 59216666
@@ -275,6 +281,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 59216666
@@ -298,8 +305,13 @@
     }
   ],
   "material_classifications": {
-    "##_draftpath_placeholder_F68E5B1A-E076-4BF8-AC2D-B080F0FFC899_##/Resources/media/INTROJUNGCHI.mp4": "REPLACE_REQUIRED",
-    "##_draftpath_placeholder_F68E5B1A-E076-4BF8-AC2D-B080F0FFC899_##/Resources/media/JUNGSHT.png": "REPLACE_REQUIRED"
+    "D96889ED-19B3-4237-AC21-9299CF68DD20": "REPLACE_REQUIRED",
+    "CDF1EFAD-00E2-4fda-A34F-59BB87539D32": "REPLACE_REQUIRED",
+    "951DFA04-C5DD-471b-A81B-7A492444AEA5": "REPLACE_REQUIRED",
+    "831B23B9-3A58-41aa-9E0A-FEDF33C40D91": "REPLACE_REQUIRED",
+    "2FADA065-33C4-4fff-ACA8-DEC501BF5CA7": "REPLACE_REQUIRED",
+    "6DEEC540-DA18-44f2-9415-E39F21ACA2E4": "REPLACE_REQUIRED",
+    "3496D188-423E-47ac-BBFF-F1D838C1D0EE": "REPLACE_REQUIRED"
   },
   "locked_fields_policy": {
     "text": [

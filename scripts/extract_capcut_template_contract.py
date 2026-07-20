@@ -188,6 +188,8 @@ def _extract_text_slot(
     content = _parse_text_content(text_material.get("content", ""))
     tx_values = _clip_transform(segment)
     clip = segment.get("clip") or {}
+    # Text slots always need their content replaced per episode.
+    text_classification = "REPLACE_REQUIRED"
     slot = {
         "slot_id": text_material.get("id", ""),
         "material_role": "TEXT",
@@ -201,7 +203,7 @@ def _extract_text_slot(
         "rotation": tx_values["rotation"],
         "alpha": tx_values["alpha"],
         "font_resource_id": text_material.get("font_resource_id", ""),
-        "font_path": text_material.get("font_path", ""),
+        "font_path": _normalize_optional_string(text_material.get("font_path", "")),
         "font_size": text_material.get("font_size", 0.0),
         "initial_scale": text_material.get("initial_scale", 1.0),
         "alignment": text_material.get("alignment", 0),
@@ -215,11 +217,30 @@ def _extract_text_slot(
         "background_round_radius": text_material.get(
             "background_round_radius", 0.0
         ),
+        "classification": text_classification,
         "target_timerange": segment.get("target_timerange"),
         "render_index": segment.get("render_index"),
         "locked_fields": list(LOCKED_TEXT_FIELDS),
     }
     return slot
+
+
+def _normalize_optional_string(value) -> str | None:
+    """Coerce a path/fingerprint field to a non-empty string or None.
+
+    CapCut draft_content sometimes stores path/md5 fields as raw integers
+    (0, 9) when the material has no resolved file. We normalize those to
+    None so consumers never see a numeric placeholder masquerading as a
+    real path.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    # Non-string scalars (int, float, bool) are not valid path/fingerprint
+    # values; treat them as missing.
+    return None
 
 
 def _extract_media_slot(
@@ -228,19 +249,26 @@ def _extract_media_slot(
     segment: dict,
     layer_index: int,
     role: str,
+    policy: dict,
 ) -> dict:
     clip = segment.get("clip") or {}
     target_timerange = segment.get("target_timerange") or {}
     tx_values = _clip_transform(segment)
+    raw_path = material.get("path", "") or material.get("source", "")
+    file_path = _normalize_optional_string(raw_path)
+    media_fingerprint = _normalize_optional_string(
+        material.get("md5", "") or material.get("source_platform", "")
+    )
+    classification = _classify_material(file_path or "", policy)
     return {
         "slot_id": material.get("id", ""),
         "material_role": role,
         "layer_index": layer_index,
         "track_order": track_index,
         "source_duration_us": material.get("duration", 0),
-        "media_fingerprint": material.get("md5", "")
-        or material.get("source_platform", ""),
-        "file_path": material.get("path", "") or material.get("source", ""),
+        "media_fingerprint": media_fingerprint,
+        "file_path": file_path,
+        "classification": classification,
         "clip_start": target_timerange.get("start", 0),
         "clip_duration": target_timerange.get("duration", 0),
         "transform_x": tx_values["transform_x"],
@@ -255,10 +283,18 @@ def _extract_media_slot(
 
 
 def _classify_material(
-    file_path: str,
+    file_path: str | None,
     policy: dict,
 ) -> str:
-    p = file_path or ""
+    """Classify a template material by its file path.
+
+    Empty/None paths are classified as REPLACE_REQUIRED by default (a slot
+    with no resolved file is one the episode must populate), unless a
+    policy rule explicitly matches.
+    """
+    p = (file_path or "").strip()
+    if not p:
+        return "REPLACE_REQUIRED"
     low = p.lower()
     for sub in policy.get("forbidden_in_output_substrings", []):
         if sub.lower() in low:
@@ -301,7 +337,6 @@ def extract_contract(
     effect_mats = {m.get("id"): m for m in materials.get("effects", [])}
 
     slots: list[dict] = []
-    material_classifications: dict[str, str] = {}
     forbidden_hits: list[dict] = []
     required_internal_asset_present = False
 
@@ -328,36 +363,34 @@ def extract_contract(
                 slots.append(slot)
             elif ttype == "video" and mat_id in video_mats:
                 mat = video_mats[mat_id]
-                role = "VIDEO"
                 slot = _extract_media_slot(
-                    mat, track_index, segment, layer_index, role
+                    mat, track_index, segment, layer_index, "VIDEO", policy
                 )
                 slots.append(slot)
-                fp = mat.get("path", "") or mat.get("source", "")
-                cls = _classify_material(fp, policy)
-                material_classifications[fp] = cls
-                if cls == "FORBIDDEN_IN_OUTPUT":
+                if slot["classification"] == "FORBIDDEN_IN_OUTPUT":
                     forbidden_hits.append(
-                        {"path": fp, "slot_id": mat.get("id", ""), "reason": cls}
+                        {
+                            "path": slot.get("file_path"),
+                            "slot_id": slot["slot_id"],
+                            "reason": slot["classification"],
+                        }
                     )
             elif ttype == "audio" and mat_id in audio_mats:
                 mat = audio_mats[mat_id]
                 slot = _extract_media_slot(
-                    mat, track_index, segment, layer_index, "AUDIO"
+                    mat, track_index, segment, layer_index, "AUDIO", policy
                 )
                 slots.append(slot)
-                fp = mat.get("path", "") or mat.get("source", "")
-                material_classifications[fp] = _classify_material(fp, policy)
             elif ttype == "effect" and mat_id in effect_mats:
                 mat = effect_mats[mat_id]
                 slot = _extract_media_slot(
-                    mat, track_index, segment, layer_index, "EFFECT"
+                    mat, track_index, segment, layer_index, "EFFECT", policy
                 )
                 slots.append(slot)
             elif ttype in {"image", "sticker"} and mat_id in image_mats:
                 mat = image_mats[mat_id]
                 slot = _extract_media_slot(
-                    mat, track_index, segment, layer_index, "IMAGE"
+                    mat, track_index, segment, layer_index, "IMAGE", policy
                 )
                 slots.append(slot)
 
@@ -375,7 +408,9 @@ def extract_contract(
         # Also reject Cache/onlineMaterial references anywhere in materials.
         for collection in ("videos", "audios", "images"):
             for m in materials.get(collection, []):
-                fp = m.get("path", "") or m.get("source", "")
+                fp = _normalize_optional_string(
+                    m.get("path", "") or m.get("source", "")
+                )
                 if fp and "Cache/onlineMaterial" in fp:
                     forbidden_hits.append(
                         {
@@ -384,6 +419,12 @@ def extract_contract(
                             "reason": "CACHE_ONLINE_MATERIAL_REFERENCE",
                         }
                     )
+
+    # Slot-id-keyed classification summary, derived from each slot's own
+    # `classification` field. Stable keys; no empty/numeric key can appear.
+    material_classifications = {
+        slot["slot_id"]: slot["classification"] for slot in slots
+    }
 
     contract = {
         "schema_version": "capcut-template-contract-v1",

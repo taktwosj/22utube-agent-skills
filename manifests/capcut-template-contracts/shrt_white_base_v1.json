@@ -24,8 +24,9 @@
       "layer_index": 11,
       "track_order": 0,
       "source_duration_us": 550000,
-      "media_fingerprint": 0,
-      "file_path": 0,
+      "media_fingerprint": null,
+      "file_path": null,
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 0,
       "clip_duration": 550000,
       "transform_x": 0.0,
@@ -48,8 +49,9 @@
       "layer_index": 9,
       "track_order": 2,
       "source_duration_us": 10800000000,
-      "media_fingerprint": 9,
+      "media_fingerprint": null,
       "file_path": "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/media/transparent_center_white_1080x1920.png",
+      "classification": "FIXED_REUSABLE",
       "clip_start": 0,
       "clip_duration": 20850000,
       "transform_x": 0.0,
@@ -91,6 +93,7 @@
       "background_width": 0.0,
       "background_height": 0.0,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 5250000,
         "duration": 3000000
@@ -137,6 +140,7 @@
       "background_width": 0.0,
       "background_height": 0.0,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 2600000,
         "duration": 3000000
@@ -183,6 +187,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 3000000
@@ -229,6 +234,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 3000000
@@ -275,6 +281,7 @@
       "background_width": 0.14,
       "background_height": 0.14,
       "background_round_radius": 0.0,
+      "classification": "REPLACE_REQUIRED",
       "target_timerange": {
         "start": 0,
         "duration": 3000000
@@ -302,8 +309,9 @@
       "layer_index": 3,
       "track_order": 8,
       "source_duration_us": 716666,
-      "media_fingerprint": 0,
-      "file_path": "",
+      "media_fingerprint": null,
+      "file_path": null,
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 0,
       "clip_duration": 716666,
       "transform_x": 0.0,
@@ -326,8 +334,9 @@
       "layer_index": 2,
       "track_order": 9,
       "source_duration_us": 750000,
-      "media_fingerprint": 0,
+      "media_fingerprint": null,
       "file_path": "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/combination/2BA74171-6CBE-4bd6-BBA5-99FEBCB567FA_audio.aac",
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 2600000,
       "clip_duration": 750000,
       "transform_x": 0.0,
@@ -350,8 +359,9 @@
       "layer_index": 1,
       "track_order": 10,
       "source_duration_us": 3500000,
-      "media_fingerprint": 0,
+      "media_fingerprint": null,
       "file_path": "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/combination/BEC9FED3-B5B6-46ba-8DB1-E9CCF0808390_audio.aac",
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 5250000,
       "clip_duration": 3500000,
       "transform_x": 0.0,
@@ -374,8 +384,9 @@
       "layer_index": 0,
       "track_order": 11,
       "source_duration_us": 48133333,
-      "media_fingerprint": 0,
-      "file_path": "",
+      "media_fingerprint": null,
+      "file_path": null,
+      "classification": "REPLACE_REQUIRED",
       "clip_start": 0,
       "clip_duration": 48133333,
       "transform_x": 0.0,
@@ -394,11 +405,17 @@
     }
   ],
   "material_classifications": {
-    "0": "REPLACE_REQUIRED",
-    "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/media/transparent_center_white_1080x1920.png": "FIXED_REUSABLE",
-    "": "REPLACE_REQUIRED",
-    "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/combination/2BA74171-6CBE-4bd6-BBA5-99FEBCB567FA_audio.aac": "REPLACE_REQUIRED",
-    "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/combination/BEC9FED3-B5B6-46ba-8DB1-E9CCF0808390_audio.aac": "REPLACE_REQUIRED"
+    "81AD5636-C596-4a13-A5DE-F149ADA28C72": "REPLACE_REQUIRED",
+    "810D0763-17DD-4e5d-9C72-C2484B18BFB8": "FIXED_REUSABLE",
+    "DDE98B8F-7B0F-4f65-A82A-8372378EFE2A": "REPLACE_REQUIRED",
+    "831B23B9-3A58-41aa-9E0A-FEDF33C40D91": "REPLACE_REQUIRED",
+    "2FADA065-33C4-4fff-ACA8-DEC501BF5CA7": "REPLACE_REQUIRED",
+    "6DEEC540-DA18-44f2-9415-E39F21ACA2E4": "REPLACE_REQUIRED",
+    "3496D188-423E-47ac-BBFF-F1D838C1D0EE": "REPLACE_REQUIRED",
+    "B87CC110-03B7-4568-903B-10CEDC2EC786": "REPLACE_REQUIRED",
+    "F2083E20-C319-45c1-8EDC-4D9940FE5D51": "REPLACE_REQUIRED",
+    "24A8B28F-90EF-4b4c-B454-ACCFE7C86C70": "REPLACE_REQUIRED",
+    "27D6E4EE-D1E8-4fcb-82D8-C445B744B503": "REPLACE_REQUIRED"
   },
   "locked_fields_policy": {
     "text": [
