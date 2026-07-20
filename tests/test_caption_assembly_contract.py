@@ -9,8 +9,8 @@ from _support import load_source_module_no_bytecode
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TIKITAKA = ROOT / "skills" / "00-tikitaka" / "SKILL.md"
-PRODUCTION = ROOT / "skills" / "000short-production-agent" / "SKILL.md"
+TIKITAKA = ROOT / "skills" / "00-tikitaka" / "references" / "legacy_contracts.md"
+PRODUCTION = ROOT / "skills" / "000short-production-agent" / "references" / "legacy_contracts.md"
 LAYOUT_CONTRACT = ROOT / "skills" / "000short-production-agent" / "03_CAPCUT_LAYOUT_CONTRACT.md"
 CAPTION_SCHEMA = ROOT / "skills" / "000short-production-agent" / "schemas" / "caption_beat_map.schema.json"
 CAPTION_VALIDATOR = ROOT / "skills" / "000short-production-agent" / "scripts" / "validate_caption_beat_map.py"

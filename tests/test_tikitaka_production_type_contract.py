@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills" / "00-tikitaka" / "SKILL.md"
+SKILL = ROOT / "skills" / "00-tikitaka" / "references" / "legacy_contracts.md"
 TIKITAKA_HARNESS = (
     ROOT / "skills" / "00-tikitaka" / "scripts" / "tikitaka_harness_runner.py"
 )

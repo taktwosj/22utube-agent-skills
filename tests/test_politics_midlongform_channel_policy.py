@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SKILL = ROOT / "skills" / "111-politics-longform" / "SKILL.md"
+SKILL = ROOT / "skills" / "111-politics-longform" / "references" / "legacy_contracts.md"
 POLICY = (
     ROOT
     / "skills"

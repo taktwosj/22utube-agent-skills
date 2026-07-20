@@ -1,4 +1,4 @@
 interface:
   display_name: "00 Tikitaka"
-  short_description: "쇼츠 원본 분석, 우라까이, 1차설계서, 조립 설계 handoff"
-  default_prompt: "Use $00-tikitaka only for Korean Shorts source/remake scripting and Stage 1 assembly design: source notes or user-supplied Gemini raw intake, urakkai, hook candidates, 1차설계서, 상단 + timed 중단 draft, assembly_role/source_order/timeline_order/duration_basis lock, 구간 오디오 정책표, and script handoff. Keep status DRAFT_EYE_REVIEW; TTS text alone is caption-only unless narration/audio_role is explicit. Do not create SRT, layout JSON, audio files, CapCut drafts, export/upload packages, or production_allowed. Route production files to $000short-production-agent."
+  short_description: "Korean Shorts source analysis and Stage 1 design"
+  default_prompt: "Use $00-tikitaka only for G00/G10/G20 design-lane work. Read workflow.yaml, resolve the active gate, and load exactly that gate reference. Do not create SRT, audio, CapCut, render, or upload assets; route production work to $000short-production-agent."

@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills" / "111-politics-longform"
-SKILL = SKILL_DIR / "SKILL.md"
+SKILL = SKILL_DIR / "references" / "legacy_contracts.md"
 REFERENCE = SKILL_DIR / "references" / "final-corrected-subtitle-lock.md"
 VALIDATOR = SKILL_DIR / "scripts" / "validate_final_corrected_srt.py"
 

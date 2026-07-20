@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills" / "111-politics-longform"
-SKILL = SKILL_DIR / "SKILL.md"
+SKILL = SKILL_DIR / "references" / "legacy_contracts.md"
 ROUTER = SKILL_DIR / "references" / "chatgpt_project_router_instruction.md"
 POLITICS_CONTRACT = (
     SKILL_DIR / "references" / "chatgpt_politics_longform_review_contract.md"

@@ -145,8 +145,15 @@ function Test-ForbiddenNames([string]$RepoRoot) {
   $forbiddenExtensions = @(".mp4", ".mov", ".mkv", ".avi", ".wav", ".mp3", ".m4a", ".aac", ".zip", ".7z", ".rar", ".tar", ".gz")
   $forbiddenDirNames = @("node_modules", "skills_backups", ".DS_Store")
   $secretPattern = "(?i)(^\.env$|(^|[._-])(env|key|token|cookie|session|secret|credential)([._-]|$))"
+  $allowedNonSecretTokenFiles = @(
+    "tests/test_shared_gate_context_token_policy.py",
+    "tests/test_shared_gate_token_regression.py",
+    "tests/fixtures/shared_gates/token_baselines.json",
+    "docs/migrations/shared-gates-separated-lanes-v2/token-regression.json"
+  )
   foreach ($item in Get-ChildItem -LiteralPath $RepoRoot -Recurse -Force) {
     $rel = Get-RelativePath $RepoRoot $item.FullName
+    if ($rel.Replace('\', '/') -match '(^|/)__pycache__(/|$)') { continue }
     if ($item.PSIsContainer) {
       if ($item.Name -like "_backup*" -or $item.Name -like "*_backup*" -or $forbiddenDirNames -contains $item.Name) {
         Add-Error "forbidden directory: $rel"
@@ -155,7 +162,8 @@ function Test-ForbiddenNames([string]$RepoRoot) {
       if ($forbiddenExtensions -contains $item.Extension.ToLowerInvariant()) {
         Add-Error "forbidden binary/archive file: $rel"
       }
-      if ($item.Name -match $secretPattern) {
+      $normalizedRel = $rel.Replace('\', '/')
+      if ($item.Name -match $secretPattern -and $allowedNonSecretTokenFiles -notcontains $normalizedRel) {
         Add-Error "secret-like file name: $rel"
       }
     }

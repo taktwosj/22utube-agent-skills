@@ -10,7 +10,7 @@ from test_000short_tikitaka_v2_handoff_contract import create_valid_tikitaka_v2_
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "skills" / "000short-production-agent" / "SKILL.md"
+SKILL = ROOT / "skills" / "000short-production-agent" / "references" / "legacy_contracts.md"
 PIPELINE_RULES = ROOT / "skills" / "000short-production-agent" / "02_PIPELINE_RULES.md"
 LAYOUT_CONTRACT = ROOT / "skills" / "000short-production-agent" / "03_CAPCUT_LAYOUT_CONTRACT.md"
 HARNESS_REQUIREMENTS = ROOT / "skills" / "000short-production-agent" / "04_HARNESS_REQUIREMENTS.md"

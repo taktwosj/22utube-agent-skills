@@ -14,7 +14,9 @@ class WatchRemovedFromShortsChainTests(unittest.TestCase):
 
 
     def test_tikitaka_requires_user_source_when_media_is_not_available(self):
-        text = (REPO / "skills" / "00-tikitaka" / "SKILL.md").read_text(encoding="utf-8")
+        text = (
+            REPO / "skills" / "00-tikitaka" / "references" / "legacy_contracts.md"
+        ).read_text(encoding="utf-8")
         self.assertNotIn("use `watch`", text)
         self.assertIn("source.mp4", text)
         self.assertIn("ask the user", text)

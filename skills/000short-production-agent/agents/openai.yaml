@@ -1,4 +1,4 @@
 interface:
   display_name: "11short Production Agent"
-  short_description: "SRT, layout JSON, CapCut, 산출물 검증 전용"
-  default_prompt: "Use $000short-production-agent only when explicitly asked for production assets: SRT/subtitles, layout JSON, render plans, TTS/audio files, CapCut drafts, validation, export/upload packages, or repair. Require source/script/gate evidence; do not originate script/urakkai/hook/channel planning or rewrite existing drafts. Route script drafting and wording-only revisions to $00-tikitaka."
+  short_description: "Shorts production and validation"
+  default_prompt: "Use $000short-production-agent only for G30/G40/G50/G60/G60.USER/G70/G80/G90 production work. Read workflow.yaml, resolve the active gate, and load exactly that gate reference. Require the locked handoff; do not originate or rewrite script, urakkai, or hook."

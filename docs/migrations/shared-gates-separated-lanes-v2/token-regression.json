@@ -1,0 +1,24 @@
+{
+  "schema_version": "shared-gates-token-regression-v1",
+  "estimator_version": "chars_div_4_v1",
+  "baseline_head": "d5144b3c538be050c33af89998448cf4eae11e21",
+  "baseline_skill_input_tokens": {
+    "00-tikitaka": 19176,
+    "000short-production-agent": 10607,
+    "111-politics-longform": 8518
+  },
+  "new_skill_input_tokens": {
+    "00-tikitaka": 578,
+    "000short-production-agent": 677,
+    "111-politics-longform": 823
+  },
+  "baseline_median_input_tokens": 10607,
+  "new_median_input_tokens": 677,
+  "reduction_percent": 93.62,
+  "target_percent": 30.0,
+  "target_status": "TARGET_MET",
+  "regression_policy": {
+    "increase_over_10_percent": "FAIL_TOKEN_REGRESSION",
+    "reduction_under_30_percent": "TARGET_NOT_MET"
+  }
+}

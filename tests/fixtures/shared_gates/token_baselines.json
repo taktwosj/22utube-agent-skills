@@ -1,0 +1,11 @@
+{
+  "schema_version": "shared-gates-token-baseline-v1",
+  "estimator_version": "chars_div_4_v1",
+  "skills": {
+    "00-tikitaka": {"input_tokens": 19176},
+    "000short-production-agent": {"input_tokens": 10607},
+    "111-politics-longform": {"input_tokens": 8518}
+  },
+  "median_input_tokens": 10607,
+  "recorded_from_head": "d5144b3c538be050c33af89998448cf4eae11e21"
+}

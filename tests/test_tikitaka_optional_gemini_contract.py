@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TIKITAKA = (ROOT / "skills" / "00-tikitaka" / "SKILL.md").read_text(encoding="utf-8")
+TIKITAKA = (ROOT / "skills" / "00-tikitaka" / "references" / "legacy_contracts.md").read_text(encoding="utf-8")
 GEMINI_PROMPT = (
     ROOT / "skills" / "00-tikitaka" / "references" / "gemini_raw_intake_prompt.md"
 ).read_text(encoding="utf-8")

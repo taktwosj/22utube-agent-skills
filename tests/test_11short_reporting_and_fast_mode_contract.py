@@ -23,6 +23,7 @@ TIMELINE_GATE = SKILL_DIR / "scripts" / "validate_capcut_timeline_order.py"
 PRODUCTION_GATE = SKILL_DIR / "scripts" / "validate_production_gate.py"
 CONTRACT_FILES = [
     SKILL,
+    SKILL_DIR / "references" / "legacy_contracts.md",
     SKILL_DIR / "02_PIPELINE_RULES.md",
     LAYOUT_CONTRACT,
     HARNESS_REQUIREMENTS,
@@ -124,7 +125,7 @@ class ReportingAndFastModeContractTests(unittest.TestCase):
         self.assertNotIn("verified_speaker_1", layout)
 
     def test_politics_longform_derivatives_defer_to_shrtjungchi_contract(self):
-        skill = SKILL.read_text(encoding="utf-8")
+        skill = (ROOT / "skills" / "111-politics-longform" / "SKILL.md").read_text(encoding="utf-8")
         for token in (
             "politics_longform_derived",
             "SHRTJUNGCHI",

@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills" / "111-politics-longform"
-SKILL = SKILL_DIR / "SKILL.md"
+SKILL = SKILL_DIR / "references" / "legacy_contracts.md"
 REFERENCE = SKILL_DIR / "references" / "clean-assembly-harness.md"
 
 
