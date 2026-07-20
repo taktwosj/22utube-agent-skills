@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/00-tikitaka/schemas/shorts_design_handoff.schema.json",
+  "title": "Shorts Design Handoff v1",
+  "description": "Canonical handoff from 00-tikitaka G20 to 000short-production-agent G30. Production must implement it but must not reinterpret it. The handoff SHA is the creative source of truth.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "lane",
+    "content_profile",
+    "production_mode",
+    "requested_target",
+    "source_fingerprint",
+    "design_blueprint_sha256",
+    "timeline_sha256",
+    "external_review_receipt_sha256",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-design-handoff-v1"},
+    "episode_id": {"type": "string"},
+    "lane": {"enum": ["general_shorts_design"]},
+    "content_profile": {"enum": ["general_shorts"]},
+    "production_mode": {
+      "enum": ["source_led", "narrated", "not_applicable"]
+    },
+    "requested_target": {
+      "enum": ["design_only", "editorial_locked", "capcut_ready",
+               "upload_package", "rendered"]
+    },
+    "source_fingerprint": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "design_blueprint_path": {"type": "string"},
+    "design_blueprint_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "timeline_path": {"type": "string"},
+    "timeline_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "caption_beat_map_path": {"type": ["string", "null"]},
+    "caption_beat_map_sha256": {"type": ["string", "null"], "pattern": "^[A-Fa-f0-9]{64}$"},
+    "external_review_receipt_path": {"type": "string"},
+    "external_review_receipt_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "next_skill": {"enum": ["000short-production-agent"]},
+    "next_lane": {"enum": ["general_shorts_production"]},
+    "status": {"enum": ["PASS"]},
+    "transfer_status": {"enum": ["PASS", "WAIT_OWNER_TRANSFER"], "description": "PASS only when owner_transfer_receipt exists."}
+  }
+}

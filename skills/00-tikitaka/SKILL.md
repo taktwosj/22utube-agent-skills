@@ -5,6 +5,99 @@ description: Use only when the user explicitly asks for Tikitaka Korean Shorts s
 
 # 00 Tikitaka
 
+## V2 Shared-Gate Router — Active Authority (2026-07-20)
+
+> Work ID: `SHARED-GATE-SEPARATED-LANES-V2-20260720`
+> This lane owns **only G00, G10, G20** of the shared gate model.
+> See `workflow.yaml` for the canonical gate router and
+> `references/gates/*.md` for per-gate contracts.
+
+### Lane ownership
+
+```text
+00-tikitaka  = G00 → G20
+             = source analysis, urakkai, hook, design, manual external review
+             = design owner
+```
+
+The production lane (G30 → G90) is owned by `000short-production-agent`.
+Tikitaka never produces TTS audio, final SRT, CapCut assembly, render, or
+upload package.
+
+### Gate router
+
+| Gate | Reference | Validator |
+|---|---|---|
+| G00 intake / source / content profile / target / budget lock | `references/gates/G00_INTAKE.md` | `scripts/validate_stage_gate.py` |
+| G10 first design blueprint + evidence map | `references/gates/G10_DESIGN.md` | `scripts/validate_stage_gate.py` |
+| G20 manual external review integration + design/editorial lock | `references/gates/G20_MANUAL_EXTERNAL_REVIEW.md` | `scripts/validate_stage_gate.py` |
+
+Runner: `scripts/workflow_runner.py`. The runner enforces cost/ownership
+policy and executes only deterministic local operations.
+
+### Hard prohibitions (this lane)
+
+```text
+TTS audio generation
+final SRT
+CapCut assembly
+render
+upload package
+browser automation (NORM-005)
+automatic external LLM calls (auto_external_llm_calls = 0)
+automatic retry (max_auto_retries = 0)
+```
+
+External review transport is USER manual only. Packets are generated
+locally via `scripts/build_external_prompt.py` and handed to the user;
+Tikitaka never opens ChatGPT, calls an API, or transports a packet. The
+prior mandatory browser-assisted two-pass review is superseded (NORM-005).
+
+External returns may use only `PASS_RECOMMENDED`,
+`REVISE_REQUIRED`, `EVIDENCE_REQUIRED`. They must NOT claim `PASS`,
+`DESIGN_LOCK`, `USER_APPROVED`, `PRODUCTION_PASS`, or any final-authority
+token.
+
+### Status-report format
+
+```text
+{gate}: {NOT_STARTED|READY|RUNNING|WAIT_USER_INPUT|WAIT_EXTERNAL_RETURN|
+         WAIT_USER_EDITORIAL_CONFIRMATION|PASS|FAIL|REWORK_REQUIRED|
+         INVALIDATED|NOT_REQUIRED}
+```
+
+`PASS` is emitted only by the deterministic validator.
+`WAIT_EXTERNAL_RETURN` is NOT `FAIL`.
+
+### Hard-stop conditions
+
+```text
+WAIT_USER_INPUT
+WAIT_EXTERNAL_RETURN
+WAIT_USER_EDITORIAL_CONFIRMATION
+EXTERNAL_ANALYSIS_MISMATCH
+EXTERNAL_AUTHORITY_OVERREACH
+SAME_CONVERSATION_REQUIRED
+PENDING_EVIDENCE
+HUMAN_MD_CANONICAL_JSON_MISMATCH
+STOP_SOURCE_OF_TRUTH_CONFLICT
+```
+
+### Schemas (V2)
+
+- `schemas/shorts_design_handoff.schema.json` — canonical handoff to 000short
+- `schemas/shorts_external_review_receipt.schema.json` — R1/R2 receipt + Codex decisions
+- `schemas/shorts_design_lock.schema.json` — G20.DESIGN_LOCKED evidence
+- `schemas/analysis_cache_manifest.schema.json` — source analysis cache
+
+---
+
+## Legacy / pre-V2 references (P10 will thin this section)
+
+> 아래 콘텐츠는 V2 라우터 도입 전 원본입니다. P10에서 thin router로
+> 축소될 예정입니다. 그 전까지는 V2 라우터 블록이 최상위 권위를 갖습니다.
+> 충돌 시 V2 라우터와 `workflow.yaml`이 우선합니다 (NORM-005, NORM-008).
+
 ## Active Instruction Authority - 2026-07-06
 
 Authority: `shorts_script_analysis_single_source_v20260706.md`.

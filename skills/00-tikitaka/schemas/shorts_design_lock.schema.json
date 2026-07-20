@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/00-tikitaka/schemas/shorts_design_lock.schema.json",
+  "title": "Shorts Design Lock v1",
+  "description": "Codex editorial lock evidence for G20.DESIGN_LOCKED. Records that all lock conditions were satisfied within the unchanged user brief, so no additional user approval token is required for the lock itself.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "lock_conditions",
+    "material_change_detected",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-design-lock-v1"},
+    "episode_id": {"type": "string"},
+    "lock_conditions": {
+      "type": "object",
+      "required": [
+        "user_brief_locked",
+        "requested_target_allows_design_lock",
+        "source_identity_unchanged",
+        "selected_ranges_within_allowed_expansion",
+        "governing_thesis_unchanged",
+        "production_mode_unchanged",
+        "no_new_high_risk_allegation",
+        "round2_grade_is_pass_recommended",
+        "deterministic_review_gate_passed",
+        "remaining_blockers_empty"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "user_brief_locked": {"type": "boolean"},
+        "requested_target_allows_design_lock": {"type": "boolean"},
+        "source_identity_unchanged": {"type": "boolean"},
+        "selected_ranges_within_allowed_expansion": {"type": "boolean"},
+        "governing_thesis_unchanged": {"type": "boolean"},
+        "production_mode_unchanged": {"type": "boolean"},
+        "no_new_high_risk_allegation": {"type": "boolean"},
+        "round2_grade_is_pass_recommended": {"type": "boolean"},
+        "deterministic_review_gate_passed": {"type": "boolean"},
+        "remaining_blockers_empty": {"type": "boolean"}
+      }
+    },
+    "material_change_detected": {
+      "type": "boolean",
+      "description": "Must be false. If true, the lock is invalid and WAIT_USER_EDITORIAL_CONFIRMATION is required."
+    },
+    "external_review_receipt_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "design_handoff_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "status": {"enum": ["PASS", "FAIL", "WAIT_USER_EDITORIAL_CONFIRMATION"]}
+  }
+}

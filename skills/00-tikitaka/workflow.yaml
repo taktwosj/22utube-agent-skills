@@ -1,0 +1,145 @@
+schema_version: shared-gates-separated-lanes-v2
+lane: general_shorts_design
+owner_skill: 00-tikitaka
+work_id: SHARED-GATE-SEPARATED-LANES-V2-20260720
+
+ownership:
+  skill: 00-tikitaka
+  gates: [G00, G10, G20]
+  owns:
+    - source analysis
+    - urakkai
+    - hook and story
+    - timeline role design
+    - manual external review adjudication
+    - canonical design handoff
+  forbidden_outputs:
+    - TTS audio generation
+    - final SRT
+    - CapCut assembly
+    - render
+    - upload package
+
+authority:
+  review_transport_owner: USER
+  external_recommendation_owner: EXTERNAL_MODEL
+  adoption_decision_owner: CODEX
+  gate_evaluation_owner: DETERMINISTIC_VALIDATOR
+  workflow_execution_owner: WORKFLOW_RUNNER
+  editorial_lock_owner: CODEX_WITHIN_LOCKED_USER_BRIEF
+  material_scope_change_owner: USER
+  auto_external_call: false
+
+execution_policy:
+  auto_internal_advance: deterministic_only
+  auto_external_llm_calls: 0
+  max_llm_calls_per_user_command: 1
+  max_auto_retries: 0
+  validator_may_execute_next_stage: false
+  stop_before_unapproved_paid_action: true
+  stop_on_unknown_cost: true
+  stop_on_material_scope_change: true
+
+runtime:
+  state_path: 90_workflow/manual_gate_state.json
+  ledger_path: 90_workflow/gate_ledger.jsonl
+  gate_results_path: 90_workflow/gate_results
+  context_manifests_path: 90_workflow/context_manifests
+  receipts_path: 90_workflow/receipts
+
+gates:
+  G00:
+    name: INPUT_SOURCE_CONTENT_PROFILE_PRODUCTION_MODE_TARGET_BUDGET_LOCK
+    instruction: references/gates/G00_INTAKE.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 00_source/**
+      - 10_analysis/**
+    forbidden_inputs:
+      - 50_capcut_project/**
+      - 70_upload/**
+    manual_events: []
+
+  G10:
+    name: FIRST_DESIGN_BLUEPRINT_AND_EVIDENCE_MAP
+    instruction: references/gates/G10_DESIGN.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 10_analysis/**
+      - 20_script/design_blueprint.json
+      - 20_script/timeline_design.json
+    forbidden_inputs:
+      - 50_capcut_project/**
+      - 70_upload/**
+    manual_events: []
+
+  G20:
+    name: MANUAL_EXTERNAL_RETURN_INTEGRATION_AND_DESIGN_EDITORIAL_LOCK
+    instruction: references/gates/G20_MANUAL_EXTERNAL_REVIEW.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 20_script/design_blueprint.json
+      - 20_script/timeline_design.json
+      - 20_script/external_packets/**
+      - 20_script/external_review_receipt.json
+      - 20_script/design_handoff.json
+      - 20_script/owner_transfer_receipt.json
+    forbidden_inputs:
+      - 30_audio_srt/**
+      - 50_capcut_project/**
+      - 70_upload/**
+    manual_events:
+      - RETURN_EXTERNAL_REVIEW_R1
+      - RETURN_EXTERNAL_REVIEW_R2
+    wait_states:
+      - WAIT_EXTERNAL_RETURN
+      - WAIT_USER_EDITORIAL_CONFIRMATION
+    subgates:
+      - REVIEW_R1_WAIT
+      - REVIEW_R1_RETURNED
+      - CODEX_DECISIONS_LOCKED
+      - REVIEW_R2_WAIT
+      - REVIEW_R2_RETURNED
+      - FINAL_AUDIT
+      - DESIGN_LOCKED
+
+external_review_policy:
+  transport: USER_MANUAL_ONLY
+  browser_automation: FORBIDDEN
+  api_calls: FORBIDDEN
+  automatic_retry: FORBIDDEN
+  external_result_authority: RECOMMENDATION_ONLY
+  forbidden_external_claims:
+    - FINAL
+    - PASS
+    - ADOPTED
+    - SCRIPT_LOCK
+    - DESIGN_LOCK
+    - USER_APPROVED
+    - PRODUCTION_PASS
+  allowed_external_grades:
+    - PASS_RECOMMENDED
+    - REVISE_REQUIRED
+    - EVIDENCE_REQUIRED
+
+owner_transfer:
+  to_skill: 000short-production-agent
+  to_lane: general_shorts_production
+  required_conditions:
+    - requested_target != design_only
+    - design_handoff.status == PASS
+    - source_fingerprint matches
+    - design_blueprint SHA matches
+    - timeline SHA matches
+    - external review receipt valid
+    - owner_transfer_receipt exists
+  canonical_handoff_path: 20_script/design_handoff.json
+  canonical_handoff_hash_required: true
+
+legacy_compatibility_pointers:
+  - canonical: 20_script/design_handoff.json
+    legacy: 20_script/script_handoff_gate.json
+    mode: pointer_manifest_only
+  - canonical: 20_script/design_handoff.json
+    legacy: 20_script/report1_handoff.json
+    mode: pointer_manifest_only

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/00-tikitaka/schemas/shorts_external_review_receipt.schema.json",
+  "title": "Shorts External Review Receipt v1",
+  "description": "Records the manual transport of external review packets and Codex's per-suggestion adoption decisions. External returns are recommendation only and never carry final authority.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "rounds",
+    "final_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-external-review-receipt-v1"},
+    "episode_id": {"type": "string"},
+    "review_transport": {"enum": ["USER_MANUAL_ONLY"]},
+    "same_conversation_reference": {"type": ["string", "null"]},
+    "rounds": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["round", "packet_sha256", "returned_at_kst", "grade", "decisions"],
+        "additionalProperties": false,
+        "properties": {
+          "round": {"enum": ["R1", "R2"]},
+          "packet_path": {"type": "string"},
+          "packet_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+          "returned_path": {"type": "string"},
+          "returned_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+          "returned_at_kst": {"type": "string"},
+          "grade": {
+            "enum": ["PASS_RECOMMENDED", "REVISE_REQUIRED", "EVIDENCE_REQUIRED"]
+          },
+          "forbidden_claim_detected": {
+            "type": "boolean",
+            "description": "True if the external return contained PASS / DESIGN_LOCK / USER_APPROVED / etc. The claim is ignored and recorded as EXTERNAL_AUTHORITY_OVERREACH."
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["suggestion_id", "decision"],
+              "additionalProperties": false,
+              "properties": {
+                "suggestion_id": {"type": "string"},
+                "decision": {
+                  "enum": ["ADOPTED", "PARTIALLY_ADOPTED", "REJECTED", "PENDING_EVIDENCE"]
+                },
+                "reason": {"type": ["string", "null"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    "final_audit": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"enum": ["PASS", "FAIL", "PENDING_EVIDENCE"]},
+        "remaining_blockers": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "final_status": {"enum": ["PASS", "FAIL", "PENDING_EVIDENCE"]}
+  }
+}
