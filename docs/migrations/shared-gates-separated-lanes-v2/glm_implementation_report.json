@@ -30,6 +30,20 @@
       "result": "PASS"
     }
   },
+  "phase_commit_evidence": {
+    "commit_count": 24,
+    "command": "git log --format=%H%x09%s b455c976a82c4ab9bb59cd672eec09e3cca36937..HEAD",
+    "result": "PASS",
+    "first_commit": "abe04fa229dc9af2534e10b81884a89865c5656a",
+    "p10_commit": "3b77aa93de1544b23e782de996ee112749dfe21c",
+    "p11_report_commit": "d01a5a1521dfddf3c5df8df7be09f715a2636171"
+  },
+  "changed_file_evidence": {
+    "changed_file_count": 148,
+    "command": "git diff --name-only b455c976a82c4ab9bb59cd672eec09e3cca36937..HEAD",
+    "result": "PASS",
+    "categories": ["migration evidence", "shared harness", "lane routers", "template contracts", "tests"]
+  },
   "execution_boundary": {
     "external_model_calls": 0,
     "paid_actions": 0,
