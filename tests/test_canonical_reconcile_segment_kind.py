@@ -159,5 +159,55 @@ class JsonFidelityComparisonTests(unittest.TestCase):
         self.assertEqual(result["status"], "IN_SYNC")
 
 
+class JsonNativeInputOnlyTests(unittest.TestCase):
+    """Round 8: render_markdown / reconcile_human_md must reject Python
+    values that json.dumps silently coerces (tuple, non-string dict key)
+    because they are not JSON-native and would either lose information
+    or collide with a real JSON value.
+    """
+
+    def setUp(self):
+        self.cr = _load_module("rw_p04_03_v8_native", CANONICAL_RENDER_PY)
+
+    def test_render_rejects_tuple(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({"a": (1, 2)})
+
+    def test_render_rejects_non_string_dict_key(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({1: "v"})
+
+    def test_render_rejects_nested_tuple(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({"a": {"b": (1, 2)}})
+
+    def test_render_rejects_tuple_in_list(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({"a": [(1, 2)]})
+
+    def test_reconcile_rejects_tuple_canonical(self):
+        # Even if human_md is well-formed, canonical must be JSON-native.
+        with self.assertRaises(TypeError):
+            self.cr.reconcile_human_md(
+                canonical={"a": (1, 2)},
+                human_md=self.cr.render_markdown({"a": [1, 2]}),
+            )
+
+    def test_reconcile_rejects_int_key_canonical(self):
+        with self.assertRaises(TypeError):
+            self.cr.reconcile_human_md(
+                canonical={1: "v"},
+                human_md=self.cr.render_markdown({"1": "v"}),
+            )
+
+    def test_int_key_does_not_collide_with_str_key(self):
+        """After rejecting int keys, a str key '1' is the only form that
+        round-trips. Pre-fix this would have silently passed IN_SYNC."""
+        canonical = {"1": "v"}  # string key, JSON-native
+        rendered = self.cr.render_markdown(canonical)
+        result = self.cr.reconcile_human_md(canonical=canonical, human_md=rendered)
+        self.assertEqual(result["status"], "IN_SYNC")
+
+
 if __name__ == "__main__":
     unittest.main()

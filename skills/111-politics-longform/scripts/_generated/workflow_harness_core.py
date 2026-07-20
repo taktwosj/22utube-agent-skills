@@ -613,9 +613,43 @@ def _parse_records_from_md(md: str) -> list[tuple[list[list[str]], Any]]:
     return out
 
 
+def _assert_json_compatible(value: Any, path: str = "<root>") -> None:
+    """Reject values that Python can serialize to JSON but that are NOT
+    themselves JSON-native. This catches:
+
+    - tuples (Python tuple serializes to JSON array; if the caller passed
+      a tuple they meant something JSON cannot represent faithfully)
+    - non-string dict keys (JSON keys MUST be strings; an int/bool/None
+      key would silently coerce to a string key on json.dumps and could
+      collide with a real string key)
+
+    Anything that json.dumps cannot serialize is already rejected by the
+    subsequent json.dumps call (set, object, cyclic refs, etc.).
+    """
+    if isinstance(value, tuple):
+        raise TypeError(
+            f"CANONICAL_NOT_JSON_NATIVE: tuple at {path} — JSON has no tuple type"
+        )
+    if isinstance(value, dict):
+        for k in value.keys():
+            if not isinstance(k, str):
+                raise TypeError(
+                    f"CANONICAL_NOT_JSON_NATIVE: non-string dict key {k!r} at {path} — "
+                    "JSON keys must be strings"
+                )
+        for k, v in value.items():
+            _assert_json_compatible(v, f"{path}.{k}")
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            _assert_json_compatible(item, f"{path}[{i}]")
+
+
 def render_markdown(canonical: Any) -> str:
     """Render canonical JSON to deterministic markdown with lossless record
     encoding."""
+    # Round 8: reject Python-native-but-not-JSON-native inputs (tuples,
+    # non-string dict keys) BEFORE they silently coerce through json.dumps.
+    _assert_json_compatible(canonical)
     # Round-trip through json for deterministic key ordering and to reject
     # non-JSON-serializable input early.
     serialized = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
@@ -668,6 +702,8 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
       same multiplicity) but the surrounding MD text differs.
     - HumanMdCanonicalJsonMismatch: the record lists differ.
     """
+    # Round 8: reject non-JSON-native canonical inputs on this path too.
+    _assert_json_compatible(canonical)
     canonical_norm = json.loads(
         json.dumps(canonical, sort_keys=True, ensure_ascii=False)
     )
@@ -1108,5 +1144,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = 'F193D315C40CE377F36C44773332FF0DF7F2C42214E02B4E232DF0EFCEB53555'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = 'B90D1556717E3C2602EA5916114E409E0CBDF74BBA3C3DC031E8B0D6D15FC996'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py
