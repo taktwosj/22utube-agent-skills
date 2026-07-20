@@ -41,18 +41,37 @@ class SegmentKindDisambiguationTests(unittest.TestCase):
     def setUp(self):
         self.cr = _load_module("rw_p04_03_v6_cr", CANONICAL_RENDER_PY)
 
+    def _assert_bidirectional_mismatch(self, left, right):
+        for canonical, other in ((left, right), (right, left)):
+            with self.subTest(canonical=canonical, other=other):
+                rendered = self.cr.render_markdown(other)
+                with self.assertRaises(
+                    self.cr.HumanMdCanonicalJsonMismatch
+                ) as ctx:
+                    self.cr.reconcile_human_md(
+                        canonical=canonical,
+                        human_md=rendered,
+                    )
+                self.assertEqual(
+                    ctx.exception.kind,
+                    "STRUCTURAL_OR_VALUE_CHANGE",
+                )
+
     def test_array_index_distinct_from_object_key_with_same_text(self):
         """The two structures below must NOT reconcile as IN_SYNC/COSMETIC."""
         array_form = {"schema_version": "demo-v1", "x": [{"a": 1}]}
         object_form = {"schema_version": "demo-v1", "x": {"[0]": {"a": 1}}}
-        # Render the object form, then try to reconcile it against the
-        # array form canonical. Must raise a mismatch.
-        rendered_object_form = self.cr.render_markdown(object_form)
-        with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch) as ctx:
-            self.cr.reconcile_human_md(
-                canonical=array_form, human_md=rendered_object_form
-            )
-        self.assertEqual(ctx.exception.kind, "STRUCTURAL_OR_VALUE_CHANGE")
+        self._assert_bidirectional_mismatch(array_form, object_form)
+
+    def test_root_array_index_distinct_from_root_object_bracket_key(self):
+        array_form = [{"a": 1}]
+        object_form = {"[0]": {"a": 1}}
+        self._assert_bidirectional_mismatch(array_form, object_form)
+
+    def test_scalar_array_index_distinct_from_object_bracket_key(self):
+        array_form = {"x": [1]}
+        object_form = {"x": {"[0]": 1}}
+        self._assert_bidirectional_mismatch(array_form, object_form)
 
     def test_segment_records_carry_kind_tag(self):
         """Each segment in a rendered record line must carry a kind tag
@@ -207,6 +226,41 @@ class JsonNativeInputOnlyTests(unittest.TestCase):
         rendered = self.cr.render_markdown(canonical)
         result = self.cr.reconcile_human_md(canonical=canonical, human_md=rendered)
         self.assertEqual(result["status"], "IN_SYNC")
+
+    def test_render_rejects_nan(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({"a": float("nan")})
+
+    def test_render_rejects_positive_infinity(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({"a": float("inf")})
+
+    def test_render_rejects_negative_infinity(self):
+        with self.assertRaises(TypeError):
+            self.cr.render_markdown({"a": float("-inf")})
+
+    def test_render_rejects_nested_and_list_nonfinite_values(self):
+        for canonical in (
+            {"a": {"b": float("nan")}},
+            {"a": [1, float("inf")]},
+        ):
+            with self.subTest(canonical=canonical):
+                with self.assertRaises(TypeError):
+                    self.cr.render_markdown(canonical)
+
+    def test_reconcile_rejects_nonfinite_canonical(self):
+        human_md = self.cr.render_markdown({"a": 1})
+        with self.assertRaises(TypeError):
+            self.cr.reconcile_human_md(
+                canonical={"a": float("nan")},
+                human_md=human_md,
+            )
+
+    def test_nonfinite_record_constants_are_not_valid_json_records(self):
+        for constant in ("NaN", "Infinity", "-Infinity"):
+            with self.subTest(constant=constant):
+                line = f'R [[[\"key\", \"a\"]], {constant}]'
+                self.assertIsNone(self.cr._parse_record_line(line))
 
 
 if __name__ == "__main__":

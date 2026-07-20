@@ -503,6 +503,7 @@ class ContextManifest:
 # === BEGIN CANONICAL MODULE: canonical_render.py ===
 import hashlib
 import json
+import math
 from typing import Any
 
 
@@ -518,7 +519,12 @@ RECORD_PREFIX = "R "
 
 def _hash_canonical(canonical: Any) -> str:
     return hashlib.sha256(
-        json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        json.dumps(
+            canonical,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
     ).hexdigest().upper()
 
 
@@ -568,7 +574,15 @@ def _collect_records(
 
 def _serialize_record(segments: list[str], value: Any) -> str:
     """Encode one record as a single JSON array line."""
-    return RECORD_PREFIX + json.dumps([segments, value], ensure_ascii=False)
+    return RECORD_PREFIX + json.dumps(
+        [segments, value],
+        ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def _reject_nonfinite_json_constant(constant: str) -> None:
+    raise ValueError(f"non-standard JSON constant: {constant}")
 
 
 def _parse_record_line(line: str) -> tuple[list[list[str]], Any] | None:
@@ -584,8 +598,11 @@ def _parse_record_line(line: str) -> tuple[list[list[str]], Any] | None:
         return None
     payload = s[len(RECORD_PREFIX):]
     try:
-        rec = json.loads(payload)
-    except json.JSONDecodeError:
+        rec = json.loads(
+            payload,
+            parse_constant=_reject_nonfinite_json_constant,
+        )
+    except (json.JSONDecodeError, ValueError):
         return None
     if not isinstance(rec, list) or len(rec) != 2:
         return None
@@ -630,6 +647,11 @@ def _assert_json_compatible(value: Any, path: str = "<root>") -> None:
         raise TypeError(
             f"CANONICAL_NOT_JSON_NATIVE: tuple at {path} — JSON has no tuple type"
         )
+    if isinstance(value, float) and not math.isfinite(value):
+        raise TypeError(
+            f"CANONICAL_NOT_JSON_NATIVE: non-finite float {value!r} at {path} — "
+            "JSON numbers must be finite"
+        )
     if isinstance(value, dict):
         for k in value.keys():
             if not isinstance(k, str):
@@ -652,14 +674,29 @@ def render_markdown(canonical: Any) -> str:
     _assert_json_compatible(canonical)
     # Round-trip through json for deterministic key ordering and to reject
     # non-JSON-serializable input early.
-    serialized = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+    serialized = json.dumps(
+        canonical,
+        sort_keys=True,
+        ensure_ascii=False,
+        allow_nan=False,
+    )
     canonical_norm = json.loads(serialized)
     sha = _hash_canonical(canonical_norm)
 
     records = _collect_records(canonical_norm)
     # Sort records by (segments, json(value)) for deterministic output that
     # is independent of insertion order.
-    records.sort(key=lambda r: (r[0], json.dumps(r[1], sort_keys=True, ensure_ascii=False)))
+    records.sort(
+        key=lambda r: (
+            r[0],
+            json.dumps(
+                r[1],
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            ),
+        )
+    )
 
     title = (
         canonical_norm.get("schema_version")
@@ -705,7 +742,12 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
     # Round 8: reject non-JSON-native canonical inputs on this path too.
     _assert_json_compatible(canonical)
     canonical_norm = json.loads(
-        json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+        json.dumps(
+            canonical,
+            sort_keys=True,
+            ensure_ascii=False,
+            allow_nan=False,
+        )
     )
     canonical_records = _collect_records(canonical_norm)
     human_records = _parse_records_from_md(human_md)
@@ -718,7 +760,15 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
     def _key(rec: tuple[list[list[str]], Any]) -> tuple:
         segments, value = rec
         segments_tuple = tuple(tuple(s) for s in segments)
-        return (segments_tuple, json.dumps(value, sort_keys=True, ensure_ascii=False))
+        return (
+            segments_tuple,
+            json.dumps(
+                value,
+                sort_keys=True,
+                ensure_ascii=False,
+                allow_nan=False,
+            ),
+        )
 
     canonical_keys = sorted(_key(r) for r in canonical_records)
     human_keys = sorted(_key(r) for r in human_records)
@@ -1144,5 +1194,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = 'B90D1556717E3C2602EA5916114E409E0CBDF74BBA3C3DC031E8B0D6D15FC996'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = '525523DD1F70DBE54DB3742317A4E9795F9AD25DF443545EFB87B55D37ACA536'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py
