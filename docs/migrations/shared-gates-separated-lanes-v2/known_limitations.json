@@ -1,0 +1,12 @@
+{
+  "schema_version": "shared-gates-separated-lanes-v2-known-limitations-v1",
+  "work_id": "SHARED-GATE-SEPARATED-LANES-V2-20260720",
+  "limitations": [
+    {"id": "LIMIT-01", "state": "NOT_RUN", "scope": "runtime deployment", "detail": "Codex, Claude, and Hermes runtime deployment and parity verification are explicitly post-Codex-review work."},
+    {"id": "LIMIT-02", "state": "NOT_RUN", "scope": "CapCut", "detail": "This repository phase did not create, patch, open, or visually inspect a local CapCut draft."},
+    {"id": "LIMIT-03", "state": "NOT_RUN", "scope": "upload", "detail": "No upload, remote metadata verification, external model call, or paid action was performed."},
+    {"id": "LIMIT-04", "state": "WARN", "scope": "path lint", "detail": "scripts/verify.ps1 -Target repo passes with six pre-existing absolute-path documentation warnings."},
+    {"id": "LIMIT-05", "state": "WARN", "scope": "line endings", "detail": "Git reports CRLF-to-LF normalization warnings for the three generated workflow_harness_core.py copies; generated-core SHA equality passes."}
+  ],
+  "release_state": "WAIT_CODEX_FINAL_REVIEW"
+}

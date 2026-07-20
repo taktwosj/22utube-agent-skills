@@ -1,0 +1,22 @@
+{
+  "schema_version": "shared-gates-separated-lanes-v2-contract-coverage-v1",
+  "work_id": "SHARED-GATE-SEPARATED-LANES-V2-20260720",
+  "coverage": [
+    {"contract_area": "canonical gate sequence and allowed states", "evidence": "tests/test_shared_gate_v2_canonical_contract.py", "result": "PASS"},
+    {"contract_area": "append-only ledger and state projection", "evidence": "tests/test_shared_gate_ledger_state.py", "result": "PASS"},
+    {"contract_area": "manual-only external transport", "evidence": "tests/test_tikitaka_shared_gate_router.py", "result": "PASS"},
+    {"contract_area": "Tikitaka G00-G20 ownership", "evidence": "tests/test_tikitaka_shared_gate_router.py", "result": "PASS"},
+    {"contract_area": "Shorts production G30-G90 ownership and release locks", "evidence": "tests/test_short_production_shared_gate_router.py", "result": "PASS"},
+    {"contract_area": "politics longform and derived-Shorts ownership", "evidence": "tests/test_politics_shared_gate_router.py", "result": "PASS"},
+    {"contract_area": "cost guard, context manifest, and deterministic runner", "evidence": "tests/test_shared_gate_runner_cost_guard.py; tests/test_shared_gate_context_token_policy.py", "result": "PASS"},
+    {"contract_area": "template extraction and pinned contract integrity", "evidence": "tests/test_capcut_template_contract_extraction.py; tests/test_capcut_template_contract_rework.py", "result": "PASS"},
+    {"contract_area": "canonical source to generated-core equality", "evidence": "tests/test_shared_workflow_harness_sync.py; scripts/verify_shared_workflow_harness.py", "result": "PASS"},
+    {"contract_area": "thin router token budget", "evidence": "tests/test_shared_gate_token_regression.py; token-regression.json", "result": "PASS"}
+  ],
+  "uncovered_by_static_repository_tests": [
+    "runtime deployment parity across Codex, Claude, and Hermes",
+    "live CapCut GUI and rendered-media visual review",
+    "upload-side remote metadata verification"
+  ],
+  "result": "STATIC_REPOSITORY_COVERAGE_PASS"
+}

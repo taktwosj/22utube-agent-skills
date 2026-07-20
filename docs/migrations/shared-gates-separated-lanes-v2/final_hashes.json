@@ -1,0 +1,16 @@
+{
+  "schema_version": "shared-gates-separated-lanes-v2-final-hashes-v1",
+  "work_id": "SHARED-GATE-SEPARATED-LANES-V2-20260720",
+  "head_before_p11_report_commit": "3b77aa93de1544b23e782de996ee112749dfe21c",
+  "sha256": {
+    "canonical_contract": {"path": "shared/workflow-harness/contract/shared_gates_separated_lanes_v2.json", "value": "3A0EF447BDDBAE4F1AFC5C85C1E09D8B5B9E3D015A33D8DA7FDB2EF0922230F3"},
+    "canonical_render": {"path": "shared/workflow-harness/core/canonical_render.py", "value": "BFDE6CBF4F0FF5F3347601802CFAEBFAFFD17344680896E7698F52118B645790"},
+    "generated_core": {"value": "87F36A69FC8BC23FEF76A79C1930AD3BB3B011C2690634BF73A5490F84DAF417", "paths": ["skills/00-tikitaka/scripts/_generated/workflow_harness_core.py", "skills/000short-production-agent/scripts/_generated/workflow_harness_core.py", "skills/111-politics-longform/scripts/_generated/workflow_harness_core.py"], "byte_identical": true},
+    "template_contracts": [
+      {"path": "manifests/capcut-template-contracts/shrt_white_base_v1.json", "value": "12A426CE6F7C7315E40945F6837822ED3C1971B42C5B19C99FD5AABA276A788A"},
+      {"path": "manifests/capcut-template-contracts/jungchilong_base_v3_intro15.json", "value": "CA1D019F66D36C76F1010B5EB2E838D017FFA9C22C0E929F2BB071D98D9B25C2"},
+      {"path": "manifests/capcut-template-contracts/shrtjungchi_base_v1.json", "value": "EC6F8834CDFEBD20F80DD24FE80E918E29BBFAF6B5791558917A27A8D41A2CA0"}
+    ]
+  },
+  "generated_core_verification": "PASS"
+}
