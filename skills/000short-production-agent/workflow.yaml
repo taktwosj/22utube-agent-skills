@@ -1,0 +1,195 @@
+schema_version: shared-gates-separated-lanes-v2
+lane: general_shorts_production
+owner_skill: 000short-production-agent
+work_id: SHARED-GATE-SEPARATED-LANES-V2-20260720
+
+ownership:
+  skill: 000short-production-agent
+  gates: [G30, G40, G50, G60, G60.USER, G70, G80, G90]
+  owns:
+    - audio generation or selection plus measured duration lock
+    - measured-audio-based caption cue and final SRT lock
+    - final second-level track assembly plan
+    - clean CapCut assembly and static harness
+    - upload and thumbnail package preparation
+    - render/export and media integrity verification
+    - final rendered video QC and release gate
+  creative_source_of_truth: 20_script/design_handoff.json
+  forbidden_creative_rewrites:
+    - rewrite hook
+    - rewrite urakkai order
+    - reinterpret caption role
+    - change production profile without returning to G20
+  does_not_own: [G00, G10, G20]
+
+authority:
+  review_transport_owner: USER
+  external_recommendation_owner: EXTERNAL_MODEL
+  adoption_decision_owner: CODEX
+  gate_evaluation_owner: DETERMINISTIC_VALIDATOR
+  workflow_execution_owner: WORKFLOW_RUNNER
+  material_scope_change_owner: USER
+  visual_gate_owner: USER
+  release_owner: USER
+  auto_external_call: false
+
+execution_policy:
+  auto_internal_advance: deterministic_only
+  auto_external_llm_calls: 0
+  max_llm_calls_per_user_command: 1
+  max_auto_retries: 0
+  validator_may_execute_next_stage: false
+  auto_capcut_gui_operations: false
+  auto_upload: false
+  stop_before_unapproved_paid_action: true
+  stop_on_unknown_cost: true
+  stop_on_material_scope_change: true
+
+runtime:
+  state_path: 90_workflow/manual_gate_state.json
+  ledger_path: 90_workflow/gate_ledger.jsonl
+  gate_results_path: 90_workflow/gate_results
+  context_manifests_path: 90_workflow/context_manifests
+  receipts_path: 90_workflow/receipts
+
+entry_contract:
+  received_from_skill: 00-tikitaka
+  received_from_lane: general_shorts_design
+  required_at_entry:
+    - owner_transfer_receipt exists and valid
+    - canonical design_handoff SHA matches owner_transfer_receipt.canonical_handoff_sha256
+    - source_fingerprint matches
+    - design_blueprint SHA matches
+    - timeline SHA matches
+    - external review receipt valid
+  reject_entry_without_owner_transfer_receipt: true
+
+capcut_root: shrt white
+capcut_template_contract: manifests/capcut-template-contracts/shrt_white_base_v1.json
+
+gates:
+  G30:
+    name: AUDIO_ASSET_SELECTION_OR_GENERATION_AND_MEASURED_DURATION_LOCK
+    instruction: references/gates/G30_AUDIO.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 20_script/design_handoff.json
+      - 30_audio_srt/**
+    forbidden_inputs:
+      - 50_capcut_project/**
+      - 70_upload/**
+    no_generated_tts_policy:
+      when_no_generated_tts_needed:
+        status: NOT_REQUIRED
+        reason_code: NO_GENERATED_TTS
+      forbidden_value: NOT_REQUIRED_NO_GENERATED_TTS
+    manual_events: []
+
+  G40:
+    name: MEASURED_AUDIO_BASED_CAPTION_CUE_AND_SRT_LOCK
+    instruction: references/gates/G40_CAPTION_SRT.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 30_audio_srt/**
+    forbidden_inputs:
+      - 50_capcut_project/**
+      - 70_upload/**
+    requires: [G30]
+    srt_lock_requires_measured_audio: true
+    manual_events: []
+
+  G50:
+    name: FINAL_SECOND_LEVEL_TRACK_ASSEMBLY_PLAN
+    instruction: references/gates/G50_TRACK_PLAN.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 30_audio_srt/**
+      - 40_assets_used/**
+    forbidden_inputs:
+      - 50_capcut_project/**
+      - 70_upload/**
+    requires: [G40]
+    manual_events: []
+
+  G60:
+    name: CLEAN_CAPCUT_ASSEMBLY_AND_STATIC_HARNESS
+    instruction: references/gates/G60_CAPCUT_ASSEMBLY.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 50_capcut_project/**
+    forbidden_inputs:
+      - 70_upload/**
+    requires: [G50]
+    clone_only_clean_root: shrt white
+    static_pass_transitions_to: WAIT_USER_VISUAL_GATE
+    auto_capcut_gui_operations: false
+    manual_events: []
+
+  G60.USER:
+    name: USER_CAPCUT_VISUAL_GATE
+    instruction: references/gates/G60_CAPCUT_ASSEMBLY.md
+    validator: scripts/validate_stage_gate.py
+    wait_state: WAIT_USER_VISUAL_GATE
+    static_pass_does_not_imply_visual_pass: true
+    manual_events:
+      - USER_VISUAL_PASS
+
+  G70:
+    name: UPLOAD_AND_THUMBNAIL_PACKAGE_WITH_RELEASE_FALSE
+    instruction: references/gates/G70_UPLOAD_PACKAGE.md
+    validator: scripts/validate_stage_gate.py
+    allowed_inputs:
+      - 70_upload/**
+    requires: [G60.USER]
+    release_allowed: false
+    actual_upload: WAIT_UPLOAD_APPROVAL
+    manual_events: []
+
+  G80:
+    name: RENDER_EXPORT_AND_MEDIA_INTEGRITY_VERIFY
+    instruction: references/gates/G80_RENDER.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G70]
+    manual_events: []
+
+  G90:
+    name: FINAL_RENDERED_VIDEO_QC_AND_RELEASE_GATE
+    instruction: references/gates/G90_FINAL_QC.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G80]
+    release_requires:
+      - FINAL_QC_PASS
+      - UPLOAD_APPROVED
+    separate_from_g80: true
+    actual_upload: WAIT_UPLOAD_APPROVAL
+    manual_events:
+      - UPLOAD_APPROVED
+
+creative_repair_boundary:
+  timing_only_repair:
+    - adjust G40/G50 timing
+    - preserve creative content
+  creative_repair_returns_to_design_lane:
+    failure_state: WAIT_TIKITAKA_DESIGN_REPAIR
+    return_to_skill: 00-tikitaka
+    return_to_gate: G20
+  creative_changes_include:
+    - hook rewrite
+    - urakkai reorder
+    - speaker quote converted to TTS
+    - situation description converted to quote
+    - new caption role
+    - new clip or BGM not in the design
+
+no_generated_tts_state_policy:
+  status: NOT_REQUIRED
+  reason_code: NO_GENERATED_TTS
+  forbidden_value: NOT_REQUIRED_NO_GENERATED_TTS
+
+legacy_compatibility_pointers:
+  - canonical: 20_script/design_handoff.json
+    legacy: 20_script/script_handoff_gate.json
+    mode: pointer_manifest_only
+  - canonical: 20_script/design_handoff.json
+    legacy: 20_script/report1_handoff.json
+    mode: pointer_manifest_only

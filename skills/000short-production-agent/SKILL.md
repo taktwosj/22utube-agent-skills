@@ -5,6 +5,114 @@ description: Use only when the user explicitly asks to create, validate, or repa
 
 # 11short Production Agent
 
+## V2 Shared-Gate Router — Active Authority (2026-07-20)
+
+> Work ID: `SHARED-GATE-SEPARATED-LANES-V2-20260720`
+> This lane owns **G30 → G90** of the shared gate model.
+> See `workflow.yaml` for the canonical gate router and
+> `references/gates/*.md` for per-gate contracts.
+
+### Lane ownership
+
+```text
+000short-production-agent  = G30 → G90
+                          = TTS/measured audio, final SRT, track plan,
+                            CapCut assembly, render/package, QC
+                          = production owner (design consumer)
+```
+
+The design lane (G00 → G20) is owned by `00-tikitaka`. This lane never
+rewrites hook, urakkai order, caption role, or production profile.
+
+### Gate router
+
+| Gate | Reference | Validator |
+|---|---|---|
+| G30 audio + measured duration lock | `references/gates/G30_AUDIO.md` | `scripts/validate_stage_gate.py` |
+| G40 measured-audio-based caption + SRT lock | `references/gates/G40_CAPTION_SRT.md` | `scripts/validate_stage_gate.py` |
+| G50 final second-level track plan | `references/gates/G50_TRACK_PLAN.md` | `scripts/validate_stage_gate.py` |
+| G60 clean CapCut assembly + static harness | `references/gates/G60_CAPCUT_ASSEMBLY.md` | `scripts/validate_stage_gate.py` |
+| G60.USER user CapCut visual gate | `references/gates/G60_CAPCUT_ASSEMBLY.md` | `scripts/validate_stage_gate.py` |
+| G70 upload/thumbnail package, release=false | `references/gates/G70_UPLOAD_PACKAGE.md` | `scripts/validate_stage_gate.py` |
+| G80 render/export + media integrity | `references/gates/G80_RENDER.md` | `scripts/validate_stage_gate.py` |
+| G90 final QC + release gate | `references/gates/G90_FINAL_QC.md` | `scripts/validate_stage_gate.py` |
+
+Runner: `scripts/workflow_runner.py`. The runner enforces cost/ownership
+policy and executes only deterministic local operations.
+
+### Entry contract
+
+Reject entry without all of:
+```text
+owner_transfer_receipt exists and valid
+canonical design_handoff SHA matches receipt.canonical_handoff_sha256
+source_fingerprint matches
+design_blueprint SHA matches
+timeline SHA matches
+external review receipt valid
+```
+
+### Hard prohibitions (this lane)
+
+```text
+rewrite hook
+rewrite urakkai order
+reinterpret caption role
+change production profile without returning to G20
+automatic CapCut GUI operations
+automatic upload
+paid TTS without COST_AUTHORIZED ledger event
+automatic external LLM calls (auto_external_llm_calls = 0)
+automatic retry (max_auto_retries = 0)
+```
+
+### Key invariants
+
+```text
+G30 measured audio precedes G40 final SRT                    (NORM-002)
+NOT_REQUIRED + reason_code=NO_GENERATED_TTS                  (NORM-003)
+NOT_REQUIRED_NO_GENERATED_TTS is forbidden                   (NORM-003)
+G60 static PASS → WAIT_USER_VISUAL_GATE (static ≠ visual)
+G70 release_allowed = false
+G80 and G90 are separate gates
+G90 release requires FINAL_QC_PASS + UPLOAD_APPROVED         (RW-P03-02)
+CapCut root for general Shorts: shrt white
+```
+
+### Status-report format
+
+```text
+{gate}: {NOT_STARTED|READY|RUNNING|WAIT_USER_INPUT|
+         WAIT_USER_VISUAL_GATE|WAIT_PAID_ACTION_APPROVAL|
+         WAIT_UPLOAD_APPROVAL|WAIT_TIKITAKA_DESIGN_REPAIR|
+         PASS|FAIL|REWORK_REQUIRED|NOT_REQUIRED}
+```
+
+`PASS` is emitted only by the deterministic validator.
+
+### Hard-stop conditions
+
+```text
+WAIT_USER_INPUT
+WAIT_USER_VISUAL_GATE
+WAIT_PAID_ACTION_APPROVAL
+WAIT_UPLOAD_APPROVAL
+WAIT_TIKITAKA_DESIGN_REPAIR
+FAIL_TEMPLATE_*              (V2 design section 41)
+FAIL_MEDIA_*
+FAIL_STALE_TEMPLATE_*
+STOP_UNAPPROVED_PAID_ACTION
+STOP_SOURCE_OF_TRUTH_CONFLICT
+```
+
+---
+
+## Legacy / pre-V2 references (P10 will thin this section)
+
+> 아래 콘텐츠는 V2 라우터 도입 전 원본입니다. P10에서 thin router로
+> 축소될 예정입니다. 그 전까지는 V2 라우터 블록이 최상위 권위를 갖습니다.
+> 충돌 시 V2 라우터와 `workflow.yaml`이 우선합니다 (NORM-002, NORM-003).
+
 ## Ownership Matrix
 
 - `00-tikitaka`: Shorts source analysis, remake script draft, hook, top/timed-middle, and script handoff only.

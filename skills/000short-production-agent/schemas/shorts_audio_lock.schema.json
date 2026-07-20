@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/000short-production-agent/schemas/shorts_audio_lock.schema.json",
+  "title": "Shorts Audio Lock v1",
+  "description": "G30 output. Records the measured duration of generated or selected audio. NORM-002: this lock must exist before G40 SRT lock. NORM-003: when no generated TTS is needed, status=NOT_REQUIRED + reason_code=NO_GENERATED_TTS.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "status",
+    "measured_duration_us",
+    "measured_duration_evidence_sha256"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-audio-lock-v1"},
+    "episode_id": {"type": "string"},
+    "status": {
+      "enum": ["PASS", "NOT_REQUIRED", "FAIL", "WAIT_PAID_ACTION_APPROVAL"]
+    },
+    "reason_code": {
+      "type": ["string", "null"],
+      "enum": [null, "NO_GENERATED_TTS"],
+      "description": "Required when status=NOT_REQUIRED. Must be NO_GENERATED_TTS, never NOT_REQUIRED_NO_GENERATED_TTS."
+    },
+    "audio_source": {
+      "enum": ["GENERATED_TTS", "SOURCE_CLIP", "NONE"]
+    },
+    "audio_path": {"type": ["string", "null"]},
+    "audio_sha256": {"type": ["string", "null"], "pattern": "^[A-Fa-f0-9]{64}$"},
+    "measured_duration_us": {"type": "integer", "minimum": 0},
+    "measured_duration_evidence_path": {"type": "string"},
+    "measured_duration_evidence_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "ffprobe_verified": {"type": "boolean"},
+    "paid_tts_cost_event_id": {
+      "type": ["string", "null"],
+      "description": "Required when audio_source=GENERATED_TTS. References the COST_AUTHORIZED ledger event."
+    }
+  }
+}

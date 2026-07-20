@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/000short-production-agent/schemas/shorts_track_plan.schema.json",
+  "title": "Shorts Track Plan v1",
+  "description": "G50 output. Second-level track assembly plan built from locked G40 timing. No creative reinterpretation; production implements the design_handoff.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "status",
+    "g40_caption_lock_sha256",
+    "segments"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-track-plan-v1"},
+    "episode_id": {"type": "string"},
+    "status": {"enum": ["PASS", "FAIL", "REWORK_REQUIRED"]},
+    "g40_caption_lock_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "design_handoff_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$",
+      "description": "Creative source of truth. Track plan must match this without reinterpretation."
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "slot_id",
+          "assembly_role",
+          "source_order",
+          "timeline_order",
+          "clip_start_us",
+          "clip_end_us",
+          "audio_role",
+          "caption_role"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "slot_id": {"type": "string"},
+          "assembly_role": {"type": "string"},
+          "source_order": {"type": "integer", "minimum": 0},
+          "timeline_order": {"type": "integer", "minimum": 0},
+          "clip_start_us": {"type": "integer", "minimum": 0},
+          "clip_end_us": {"type": "integer", "minimum": 0},
+          "audio_role": {"enum": ["ON", "OFF", "DUCK"]},
+          "caption_role": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "timeline_order_matches_design_handoff": {"type": "boolean"}
+  }
+}

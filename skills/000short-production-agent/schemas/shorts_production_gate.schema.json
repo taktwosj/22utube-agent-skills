@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/000short-production-agent/schemas/shorts_production_gate.schema.json",
+  "title": "Shorts Production Gate v1",
+  "description": "Per-gate state for the general_shorts_production lane (G30-G90). G70 release_allowed=false. G80/G90 separate. Release requires G90 FINAL_QC_PASS + UPLOAD_APPROVED.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "lane",
+    "gate",
+    "status",
+    "release_allowed"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-production-gate-v1"},
+    "episode_id": {"type": "string"},
+    "lane": {"enum": ["general_shorts_production"]},
+    "gate": {
+      "enum": ["G30", "G40", "G50", "G60", "G60.USER", "G70", "G80", "G90"]
+    },
+    "subgate": {"type": ["string", "null"]},
+    "status": {
+      "enum": [
+        "NOT_STARTED",
+        "READY",
+        "RUNNING",
+        "WAIT_USER_INPUT",
+        "WAIT_USER_VISUAL_GATE",
+        "WAIT_PAID_ACTION_APPROVAL",
+        "WAIT_UPLOAD_APPROVAL",
+        "WAIT_TIKITAKA_DESIGN_REPAIR",
+        "PASS",
+        "FAIL",
+        "REWORK_REQUIRED",
+        "NOT_REQUIRED"
+      ]
+    },
+    "reason_code": {
+      "type": ["string", "null"],
+      "enum": [null, "NO_GENERATED_TTS"]
+    },
+    "release_allowed": {
+      "type": "boolean",
+      "description": "Must be false at G70. Flips true only at G90 after FINAL_QC_PASS + UPLOAD_APPROVED."
+    },
+    "requires_gates_passed": {
+      "type": "array",
+      "items": {
+        "enum": ["G30", "G40", "G50", "G60", "G60.USER", "G70", "G80"]
+      }
+    },
+    "capcut_root": {
+      "enum": ["shrt white"],
+      "description": "General Shorts production uses shrt white only."
+    }
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/000short-production-agent/schemas/shorts_caption_lock.schema.json",
+  "title": "Shorts Caption Lock v1",
+  "description": "G40 output. Caption cues and final SRT derived from G30 measured audio. NORM-002: SRT lock requires measured audio.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "status",
+    "g30_audio_lock_sha256",
+    "final_cue_count",
+    "final_srt_sha256"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "shorts-caption-lock-v1"},
+    "episode_id": {"type": "string"},
+    "status": {"enum": ["PASS", "FAIL", "REWORK_REQUIRED"]},
+    "g30_audio_lock_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$",
+      "description": "G30 measured audio lock SHA. SRT lock requires this reference."
+    },
+    "final_cue_count": {"type": "integer", "minimum": 0},
+    "cues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cue_id", "start_us", "end_us", "text"],
+        "additionalProperties": false,
+        "properties": {
+          "cue_id": {"type": "string"},
+          "start_us": {"type": "integer", "minimum": 0},
+          "end_us": {"type": "integer", "minimum": 0},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "final_srt_path": {"type": "string"},
+    "final_srt_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "no_overlap_verified": {"type": "boolean"},
+    "all_cues_within_measured_audio": {"type": "boolean"}
+  }
+}
