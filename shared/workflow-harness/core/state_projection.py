@@ -87,6 +87,7 @@ def rebuild_state(events: Iterable[dict]) -> dict:
     for ev in events:
         et = ev.get("event_type")
         gate = ev.get("gate")
+        actor = ev.get("actor")
         if et == "WORKFLOW_CREATED":
             # Promote any G00-scoped fields locked at creation.
             for k in (
@@ -121,14 +122,22 @@ def rebuild_state(events: Iterable[dict]) -> dict:
         elif et == "USER_VISUAL_PASS":
             state["next_user_action"] = None
         elif et == "FINAL_QC_PASS":
-            # Mark that G90 final QC has passed. Release still requires a
-            # subsequent UPLOAD_APPROVED event; FINAL_QC_PASS alone does NOT
-            # flip release_allowed.
-            final_qc_passed = True
+            # RW-P03-02 strict: FINAL_QC_PASS counts toward release only when
+            # it occurs on gate=G90 and actor=VALIDATOR. A FINAL_QC_PASS
+            # recorded against any other gate (e.g. G20) or any other actor
+            # does not satisfy the release precondition.
+            if gate == "G90" and actor == "VALIDATOR":
+                final_qc_passed = True
         elif et == "UPLOAD_APPROVED":
-            # RW-P03-02: release requires BOTH FINAL_QC_PASS and UPLOAD_APPROVED.
-            # An UPLOAD_APPROVED before FINAL_QC_PASS does not release.
-            if final_qc_passed:
+            # RW-P03-02 strict: UPLOAD_APPROVED releases only when (a) a
+            # valid G90 FINAL_QC_PASS preceded it, (b) this UPLOAD_APPROVED
+            # is itself on gate=G90, and (c) its actor is USER (material
+            # user-owned decision; never auto-released by RUNNER/VALIDATOR).
+            if (
+                final_qc_passed
+                and gate == "G90"
+                and actor == "USER"
+            ):
                 state["release_allowed"] = True
         state["projection_of_ledger_event_id"] = ev.get("event_id")
 

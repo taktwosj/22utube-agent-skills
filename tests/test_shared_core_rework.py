@@ -177,6 +177,131 @@ class ReleaseAllowedG90GateTests(unittest.TestCase):
         projection = self.state.rebuild_state(events)
         self.assertFalse(projection["release_allowed"])
 
+    def test_final_qc_pass_on_non_g90_gate_does_not_count(self):
+        """RW-P03-02 strict: FINAL_QC_PASS must occur on gate=G90. A
+        FINAL_QC_PASS recorded against any other gate must not satisfy the
+        release precondition, so a subsequent UPLOAD_APPROVED (even on G90)
+        must not release."""
+        events = self._base_events()
+        # FINAL_QC_PASS recorded against G20 (wrong gate).
+        events.append({
+            "event_id": "evt-000001",
+            "timestamp": "2026-07-20T11:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G20",
+            "event_type": "FINAL_QC_PASS",
+            "actor": "VALIDATOR",
+            "previous_event_id": "evt-000000",
+        })
+        # UPLOAD_APPROVED on G90.
+        events.append({
+            "event_id": "evt-000002",
+            "timestamp": "2026-07-20T12:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G90",
+            "event_type": "UPLOAD_APPROVED",
+            "actor": "USER",
+            "previous_event_id": "evt-000001",
+        })
+        projection = self.state.rebuild_state(events)
+        self.assertFalse(
+            projection["release_allowed"],
+            "FINAL_QC_PASS on a non-G90 gate must not satisfy release precondition",
+        )
+
+    def test_upload_approved_on_non_g90_gate_does_not_release(self):
+        """UPLOAD_APPROVED on a non-G90 gate must not release even if
+        FINAL_QC_PASS on G90 preceded it."""
+        events = self._base_events()
+        events.append({
+            "event_id": "evt-000001",
+            "timestamp": "2026-07-20T11:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G90",
+            "event_type": "FINAL_QC_PASS",
+            "actor": "VALIDATOR",
+            "previous_event_id": "evt-000000",
+        })
+        events.append({
+            "event_id": "evt-000002",
+            "timestamp": "2026-07-20T12:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G70",
+            "event_type": "UPLOAD_APPROVED",
+            "actor": "USER",
+            "previous_event_id": "evt-000001",
+        })
+        projection = self.state.rebuild_state(events)
+        self.assertFalse(
+            projection["release_allowed"],
+            "UPLOAD_APPROVED on a non-G90 gate must not release",
+        )
+
+    def test_actor_for_final_qc_pass_is_validator(self):
+        """The canonical contract pins FINAL_QC_PASS actor to VALIDATOR.
+        A FINAL_QC_PASS from any other actor must not satisfy release
+        precondition."""
+        events = self._base_events()
+        events.append({
+            "event_id": "evt-000001",
+            "timestamp": "2026-07-20T11:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G90",
+            "event_type": "FINAL_QC_PASS",
+            "actor": "RUNNER",
+            "previous_event_id": "evt-000000",
+        })
+        events.append({
+            "event_id": "evt-000002",
+            "timestamp": "2026-07-20T12:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G90",
+            "event_type": "UPLOAD_APPROVED",
+            "actor": "USER",
+            "previous_event_id": "evt-000001",
+        })
+        projection = self.state.rebuild_state(events)
+        self.assertFalse(
+            projection["release_allowed"],
+            "FINAL_QC_PASS actor must be VALIDATOR for the release precondition",
+        )
+
+    def test_actor_for_upload_approved_is_user(self):
+        """UPLOAD_APPROVED actor must be USER (material user-owned decision).
+        A VALIDATOR or RUNNER UPLOAD_APPROVED must not release."""
+        events = self._base_events()
+        events.append({
+            "event_id": "evt-000001",
+            "timestamp": "2026-07-20T11:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G90",
+            "event_type": "FINAL_QC_PASS",
+            "actor": "VALIDATOR",
+            "previous_event_id": "evt-000000",
+        })
+        events.append({
+            "event_id": "evt-000002",
+            "timestamp": "2026-07-20T12:00:00+09:00",
+            "episode_id": "EP-01",
+            "lane": "general_shorts_production",
+            "gate": "G90",
+            "event_type": "UPLOAD_APPROVED",
+            "actor": "RUNNER",
+            "previous_event_id": "evt-000001",
+        })
+        projection = self.state.rebuild_state(events)
+        self.assertFalse(
+            projection["release_allowed"],
+            "UPLOAD_APPROVED actor must be USER for release",
+        )
+
 
 class CacheInvalidationDependencyAwareTests(unittest.TestCase):
     """RW-P04-02: invalidation must react to every cache-key component."""
@@ -271,6 +396,51 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
         # Remove one occurrence of SAME_TEXT so a naive global-scalar check
         # would still find the value present once.
         tampered_md = rendered.replace("`title_a`: SAME_TEXT", "`title_a`: ", 1)
+        with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
+            self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
+
+    def test_array_element_with_duplicate_value_is_detected(self):
+        """RW-P04-03 strict: two array elements that happen to share a value
+        must be distinguished by their structural path (index). Dropping
+        one element's value while keeping the other's must NOT pass as
+        cosmetic."""
+        canonical = {
+            "schema_version": "demo-v1",
+            "episode_id": "EP-DEMO",
+            "segments": [
+                {"id": "seg-001", "title": "SAME_TITLE"},
+                {"id": "seg-002", "title": "SAME_TITLE"},
+            ],
+        }
+        rendered = self.cr.render_markdown(canonical)
+        # Remove the [0] element's title value but keep [1]'s. A leaf-key-
+        # only check would still see SAME_TITLE on the [1] line and pass.
+        lines = rendered.splitlines()
+        tampered_lines = []
+        removed_once = False
+        for line in lines:
+            if not removed_once and "`title`: SAME_TITLE" in line:
+                # Only remove the FIRST occurrence (segments[0]).
+                tampered_lines.append(line.replace("`title`: SAME_TITLE", "`title`: "))
+                removed_once = True
+            else:
+                tampered_lines.append(line)
+        tampered_md = "\n".join(tampered_lines)
+        with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
+            self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
+
+    def test_nested_object_duplicate_value_is_detected(self):
+        """Nested objects under different parent paths that share a value
+        must be distinguished by their full parent path, not by leaf key
+        alone."""
+        canonical = {
+            "schema_version": "demo-v1",
+            "episode_id": "EP-DEMO",
+            "chapter_a": {"title": "SAME"},
+            "chapter_b": {"title": "SAME"},
+        }
+        rendered = self.cr.render_markdown(canonical)
+        tampered_md = rendered.replace("`title`: SAME", "`title`: ", 1)
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 

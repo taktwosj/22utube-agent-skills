@@ -9,8 +9,6 @@ WORKFLOW_HARNESS_SOURCE_VERSION: shared-gates-separated-lanes-v2
 from __future__ import annotations
 
 # === BEGIN CANONICAL MODULE: ledger.py ===
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from typing import Iterable
@@ -94,8 +92,6 @@ class LedgerStore:
 # === END CANONICAL MODULE: ledger.py ===
 
 # === BEGIN CANONICAL MODULE: state_projection.py ===
-from __future__ import annotations
-
 from typing import Iterable
 
 
@@ -176,6 +172,7 @@ def rebuild_state(events: Iterable[dict]) -> dict:
     for ev in events:
         et = ev.get("event_type")
         gate = ev.get("gate")
+        actor = ev.get("actor")
         if et == "WORKFLOW_CREATED":
             # Promote any G00-scoped fields locked at creation.
             for k in (
@@ -210,14 +207,22 @@ def rebuild_state(events: Iterable[dict]) -> dict:
         elif et == "USER_VISUAL_PASS":
             state["next_user_action"] = None
         elif et == "FINAL_QC_PASS":
-            # Mark that G90 final QC has passed. Release still requires a
-            # subsequent UPLOAD_APPROVED event; FINAL_QC_PASS alone does NOT
-            # flip release_allowed.
-            final_qc_passed = True
+            # RW-P03-02 strict: FINAL_QC_PASS counts toward release only when
+            # it occurs on gate=G90 and actor=VALIDATOR. A FINAL_QC_PASS
+            # recorded against any other gate (e.g. G20) or any other actor
+            # does not satisfy the release precondition.
+            if gate == "G90" and actor == "VALIDATOR":
+                final_qc_passed = True
         elif et == "UPLOAD_APPROVED":
-            # RW-P03-02: release requires BOTH FINAL_QC_PASS and UPLOAD_APPROVED.
-            # An UPLOAD_APPROVED before FINAL_QC_PASS does not release.
-            if final_qc_passed:
+            # RW-P03-02 strict: UPLOAD_APPROVED releases only when (a) a
+            # valid G90 FINAL_QC_PASS preceded it, (b) this UPLOAD_APPROVED
+            # is itself on gate=G90, and (c) its actor is USER (material
+            # user-owned decision; never auto-released by RUNNER/VALIDATOR).
+            if (
+                final_qc_passed
+                and gate == "G90"
+                and actor == "USER"
+            ):
                 state["release_allowed"] = True
         state["projection_of_ledger_event_id"] = ev.get("event_id")
 
@@ -252,9 +257,6 @@ def compare_and_assert(ledger_projection: dict, candidate: dict) -> None:
 # === END CANONICAL MODULE: state_projection.py ===
 
 # === BEGIN CANONICAL MODULE: gate_validation.py ===
-from __future__ import annotations
-
-
 SCHEMA_VERSION = "gate-result-v1"
 
 ALLOWED_AUTO_ADVANCE_CLASSES = {
@@ -354,8 +356,6 @@ def validate_gate(
 # === END CANONICAL MODULE: gate_validation.py ===
 
 # === BEGIN CANONICAL MODULE: cost_guard.py ===
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 
@@ -429,8 +429,6 @@ class CostGuard:
 # === END CANONICAL MODULE: cost_guard.py ===
 
 # === BEGIN CANONICAL MODULE: context_manifest.py ===
-from __future__ import annotations
-
 import hashlib
 from dataclasses import dataclass, field
 
@@ -503,8 +501,6 @@ class ContextManifest:
 # === END CANONICAL MODULE: context_manifest.py ===
 
 # === BEGIN CANONICAL MODULE: canonical_render.py ===
-from __future__ import annotations
-
 import json
 from typing import Any
 
@@ -599,16 +595,21 @@ def render_markdown(canonical: dict) -> str:
 def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
     """Compare a hand-edited MD against the canonical JSON projection.
 
-    Strategy (RW-P04-03 structural-path comparison):
-    - For every tracked scalar field, render its canonical line and require
-      that exact line (key + value) to appear in the human MD. A field is
-      matched by its structural path (e.g. `title_a`), not by whether its
-      value happens to appear anywhere else in the document.
-    - If any tracked field's rendered line is absent or carries a different
-      value, raise HumanMdCanonicalJsonMismatch.
+    Strategy (RW-P04-03 strict structural-path comparison):
+    - Walk every tracked scalar field by its full structural path including
+      array indices and nested-object parent paths.
+    - For each (path, value) pair, require a rendered line in the human MD
+      that binds the value to that specific structural position — not to
+      any other position that happens to share the value.
+    - We do this by rendering the canonical projection, then for each
+      tracked scalar finding the unique canonical rendered line that
+      contains the value, and requiring that exact line (modulo
+      whitespace) to be present in the human MD.
 
-    This prevents a deleted duplicate-value field from being misclassified
-    as a cosmetic diff: each `path: value` pair must be present on its own.
+    This catches:
+    - two sibling fields with the same value where one is deleted
+    - two array elements with the same value where one is dropped
+    - two nested objects under different parents that share a value
     """
     rendered = render_markdown(canonical)
     if human_md.strip() == rendered.strip():
@@ -618,28 +619,65 @@ def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
         }
 
     tracked = _extract_tracked_scalars(canonical)
-    normalized_human_lines = [
+    canonical_lines = [
+        " ".join(line.split())
+        for line in rendered.splitlines()
+    ]
+    human_lines = [
         " ".join(line.split())
         for line in human_md.splitlines()
     ]
 
+    # Group tracked scalars by their canonical rendered line. When two
+    # distinct structural positions render to the same line text (e.g. two
+    # sibling nested objects whose `title` field has the same value), the
+    # human MD must contain that line AT LEAST as many times as the
+    # canonical projection does. A naive set-membership check would miss
+    # the case where one of the duplicates was deleted.
+    from collections import Counter
+    canonical_counter = Counter(canonical_lines)
+    human_counter = Counter(human_lines)
+
+    # Also build per-(value, count) buckets so we can detect when N
+    # structural positions share a value: the human MD must render that
+    # value on at least N distinct lines (counting duplicates).
+    value_to_canonical_count: dict[str, int] = {}
     for path, value in tracked.items():
-        # The rendered form for a scalar is `- `key`: <value>` possibly
-        # nested under parents. We compare the canonical leaf-line token.
-        leaf_key = path.split(".")[-1]
-        # Strip array-index suffix for display key (segment lists).
-        if "[" in leaf_key:
-            leaf_key = leaf_key.split("[", 1)[0]
         token = str(value)
-        # Require a line whose tail matches "`leaf_key`: token" so the value
-        # is bound to the right field, not to any other field.
-        expected_tail = f"`{leaf_key}`: {token}".replace(" ", "")
-        found = any(
-            expected_tail in line.replace(" ", "")
-            for line in normalized_human_lines
-        )
-        if not found:
-            raise HumanMdCanonicalJsonMismatch(path, value, "<absent-or-changed>")
+        if not token:
+            continue
+        # Count how many canonical rendered lines carry this value.
+        count = sum(1 for line in canonical_lines if token in line)
+        if count > value_to_canonical_count.get(token, 0):
+            value_to_canonical_count[token] = count
+
+    # For each value, the human MD must contain at least as many lines
+    # carrying that value as the canonical projection does.
+    for token, required_count in value_to_canonical_count.items():
+        human_count = sum(1 for line in human_lines if token in line)
+        if human_count < required_count:
+            raise HumanMdCanonicalJsonMismatch(
+                f"<value={token}>",
+                f"appears {required_count} times in canonical",
+                f"appears {human_count} times in human MD",
+            )
+
+    # Additionally, every distinct canonical line must be present in the
+    # human MD (catches lines whose value was edited in place).
+    for canonical_line, required in canonical_counter.items():
+        if human_counter.get(canonical_line, 0) < required:
+            # Only flag if this line carried a tracked value; otherwise it
+            # is structural (header/footer) and the byte-identity check
+            # above already handles the trivial case.
+            if any(
+                str(value) in canonical_line
+                for value in tracked.values()
+            ):
+                raise HumanMdCanonicalJsonMismatch(
+                    canonical_line,
+                    f"required {required} occurrence(s)",
+                    f"found {human_counter.get(canonical_line, 0)}",
+                )
 
     # All tracked structural field paths are intact; any remaining diff is
     # cosmetic (whitespace, comment order).
@@ -672,8 +710,6 @@ def _extract_tracked_scalars(canonical: dict, prefix: str = "") -> dict[str, Any
 # === END CANONICAL MODULE: canonical_render.py ===
 
 # === BEGIN CANONICAL MODULE: prompt_factory.py ===
-from __future__ import annotations
-
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -1053,5 +1089,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = '505DDFE2AC392C98F4B1068413ED22075280DD255C3866C6A63EC9726E19AEA4'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = 'F640306E1FFD0AD92E379B50B76AEB89BF453F01455AC8D611C7A2491549566A'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py

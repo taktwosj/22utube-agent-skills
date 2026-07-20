@@ -50,15 +50,29 @@ def _read(path: Path) -> str:
 
 
 def _strip_module_header(text: str) -> str:
-    """Strip leading module docstring so the generated bundle doesn't carry
-    five stacked top-of-file docstrings. We keep all `from __future__` and
-    real code; only the first triple-quoted block is removed."""
+    """Strip leading module docstring AND `from __future__ import annotations`
+    so the generated bundle does not carry:
+    - five stacked top-of-file docstrings
+    - five `from __future__ import annotations` lines (which Python forbids:
+      future imports must occur only at the beginning of a file).
+
+    The bundle emits its own single `from __future__ import annotations` at
+    the top. Per-module future imports are removed here.
+    """
     stripped = text.lstrip()
     if stripped.startswith('"""'):
         end = stripped.find('"""', 3)
         if end != -1:
             stripped = stripped[end + 3 :].lstrip()
-    return stripped
+    # Remove any `from __future__ import ...` lines anywhere in the module
+    # body. The bundle emits one at the top; per-module copies are illegal
+    # mid-file.
+    lines = stripped.splitlines()
+    filtered = [
+        line for line in lines
+        if not line.strip().startswith("from __future__ import")
+    ]
+    return "\n".join(filtered).strip()
 
 
 def build_canonical_bundle() -> tuple[str, str, str]:

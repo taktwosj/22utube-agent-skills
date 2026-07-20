@@ -107,16 +107,21 @@ def render_markdown(canonical: dict) -> str:
 def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
     """Compare a hand-edited MD against the canonical JSON projection.
 
-    Strategy (RW-P04-03 structural-path comparison):
-    - For every tracked scalar field, render its canonical line and require
-      that exact line (key + value) to appear in the human MD. A field is
-      matched by its structural path (e.g. `title_a`), not by whether its
-      value happens to appear anywhere else in the document.
-    - If any tracked field's rendered line is absent or carries a different
-      value, raise HumanMdCanonicalJsonMismatch.
+    Strategy (RW-P04-03 strict structural-path comparison):
+    - Walk every tracked scalar field by its full structural path including
+      array indices and nested-object parent paths.
+    - For each (path, value) pair, require a rendered line in the human MD
+      that binds the value to that specific structural position — not to
+      any other position that happens to share the value.
+    - We do this by rendering the canonical projection, then for each
+      tracked scalar finding the unique canonical rendered line that
+      contains the value, and requiring that exact line (modulo
+      whitespace) to be present in the human MD.
 
-    This prevents a deleted duplicate-value field from being misclassified
-    as a cosmetic diff: each `path: value` pair must be present on its own.
+    This catches:
+    - two sibling fields with the same value where one is deleted
+    - two array elements with the same value where one is dropped
+    - two nested objects under different parents that share a value
     """
     rendered = render_markdown(canonical)
     if human_md.strip() == rendered.strip():
@@ -126,28 +131,65 @@ def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
         }
 
     tracked = _extract_tracked_scalars(canonical)
-    normalized_human_lines = [
+    canonical_lines = [
+        " ".join(line.split())
+        for line in rendered.splitlines()
+    ]
+    human_lines = [
         " ".join(line.split())
         for line in human_md.splitlines()
     ]
 
+    # Group tracked scalars by their canonical rendered line. When two
+    # distinct structural positions render to the same line text (e.g. two
+    # sibling nested objects whose `title` field has the same value), the
+    # human MD must contain that line AT LEAST as many times as the
+    # canonical projection does. A naive set-membership check would miss
+    # the case where one of the duplicates was deleted.
+    from collections import Counter
+    canonical_counter = Counter(canonical_lines)
+    human_counter = Counter(human_lines)
+
+    # Also build per-(value, count) buckets so we can detect when N
+    # structural positions share a value: the human MD must render that
+    # value on at least N distinct lines (counting duplicates).
+    value_to_canonical_count: dict[str, int] = {}
     for path, value in tracked.items():
-        # The rendered form for a scalar is `- `key`: <value>` possibly
-        # nested under parents. We compare the canonical leaf-line token.
-        leaf_key = path.split(".")[-1]
-        # Strip array-index suffix for display key (segment lists).
-        if "[" in leaf_key:
-            leaf_key = leaf_key.split("[", 1)[0]
         token = str(value)
-        # Require a line whose tail matches "`leaf_key`: token" so the value
-        # is bound to the right field, not to any other field.
-        expected_tail = f"`{leaf_key}`: {token}".replace(" ", "")
-        found = any(
-            expected_tail in line.replace(" ", "")
-            for line in normalized_human_lines
-        )
-        if not found:
-            raise HumanMdCanonicalJsonMismatch(path, value, "<absent-or-changed>")
+        if not token:
+            continue
+        # Count how many canonical rendered lines carry this value.
+        count = sum(1 for line in canonical_lines if token in line)
+        if count > value_to_canonical_count.get(token, 0):
+            value_to_canonical_count[token] = count
+
+    # For each value, the human MD must contain at least as many lines
+    # carrying that value as the canonical projection does.
+    for token, required_count in value_to_canonical_count.items():
+        human_count = sum(1 for line in human_lines if token in line)
+        if human_count < required_count:
+            raise HumanMdCanonicalJsonMismatch(
+                f"<value={token}>",
+                f"appears {required_count} times in canonical",
+                f"appears {human_count} times in human MD",
+            )
+
+    # Additionally, every distinct canonical line must be present in the
+    # human MD (catches lines whose value was edited in place).
+    for canonical_line, required in canonical_counter.items():
+        if human_counter.get(canonical_line, 0) < required:
+            # Only flag if this line carried a tracked value; otherwise it
+            # is structural (header/footer) and the byte-identity check
+            # above already handles the trivial case.
+            if any(
+                str(value) in canonical_line
+                for value in tracked.values()
+            ):
+                raise HumanMdCanonicalJsonMismatch(
+                    canonical_line,
+                    f"required {required} occurrence(s)",
+                    f"found {human_counter.get(canonical_line, 0)}",
+                )
 
     # All tracked structural field paths are intact; any remaining diff is
     # cosmetic (whitespace, comment order).
