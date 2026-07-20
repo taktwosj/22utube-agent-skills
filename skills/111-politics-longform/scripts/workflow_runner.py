@@ -13,6 +13,30 @@ import sys
 from pathlib import Path
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+GENERATED_CORE = (
+    REPO_ROOT
+    / "skills"
+    / "111-politics-longform"
+    / "scripts"
+    / "_generated"
+    / "workflow_harness_core.py"
+)
+
+
+def _import_core():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "politics_runner_core", GENERATED_CORE
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["politics_runner_core"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 ALLOWED = {
     "PREPARE_G10",
     "PREPARE_G20",
@@ -48,29 +72,22 @@ FORBIDDEN_MARKERS = (
 
 
 def decide(result: dict) -> dict:
-    if result.get("schema_version") != "gate-result-v1":
-        return {"decision": "STOP", "reason": "INVALID_VALIDATOR_RESULT"}
     if result.get("lane") != "politics_longform":
-        return {"decision": "STOP", "reason": "CROSS_LANE_RESULT"}
-    advance_class = result.get("auto_advance_class")
-    if advance_class not in ("NONE", "DETERMINISTIC_ONLY"):
-        return {"decision": "STOP", "reason": "FORBIDDEN_ADVANCE_CLASS"}
-    action = str(result.get("next_action", "NONE"))
-    if action in WAIT:
-        return {"decision": "WAIT", "reason": action, "next_action": action}
-    if any(marker in action.upper() for marker in FORBIDDEN_MARKERS):
-        return {"decision": "STOP", "reason": f"FORBIDDEN_ACTION {action}"}
-    if result.get("status") != "PASS":
-        return {"decision": "STOP", "reason": f"VALIDATOR_STATUS={result.get('status')}"}
-    if action not in ALLOWED:
-        return {"decision": "STOP", "reason": f"UNLISTED_ACTION {action}"}
-    if result.get("auto_advance_allowed") is not True:
-        return {"decision": "STOP", "reason": "AUTO_ADVANCE_NOT_ALLOWED"}
-    return {
-        "decision": "EXECUTE_DETERMINISTIC",
-        "next_action": action,
-        "max_auto_retries": 0,
-    }
+        return {
+            "decision": "STOP",
+            "status": "STOP",
+            "reason": "CROSS_LANE_RESULT",
+            "reason_code": "CROSS_LANE_RESULT",
+        }
+    shared = _import_core().decide_runner_action(
+        validator_result=result,
+        allowed_deterministic_actions=ALLOWED,
+        wait_actions=WAIT,
+    )
+    decision = dict(shared)
+    decision["decision"] = shared["status"]
+    decision.setdefault("reason", shared.get("reason_code"))
+    return decision
 
 
 def main(argv: list[str] | None = None) -> int:

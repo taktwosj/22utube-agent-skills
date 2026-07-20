@@ -69,6 +69,21 @@
       "type": "array",
       "items": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
       "description": "Mandatory for LOCK_INVALIDATED events: the SHA values affected by the rewind."
+    },
+    "action_id": {"type": "string", "minLength": 1},
+    "max_cost_usd": {"type": "number", "minimum": 0},
+    "max_chars": {"type": ["integer", "null"], "minimum": 0}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"event_type": {"const": "COST_AUTHORIZED"}},
+        "required": ["event_type"]
+      },
+      "then": {
+        "required": ["action_id", "max_cost_usd"],
+        "properties": {"actor": {"const": "USER"}}
+      }
     }
-  }
+  ]
 }

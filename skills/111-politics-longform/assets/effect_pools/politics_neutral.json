@@ -1,0 +1,11 @@
+{
+  "schema_version": "effect-pool-v1",
+  "preset_pool_version": "politics-neutral-v1",
+  "lane": "politics_longform",
+  "policy": "SELECT_FROM_POOL",
+  "conservative": true,
+  "presets": [
+    {"preset_id": "politics-neutral-cut", "approved": true},
+    {"preset_id": "politics-neutral-fade", "approved": true}
+  ]
+}

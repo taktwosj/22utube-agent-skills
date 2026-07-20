@@ -1,0 +1,10 @@
+{
+  "schema_version": "effect-pool-v1",
+  "preset_pool_version": "shorts-tension-v1",
+  "lane": "general_shorts_production",
+  "policy": "SELECT_FROM_POOL",
+  "presets": [
+    {"preset_id": "tension-push-light", "approved": true},
+    {"preset_id": "tension-shake-micro", "approved": true}
+  ]
+}

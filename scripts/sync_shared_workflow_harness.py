@@ -34,6 +34,8 @@ CORE_MODULE_ORDER = [
     "gate_validation.py",
     "cost_guard.py",
     "context_manifest.py",
+    "runner_policy.py",
+    "effect_policy.py",
     "canonical_render.py",
     "prompt_factory.py",
 ]

@@ -72,6 +72,8 @@ class CostGuard:
         self.spent_tts_chars += chars
 
     def can_spend_model_tokens(self, *, input_tokens: int, output_tokens: int) -> bool:
+        if input_tokens < 0 or output_tokens < 0:
+            return False
         if self.max_model_input_tokens_per_gate is not None:
             if self.spent_model_input_tokens + input_tokens > self.max_model_input_tokens_per_gate:
                 return False
@@ -79,3 +81,95 @@ class CostGuard:
             if self.spent_model_output_tokens + output_tokens > self.max_model_output_tokens_per_gate:
                 return False
         return True
+
+    def authorize_paid_action(
+        self,
+        *,
+        episode_id: str,
+        action_id: str,
+        cost_usd: float | None,
+        chars: int | None,
+        ledger_events: list[dict],
+    ) -> dict:
+        """Return a fail-closed authorization decision without executing.
+
+        Authorization requires all three layers:
+        1. G00 episode policy authorizes the paid scope.
+        2. A USER COST_AUTHORIZED event matches the exact episode/action.
+        3. The requested cost and optional character count fit both the
+           event limit and remaining episode limits.
+        """
+        if (
+            cost_usd is None
+            or isinstance(cost_usd, bool)
+            or not isinstance(cost_usd, (int, float))
+            or cost_usd < 0
+        ):
+            return {"status": "STOP", "reason_code": "UNKNOWN_COST"}
+        if not self.can_authorize_paid_action():
+            return {"status": "STOP", "reason_code": "PAID_ACTION_NOT_AUTHORIZED"}
+        if chars is not None and (
+            isinstance(chars, bool) or not isinstance(chars, int) or chars < 0
+        ):
+            return {"status": "STOP", "reason_code": "INVALID_PAID_ACTION_SIZE"}
+
+        matches = [
+            event
+            for event in ledger_events
+            if event.get("event_type") == "COST_AUTHORIZED"
+            and event.get("actor") == "USER"
+            and event.get("episode_id") == episode_id
+            and event.get("action_id") == action_id
+        ]
+        if not matches:
+            return {
+                "status": "STOP",
+                "reason_code": "COST_AUTHORIZED_EVENT_REQUIRED",
+            }
+        event = matches[-1]
+        event_limit = event.get("max_cost_usd")
+        if (
+            isinstance(event_limit, bool)
+            or not isinstance(event_limit, (int, float))
+            or event_limit < cost_usd
+        ):
+            return {"status": "STOP", "reason_code": "ACTION_LIMIT_EXCEEDED"}
+        if self.spent_usd + cost_usd > float(self.episode_budget_usd or 0):
+            return {"status": "STOP", "reason_code": "BUDGET_OVERRUN"}
+        if chars is not None and not self.can_spend_tts(chars=chars):
+            return {"status": "STOP", "reason_code": "TTS_CHAR_LIMIT_EXCEEDED"}
+        return {
+            "status": "AUTHORIZED",
+            "reason_code": "COST_AUTHORIZED",
+            "episode_id": episode_id,
+            "action_id": action_id,
+            "cost_usd": float(cost_usd),
+            "chars": chars,
+        }
+
+    def record_paid_action(
+        self,
+        *,
+        episode_id: str,
+        action_id: str,
+        cost_usd: float | None,
+        chars: int | None,
+        ledger_events: list[dict],
+    ) -> dict:
+        decision = self.authorize_paid_action(
+            episode_id=episode_id,
+            action_id=action_id,
+            cost_usd=cost_usd,
+            chars=chars,
+            ledger_events=ledger_events,
+        )
+        if decision["status"] != "AUTHORIZED":
+            raise CostOverrun(
+                decision["reason_code"],
+                cost_usd,
+                self.episode_budget_usd,
+            )
+        self.spent_usd += float(cost_usd)
+        if chars is not None:
+            self.spent_tts_chars += chars
+        return decision

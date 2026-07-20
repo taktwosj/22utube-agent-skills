@@ -64,6 +64,12 @@ ALLOWED_DETERMINISTIC_ACTIONS = {
     "STOP_AT_G20",
 }
 
+WAIT_ACTIONS = {
+    "WAIT_EXTERNAL_RETURN",
+    "WAIT_USER_EDITORIAL_CONFIRMATION",
+    "WAIT_USER_INPUT",
+}
+
 # Actions the runner must NEVER execute automatically, regardless of what
 # the validator result requests.
 FORBIDDEN_AUTO_ACTIONS = {
@@ -76,46 +82,29 @@ FORBIDDEN_AUTO_ACTIONS = {
 }
 
 
-def apply_validator_result(*, validator_result: dict, ledger, cost_guard) -> dict:
+def apply_validator_result(
+    *,
+    validator_result: dict,
+    ledger=None,
+    cost_guard=None,
+    episode_id: str | None = None,
+    paid_action: dict | None = None,
+) -> dict:
     """Decide what (if anything) the runner may execute next.
 
     Returns a runner decision record. The decision is logged to the ledger
     by the caller.
     """
-    if validator_result.get("schema_version") != "gate-result-v1":
-        raise RunnerAbort("INVALID_VALIDATOR_RESULT_SHAPE")
-
-    advance_class = validator_result.get("auto_advance_class")
-    if advance_class in ("LLM_CALL_ALLOWED", "PAID_ACTION_ALLOWED", "UPLOAD_ALLOWED"):
-        raise RunnerAbort(f"FORBIDDEN_ADVANCE_CLASS {advance_class}")
-
-    next_action = validator_result.get("next_action", "NONE")
-    if next_action in FORBIDDEN_AUTO_ACTIONS:
-        raise RunnerAbort(f"FORBIDDEN_AUTO_ACTION {next_action}")
-
-    if validator_result.get("status") not in ("PASS", "NOT_REQUIRED"):
-        return {
-            "status": "STOP",
-            "reason": f"VALIDATOR_STATUS={validator_result.get('status')}",
-            "next_action": "NONE",
-        }
-
-    if next_action == "NONE":
-        return {"status": "STOP", "reason": "NO_NEXT_ACTION", "next_action": "NONE"}
-
-    if next_action not in ALLOWED_DETERMINISTIC_ACTIONS:
-        return {
-            "status": "WAIT_USER_INPUT",
-            "reason": f"NEXT_ACTION_REQUIRES_USER {next_action}",
-            "next_action": next_action,
-        }
-
-    # Deterministic local action authorized.
-    return {
-        "status": "EXECUTE_DETERMINISTIC",
-        "next_action": next_action,
-        "auto_advance_class": advance_class,
-    }
+    core = _import_core()
+    return core.decide_runner_action(
+        validator_result=validator_result,
+        allowed_deterministic_actions=ALLOWED_DETERMINISTIC_ACTIONS,
+        wait_actions=WAIT_ACTIONS,
+        episode_id=episode_id,
+        paid_action=paid_action,
+        cost_guard=cost_guard,
+        ledger_events=ledger,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,7 +114,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--validator-result", type=Path, required=True)
     args = parser.parse_args(argv)
     result = json.loads(args.validator_result.read_text(encoding="utf-8"))
-    core = _import_core()
     decision = apply_validator_result(
         validator_result=result,
         ledger=None,

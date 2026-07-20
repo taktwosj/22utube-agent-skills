@@ -419,6 +419,8 @@ class CostGuard:
         self.spent_tts_chars += chars
 
     def can_spend_model_tokens(self, *, input_tokens: int, output_tokens: int) -> bool:
+        if input_tokens < 0 or output_tokens < 0:
+            return False
         if self.max_model_input_tokens_per_gate is not None:
             if self.spent_model_input_tokens + input_tokens > self.max_model_input_tokens_per_gate:
                 return False
@@ -426,16 +428,115 @@ class CostGuard:
             if self.spent_model_output_tokens + output_tokens > self.max_model_output_tokens_per_gate:
                 return False
         return True
+
+    def authorize_paid_action(
+        self,
+        *,
+        episode_id: str,
+        action_id: str,
+        cost_usd: float | None,
+        chars: int | None,
+        ledger_events: list[dict],
+    ) -> dict:
+        """Return a fail-closed authorization decision without executing.
+
+        Authorization requires all three layers:
+        1. G00 episode policy authorizes the paid scope.
+        2. A USER COST_AUTHORIZED event matches the exact episode/action.
+        3. The requested cost and optional character count fit both the
+           event limit and remaining episode limits.
+        """
+        if (
+            cost_usd is None
+            or isinstance(cost_usd, bool)
+            or not isinstance(cost_usd, (int, float))
+            or cost_usd < 0
+        ):
+            return {"status": "STOP", "reason_code": "UNKNOWN_COST"}
+        if not self.can_authorize_paid_action():
+            return {"status": "STOP", "reason_code": "PAID_ACTION_NOT_AUTHORIZED"}
+        if chars is not None and (
+            isinstance(chars, bool) or not isinstance(chars, int) or chars < 0
+        ):
+            return {"status": "STOP", "reason_code": "INVALID_PAID_ACTION_SIZE"}
+
+        matches = [
+            event
+            for event in ledger_events
+            if event.get("event_type") == "COST_AUTHORIZED"
+            and event.get("actor") == "USER"
+            and event.get("episode_id") == episode_id
+            and event.get("action_id") == action_id
+        ]
+        if not matches:
+            return {
+                "status": "STOP",
+                "reason_code": "COST_AUTHORIZED_EVENT_REQUIRED",
+            }
+        event = matches[-1]
+        event_limit = event.get("max_cost_usd")
+        if (
+            isinstance(event_limit, bool)
+            or not isinstance(event_limit, (int, float))
+            or event_limit < cost_usd
+        ):
+            return {"status": "STOP", "reason_code": "ACTION_LIMIT_EXCEEDED"}
+        if self.spent_usd + cost_usd > float(self.episode_budget_usd or 0):
+            return {"status": "STOP", "reason_code": "BUDGET_OVERRUN"}
+        if chars is not None and not self.can_spend_tts(chars=chars):
+            return {"status": "STOP", "reason_code": "TTS_CHAR_LIMIT_EXCEEDED"}
+        return {
+            "status": "AUTHORIZED",
+            "reason_code": "COST_AUTHORIZED",
+            "episode_id": episode_id,
+            "action_id": action_id,
+            "cost_usd": float(cost_usd),
+            "chars": chars,
+        }
+
+    def record_paid_action(
+        self,
+        *,
+        episode_id: str,
+        action_id: str,
+        cost_usd: float | None,
+        chars: int | None,
+        ledger_events: list[dict],
+    ) -> dict:
+        decision = self.authorize_paid_action(
+            episode_id=episode_id,
+            action_id=action_id,
+            cost_usd=cost_usd,
+            chars=chars,
+            ledger_events=ledger_events,
+        )
+        if decision["status"] != "AUTHORIZED":
+            raise CostOverrun(
+                decision["reason_code"],
+                cost_usd,
+                self.episode_budget_usd,
+            )
+        self.spent_usd += float(cost_usd)
+        if chars is not None:
+            self.spent_tts_chars += chars
+        return decision
 # === END CANONICAL MODULE: cost_guard.py ===
 
 # === BEGIN CANONICAL MODULE: context_manifest.py ===
 import hashlib
+import json
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 CONTEXT_MANIFEST_SCHEMA_VERSION = "context-manifest-v1"
 
 DEFAULT_ESTIMATOR_VERSION = "chars_div_4_v1"
+
+
+class ContextPolicyViolation(Exception):
+    pass
 
 
 @dataclass
@@ -498,7 +599,221 @@ class ContextManifest:
             "contract_mode": self.contract_mode,
             "status": self.status,
         }
+
+
+def write_model_call_context(
+    *,
+    episode_root: Path,
+    manifest: ContextManifest,
+) -> Path:
+    """Write the required manifest before a model call can be attempted."""
+    identifier = re.compile(r"^[A-Za-z0-9_.-]+$")
+    if (
+        not identifier.fullmatch(manifest.gate)
+        or not identifier.fullmatch(manifest.run_id)
+        or ".." in manifest.gate
+        or ".." in manifest.run_id
+    ):
+        raise ContextPolicyViolation("UNSAFE_CONTEXT_MANIFEST_IDENTIFIER")
+    if manifest.unrelated_lane_reads != 0:
+        raise ContextPolicyViolation("UNRELATED_LANE_READS_MUST_BE_ZERO")
+    if manifest.legacy_reads and manifest.contract_mode != "LEGACY_COMPAT":
+        raise ContextPolicyViolation("LEGACY_READS_REQUIRE_LEGACY_COMPAT")
+    payload = manifest.to_dict()
+    payload["model_call_ready"] = True
+    target_dir = (
+        Path(episode_root)
+        / "90_workflow"
+        / "context_manifests"
+    )
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{manifest.gate}-{manifest.run_id}.json"
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(target)
+    return target
 # === END CANONICAL MODULE: context_manifest.py ===
+
+# === BEGIN CANONICAL MODULE: runner_policy.py ===
+FORBIDDEN_ADVANCE_CLASSES = {
+    "LLM_CALL_ALLOWED",
+    "PAID_ACTION_ALLOWED",
+    "UPLOAD_ALLOWED",
+}
+FORBIDDEN_ACTION_MARKERS = (
+    "LLM",
+    "MODEL",
+    "CAPCUT",
+    "GUI",
+    "UPLOAD",
+    "RELEASE",
+    "RETRY",
+    "TRANSPORT",
+)
+
+
+def _stop(reason_code: str, detail: str | None = None) -> dict:
+    result = {
+        "status": "STOP",
+        "reason_code": reason_code,
+        "next_action": "NONE",
+        "max_auto_retries": 0,
+    }
+    if detail is not None:
+        result["detail"] = detail
+    return result
+
+
+def decide_runner_action(
+    *,
+    validator_result: dict,
+    allowed_deterministic_actions: set[str],
+    wait_actions: set[str],
+    episode_id: str | None = None,
+    paid_action: dict | None = None,
+    cost_guard=None,
+    ledger_events: list[dict] | None = None,
+) -> dict:
+    """Evaluate a validator result; never execute its next action."""
+    if validator_result.get("schema_version") != "gate-result-v1":
+        return _stop("INVALID_VALIDATOR_RESULT")
+    advance_class = validator_result.get("auto_advance_class")
+    if advance_class in FORBIDDEN_ADVANCE_CLASSES or advance_class not in {
+        "NONE",
+        "DETERMINISTIC_ONLY",
+    }:
+        return _stop("FORBIDDEN_ADVANCE_CLASS", str(advance_class))
+
+    action = str(validator_result.get("next_action", "NONE"))
+    status = validator_result.get("status")
+    if action in wait_actions and status != "FAIL":
+        return {
+            "status": "WAIT",
+            "reason_code": action,
+            "next_action": action,
+            "max_auto_retries": 0,
+        }
+    if status not in ("PASS", "NOT_REQUIRED"):
+        return _stop("VALIDATOR_NOT_PASS", str(status))
+
+    if paid_action is not None:
+        if cost_guard is None or episode_id is None:
+            return _stop("PAID_ACTION_POLICY_REQUIRED")
+        normalized_events = getattr(ledger_events, "events", ledger_events) or []
+        decision = cost_guard.authorize_paid_action(
+            episode_id=episode_id,
+            action_id=paid_action.get("action_id", ""),
+            cost_usd=paid_action.get("cost_usd"),
+            chars=paid_action.get("chars"),
+            ledger_events=normalized_events,
+        )
+        if decision.get("status") != "AUTHORIZED":
+            return _stop(decision.get("reason_code", "PAID_ACTION_REJECTED"))
+        return {
+            "status": "WAIT",
+            "reason_code": "PAID_ACTION_AUTHORIZED_MANUAL_EXECUTION_ONLY",
+            "next_action": "WAIT_PAID_ACTION_EXECUTION",
+            "max_auto_retries": 0,
+            "authorization": decision,
+        }
+
+    if any(marker in action.upper() for marker in FORBIDDEN_ACTION_MARKERS) or action.startswith(
+        ("PAID_", "COST_")
+    ):
+        return _stop("FORBIDDEN_AUTO_ACTION", action)
+    if action == "NONE":
+        return _stop("NO_NEXT_ACTION")
+    if action not in allowed_deterministic_actions:
+        return _stop("ACTION_NOT_ALLOWLISTED", action)
+    if validator_result.get("auto_advance_allowed") is not True:
+        return _stop("AUTO_ADVANCE_NOT_ALLOWED")
+    return {
+        "status": "EXECUTE_DETERMINISTIC",
+        "reason_code": "DETERMINISTIC_ACTION_ALLOWED",
+        "next_action": action,
+        "auto_advance_class": "DETERMINISTIC_ONLY",
+        "max_auto_retries": 0,
+    }
+# === END CANONICAL MODULE: runner_policy.py ===
+
+# === BEGIN CANONICAL MODULE: effect_policy.py ===
+import hashlib
+
+
+class EffectPolicyError(Exception):
+    pass
+
+
+def _approved_presets(pool: dict) -> list[dict]:
+    presets = pool.get("presets")
+    if not isinstance(presets, list):
+        raise EffectPolicyError("EFFECT_POOL_PRESETS_REQUIRED")
+    approved = [
+        preset
+        for preset in presets
+        if isinstance(preset, dict)
+        and preset.get("approved") is True
+        and isinstance(preset.get("preset_id"), str)
+        and preset["preset_id"]
+    ]
+    if len({preset["preset_id"] for preset in approved}) != len(approved):
+        raise EffectPolicyError("DUPLICATE_EFFECT_PRESET_ID")
+    return approved
+
+
+def select_effect(*, pool: dict, episode_id: str, segment_id: str) -> dict:
+    if pool.get("schema_version") != "effect-pool-v1":
+        raise EffectPolicyError("EFFECT_POOL_SCHEMA")
+    version = pool.get("preset_pool_version")
+    lane = pool.get("lane")
+    policy = pool.get("policy")
+    if not all(isinstance(value, str) and value for value in (version, lane, policy)):
+        raise EffectPolicyError("EFFECT_POOL_IDENTITY_REQUIRED")
+    if policy == "NONE":
+        return {
+            "status": "NONE",
+            "preset_id": None,
+            "preset_pool_version": version,
+        }
+    if policy == "EXPLICIT_ONLY":
+        return {
+            "status": "WAIT_EXPLICIT_EFFECT_SELECTION",
+            "preset_id": None,
+            "preset_pool_version": version,
+        }
+    if (
+        lane == "politics_longform"
+        and policy == "SELECT_FROM_POOL"
+        and pool.get("conservative") is not True
+    ):
+        raise EffectPolicyError("POLITICS_EFFECT_POOL_MUST_BE_CONSERVATIVE")
+    approved = _approved_presets(pool)
+    if policy == "LOCKED":
+        locked_id = pool.get("locked_preset_id")
+        if locked_id not in {preset["preset_id"] for preset in approved}:
+            raise EffectPolicyError("LOCKED_EFFECT_NOT_APPROVED")
+        selected = next(preset for preset in approved if preset["preset_id"] == locked_id)
+    elif policy == "SELECT_FROM_POOL":
+        if not approved:
+            raise EffectPolicyError("NO_APPROVED_EFFECT_PRESETS")
+        seed_material = f"{episode_id}{segment_id}{version}"
+        digest = hashlib.sha256(seed_material.encode("utf-8")).hexdigest()
+        selected = approved[int(digest, 16) % len(approved)]
+    else:
+        raise EffectPolicyError("UNKNOWN_EFFECT_POLICY")
+    seed_material = f"{episode_id}{segment_id}{version}"
+    return {
+        "status": "SELECTED",
+        "preset_id": selected["preset_id"],
+        "preset_pool_version": version,
+        "lane": lane,
+        "seed_material": seed_material,
+        "seed_sha256": hashlib.sha256(seed_material.encode("utf-8")).hexdigest().upper(),
+    }
+# === END CANONICAL MODULE: effect_policy.py ===
 
 # === BEGIN CANONICAL MODULE: canonical_render.py ===
 import hashlib
@@ -1194,5 +1509,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = '02D481A14E532B260C65B5079D66214AB4B438231A3063320EC47274B6CC6FE7'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = '0BB143DB52C21BEE318CB4BC7BE685B81A9C58A8B46BC8F90F0D3A1A5960E4DF'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py

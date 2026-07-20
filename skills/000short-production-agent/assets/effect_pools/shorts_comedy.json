@@ -1,0 +1,11 @@
+{
+  "schema_version": "effect-pool-v1",
+  "preset_pool_version": "shorts-comedy-v1",
+  "lane": "general_shorts_production",
+  "policy": "SELECT_FROM_POOL",
+  "presets": [
+    {"preset_id": "comedy-pop-soft", "approved": true},
+    {"preset_id": "comedy-bounce-light", "approved": true},
+    {"preset_id": "comedy-zoom-micro", "approved": true}
+  ]
+}

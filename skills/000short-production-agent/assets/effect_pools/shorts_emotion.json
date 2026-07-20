@@ -1,0 +1,10 @@
+{
+  "schema_version": "effect-pool-v1",
+  "preset_pool_version": "shorts-emotion-v1",
+  "lane": "general_shorts_production",
+  "policy": "SELECT_FROM_POOL",
+  "presets": [
+    {"preset_id": "emotion-fade-soft", "approved": true},
+    {"preset_id": "emotion-focus-slow", "approved": true}
+  ]
+}

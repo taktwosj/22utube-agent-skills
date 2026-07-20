@@ -75,55 +75,24 @@ FORBIDDEN_AUTO_ACTIONS = {
 }
 
 
-def apply_validator_result(*, validator_result: dict) -> dict:
-    if validator_result.get("schema_version") != "gate-result-v1":
-        raise RunnerAbort("INVALID_VALIDATOR_RESULT_SHAPE")
-
-    advance_class = validator_result.get("auto_advance_class")
-    if advance_class in ("LLM_CALL_ALLOWED", "PAID_ACTION_ALLOWED", "UPLOAD_ALLOWED"):
-        raise RunnerAbort(f"FORBIDDEN_ADVANCE_CLASS {advance_class}")
-
-    next_action = validator_result.get("next_action", "NONE")
-    if next_action in FORBIDDEN_AUTO_ACTIONS:
-        raise RunnerAbort(f"FORBIDDEN_AUTO_ACTION {next_action}")
-
-    status = validator_result.get("status")
-    if next_action in WAIT_ACTIONS and status != "FAIL":
-        return {
-            "status": "WAIT",
-            "reason": next_action,
-            "next_action": next_action,
-        }
-
-    if status not in ("PASS", "NOT_REQUIRED"):
-        return {
-            "status": "STOP",
-            "reason": f"VALIDATOR_STATUS={status}",
-            "next_action": "NONE",
-        }
-
-    if next_action == "NONE":
-        return {"status": "STOP", "reason": "NO_NEXT_ACTION", "next_action": "NONE"}
-
-    if next_action not in ALLOWED_DETERMINISTIC_ACTIONS:
-        return {
-            "status": "WAIT_USER_INPUT",
-            "reason": f"NEXT_ACTION_REQUIRES_USER {next_action}",
-            "next_action": next_action,
-        }
-
-    if validator_result.get("auto_advance_allowed") is not True:
-        return {
-            "status": "STOP",
-            "reason": "AUTO_ADVANCE_NOT_ALLOWED",
-            "next_action": "NONE",
-        }
-
-    return {
-        "status": "EXECUTE_DETERMINISTIC",
-        "next_action": next_action,
-        "auto_advance_class": advance_class,
-    }
+def apply_validator_result(
+    *,
+    validator_result: dict,
+    episode_id: str | None = None,
+    paid_action: dict | None = None,
+    cost_guard=None,
+    ledger_events: list[dict] | None = None,
+) -> dict:
+    core = _import_core()
+    return core.decide_runner_action(
+        validator_result=validator_result,
+        allowed_deterministic_actions=ALLOWED_DETERMINISTIC_ACTIONS,
+        wait_actions=WAIT_ACTIONS,
+        episode_id=episode_id,
+        paid_action=paid_action,
+        cost_guard=cost_guard,
+        ledger_events=ledger_events,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

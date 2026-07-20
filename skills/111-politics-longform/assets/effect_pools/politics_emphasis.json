@@ -1,0 +1,9 @@
+{
+  "schema_version": "effect-pool-v1",
+  "preset_pool_version": "politics-emphasis-v1",
+  "lane": "politics_longform",
+  "policy": "EXPLICIT_ONLY",
+  "presets": [
+    {"preset_id": "politics-emphasis-focus", "approved": true}
+  ]
+}

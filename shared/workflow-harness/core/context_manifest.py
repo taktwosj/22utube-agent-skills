@@ -16,12 +16,19 @@ null and estimated_input_tokens + estimator_version are recorded instead.
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 CONTEXT_MANIFEST_SCHEMA_VERSION = "context-manifest-v1"
 
 DEFAULT_ESTIMATOR_VERSION = "chars_div_4_v1"
+
+
+class ContextPolicyViolation(Exception):
+    pass
 
 
 @dataclass
@@ -84,3 +91,39 @@ class ContextManifest:
             "contract_mode": self.contract_mode,
             "status": self.status,
         }
+
+
+def write_model_call_context(
+    *,
+    episode_root: Path,
+    manifest: ContextManifest,
+) -> Path:
+    """Write the required manifest before a model call can be attempted."""
+    identifier = re.compile(r"^[A-Za-z0-9_.-]+$")
+    if (
+        not identifier.fullmatch(manifest.gate)
+        or not identifier.fullmatch(manifest.run_id)
+        or ".." in manifest.gate
+        or ".." in manifest.run_id
+    ):
+        raise ContextPolicyViolation("UNSAFE_CONTEXT_MANIFEST_IDENTIFIER")
+    if manifest.unrelated_lane_reads != 0:
+        raise ContextPolicyViolation("UNRELATED_LANE_READS_MUST_BE_ZERO")
+    if manifest.legacy_reads and manifest.contract_mode != "LEGACY_COMPAT":
+        raise ContextPolicyViolation("LEGACY_READS_REQUIRE_LEGACY_COMPAT")
+    payload = manifest.to_dict()
+    payload["model_call_ready"] = True
+    target_dir = (
+        Path(episode_root)
+        / "90_workflow"
+        / "context_manifests"
+    )
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{manifest.gate}-{manifest.run_id}.json"
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(target)
+    return target
