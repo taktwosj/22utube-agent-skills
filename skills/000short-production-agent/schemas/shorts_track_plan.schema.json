@@ -9,6 +9,8 @@
     "episode_id",
     "status",
     "g40_caption_lock_sha256",
+    "design_handoff_sha256",
+    "timeline_order_matches_design_handoff",
     "segments"
   ],
   "additionalProperties": false,
@@ -53,6 +55,6 @@
         }
       }
     },
-    "timeline_order_matches_design_handoff": {"type": "boolean"}
+    "timeline_order_matches_design_handoff": {"type": "boolean", "const": true}
   }
 }

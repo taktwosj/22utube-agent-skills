@@ -19,7 +19,7 @@ import hashlib
 from dataclasses import dataclass, field
 
 
-SCHEMA_VERSION = "context-manifest-v1"
+CONTEXT_MANIFEST_SCHEMA_VERSION = "context-manifest-v1"
 
 DEFAULT_ESTIMATOR_VERSION = "chars_div_4_v1"
 
@@ -66,7 +66,7 @@ class ContextManifest:
                 "or estimated_input_tokens"
             )
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": CONTEXT_MANIFEST_SCHEMA_VERSION,
             "lane": self.lane,
             "gate": self.gate,
             "subgate": self.subgate,

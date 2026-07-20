@@ -47,6 +47,7 @@ ALLOWED_DETERMINISTIC_ACTIONS = {
     "PREPARE_G40",
     "PREPARE_G50",
     "PREPARE_G60",
+    "PREPARE_G70",
     "PREPARE_G80",
     "PREPARE_G90",
     "REBUILD_STATE_PROJECTION",
@@ -87,18 +88,18 @@ def apply_validator_result(*, validator_result: dict) -> dict:
         raise RunnerAbort(f"FORBIDDEN_AUTO_ACTION {next_action}")
 
     status = validator_result.get("status")
-    if status not in ("PASS", "NOT_REQUIRED", "WAIT_UPLOAD_APPROVAL"):
-        return {
-            "status": "STOP",
-            "reason": f"VALIDATOR_STATUS={status}",
-            "next_action": "NONE",
-        }
-
-    if next_action in WAIT_ACTIONS:
+    if next_action in WAIT_ACTIONS and status != "FAIL":
         return {
             "status": "WAIT",
             "reason": next_action,
             "next_action": next_action,
+        }
+
+    if status not in ("PASS", "NOT_REQUIRED"):
+        return {
+            "status": "STOP",
+            "reason": f"VALIDATOR_STATUS={status}",
+            "next_action": "NONE",
         }
 
     if next_action == "NONE":
@@ -109,6 +110,13 @@ def apply_validator_result(*, validator_result: dict) -> dict:
             "status": "WAIT_USER_INPUT",
             "reason": f"NEXT_ACTION_REQUIRES_USER {next_action}",
             "next_action": next_action,
+        }
+
+    if validator_result.get("auto_advance_allowed") is not True:
+        return {
+            "status": "STOP",
+            "reason": "AUTO_ADVANCE_NOT_ALLOWED",
+            "next_action": "NONE",
         }
 
     return {

@@ -16,7 +16,7 @@ Pass authority is DETERMINISTIC_VALIDATOR_ONLY.
 from __future__ import annotations
 
 
-SCHEMA_VERSION = "gate-result-v1"
+GATE_RESULT_SCHEMA_VERSION = "gate-result-v1"
 
 ALLOWED_AUTO_ADVANCE_CLASSES = {
     "NONE",
@@ -97,7 +97,7 @@ def validate_gate(
         derived_status = "FAIL" if has_errors else "PASS"
 
     result = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": GATE_RESULT_SCHEMA_VERSION,
         "status": derived_status,
         "reason_code": reason_code,
         "lane": lane,

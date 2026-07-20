@@ -10,7 +10,11 @@
     "status",
     "g30_audio_lock_sha256",
     "final_cue_count",
-    "final_srt_sha256"
+    "cues",
+    "final_srt_path",
+    "final_srt_sha256",
+    "no_overlap_verified",
+    "all_cues_within_measured_audio"
   ],
   "additionalProperties": false,
   "properties": {
@@ -39,7 +43,7 @@
     },
     "final_srt_path": {"type": "string"},
     "final_srt_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
-    "no_overlap_verified": {"type": "boolean"},
-    "all_cues_within_measured_audio": {"type": "boolean"}
+    "no_overlap_verified": {"type": "boolean", "const": true},
+    "all_cues_within_measured_audio": {"type": "boolean", "const": true}
   }
 }

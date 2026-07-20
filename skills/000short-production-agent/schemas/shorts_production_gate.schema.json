@@ -55,5 +55,28 @@
       "enum": ["shrt white"],
       "description": "General Shorts production uses shrt white only."
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"gate": {"const": "G70"}},
+        "required": ["gate"]
+      },
+      "then": {
+        "properties": {"release_allowed": {"const": false}}
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "gate": {"const": "G90"},
+          "status": {"const": "PASS"}
+        },
+        "required": ["gate", "status"]
+      },
+      "then": {
+        "properties": {"release_allowed": {"const": true}}
+      }
+    }
+  ]
 }

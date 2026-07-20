@@ -257,7 +257,7 @@ def compare_and_assert(ledger_projection: dict, candidate: dict) -> None:
 # === END CANONICAL MODULE: state_projection.py ===
 
 # === BEGIN CANONICAL MODULE: gate_validation.py ===
-SCHEMA_VERSION = "gate-result-v1"
+GATE_RESULT_SCHEMA_VERSION = "gate-result-v1"
 
 ALLOWED_AUTO_ADVANCE_CLASSES = {
     "NONE",
@@ -338,7 +338,7 @@ def validate_gate(
         derived_status = "FAIL" if has_errors else "PASS"
 
     result = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": GATE_RESULT_SCHEMA_VERSION,
         "status": derived_status,
         "reason_code": reason_code,
         "lane": lane,
@@ -433,7 +433,7 @@ import hashlib
 from dataclasses import dataclass, field
 
 
-SCHEMA_VERSION = "context-manifest-v1"
+CONTEXT_MANIFEST_SCHEMA_VERSION = "context-manifest-v1"
 
 DEFAULT_ESTIMATOR_VERSION = "chars_div_4_v1"
 
@@ -480,7 +480,7 @@ class ContextManifest:
                 "or estimated_input_tokens"
             )
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": CONTEXT_MANIFEST_SCHEMA_VERSION,
             "lane": self.lane,
             "gate": self.gate,
             "subgate": self.subgate,
@@ -1194,5 +1194,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = '525523DD1F70DBE54DB3742317A4E9795F9AD25DF443545EFB87B55D37ACA536'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = '02D481A14E532B260C65B5079D66214AB4B438231A3063320EC47274B6CC6FE7'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py
