@@ -385,7 +385,7 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
     def test_deleted_duplicate_value_field_is_detected_as_change(self):
         """If canonical has two fields with the same value and the human MD
         drops one of them, the global-scalar check would call it cosmetic.
-        Structural-path check must catch it as a mismatch."""
+        Structural record-set check must catch it as a mismatch."""
         canonical = {
             "schema_version": "demo-v1",
             "episode_id": "EP-DEMO",
@@ -393,9 +393,13 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
             "title_b": "SAME_TEXT",
         }
         rendered = self.cr.render_markdown(canonical)
-        # Remove one occurrence of SAME_TEXT so a naive global-scalar check
-        # would still find the value present once.
-        tampered_md = rendered.replace("`title_a`: SAME_TEXT", "`title_a`: ", 1)
+        # In the new (path, value) record format, drop the title_a record
+        # entirely so its value no longer appears for that path.
+        tampered_md = rendered.replace(
+            "P path:title_a = SAME_TEXT",
+            "",
+            1,
+        )
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 
@@ -413,19 +417,13 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
             ],
         }
         rendered = self.cr.render_markdown(canonical)
-        # Remove the [0] element's title value but keep [1]'s. A leaf-key-
+        # Remove the [0] element's title record but keep [1]'s. A leaf-value
         # only check would still see SAME_TITLE on the [1] line and pass.
-        lines = rendered.splitlines()
-        tampered_lines = []
-        removed_once = False
-        for line in lines:
-            if not removed_once and "`title`: SAME_TITLE" in line:
-                # Only remove the FIRST occurrence (segments[0]).
-                tampered_lines.append(line.replace("`title`: SAME_TITLE", "`title`: "))
-                removed_once = True
-            else:
-                tampered_lines.append(line)
-        tampered_md = "\n".join(tampered_lines)
+        tampered_md = rendered.replace(
+            "P path:segments[0].title = SAME_TITLE",
+            "",
+            1,
+        )
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 
@@ -440,7 +438,11 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
             "chapter_b": {"title": "SAME"},
         }
         rendered = self.cr.render_markdown(canonical)
-        tampered_md = rendered.replace("`title`: SAME", "`title`: ", 1)
+        tampered_md = rendered.replace(
+            "P path:chapter_a.title = SAME",
+            "",
+            1,
+        )
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 

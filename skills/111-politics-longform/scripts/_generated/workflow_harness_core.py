@@ -501,182 +501,172 @@ class ContextManifest:
 # === END CANONICAL MODULE: context_manifest.py ===
 
 # === BEGIN CANONICAL MODULE: canonical_render.py ===
+import hashlib
 import json
+import re
 from typing import Any
 
 
 class HumanMdCanonicalJsonMismatch(Exception):
     """Raised when a hand-edited MD disagrees with the canonical JSON
-    projection on a tracked field."""
+    projection."""
 
-    def __init__(self, field_path: str, canonical_value, human_value):
-        super().__init__(
-            f"HUMAN_MD_CANONICAL_JSON_MISMATCH field={field_path} "
-            f"canonical={canonical_value!r} human={human_value!r}"
-        )
-        self.field_path = field_path
-        self.canonical_value = canonical_value
-        self.human_value = human_value
+    def __init__(self, kind: str, detail: str):
+        super().__init__(f"HUMAN_MD_CANONICAL_JSON_MISMATCH kind={kind} {detail}")
+        self.kind = kind
+        self.detail = detail
+
+
+# Path-record line format. The "P " prefix + " = " + value uniquely
+# identifies a structural record. The prefix avoids ambiguity with prose.
+# Example:  P path:chapter_a.title = SAME
+_PATH_RECORD_RE = re.compile(r"^P\s+path:(?P<path>\S+)\s+=\s+(?P<value>.*)$")
 
 
 def _hash_canonical(canonical: dict) -> str:
-    return json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest().upper()
 
 
-def _emit_value(
-    buf: list[str],
-    depth: int,
-    key: str,
+def _collect_path_records(
     value: Any,
-    parent_path: str = "",
-) -> None:
-    """Emit one node. For scalar leaves we emit a path-aware line."""
-    indent = "  " * depth
-    full_path = f"{parent_path}.{key}" if parent_path else key
+    path: str = "",
+) -> list[tuple[str, str]]:
+    """Walk canonical recursively and return (path, normalized_value) tuples
+    for every scalar leaf and every array index position.
+
+    Containers (dict / non-empty list) produce no record of their own but
+    their children carry the parent path. Empty containers are recorded
+    explicitly so adding/removing them is detectable."""
+    out: list[tuple[str, str]] = []
     if isinstance(value, dict):
-        buf.append(f"{indent}- **{key}**")
+        if not value:
+            # Empty container — record explicitly so deletion is detectable.
+            out.append((path or "<root>", "<empty-object>"))
+            return out
         for k in sorted(value.keys()):
-            _emit_value(buf, depth + 1, k, value[k], full_path)
-    elif isinstance(value, list):
-        buf.append(f"{indent}- **{key}** ({len(value)} items)")
+            child_path = f"{path}.{k}" if path else k
+            out.extend(_collect_path_records(value[k], child_path))
+        return out
+    if isinstance(value, list):
+        if not value:
+            out.append((path or "<root>", "<empty-list>"))
+            return out
         for i, item in enumerate(value):
-            child_path = f"{full_path}[{i}]"
-            if isinstance(item, dict):
-                buf.append(f"{indent}  - `[{i}]`")
-                for k in sorted(item.keys()):
-                    _emit_value(buf, depth + 2, k, item[k], child_path)
-            else:
-                _emit_path_aware_scalar(buf, indent + "  ", child_path, f"[{i}]", item)
-    elif isinstance(value, bool):
-        _emit_path_aware_scalar(buf, indent, full_path, key, str(value).lower())
-    elif isinstance(value, (int, float)):
-        _emit_path_aware_scalar(buf, indent, full_path, key, str(value))
+            child_path = f"{path}[{i}]"
+            out.extend(_collect_path_records(item, child_path))
+        return out
+    # Scalar leaf.
+    if isinstance(value, bool):
+        normalized = "true" if value else "false"
     elif value is None:
-        _emit_path_aware_scalar(buf, indent, full_path, key, "null")
+        normalized = "null"
     else:
-        text = str(value).replace("\n", " ")
-        _emit_path_aware_scalar(buf, indent, full_path, key, text)
+        normalized = str(value)
+    out.append((path, normalized))
+    return out
 
 
-def _emit_path_aware_scalar(
-    buf: list[str],
-    indent: str,
-    full_path: str,
-    leaf_key: str,
-    rendered_value: str,
-) -> None:
-    """Emit a scalar line that carries an explicit structural path token.
+def _parse_path_records_from_md(md: str) -> set[tuple[str, str]]:
+    """Parse a rendered MD back into the (path, value) record set.
 
-    The token is a HTML comment immediately before the value so that:
-    - the rendered MD is still human-readable
-    - the structural path is recoverable from the MD text alone
-    - two structural positions that share a value render to DIFFERENT
-      lines (the path token differs), so Counter-based and set-based
-      comparisons both distinguish them.
-    """
-    buf.append(
-        f"{indent}- <!-- path: {full_path} --> `{leaf_key}`: {rendered_value}"
-    )
+    The MD format is line-oriented; any line matching the path-record
+    regex contributes one record. Comment lines, prose, headings, and
+    whitespace are ignored."""
+    records: set[tuple[str, str]] = set()
+    for raw_line in md.splitlines():
+        line = raw_line.strip()
+        m = _PATH_RECORD_RE.match(line)
+        if m:
+            records.add((m.group("path"), m.group("value").strip()))
+    return records
 
 
 def render_markdown(canonical: dict) -> str:
-    """Render canonical JSON to deterministic, path-aware markdown."""
+    """Render canonical JSON to deterministic markdown.
+
+    Every tracked scalar is rendered as one ``P path:<full.path> = <value>``
+    record line. Containers are represented only through their children's
+    paths, except empty containers which get an explicit record so
+    adding/removing them is detectable.
+
+    The render is stable: sorting the records yields the same output for
+    the same canonical input. Cosmetic edits (whitespace, prose, comment
+    rewording) to the MD do not change the parsed record set.
+    """
+    # Round-trip through json to ensure deterministic key ordering and to
+    # reject non-JSON-serializable input early.
     serialized = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
-    import hashlib
-    sha = hashlib.sha256(serialized.encode("utf-8")).hexdigest().upper()
-    title = canonical.get("schema_version") if isinstance(canonical, dict) else None
-    title = title or "canonical-json"
+    canonical_norm = json.loads(serialized)
+    sha = _hash_canonical(canonical_norm)
 
-    buf: list[str] = []
-    buf.append(f"# {title}")
-    buf.append("")
-    buf.append("<!-- This file is rendered from canonical JSON. Do not edit directly. -->")
-    buf.append("<!-- To change content, edit the canonical JSON and re-render. -->")
-    buf.append("")
-    buf.append("## Fields")
-    buf.append("")
-    if isinstance(canonical, dict):
-        for k in sorted(canonical.keys()):
-            _emit_value(buf, 0, k, canonical[k])
-    else:
-        buf.append(f"- {serialized}")
-    buf.append("")
-    buf.append(f"<!-- CANONICAL_SHA256: {sha} -->")
-    buf.append("")
-    return "\n".join(buf)
+    records = _collect_path_records(canonical_norm)
+    # Sort by (path, value) for deterministic output.
+    records_sorted = sorted(records, key=lambda r: (r[0], r[1]))
 
+    title = (
+        canonical_norm.get("schema_version")
+        if isinstance(canonical_norm, dict)
+        else None
+    ) or "canonical-json"
 
-def _extract_tracked_scalars(
-    canonical: dict,
-    prefix: str = "",
-) -> dict[str, Any]:
-    """Map each tracked scalar's full structural path to its value.
-
-    Paths include array indices (segments[0].title) and nested-object
-    parents (chapter_a.title). This is the authority for structural
-    comparison."""
-    out: dict[str, Any] = {}
-    if not isinstance(canonical, dict):
-        return out
-    for k, v in canonical.items():
-        path = f"{prefix}.{k}" if prefix else k
-        if isinstance(v, dict):
-            out.update(_extract_tracked_scalars(v, path))
-        elif isinstance(v, list):
-            for i, item in enumerate(v):
-                child_path = f"{path}[{i}]"
-                if isinstance(item, dict):
-                    out.update(_extract_tracked_scalars(item, child_path))
-                else:
-                    out[child_path] = item
-        elif isinstance(v, (str, int, float)) and not isinstance(v, bool):
-            if v not in (None, ""):
-                out[path] = v
-    return out
+    lines: list[str] = []
+    lines.append(f"# {title}")
+    lines.append("")
+    lines.append("<!-- Rendered from canonical JSON. Do not edit. -->")
+    lines.append("<!-- To change content, edit the canonical JSON and re-render. -->")
+    lines.append("<!-- Each path-record line below is parsed as (path, value) and")
+    lines.append("     compared as a set against the canonical projection. -->")
+    lines.append("")
+    lines.append("## Records")
+    lines.append("")
+    for path, value in records_sorted:
+        lines.append(f"P path:{path} = {value}")
+    lines.append("")
+    lines.append(f"<!-- CANONICAL_SHA256: {sha} -->")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
     """Compare a hand-edited MD against the canonical JSON projection.
 
-    Strategy (RW-P04-03 round 3, path-aware):
-    - The canonical render emits a `<!-- path: <full.path> -->` token on
-      every tracked scalar line.
-    - For each tracked scalar, we require the human MD to contain a line
-      whose path token equals the canonical full path AND whose value
-      matches the canonical value.
-    - This catches: deleted duplicate-value fields, reparented fields,
-      moved array elements, and any value edit. Whitespace-only diffs
-      still pass as COSMETIC.
+    Strategy (RW-P04-03 round 4):
+    - Build the canonical record set from the canonical JSON.
+    - Parse the human MD's path-record lines into the same set shape.
+    - Compare the two sets EXACTLY (set equality on (path, value) tuples).
+      Any extra/missing/different record is a real change.
+
+    Cosmetic edits (whitespace, prose between records, comment rewording,
+    blank lines) do not produce or remove path-record lines, so genuine
+    cosmetic diffs still return COSMETIC_DIFF_ONLY.
     """
-    rendered = render_markdown(canonical)
-    if human_md.strip() == rendered.strip():
+    canonical_norm = json.loads(
+        json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+    )
+    canonical_records = set(_collect_path_records(canonical_norm))
+    human_records = _parse_path_records_from_md(human_md)
+
+    if canonical_records == human_records:
         return {"status": "IN_SYNC", "action": "NONE"}
 
-    tracked = _extract_tracked_scalars(canonical)
-    # Normalize human MD lines (collapse internal whitespace) so cosmetic
-    # whitespace does not cause false positives.
-    human_lines = [" ".join(line.split()) for line in human_md.splitlines()]
+    missing = canonical_records - human_records
+    extra = human_records - canonical_records
+    if not missing and not extra:
+        return {"status": "COSMETIC_DIFF_ONLY", "action": "RE_RENDER_RECOMMENDED"}
 
-    for full_path, value in tracked.items():
-        token = str(value)
-        # The canonical render for this scalar is a line that contains
-        # both the path token and the value. We require such a line in
-        # the human MD bound to THIS exact path.
-        expected_path_marker = f"<!-- path: {full_path} -->"
-        # Find a human line that has this exact path marker.
-        matching_human_lines = [
-            line for line in human_lines if expected_path_marker in line
-        ]
-        if not matching_human_lines:
-            raise HumanMdCanonicalJsonMismatch(full_path, value, "<path-missing>")
-        # Among the lines carrying this exact path, at least one must also
-        # carry the canonical value.
-        value_present = any(token in line for line in matching_human_lines)
-        if not value_present:
-            raise HumanMdCanonicalJsonMismatch(full_path, value, "<value-changed>")
-
-    # All tracked structural positions are intact with correct values.
-    return {"status": "COSMETIC_DIFF_ONLY", "action": "RE_RENDER_RECOMMENDED"}
+    # We have at least one real structural/value change. Classify for the
+    # error message.
+    missing_paths = sorted(p for p, _ in missing)
+    extra_paths = sorted(p for p, _ in extra)
+    detail = (
+        f"missing_from_human={missing_paths[:5]} "
+        f"extra_in_human={extra_paths[:5]} "
+        f"(canonical_records={len(canonical_records)} "
+        f"human_records={len(human_records)})"
+    )
+    raise HumanMdCanonicalJsonMismatch("STRUCTURAL_OR_VALUE_CHANGE", detail)
 # === END CANONICAL MODULE: canonical_render.py ===
 
 # === BEGIN CANONICAL MODULE: prompt_factory.py ===
@@ -1059,5 +1049,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = 'E0788C8EE476A95D67F785EC2982F17946A6D0DCAB13B1B940DE97F3DCB2C65C'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = '00513D589FBED9EABC0045B2A736242E3CB8BA392267A58AC70A78D05B5F4EBA'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py
