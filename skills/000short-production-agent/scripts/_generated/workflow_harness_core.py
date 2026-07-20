@@ -674,20 +674,23 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
     canonical_records = _collect_records(canonical_norm)
     human_records = _parse_records_from_md(human_md)
 
-    # Sort key: deterministic ordering independent of source order. Each
-    # segment is a [kind, name] list; convert to nested tuple so the key
-    # is hashable for the Counter step.
+    # Comparison key: canonical-form JSON of (segments, value). We compare
+    # the JSON-serialized form rather than the Python objects so that
+    # distinct JSON values that compare equal in Python (e.g. int 1 and
+    # float 1.0, or 0 and False) are correctly distinguished. The key is
+    # also hashable for the multiplicity counter below.
     def _key(rec: tuple[list[list[str]], Any]) -> tuple:
         segments, value = rec
         segments_tuple = tuple(tuple(s) for s in segments)
         return (segments_tuple, json.dumps(value, sort_keys=True, ensure_ascii=False))
 
-    canonical_sorted = sorted(canonical_records, key=_key)
-    human_sorted = sorted(human_records, key=_key)
+    canonical_keys = sorted(_key(r) for r in canonical_records)
+    human_keys = sorted(_key(r) for r in human_records)
 
-    if canonical_sorted == human_sorted:
-        # Record lists identical. Now decide IN_SYNC vs COSMETIC_DIFF_ONLY
-        # by comparing the surrounding MD text against a fresh render.
+    if canonical_keys == human_keys:
+        # Record lists identical at the JSON-fidelity level. Now decide
+        # IN_SYNC vs COSMETIC_DIFF_ONLY by comparing the surrounding MD
+        # text against a fresh render.
         fresh = render_markdown(canonical)
         if human_md.strip() == fresh.strip():
             return {"status": "IN_SYNC", "action": "NONE"}
@@ -695,12 +698,10 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
 
     # Record lists differ. Classify the difference for the error message.
     canonical_count: dict[tuple, int] = {}
-    for rec in canonical_sorted:
-        k = _key(rec)
+    for k in canonical_keys:
         canonical_count[k] = canonical_count.get(k, 0) + 1
     human_count: dict[tuple, int] = {}
-    for rec in human_sorted:
-        k = _key(rec)
+    for k in human_keys:
         human_count[k] = human_count.get(k, 0) + 1
 
     missing = [
@@ -721,8 +722,8 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
     detail = (
         f"missing_or_underrepresented={[ _preview(k) for k in missing[:5] ]} "
         f"extra_or_overrepresented={[ _preview(k) for k in extra[:5] ]} "
-        f"(canonical_records={len(canonical_sorted)} "
-        f"human_records={len(human_sorted)})"
+        f"(canonical_records={len(canonical_keys)} "
+        f"human_records={len(human_keys)})"
     )
     raise HumanMdCanonicalJsonMismatch("STRUCTURAL_OR_VALUE_CHANGE", detail)
 # === END CANONICAL MODULE: canonical_render.py ===
@@ -1107,5 +1108,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = '64105B4F13BCA3E9AFCC9EF503A9D2E3F56FEEB90A0FE82D58FE490A3291C0F0'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = 'F193D315C40CE377F36C44773332FF0DF7F2C42214E02B4E232DF0EFCEB53555'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py

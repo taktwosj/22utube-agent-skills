@@ -117,5 +117,47 @@ class SegmentKindDisambiguationTests(unittest.TestCase):
         self.assertEqual(result["status"], "IN_SYNC")
 
 
+class JsonFidelityComparisonTests(unittest.TestCase):
+    """JSON values that compare equal in Python but are distinct JSON scalars
+    must be distinguished by the codec.
+
+    These were found during pre-submission self-review (round 7) and would
+    have been the next Codex blocker if shipped as-is.
+    """
+
+    def setUp(self):
+        self.cr = _load_module("rw_p04_03_v7_fidelity", CANONICAL_RENDER_PY)
+
+    def _assert_mismatch(self, canonical: dict, tampered_canonical: dict) -> None:
+        rendered = self.cr.render_markdown(tampered_canonical)
+        with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch) as ctx:
+            self.cr.reconcile_human_md(canonical=canonical, human_md=rendered)
+        self.assertEqual(ctx.exception.kind, "STRUCTURAL_OR_VALUE_CHANGE")
+
+    def test_int_one_distinct_from_float_one(self):
+        self._assert_mismatch({"a": 1}, {"a": 1.0})
+
+    def test_zero_int_distinct_from_false(self):
+        self._assert_mismatch({"a": 0}, {"a": False})
+
+    def test_one_int_distinct_from_true(self):
+        self._assert_mismatch({"a": 1}, {"a": True})
+
+    def test_negative_zero_distinct_from_positive_zero(self):
+        self._assert_mismatch({"a": -0.0}, {"a": 0.0})
+
+    def test_self_round_trip_preserves_int(self):
+        canonical = {"a": 1}
+        rendered = self.cr.render_markdown(canonical)
+        result = self.cr.reconcile_human_md(canonical=canonical, human_md=rendered)
+        self.assertEqual(result["status"], "IN_SYNC")
+
+    def test_self_round_trip_preserves_float(self):
+        canonical = {"a": 1.5}
+        rendered = self.cr.render_markdown(canonical)
+        result = self.cr.reconcile_human_md(canonical=canonical, human_md=rendered)
+        self.assertEqual(result["status"], "IN_SYNC")
+
+
 if __name__ == "__main__":
     unittest.main()
