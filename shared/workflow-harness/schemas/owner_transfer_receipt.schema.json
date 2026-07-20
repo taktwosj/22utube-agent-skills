@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/shared/workflow-harness/schemas/owner_transfer_receipt.schema.json",
+  "title": "Owner Transfer Receipt v1",
+  "description": "Transfer of ownership from 00-tikitaka G20 to 000short-production-agent G30. Politics longform never transfers (cross_lane_handoff_forbidden=true).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "from_lane",
+    "from_skill",
+    "to_lane",
+    "to_skill",
+    "source_fingerprint",
+    "canonical_handoff_path",
+    "canonical_handoff_sha256",
+    "requested_target",
+    "transfer_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "owner-transfer-v1"},
+    "from_lane": {
+      "enum": ["general_shorts_design"]
+    },
+    "from_skill": {
+      "enum": ["00-tikitaka"]
+    },
+    "to_lane": {
+      "enum": ["general_shorts_production"]
+    },
+    "to_skill": {
+      "enum": ["000short-production-agent"]
+    },
+    "source_fingerprint": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "canonical_handoff_path": {
+      "type": "string",
+      "description": "Relative episode path, e.g. 20_script/design_handoff.json"
+    },
+    "canonical_handoff_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "design_blueprint_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "timeline_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "external_review_receipt_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "requested_target": {
+      "enum": ["editorial_locked", "capcut_ready", "upload_package", "rendered"]
+    },
+    "transfer_status": {"enum": ["PASS"]}
+  }
+}

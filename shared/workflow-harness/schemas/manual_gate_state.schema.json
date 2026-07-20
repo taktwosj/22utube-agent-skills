@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/shared/workflow-harness/schemas/manual_gate_state.schema.json",
+  "title": "Manual Gate State v1",
+  "description": "Current-state projection of gate_ledger.jsonl. Authority = projection only. On mismatch with the ledger, stop with STOP_STATE_LEDGER_MISMATCH and rebuild.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "lane",
+    "content_profile",
+    "production_mode",
+    "requested_target",
+    "current_gate",
+    "current_subgate",
+    "last_passed_gate",
+    "source_fingerprint",
+    "current_authoritative_artifact",
+    "current_authoritative_sha256",
+    "next_user_action",
+    "auto_external_call",
+    "release_allowed",
+    "projection_of_ledger_event_id",
+    "contract_mode"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "manual-gate-state-v1"},
+    "episode_id": {"type": "string"},
+    "lane": {
+      "enum": ["general_shorts_design", "general_shorts_production", "politics_longform"]
+    },
+    "content_profile": {
+      "enum": [
+        "general_shorts",
+        "politics_longform",
+        "politics_derived_short"
+      ]
+    },
+    "production_mode": {
+      "enum": ["source_led", "narrated", "not_applicable"]
+    },
+    "requested_target": {
+      "enum": [
+        "design_only",
+        "editorial_locked",
+        "capcut_ready",
+        "upload_package",
+        "rendered"
+      ]
+    },
+    "current_gate": {
+      "type": ["string", "null"],
+      "pattern": "^(G(00|10|20|30|40|50|60|60\\.USER|70|80|90))?$"
+    },
+    "current_subgate": {"type": ["string", "null"]},
+    "last_passed_gate": {
+      "type": ["string", "null"],
+      "pattern": "^(G(00|10|20|30|40|50|60|60\\.USER|70|80|90))?$"
+    },
+    "source_fingerprint": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "current_authoritative_artifact": {"type": ["string", "null"]},
+    "current_authoritative_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "next_user_action": {
+      "type": ["string", "null"],
+      "description": "One of RETURN_NARRATION, RETURN_EXTERNAL_REVIEW_R1, RETURN_EXTERNAL_REVIEW_R2, CONFIRM_MATERIAL_SCOPE, VISUAL_GATE, UPLOAD_APPROVAL or null."
+    },
+    "auto_external_call": {"type": "boolean", "const": false},
+    "release_allowed": {"type": "boolean"},
+    "projection_of_ledger_event_id": {
+      "type": "string",
+      "pattern": "^evt-[0-9]{6}$"
+    },
+    "contract_mode": {
+      "enum": ["V2_CANONICAL", "LEGACY_COMPAT"]
+    }
+  }
+}

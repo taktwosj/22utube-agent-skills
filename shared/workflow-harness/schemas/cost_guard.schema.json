@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/shared/workflow-harness/schemas/cost_guard.schema.json",
+  "title": "Episode Cost Guard v1",
+  "description": "Locked at G00. No configured budget means no paid automatic action. A paid action must write a COST_AUTHORIZED ledger event before execution. Unknown cost or budget overrun => STOP.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "currency",
+    "episode_budget_usd",
+    "max_model_input_tokens_per_gate",
+    "max_model_output_tokens_per_gate",
+    "max_paid_tts_chars",
+    "paid_tts_authorization",
+    "budget_overrun_action"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "cost-guard-v1"},
+    "episode_id": {"type": "string"},
+    "currency": {"enum": ["USD"]},
+    "episode_budget_usd": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "description": "null or 0 means no paid automatic action is authorized."
+    },
+    "max_model_input_tokens_per_gate": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "max_model_output_tokens_per_gate": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "max_paid_tts_chars": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "paid_tts_authorization": {
+      "type": "object",
+      "required": ["status", "scope"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": ["NOT_AUTHORIZED", "AUTHORIZED_FOR_EPISODE"]
+        },
+        "scope": {"enum": ["none", "tts_only"]},
+        "max_chars": {"type": ["integer", "null"], "minimum": 0},
+        "provider": {"type": ["string", "null"]}
+      }
+    },
+    "budget_overrun_action": {"enum": ["STOP"]}
+  }
+}

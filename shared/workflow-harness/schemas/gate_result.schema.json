@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/shared/workflow-harness/schemas/gate_result.schema.json",
+  "title": "Gate Result v1",
+  "description": "Deterministic validator output for a single gate. The runner consumes this; the validator only validates and must never request automatic LLM/paid/upload actions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "lane",
+    "gate",
+    "subgate",
+    "validated_inputs",
+    "evidence",
+    "errors",
+    "warnings",
+    "next_action",
+    "auto_advance_allowed",
+    "auto_advance_class"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "gate-result-v1"
+    },
+    "status": {
+      "enum": [
+        "NOT_STARTED",
+        "READY",
+        "RUNNING",
+        "WAIT_USER_INPUT",
+        "WAIT_EXTERNAL_RETURN",
+        "WAIT_PAID_ACTION_APPROVAL",
+        "WAIT_USER_EDITORIAL_CONFIRMATION",
+        "WAIT_USER_VISUAL_GATE",
+        "WAIT_UPLOAD_APPROVAL",
+        "PASS",
+        "FAIL",
+        "REWORK_REQUIRED",
+        "INVALIDATED",
+        "NOT_REQUIRED"
+      ]
+    },
+    "reason_code": {
+      "type": ["string", "null"],
+      "description": "Required when status=NOT_REQUIRED. Must be one of canonical reason codes such as NO_GENERATED_TTS."
+    },
+    "lane": {
+      "type": "string",
+      "description": "Lane identifier: general_shorts_design, general_shorts_production, politics_longform."
+    },
+    "gate": {
+      "type": "string",
+      "pattern": "^G(00|10|20|30|40|50|60|60\\.USER|70|80|90)$"
+    },
+    "subgate": {
+      "type": ["string", "null"]
+    },
+    "validated_inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "path": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"}
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {"type": "string"},
+          "path": {"type": "string"},
+          "sha256": {"type": ["string", "null"], "pattern": "^[A-Fa-f0-9]{64}$"},
+          "detail": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code"],
+        "additionalProperties": false,
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"},
+          "field": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code"],
+        "additionalProperties": false,
+        "properties": {
+          "code": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      }
+    },
+    "next_action": {
+      "type": "string",
+      "description": "Free-text next action label. Authority to perform it is governed by auto_advance_class and the runner policy."
+    },
+    "auto_advance_allowed": {
+      "type": "boolean"
+    },
+    "auto_advance_class": {
+      "enum": [
+        "NONE",
+        "DETERMINISTIC_ONLY",
+        "LLM_CALL_FORBIDDEN",
+        "PAID_ACTION_FORBIDDEN",
+        "UPLOAD_FORBIDDEN"
+      ],
+      "description": "Runner must reject any result whose class requests forbidden automatic work."
+    }
+  }
+}

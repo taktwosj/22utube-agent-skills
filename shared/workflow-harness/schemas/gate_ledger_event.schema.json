@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/shared/workflow-harness/schemas/gate_ledger_event.schema.json",
+  "title": "Gate Ledger Event v1",
+  "description": "One immutable line of gate_ledger.jsonl. The ledger is append-only authority; manual_gate_state.json is a projection rebuilt from it.",
+  "type": "object",
+  "required": [
+    "event_id",
+    "timestamp",
+    "episode_id",
+    "lane",
+    "gate",
+    "event_type",
+    "actor",
+    "previous_event_id"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt-[0-9]{6}$",
+      "description": "Monotonic per-episode event id. evt-000000 is the genesis WORKFLOW_CREATED event with previous_event_id=null."
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$"
+    },
+    "episode_id": {"type": "string"},
+    "lane": {
+      "enum": ["general_shorts_design", "general_shorts_production", "politics_longform"]
+    },
+    "gate": {
+      "type": ["string", "null"],
+      "pattern": "^(G(00|10|20|30|40|50|60|60\\.USER|70|80|90))?$"
+    },
+    "subgate": {"type": ["string", "null"]},
+    "event_type": {
+      "enum": [
+        "WORKFLOW_CREATED",
+        "GATE_STARTED",
+        "GATE_PASSED",
+        "GATE_FAILED",
+        "EXTERNAL_RETURN_RECORDED",
+        "CODEX_DECISIONS_LOCKED",
+        "ARTIFACT_LOCKED",
+        "LOCK_INVALIDATED",
+        "OWNER_TRANSFERRED",
+        "COST_AUTHORIZED",
+        "USER_VISUAL_PASS",
+        "FINAL_QC_PASS",
+        "UPLOAD_APPROVED",
+        "STATE_REBUILT"
+      ]
+    },
+    "actor": {
+      "enum": ["USER", "CODEX", "VALIDATOR", "RUNNER", "EXTERNAL_MODEL"]
+    },
+    "artifact_path": {"type": ["string", "null"]},
+    "artifact_sha256": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "previous_event_id": {
+      "type": ["string", "null"],
+      "description": "Must reference an existing prior event id, or be null only for the genesis event. A broken chain is rejected."
+    },
+    "reason": {"type": ["string", "null"]},
+    "affected_sha256": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+      "description": "Mandatory for LOCK_INVALIDATED events: the SHA values affected by the rewind."
+    }
+  }
+}

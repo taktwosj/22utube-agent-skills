@@ -1,0 +1,170 @@
+{
+  "schema_version": "shared-gates-separated-lanes-v2",
+  "work_id": "SHARED-GATE-SEPARATED-LANES-V2-20260720",
+  "normalization_ids": [
+    "NORM-001",
+    "NORM-002",
+    "NORM-003",
+    "NORM-004",
+    "NORM-005",
+    "NORM-006",
+    "NORM-007",
+    "NORM-008"
+  ],
+  "canonical_gate_model": {
+    "sequence": [
+      "G00",
+      "G10",
+      "G20",
+      "G30",
+      "G40",
+      "G50",
+      "G60",
+      "G60.USER",
+      "G70",
+      "G80",
+      "G90"
+    ],
+    "definitions": {
+      "G00": "INPUT_SOURCE_CONTENT_PROFILE_PRODUCTION_MODE_TARGET_BUDGET_LOCK",
+      "G10": "FIRST_DESIGN_BLUEPRINT_AND_EVIDENCE_MAP",
+      "G20": "MANUAL_EXTERNAL_RETURN_INTEGRATION_AND_DESIGN_EDITORIAL_LOCK",
+      "G30": "AUDIO_ASSET_SELECTION_OR_GENERATION_AND_MEASURED_DURATION_LOCK",
+      "G40": "MEASURED_AUDIO_BASED_CAPTION_CUE_AND_SRT_LOCK",
+      "G50": "FINAL_SECOND_LEVEL_TRACK_ASSEMBLY_PLAN",
+      "G60": "CLEAN_CAPCUT_ASSEMBLY_AND_STATIC_HARNESS",
+      "G60.USER": "USER_CAPCUT_VISUAL_GATE",
+      "G70": "UPLOAD_AND_THUMBNAIL_PACKAGE_WITH_RELEASE_FALSE",
+      "G80": "RENDER_EXPORT_AND_MEDIA_INTEGRITY_VERIFY",
+      "G90": "FINAL_RENDERED_VIDEO_QC_AND_RELEASE_GATE"
+    },
+    "allowed_states": [
+      "NOT_STARTED",
+      "READY",
+      "RUNNING",
+      "WAIT_USER_INPUT",
+      "WAIT_EXTERNAL_RETURN",
+      "WAIT_PAID_ACTION_APPROVAL",
+      "WAIT_USER_EDITORIAL_CONFIRMATION",
+      "WAIT_USER_VISUAL_GATE",
+      "WAIT_UPLOAD_APPROVAL",
+      "PASS",
+      "FAIL",
+      "REWORK_REQUIRED",
+      "INVALIDATED",
+      "NOT_REQUIRED"
+    ],
+    "forbidden_state_values": [
+      "NOT_REQUIRED_NO_GENERATED_TTS"
+    ],
+    "not_required_reason_codes": [
+      "NO_GENERATED_TTS"
+    ],
+    "pass_authority": "DETERMINISTIC_VALIDATOR_ONLY",
+    "external_recommendations": [
+      "PASS_RECOMMENDED",
+      "REVISE_REQUIRED",
+      "EVIDENCE_REQUIRED"
+    ],
+    "external_forbidden_claims": [
+      "FINAL",
+      "PASS",
+      "ADOPTED",
+      "SCRIPT_LOCK",
+      "DESIGN_LOCK",
+      "USER_APPROVED",
+      "PRODUCTION_PASS"
+    ]
+  },
+  "lane_contracts": {
+    "general_shorts_design": {
+      "owner": "00-tikitaka",
+      "gates": ["G00", "G10", "G20"],
+      "owns": [
+        "source analysis",
+        "urakkai",
+        "hook and story",
+        "timeline role design",
+        "manual external review adjudication",
+        "canonical design handoff"
+      ],
+      "forbidden": [
+        "TTS audio generation",
+        "final SRT",
+        "CapCut assembly",
+        "render",
+        "upload package"
+      ]
+    },
+    "general_shorts_production": {
+      "owner": "000short-production-agent",
+      "gates": ["G30", "G40", "G50", "G60", "G60.USER", "G70", "G80", "G90"],
+      "creative_source_of_truth": "20_script/design_handoff.json",
+      "forbidden": [
+        "rewrite hook",
+        "rewrite urakkai order",
+        "reinterpret caption role",
+        "change production profile without returning to G20"
+      ],
+      "capcut_root": "shrt white"
+    },
+    "politics_longform": {
+      "owner": "111-politics-longform",
+      "gates": [
+        "G00",
+        "G10",
+        "G20",
+        "G30",
+        "G40",
+        "G50",
+        "G60",
+        "G60.USER",
+        "G70",
+        "G80",
+        "G90"
+      ],
+      "main_capcut_root": "jungchilong_base_v3_intro15",
+      "derived_short_owner": "111-politics-longform",
+      "derived_short_capcut_root": "SHRTJUNGCHI",
+      "cross_lane_handoff_forbidden": true,
+      "content_profiles": ["politics_longform", "politics_derived_short"],
+      "production_modes": ["source_led", "narrated"]
+    }
+  },
+  "global_execution_policy": {
+    "auto_internal_advance": "DETERMINISTIC_ONLY",
+    "auto_external_llm_calls": 0,
+    "max_llm_calls_per_user_command": 1,
+    "max_auto_retries": 0,
+    "validator_may_execute_next_stage": false,
+    "auto_capcut_gui_operations": false,
+    "auto_upload": false,
+    "unknown_cost_action": "STOP",
+    "paid_action_requires": "COST_AUTHORIZED ledger event and exact episode limit",
+    "runtime_direct_edit": false,
+    "runtime_deploy_before_codex_review": false
+  },
+  "tdd_policy": {
+    "required": true,
+    "rule": "Each behavior change is covered by a failing test before code modification.",
+    "red_evidence_required": true,
+    "tests_after_only_forbidden": true,
+    "skill_router_changes_require_characterization_tests_first": true,
+    "existing_tests_may_be_updated_only_when": "A new supersession test for NORM-005 or NORM-006 fails first."
+  },
+  "shared_harness_layout": {
+    "canonical_source": "shared/workflow-harness/core",
+    "generated_targets": [
+      "skills/00-tikitaka/scripts/_generated/workflow_harness_core.py",
+      "skills/000short-production-agent/scripts/_generated/workflow_harness_core.py",
+      "skills/111-politics-longform/scripts/_generated/workflow_harness_core.py"
+    ],
+    "generated_files_byte_identical_across_skills": true,
+    "generated_files_may_be_manually_edited": false
+  },
+  "runtime_state": {
+    "ledger_authority": "append_only",
+    "manual_gate_state_authority": "projection_only",
+    "mismatch_action": "STOP_STATE_LEDGER_MISMATCH"
+  }
+}
