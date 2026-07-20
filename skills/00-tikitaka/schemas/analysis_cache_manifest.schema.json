@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://22utube/agent-skills/skills/00-tikitaka/schemas/analysis_cache_manifest.schema.json",
+  "title": "Analysis Cache Manifest v1",
+  "description": "Records the content-addressed cache key for source analysis so the same source is not re-analyzed. External (Gemini) analysis is optional supplementary input; if it conflicts with local primary evidence, external_analysis_status=EXTERNAL_ANALYSIS_MISMATCH and the external result is NOT adopted.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "cache_key_sha256",
+    "source_sha256",
+    "duration_us",
+    "resolution",
+    "selected_range",
+    "profile_version",
+    "tool_versions",
+    "sampling_policy",
+    "layers",
+    "external_analysis_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "analysis-cache-manifest-v1"},
+    "cache_key_sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$",
+      "description": "SHA of the canonical payload (source_sha256 + duration + resolution + selected_range + profile_version + tool_versions + sampling_policy)."
+    },
+    "source_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "duration_us": {"type": "integer", "minimum": 0},
+    "resolution": {"type": "string"},
+    "selected_range": {
+      "type": "object",
+      "required": ["start_us", "end_us"],
+      "additionalProperties": false,
+      "properties": {
+        "start_us": {"type": "integer", "minimum": 0},
+        "end_us": {"type": "integer", "minimum": 0}
+      }
+    },
+    "profile_version": {"type": "string"},
+    "tool_versions": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "sampling_policy": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "layers": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["sha256"],
+        "properties": {
+          "sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+          "count": {"type": ["integer", "null"], "minimum": 0}
+        }
+      }
+    },
+    "external_analysis": {
+      "type": ["object", "null"],
+      "description": "Optional supplementary external analysis. Local source is primary."
+    },
+    "external_analysis_status": {
+      "enum": [
+        "NOT_PROVIDED",
+        "ACCEPTED_SUPPLEMENTARY",
+        "EXTERNAL_ANALYSIS_MISMATCH"
+      ]
+    }
+  }
+}

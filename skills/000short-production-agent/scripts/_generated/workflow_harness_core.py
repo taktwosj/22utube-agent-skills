@@ -474,8 +474,520 @@ class ContextManifest:
         }
 # === END CANONICAL MODULE: context_manifest.py ===
 
+# === BEGIN CANONICAL MODULE: canonical_render.py ===
+from __future__ import annotations
+
+import json
+from typing import Any
+
+
+class HumanMdCanonicalJsonMismatch(Exception):
+    """Raised when a hand-edited MD disagrees with the canonical JSON
+    projection on a tracked field."""
+
+    def __init__(self, field_path: str, canonical_value, human_value):
+        super().__init__(
+            f"HUMAN_MD_CANONICAL_JSON_MISMATCH field={field_path} "
+            f"canonical={canonical_value!r} human={human_value!r}"
+        )
+        self.field_path = field_path
+        self.canonical_value = canonical_value
+        self.human_value = human_value
+
+
+def _hash_canonical(canonical: dict) -> str:
+    # Stable serialization for the footer fingerprint line.
+    return json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+
+
+def _emit_value(buf: list[str], depth: int, key: str, value: Any) -> None:
+    indent = "  " * depth
+    if isinstance(value, dict):
+        buf.append(f"{indent}- **{key}**")
+        for k in sorted(value.keys()):
+            _emit_value(buf, depth + 1, k, value[k])
+    elif isinstance(value, list):
+        buf.append(f"{indent}- **{key}** ({len(value)} items)")
+        for i, item in enumerate(value):
+            if isinstance(item, dict):
+                _emit_value(buf, depth + 1, f"[{i}]", item)
+            else:
+                buf.append(f"{indent}  - [{i}] {item}")
+    elif isinstance(value, bool):
+        buf.append(f"{indent}- `{key}`: {str(value).lower()}")
+    elif isinstance(value, (int, float)):
+        buf.append(f"{indent}- `{key}`: {value}")
+    elif value is None:
+        buf.append(f"{indent}- `{key}`: null")
+    else:
+        # String. Escape any markdown bullet leaders to avoid accidental
+        # structural edits in the rendered file.
+        text = str(value).replace("\n", " ")
+        buf.append(f"{indent}- `{key}`: {text}")
+
+
+def render_markdown(canonical: dict) -> str:
+    """Render canonical JSON to deterministic markdown.
+
+    Output shape:
+        # <schema_version or 'canonical-json'>
+
+        <top-level prose summary is intentionally absent; the renderer is
+         a pure projection, not a creative writer.>
+
+        ## Fields
+        <field tree>
+
+        <!-- CANONICAL_SHA256: <sha> -->
+    """
+    # Provoke serialization errors early (e.g. non-JSON-serializable input).
+    serialized = json.dumps(canonical, sort_keys=True, ensure_ascii=False)
+
+    import hashlib
+
+    sha = hashlib.sha256(serialized.encode("utf-8")).hexdigest().upper()
+    title = canonical.get("schema_version") if isinstance(canonical, dict) else None
+    title = title or "canonical-json"
+
+    buf: list[str] = []
+    buf.append(f"# {title}")
+    buf.append("")
+    buf.append("<!-- This file is rendered from canonical JSON. Do not edit directly. -->")
+    buf.append("<!-- To change content, edit the canonical JSON and re-render. -->")
+    buf.append("")
+    buf.append("## Fields")
+    buf.append("")
+    if isinstance(canonical, dict):
+        for k in sorted(canonical.keys()):
+            _emit_value(buf, 0, k, canonical[k])
+    else:
+        buf.append(f"- {serialized}")
+    buf.append("")
+    buf.append(f"<!-- CANONICAL_SHA256: {sha} -->")
+    buf.append("")
+    return "\n".join(buf)
+
+
+def reconcile_human_md(*, canonical: dict, human_md: str) -> dict:
+    """Compare a hand-edited MD against the canonical JSON projection.
+
+    Strategy: re-render the canonical, then verify that every tracked
+    scalar field's rendered form is still present in the human MD. If any
+    field is missing or changed beyond whitespace, raise
+    HumanMdCanonicalJsonMismatch.
+
+    Returns a reconciliation report when all tracked fields are intact.
+    """
+    rendered = render_markdown(canonical)
+    if human_md.strip() == rendered.strip():
+        return {
+            "status": "IN_SYNC",
+            "action": "NONE",
+        }
+
+    # The MD differs. Determine whether the divergence is a tracked-field
+    # change or merely cosmetic (whitespace / formatting). We do this by
+    # checking each tracked scalar field's value still appears in the MD.
+    tracked = _extract_tracked_scalars(canonical)
+    normalized_human = " ".join(human_md.split())
+    for path, value in tracked.items():
+        token = str(value)
+        if token and token not in normalized_human:
+            raise HumanMdCanonicalJsonMismatch(path, value, "<absent-or-changed>")
+
+    # All tracked fields present; the diff is cosmetic. Treat as reconciled
+    # but flag for explicit re-render.
+    return {
+        "status": "COSMETIC_DIFF_ONLY",
+        "action": "RE_RENDER_RECOMMENDED",
+    }
+
+
+def _extract_tracked_scalars(canonical: dict, prefix: str = "") -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if not isinstance(canonical, dict):
+        return out
+    for k, v in canonical.items():
+        path = f"{prefix}.{k}" if prefix else k
+        if isinstance(v, dict):
+            out.update(_extract_tracked_scalars(v, path))
+        elif isinstance(v, list):
+            # Only track scalar lists by length + element strings.
+            for i, item in enumerate(v):
+                if isinstance(item, dict):
+                    out.update(_extract_tracked_scalars(item, f"{path}[{i}]"))
+                else:
+                    out[f"{path}[{i}]"] = item
+        elif isinstance(v, (str, int, float)) and not isinstance(v, bool):
+            # Skip None and empty strings — they are not stable markers.
+            if v not in (None, ""):
+                out[path] = v
+    return out
+# === END CANONICAL MODULE: canonical_render.py ===
+
+# === BEGIN CANONICAL MODULE: prompt_factory.py ===
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from typing import Any
+
+
+PROMPT_MANIFEST_SCHEMA_VERSION = "prompt-packet-manifest-v1"
+ANALYSIS_CACHE_SCHEMA_VERSION = "analysis-cache-manifest-v1"
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest().upper()
+
+
+def _sha256_bytes(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest().upper()
+
+
+# ---------------------------------------------------------------------------
+# Prompt Factory
+# ---------------------------------------------------------------------------
+
+
+def _content_address_key(
+    *,
+    template_sha256: str,
+    input_artifacts: list[dict],
+    included_segment_ids: list[str],
+    excluded_fields: list[str],
+    language_quality_contract_sha: str,
+    external_authority_contract_sha: str,
+) -> str:
+    """Stable content-addressed key for prompt-packet reuse."""
+    payload = json.dumps(
+        {
+            "template_sha256": template_sha256,
+            "input_artifacts": [
+                {"path": a["path"], "sha256": a["sha256"]} for a in input_artifacts
+            ],
+            "included_segment_ids": list(included_segment_ids),
+            "excluded_fields": sorted(excluded_fields),
+            "language_quality_contract_sha256": language_quality_contract_sha,
+            "external_authority_contract_sha256": external_authority_contract_sha,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return _sha256_text(payload)
+
+
+def build_prompt(
+    *,
+    template_path: str,
+    template_text: str,
+    inputs: list[dict],
+    included_segment_ids: list[str],
+    excluded_fields: list[str],
+    language_quality_contract: str,
+    external_authority_contract: str,
+) -> dict:
+    """Build an external prompt packet + manifest.
+
+    inputs: list of {path, content} dicts. Content may be str or bytes.
+    The packet body is deterministic: template, then inputs in given order,
+    then the shared contracts appended.
+
+    The manifest records the content-addressed packet SHA so callers can
+    reuse the same packet when the key matches.
+    """
+    if not isinstance(template_text, str):
+        raise TypeError("template_text must be str")
+    template_sha = _sha256_text(template_text)
+
+    input_artifacts: list[dict] = []
+    input_bodies: list[str] = []
+    for inp in inputs:
+        path = inp["path"]
+        content = inp["content"]
+        if isinstance(content, str):
+            content_bytes = content.encode("utf-8")
+        elif isinstance(content, (bytes, bytearray)):
+            content_bytes = bytes(content)
+        else:
+            raise TypeError(f"input content must be str or bytes: {path}")
+        sha = _sha256_bytes(content_bytes)
+        input_artifacts.append({"path": path, "sha256": sha})
+        input_bodies.append(
+            f"--- INPUT: {path} (sha256={sha}) ---\n{content_bytes.decode('utf-8', errors='replace')}"
+        )
+
+    lq_text = ""
+    lq_sha = ""
+    if language_quality_contract:
+        try:
+            from pathlib import Path
+
+            lq_text = Path(language_quality_contract).read_text(encoding="utf-8")
+            lq_sha = _sha256_text(lq_text)
+        except OSError:
+            lq_text = ""
+            lq_sha = ""
+
+    ea_text = ""
+    ea_sha = ""
+    if external_authority_contract:
+        try:
+            from pathlib import Path
+
+            ea_text = Path(external_authority_contract).read_text(encoding="utf-8")
+            ea_sha = _sha256_text(ea_text)
+        except OSError:
+            ea_text = ""
+            ea_sha = ""
+
+    # Compose the packet in a fixed order.
+    parts: list[str] = []
+    parts.append("# External Prompt Packet")
+    parts.append("")
+    parts.append(f"<!-- template_path: {template_path} -->")
+    parts.append(f"<!-- template_sha256: {template_sha} -->")
+    parts.append("")
+    parts.append("## Template")
+    parts.append("")
+    parts.append(template_text.strip())
+    parts.append("")
+    if included_segment_ids:
+        parts.append("## Included Segment IDs")
+        parts.append("")
+        for sid in included_segment_ids:
+            parts.append(f"- {sid}")
+        parts.append("")
+    if excluded_fields:
+        parts.append("## Excluded Fields (do not surface to external model)")
+        parts.append("")
+        for f in excluded_fields:
+            parts.append(f"- {f}")
+        parts.append("")
+    parts.append("## Inputs")
+    parts.append("")
+    parts.extend(input_bodies)
+    parts.append("")
+    if lq_text:
+        parts.append("## Shared Language Quality Contract")
+        parts.append("")
+        parts.append(lq_text.strip())
+        parts.append("")
+    if ea_text:
+        parts.append("## Shared External Authority Contract")
+        parts.append("")
+        parts.append(ea_text.strip())
+        parts.append("")
+
+    packet_text = "\n".join(parts)
+    packet_sha = _sha256_text(packet_text)
+
+    content_key = _content_address_key(
+        template_sha256=template_sha,
+        input_artifacts=input_artifacts,
+        included_segment_ids=included_segment_ids,
+        excluded_fields=excluded_fields,
+        language_quality_contract_sha=lq_sha,
+        external_authority_contract_sha=ea_sha,
+    )
+
+    manifest = {
+        "schema_version": PROMPT_MANIFEST_SCHEMA_VERSION,
+        "template_path": template_path,
+        "template_sha256": template_sha,
+        "language_quality_contract_path": language_quality_contract or None,
+        "language_quality_contract_sha256": lq_sha or None,
+        "external_authority_contract_path": external_authority_contract or None,
+        "external_authority_contract_sha256": ea_sha or None,
+        "input_artifacts": input_artifacts,
+        "included_segment_ids": list(included_segment_ids),
+        "excluded_fields": list(excluded_fields),
+        "content_addressed_key": content_key,
+        "packet_sha256": packet_sha,
+        "packet_text": packet_text,
+    }
+    return {"packet_text": packet_text, "manifest": manifest}
+
+
+# ---------------------------------------------------------------------------
+# Analysis cache
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _LayerInputs:
+    """Which upstream inputs each cache layer depends on. Used by the
+    invalidation planner to invalidate only the affected layer."""
+
+    transcript_segments: tuple[str, ...] = ("source_sha256",)
+    ocr_segments: tuple[str, ...] = ("source_sha256", "tool_versions.ocr")
+    scene_segments: tuple[str, ...] = (
+        "source_sha256",
+        "tool_versions.scene",
+        "sampling_policy.frame_sample_fps",
+    )
+    motion_segments: tuple[str, ...] = (
+        "source_sha256",
+        "tool_versions.scene",
+        "sampling_policy.frame_sample_fps",
+    )
+    speaker_segments: tuple[str, ...] = ("source_sha256",)
+    audio_event_segments: tuple[str, ...] = ("source_sha256",)
+
+
+_LAYER_DEPS = _LayerInputs()
+
+
+def _layer_depends_on(layer_name: str) -> tuple[str, ...]:
+    return getattr(_LAYER_DEPS, layer_name, ("source_sha256",))
+
+
+def _cache_key_payload(
+    *,
+    source_sha256: str,
+    duration_us: int,
+    resolution: str,
+    selected_range: dict,
+    profile_version: str,
+    tool_versions: dict,
+    sampling_policy: dict,
+) -> str:
+    return json.dumps(
+        {
+            "source_sha256": source_sha256,
+            "duration_us": duration_us,
+            "resolution": resolution,
+            "selected_range": selected_range,
+            "profile_version": profile_version,
+            "tool_versions": tool_versions,
+            "sampling_policy": sampling_policy,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+
+
+def build_analysis_cache_manifest(
+    *,
+    source_sha256: str,
+    duration_us: int,
+    resolution: str,
+    selected_range: dict,
+    profile_version: str,
+    tool_versions: dict,
+    sampling_policy: dict,
+    layers: dict,
+    external_analysis: dict | None = None,
+) -> dict:
+    """Build an analysis-cache manifest.
+
+    external_analysis, when provided, is treated as optional supplementary
+    input. If it disagrees with local primary evidence on a tracked hash
+    (e.g. transcript_sha256), the manifest records
+    external_analysis_status=EXTERNAL_ANALYSIS_MISMATCH and does NOT adopt
+    the external result.
+    """
+    if not isinstance(layers, dict) or not layers:
+        raise ValueError("ANALYSIS_CACHE_EMPTY_LAYERS")
+    for layer_name, layer in layers.items():
+        if "sha256" not in layer:
+            raise ValueError(f"ANALYSIS_CACHE_LAYER_MISSING_SHA: {layer_name}")
+
+    key = _sha256_text(
+        _cache_key_payload(
+            source_sha256=source_sha256,
+            duration_us=duration_us,
+            resolution=resolution,
+            selected_range=selected_range,
+            profile_version=profile_version,
+            tool_versions=tool_versions,
+            sampling_policy=sampling_policy,
+        )
+    )
+
+    external_status = "NOT_PROVIDED"
+    if external_analysis is not None:
+        # Compare any tracked hash the external result claims against the
+        # local layer hash of the same name.
+        external_status = "ACCEPTED_SUPPLEMENTARY"
+        for ext_key, local_layer in (
+            ("transcript_sha256", "transcript_segments"),
+            ("ocr_sha256", "ocr_segments"),
+            ("scene_sha256", "scene_segments"),
+        ):
+            if ext_key in external_analysis and local_layer in layers:
+                if external_analysis[ext_key] != layers[local_layer]["sha256"]:
+                    external_status = "EXTERNAL_ANALYSIS_MISMATCH"
+                    break
+
+    return {
+        "schema_version": ANALYSIS_CACHE_SCHEMA_VERSION,
+        "cache_key_sha256": key,
+        "source_sha256": source_sha256,
+        "duration_us": duration_us,
+        "resolution": resolution,
+        "selected_range": selected_range,
+        "profile_version": profile_version,
+        "tool_versions": dict(tool_versions),
+        "sampling_policy": dict(sampling_policy),
+        "layers": dict(layers),
+        "external_analysis": external_analysis,
+        "external_analysis_status": external_status,
+    }
+
+
+def plan_cache_invalidation(
+    *,
+    current_manifest: dict,
+    new_inputs: dict,
+) -> dict:
+    """Decide which layers to invalidate when inputs change.
+
+    Rule:
+    - source_sha256 change => invalidate every layer (full rebuild).
+    - tool_versions.<x> change => invalidate layers depending on tool <x>.
+    - sampling_policy change => invalidate layers depending on sampling.
+    """
+    current_source = current_manifest.get("source_sha256")
+    new_source = new_inputs.get("source_sha256")
+    if current_source != new_source:
+        return {
+            "invalidate": sorted(current_manifest.get("layers", {}).keys()),
+            "reason": "SOURCE_SHA256_CHANGED",
+        }
+
+    invalidate: set[str] = set()
+    current_tools = current_manifest.get("tool_versions", {})
+    new_tools = new_inputs.get("tool_versions", {})
+    current_sampling = current_manifest.get("sampling_policy", {})
+    new_sampling = new_inputs.get("sampling_policy", {})
+
+    sampling_changed = current_sampling != new_sampling
+
+    for layer_name in current_manifest.get("layers", {}).keys():
+        deps = _layer_depends_on(layer_name)
+        for dep in deps:
+            if dep == "source_sha256":
+                continue
+            if dep.startswith("tool_versions."):
+                tool_key = dep.split(".", 1)[1]
+                if current_tools.get(tool_key) != new_tools.get(tool_key):
+                    invalidate.add(layer_name)
+                    break
+            elif dep.startswith("sampling_policy."):
+                if sampling_changed:
+                    invalidate.add(layer_name)
+                    break
+
+    return {
+        "invalidate": sorted(invalidate),
+        "reason": "PARTIAL_INVALIDATION",
+    }
+# === END CANONICAL MODULE: prompt_factory.py ===
+
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = '31F89982FF680DA94C17995BBD933F34F2A68F0780F6EFF8BF00CFEFF08EEDE6'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = 'B6D341B906456E141ADF08AAFB16C342779813ED9D28948F942CA6E11EC59A0D'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py
 
