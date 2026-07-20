@@ -1,0 +1,94 @@
+{
+  "schema_version": "shared-gates-separated-lanes-v2-baseline-v1",
+  "work_id": "SHARED-GATE-SEPARATED-LANES-V2-20260720",
+  "recorded_at_kst": "2026-07-20",
+  "repository": {
+    "authoritative_path": "C:/Users/arajun/agent-skills",
+    "remote": "https://github.com/taktwosj/22utube-agent-skills.git",
+    "baseline_branch": "agent/politics-chatgpt-two-pass-v3",
+    "baseline_commit": "b455c976a82c4ab9bb59cd672eec09e3cca36937",
+    "baseline_branch_clean": true,
+    "implementation_branch": "agent/shared-gates-separated-lanes-v2",
+    "implementation_worktree": "C:/Users/arajun/worktrees/agent-skills-shared-gates-v2",
+    "worktree_outside_runtime_save_sync_path": true
+  },
+  "baseline_head_status": {
+    "head": "b455c976a82c4ab9bb59cd672eec09e3cca36937",
+    "branch": "agent/politics-chatgpt-two-pass-v3",
+    "status_short": "",
+    "clean": true
+  },
+  "baseline_skill_source_tree_sha256_from_work_order": {
+    "00-tikitaka": "6C73E979E499A5D967FDEFC48DFCA96904F6E1DA9623077BE21773680453D03A",
+    "000short-production-agent": "2C155F285792CB9EC643FD686312CD8B3142E5D0F0A5D9609B0E6D67634FEDC7",
+    "111-politics-longform": "79FC0EBFD2A6DD1EE59A4AF6B06B87A8A0009EA5111672F413CEEDBE111AEF9F"
+  },
+  "baseline_skill_source_tree_sha256_independent_observer": {
+    "note": "Independent directory-hash recomputation using the verify.ps1 Get-DirectoryHash algorithm (relpath\\tsha256 per file, UTF-8 joined by newline, SHA256 upper hex). Used only as auxiliary evidence; canonical authority is verify.ps1 PASS output below.",
+    "00-tikitaka": "920378558DB46D9B7AF2CB4E0EF9FA2919BC075301B48E672D223A4C6A54A320",
+    "000short-production-agent": "7BF6D90EE86263409BFD32F4A28D4E60F0AF52B915147782A3D8C60DE58787BE",
+    "111-politics-longform": "04B93AC0DF6AAD9B6BF5AD99954AF1EF81543CD0106B754D4F44B0C9B03971B2"
+  },
+  "baseline_unittest": {
+    "command": "python -m unittest discover -s tests -p \"test_*.py\" -v",
+    "result": "PASS",
+    "tests_run": 276
+  },
+  "baseline_verify_repo": {
+    "command": "powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -Target repo",
+    "result": "PASS",
+    "warnings": 3,
+    "warning_class": "absolute-path examples in old plan documents"
+  },
+  "source_of_truth_integrity": {
+    "rank_2_design_doc": {
+      "path": "C:/Users/arajun/Desktop/2026-07-20_shared-gates_separated-lanes_codex-final-design_v2.md",
+      "sha256_observed": "3AC9013B866E0DAAE81DD32E2FD7AA39D63F4BBABB1CD90CAC95391BCAE84B03",
+      "sha256_work_order": "3AC9013B866E0DAAE81DD32E2FD7AA39D63F4BBABB1CD90CAC95391BCAE84B03",
+      "match": true
+    },
+    "rank_3_handoff_json": {
+      "path": "C:/Users/arajun/Desktop/three_skill_gate_architecture_handoff_v1.json",
+      "sha256_observed": "53718DE35B5BDE286E8D258BCCA9F9121A2316E37028BF1AF964E7181F81E29D",
+      "sha256_work_order": "53718DE35B5BDE286E8D258BCCA9F9121A2316E37028BF1AF964E7181F81E29D",
+      "match": true
+    },
+    "rank_4_agents_md": {
+      "path": "C:/Users/arajun/OneDrive/22utube/22factory_20260628/AGENTS.md",
+      "exists": true
+    },
+    "rank_5_work_order_md": {
+      "path": "C:/Users/arajun/OneDrive/22utube/22factory_20260628/docs/YOUTUBE_PRODUCTION_WORK_ORDER.md",
+      "exists": true
+    }
+  },
+  "existing_test_conflict_scan": {
+    "method": "grep across tests/ for V1-specific patterns V2 supersedes",
+    "patterns_searched": [
+      "browser.assisted",
+      "NOT_REQUIRED_NO_GENERATED_TTS",
+      "G30.*SRT",
+      "G40.*TTS",
+      "chatgpt.*project",
+      "ChatGPT.*Project",
+      "derived.*short.*tikitaka",
+      "tikitaka.*derived.*short",
+      "politics.*short.*00-tikitaka"
+    ],
+    "matches": [],
+    "result": "NO_HARD_CONFLICT_WITHOUT_NORMALIZATION_ID",
+    "notes": "NORM-005 (Tikitaka manual external transport) and NORM-006 (politics-derived-shorts stay in 111) are intentional behavior changes. Existing tests assert current behavior in neutral terms (e.g. optional Gemini, channel policy). TDD policy permits existing-test updates only when a new supersession test fails first."
+  },
+  "skill_md_line_counts_baseline": {
+    "00-tikitaka": "to_be_recorded_in_P10",
+    "000short-production-agent": "to_be_recorded_in_P10",
+    "111-politics-longform": "to_be_recorded_in_P10"
+  },
+  "policy_acknowledgement": {
+    "tdd_required": true,
+    "runtime_deploy_before_codex_review_forbidden": true,
+    "push_before_codex_review_forbidden": true,
+    "capcut_local_mutation_forbidden": true,
+    "external_model_calls_target": 0
+  }
+}
