@@ -359,13 +359,37 @@ fidelity 검증은 표시 cue 텍스트를 시간순으로 정규화해 연결�
 `source_text`를 시간순으로 정규화해 연결한 값을 비교한다. 경로 문자열 자체를
 화면 자막과 비교하지 않는다.
 
+### 사용자 최종 교정 SRT 잠금
+
+사용자가 직접 교정한 SRT 또는 구체적인 교정 목록을 주고 최종 반영을 지시하면
+`references/final-corrected-subtitle-lock.md`를 읽는다. 이때 사용자 교정본은
+이전 자동자막, 생성 자막, 초벌 SRT보다 우선하는 최종 권위다.
+
+교정본을 `30_audio_srt`에 복사하고 SHA-256으로 고정한 뒤 다음 검증기를 실행한다.
+
+```text
+py -3 scripts/validate_final_corrected_srt.py ^
+  --srt {final_corrected_srt} ^
+  --corrections-json {corrections_json} ^
+  --expected-cue-count {cue_count}
+```
+
+`USER_CORRECTED_SRT_LOCK=PASS` 전에는 CapCut 최종 자막을 만들지 않는다. 검증 후
+본문·줄바꿈·문장부호·cue 순서를 다시 자동 교정하거나 축약하지 않는다.
+`[콧방귀]`, `[웃음]`, `>>`처럼 사용자가 제거한 표기와 결론부
+`정리하겠습니다` 연속 반복이 되살아나면 FAIL이다. 두 줄 자막은 편집 가능한
+두 텍스트 트랙에 같은 시작·종료로 배치하고, cue별로 다시 합친 결과가 교정 SRT와
+정확히 같아야 `FINAL_CORRECTED_CAPTION_FIDELITY=PASS`다.
+사용자 교정본이 없는 에피소드에서는 이 전용 게이트들을 `NOT_APPLICABLE`로
+기록하고 기존 `SOURCE_CAPTION_FIDELITY` 계약을 적용한다.
+
 ### CapCut 화면 텍스트 입력 규칙
 
-- 화면 텍스트에는 가운데점 `·`을 사용하지 않는다. CapCut에서 글자가 잘릴 수
-  있으므로 의미를 유지한 채 공백 없는 쉼표 `,`로 바꾼다.
-- 예: `재건축·재개발이`는 쓰지 않고 `재건축,재개발이`로 입력한다.
-- 이 치환은 TTS, 하단 평론, 우측 상단 주제 등 최종 화면 텍스트에 적용한다.
-  원본 자막·출처 기록용 원문은 그대로 보존한다.
+- 사용자 교정본과 원본 발화 자막의 가운데점 `·`, 띄어쓰기, 고유명사와 문장부호는
+  그대로 보존한다. 예: `수사·기소`, `재건축·재개발`.
+- 가운데점 때문에 실제 렌더에서 글자가 잘리는 것이 확인된 경우에만 사용자에게
+  알리고 해당 비자막 템플릿 문구를 수정한다. 사용자 교정 자막을 쉼표로 되돌리지
+  않는다.
 
 ## ChatGPT 마스터 원고 2회 검수
 
@@ -647,6 +671,26 @@ ffprobe PASS, video/audio duration을 기록한다. 오디오는
 
 ## Stage 2 — jungchilong 조립
 
+### CLEAN_ASSEMBLY_HARNESS
+
+조립을 시작하기 전에 `50_capcut_project/assembly_contract.json`을 만든다.
+이 파일에는 Source of Truth, Acceptance Criteria, Validation, Evidence와 함께
+모든 입력의 `PRODUCTION`·`REFERENCE_ONLY`·`TEMPLATE_ONLY` 역할,
+`expected_timeline_order`, `forbidden_project_inputs`, `allowed_visible_text`,
+경로·SHA-256·시간·위치·화면 역할을 고정한다. 빌드·검증 직전과 컨텍스트 압축
+또는 작업 재개 직후에는 이 계약 파일을 다시 읽는다.
+
+`REFERENCE_ONLY` 콘텐츠 유입, 폐기된 프로젝트 계보 사용, 순서·해시 불일치,
+중복 material ID, 외부 online/request ID, 승인되지 않은 화면 텍스트는
+`STRUCTURAL_CONTAMINATION_REQUIRES_CLEAN_REBUILD`다. 오염된 파생 프로젝트를
+부분 패치하지 않고 실패한 대상 빌드만 폐기한 뒤 고정 근본
+`jungchilong_base_v3_intro15`에서 다시 조립한다.
+
+정적 JSON 하네스가 통과해도 CapCut을 자동으로 열거나 화면 PASS를 주장하지
+않는다. 사용자가 제공한 화면 또는 사용자가 알린 문제로 검증하기 전에는
+`WAIT_USER_VISUAL_GATE`다. 전체 계약과 hard-fail 목록은
+`references/clean-assembly-harness.md`를 따른다.
+
 1. archive와 manifest 경로를 해결한다.
 2. archive SHA-256, 고정 루트 `jungchilong/`, 승격된 매니페스트에 pin된 파일 수,
    manifest `PASS_ARCHIVE_INTEGRITY`, 복원본 전 파일의 archive 대비 SHA-256
@@ -658,7 +702,9 @@ ffprobe PASS, video/audio duration을 기록한다. 오디오는
 6. `timeline_design_approved.json`과 locked clips만 화면 타임라인에 적용한다.
    `design_blueprint_approved.json`, `commentary_decisions.json`, 승인 timeline의
    구간·최종 문장·결정·flow가 정확히 같아야 한다.
-7. 조립은 트랜잭션으로 처리한다. 레지스트리를 먼저 읽고 검증하며, 프로젝트
+7. 사용자 교정 SRT가 있으면 `USER_CORRECTED_SRT_LOCK=PASS`와 해당 SHA-256을
+   확인하고, 교정본만 편집 가능한 최종 자막으로 배치한다.
+8. 조립은 트랜잭션으로 처리한다. 레지스트리를 먼저 읽고 검증하며, 프로젝트
    rename 뒤 어떤 단계라도 실패하면 새 프로젝트 폴더를 제거하고
    `root_meta_info.json`을 원래 바이트로 원복한다.
 
@@ -724,11 +770,13 @@ every locked clip audio_duration_sec >= video_duration_sec - 0.25
   대괄호를 화면에 노출하지 않는다. 숫자 접두사를 붙이지 않는다. 사용자가
   명시한 경우에만 예외다. 현재 주제의 전체 문자열은 노란색, 나머지는 흰색이다.
 - 하단 평론 A/B는 글자 크기 `8.0`을 유지하고 각 줄은 공백 제외 최대 15자다.
-- 최종 화면 텍스트 전체에서 가운데점 `·`이 0개인지 확인하고, 필요한 병렬
-  표기는 `재건축,재개발이`처럼 공백 없는 쉼표로 입력한다.
+- 사용자 최종 교정 SRT의 가운데점 `·`과 문장부호가 CapCut 자막에서도 그대로
+  유지되는지 확인한다. 전역 치환으로 `수사·기소`를 `수사,기소`로 되돌리지 않는다.
 - 동일 cue의 활성 `source_caption` 세그먼트는 한 번만 존재한다. 박힌 자막과
   이중 노출이 없어야 하며, frame QA에는 원본자막과 하단 평론이 함께 보이는
   프레임을 포함한다.
+- 사용자 교정 SRT가 있으면 두 자막 트랙을 시간순으로 재구성해 cue 수·줄바꿈·
+  본문·시작·종료를 대조하고 `FINAL_CORRECTED_CAPTION_FIDELITY=PASS`를 요구한다.
 - `draft_content.json`, `template-2.tmp`, `Timelines/*` 미러는 논리적으로 동일하다.
 - source/date/topic/lower text 수는 설계 데이터에 따라 가변이며 고정 6·38을
   요구하지 않는다.
@@ -810,6 +858,12 @@ INTRO_MEDIA_SHA256=PASS
 INTRO_TEXT_COVERAGE=PASS
 OVERLAY_OFFSET=PASS
 SOURCE_CAPTION_FIDELITY=PASS
+USER_CORRECTED_SRT_LOCK=NOT_APPLICABLE|PASS
+USER_CORRECTED_SRT_SHA256=NOT_APPLICABLE|PASS
+USER_CORRECTION_RULES=NOT_APPLICABLE|PASS
+FINAL_CORRECTED_CAPTION_FIDELITY=NOT_APPLICABLE|PASS
+CLEAN_ASSEMBLY_HARNESS=PASS
+VISUAL_GATE=WAIT_USER_VISUAL_GATE|PASS
 AUDIO_LOUDNESS_NORMALIZATION=PASS
 NO_FOREIGN_ABSOLUTE_PATHS=PASS
 force_full_stdout=true
@@ -962,6 +1016,12 @@ INTRO_MEDIA_SHA256=PASS
 INTRO_TEXT_COVERAGE=PASS
 OVERLAY_OFFSET=PASS
 SOURCE_CAPTION_FIDELITY=PASS
+USER_CORRECTED_SRT_LOCK=NOT_APPLICABLE|PASS
+USER_CORRECTED_SRT_SHA256=NOT_APPLICABLE|PASS
+USER_CORRECTION_RULES=NOT_APPLICABLE|PASS
+FINAL_CORRECTED_CAPTION_FIDELITY=NOT_APPLICABLE|PASS
+CLEAN_ASSEMBLY_HARNESS=PASS
+VISUAL_GATE=WAIT_USER_VISUAL_GATE|PASS
 AUDIO_LOUDNESS_NORMALIZATION=PASS
 NO_FOREIGN_ABSOLUTE_PATHS=PASS
 CAPCUT_META_DURATION=PASS
