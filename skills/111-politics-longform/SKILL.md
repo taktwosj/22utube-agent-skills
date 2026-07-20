@@ -5,6 +5,29 @@ description: Use when the user says 111정치롱폼, 정치롱폼, 정치미드�
 
 # 111 Politics Longform
 
+## Shared Gate Router
+
+`workflow.yaml`이 정치롱폼과 파생 정치 쇼츠의 G00~G90 단일 라우터다.
+현재 gate의 계약만 `references/gates/`에서 읽고
+`scripts/validate_stage_gate.py`로 검증한다. 자동 진행 판단은
+`scripts/workflow_runner.py`가 결정론적 로컬 단계에 한해서만 수행한다.
+
+```text
+owner: 111-politics-longform
+gates: G00 G10 G20 G30 G40 G50 G60 G60.USER G70 G80 G90
+content_profile: politics_longform | politics_derived_short
+production_mode: source_led | narrated
+main_root: jungchilong_base_v3_intro15
+derived_short_root: SHRTJUNGCHI
+cross_lane_handoff: FORBIDDEN
+auto_external_llm_calls: 0
+max_auto_retries: 0
+```
+
+기존의 동일 대화 2회 검수, 사용자 교정 SRT, clean assembly hard-fail,
+근본 프로젝트 계약은 새 라우터에서도 그대로 적용된다. 정적 G60 PASS는
+`WAIT_USER_VISUAL_GATE`이며 사용자 시각 승인으로 간주하지 않는다.
+
 ## Core Rule
 
 정치 롱폼은 다음 두 단계로 운영한다.

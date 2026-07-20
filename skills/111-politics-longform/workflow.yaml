@@ -1,0 +1,147 @@
+schema_version: shared-gates-separated-lanes-v2
+lane: politics_longform
+owner_skill: 111-politics-longform
+work_id: SHARED-GATE-SEPARATED-LANES-V2-20260720
+
+ownership:
+  skill: 111-politics-longform
+  gates: [G00, G10, G20, G30, G40, G50, G60, G60.USER, G70, G80, G90]
+  owns_end_to_end: true
+  cross_lane_handoff_forbidden: true
+  derived_short_owner: 111-politics-longform
+
+authority:
+  review_transport_owner: USER
+  external_recommendation_owner: EXTERNAL_MODEL
+  adoption_decision_owner: CODEX
+  editorial_lock_owner: CODEX_WITHIN_LOCKED_USER_BRIEF
+  gate_evaluation_owner: DETERMINISTIC_VALIDATOR
+  workflow_execution_owner: WORKFLOW_RUNNER
+  material_scope_change_owner: USER
+  visual_gate_owner: USER
+  release_owner: USER
+  auto_external_call: false
+
+execution_policy:
+  auto_internal_advance: deterministic_only
+  auto_external_llm_calls: 0
+  max_llm_calls_per_user_command: 1
+  max_auto_retries: 0
+  validator_may_execute_next_stage: false
+  auto_capcut_gui_operations: false
+  auto_upload: false
+  stop_before_unapproved_paid_action: true
+  stop_on_unknown_cost: true
+  stop_on_material_scope_change: true
+
+runtime:
+  state_path: 90_workflow/manual_gate_state.json
+  ledger_path: 90_workflow/gate_ledger.jsonl
+  gate_results_path: 90_workflow/gate_results
+  context_manifests_path: 90_workflow/context_manifests
+  receipts_path: 90_workflow/receipts
+
+content_profiles:
+  allowed: [politics_longform, politics_derived_short]
+  lock_gate: G00
+production_modes:
+  allowed: [source_led, narrated]
+  lock_gate: G00
+  change_requires: WAIT_USER_EDITORIAL_CONFIRMATION
+
+capcut_roots:
+  politics_longform: jungchilong_base_v3_intro15
+  politics_derived_short: SHRTJUNGCHI
+  derived_short_capcut_root: SHRTJUNGCHI
+
+gates:
+  G00:
+    name: SOURCE_PROFILE_MODE_TARGET_LOCK
+    instruction: references/gates/G00_INTAKE.md
+    validator: scripts/validate_stage_gate.py
+    manual_events: []
+  G10:
+    name: POLITICS_DESIGN_BLUEPRINT
+    instruction: references/gates/G10_DESIGN.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G00]
+    manual_events: []
+  G20:
+    name: MANUAL_DIALOGUE_TWO_PASS_AND_EDITORIAL_LOCK
+    instruction: references/gates/G20_MANUAL_DIALOGUE_TWO_PASS.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G10]
+    manual_events:
+      - RETURN_NARRATION
+      - RETURN_EXTERNAL_REVIEW_R1
+      - RETURN_EXTERNAL_REVIEW_R2
+    wait_states:
+      - WAIT_EXTERNAL_RETURN
+      - WAIT_USER_EDITORIAL_CONFIRMATION
+      - PENDING_EVIDENCE
+  G30:
+    name: SOURCE_OR_NARRATION_AUDIO_MEASUREMENT
+    instruction: references/gates/G30_AUDIO.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G20]
+    source_led_generated_tts:
+      status: NOT_REQUIRED
+      reason_code: NO_GENERATED_TTS
+    manual_events: []
+  G40:
+    name: FINAL_CAPTION_AND_SRT_LOCK
+    instruction: references/gates/G40_CAPTION_SRT.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G30]
+    user_corrected_srt_is_authority: true
+    manual_events: []
+  G50:
+    name: POLITICS_TRACK_PLAN
+    instruction: references/gates/G50_TRACK_PLAN.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G40]
+    manual_events: []
+  G60:
+    name: CLEAN_POLITICS_ASSEMBLY_AND_STATIC_HARNESS
+    instruction: references/gates/G60_CLEAN_ASSEMBLY.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G50]
+    static_pass_transitions_to: WAIT_USER_VISUAL_GATE
+    manual_events: []
+  G60.USER:
+    name: USER_VISUAL_GATE
+    instruction: references/gates/G60_CLEAN_ASSEMBLY.md
+    validator: scripts/validate_stage_gate.py
+    wait_state: WAIT_USER_VISUAL_GATE
+    manual_events: [USER_VISUAL_PASS]
+  G70:
+    name: UPLOAD_PACKAGE_RELEASE_FALSE
+    instruction: references/gates/G70_UPLOAD_PACKAGE.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G60.USER]
+    release_allowed: false
+    actual_upload: WAIT_UPLOAD_APPROVAL
+    manual_events: []
+  G80:
+    name: RENDER_AND_MEDIA_INTEGRITY
+    instruction: references/gates/G80_RENDER.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G70]
+    manual_events: []
+  G90:
+    name: FINAL_QC_AND_RELEASE_GATE
+    instruction: references/gates/G90_FINAL_QC.md
+    validator: scripts/validate_stage_gate.py
+    requires: [G80]
+    release_requires: [FINAL_QC_PASS, UPLOAD_APPROVED]
+    actual_upload: WAIT_UPLOAD_APPROVAL
+    manual_events: [UPLOAD_APPROVED]
+
+external_review_policy:
+  transport: USER_MANUAL_ONLY
+  browser_automation: FORBIDDEN
+  api_calls: FORBIDDEN
+  automatic_retry: FORBIDDEN
+  external_result_authority: RECOMMENDATION_ONLY
+  same_conversation_round2_required: true
+

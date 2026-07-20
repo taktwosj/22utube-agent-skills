@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics-track-plan.schema.json",
+  "title": "Politics track plan",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "content_profile", "production_mode", "status", "capcut_root", "caption_lock_sha256", "timeline_order", "tracks"],
+  "properties": {
+    "schema_version": {"const": "politics-track-plan-v1"},
+    "content_profile": {"enum": ["politics_longform", "politics_derived_short"]},
+    "production_mode": {"enum": ["source_led", "narrated"]},
+    "status": {"const": "PASS"},
+    "capcut_root": {"enum": ["jungchilong_base_v3_intro15", "SHRTJUNGCHI"]},
+    "caption_lock_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "timeline_order": {"type": "array", "minItems": 1},
+    "tracks": {"type": "array", "minItems": 1}
+  },
+  "additionalProperties": true
+}

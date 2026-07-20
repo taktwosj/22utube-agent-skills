@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics-caption-lock.schema.json",
+  "title": "Politics caption lock",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "production_mode", "status", "srt_path", "srt_sha256", "cue_count", "audio_lock_sha256", "user_corrected_srt_applicable", "final_corrected_caption_fidelity"],
+  "properties": {
+    "schema_version": {"const": "politics-caption-lock-v1"},
+    "status": {"const": "PASS"},
+    "srt_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "cue_count": {"type": "integer", "minimum": 1},
+    "audio_lock_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "user_corrected_srt_applicable": {"type": "boolean"},
+    "user_corrected_srt_sha256": {"type": ["string", "null"], "pattern": "^[A-Fa-f0-9]{64}$"},
+    "final_corrected_caption_fidelity": {"enum": ["PASS", "NOT_APPLICABLE"]}
+  },
+  "additionalProperties": true
+}

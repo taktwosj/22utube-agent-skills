@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics-editorial-lock.schema.json",
+  "title": "Politics editorial lock",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "content_profile", "production_mode", "editorial_status", "round1_conversation_id", "round2_conversation_id", "round1_return_sha256", "round2_return_sha256", "script_sha256"],
+  "properties": {
+    "schema_version": {"const": "politics-editorial-lock-v1"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "content_profile": {"enum": ["politics_longform", "politics_derived_short"]},
+    "production_mode": {"enum": ["source_led", "narrated"]},
+    "editorial_status": {"const": "LOCKED"},
+    "round1_conversation_id": {"type": "string", "minLength": 1},
+    "round2_conversation_id": {"type": "string", "minLength": 1},
+    "round1_return_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "round2_return_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "script_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"}
+  },
+  "additionalProperties": true
+}

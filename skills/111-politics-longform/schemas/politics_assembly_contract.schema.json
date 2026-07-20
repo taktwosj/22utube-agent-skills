@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics-assembly-contract.schema.json",
+  "title": "Politics clean assembly contract",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "content_profile", "capcut_root", "static_harness_status", "reference_only_material_count", "reference_only_timeline_count", "unapproved_visible_text_count", "structural_contamination"],
+  "properties": {
+    "schema_version": {"const": "politics-assembly-contract-v1"},
+    "content_profile": {"enum": ["politics_longform", "politics_derived_short"]},
+    "capcut_root": {"enum": ["jungchilong_base_v3_intro15", "SHRTJUNGCHI"]},
+    "static_harness_status": {"const": "PASS"},
+    "reference_only_material_count": {"const": 0},
+    "reference_only_timeline_count": {"const": 0},
+    "unapproved_visible_text_count": {"const": 0},
+    "structural_contamination": {"const": false}
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics-audio-lock.schema.json",
+  "title": "Politics audio lock",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "production_mode", "status", "audio_source", "audio_path", "audio_sha256", "measured_duration_us", "measurement_evidence_path", "measurement_evidence_sha256", "ffprobe_verified"],
+  "properties": {
+    "schema_version": {"const": "politics-audio-lock-v1"},
+    "production_mode": {"enum": ["source_led", "narrated"]},
+    "status": {"enum": ["PASS", "NOT_REQUIRED"]},
+    "reason_code": {"enum": ["NO_GENERATED_TTS", null]},
+    "audio_source": {"enum": ["SOURCE_CLIP", "NARRATION"]},
+    "audio_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "measured_duration_us": {"type": "integer", "minimum": 1},
+    "measurement_evidence_sha256": {"type": "string", "pattern": "^[A-Fa-f0-9]{64}$"},
+    "ffprobe_verified": {"const": true}
+  },
+  "additionalProperties": true
+}
