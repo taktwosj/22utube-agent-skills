@@ -82,6 +82,7 @@ def rebuild_state(events: Iterable[dict]) -> dict:
         "contract_mode": genesis.get("contract_mode", "V2_CANONICAL"),
     }
 
+    passed_gate_indices: set[int] = set()
     last_passed_idx = -1
     final_qc_passed = False
     for ev in events:
@@ -103,6 +104,8 @@ def rebuild_state(events: Iterable[dict]) -> dict:
             state["current_subgate"] = ev.get("subgate")
         elif et == "GATE_PASSED" and gate is not None:
             idx = _gate_index(gate)
+            if idx >= 0:
+                passed_gate_indices.add(idx)
             if idx > last_passed_idx:
                 last_passed_idx = idx
                 state["last_passed_gate"] = gate
@@ -117,6 +120,26 @@ def rebuild_state(events: Iterable[dict]) -> dict:
         elif et == "GATE_FAILED" and gate is not None:
             state["current_gate"] = gate
             state["current_subgate"] = ev.get("subgate")
+        elif et == "LOCK_INVALIDATED" and gate is not None:
+            rewind_idx = _gate_index(gate)
+            if rewind_idx < 0:
+                raise ValueError(f"STATE_REBUILD_INVALID_REWIND_GATE gate={gate}")
+            passed_gate_indices = {
+                idx for idx in passed_gate_indices if idx < rewind_idx
+            }
+            last_passed_idx = (
+                max(passed_gate_indices) if passed_gate_indices else -1
+            )
+            state["last_passed_gate"] = (
+                GATE_ORDER[last_passed_idx] if last_passed_idx >= 0 else None
+            )
+            state["current_gate"] = gate
+            state["current_subgate"] = ev.get("subgate")
+            state["current_authoritative_artifact"] = None
+            state["current_authoritative_sha256"] = None
+            state["next_user_action"] = None
+            state["release_allowed"] = False
+            final_qc_passed = False
         elif et == "OWNER_TRANSFERRED":
             state["next_user_action"] = None
         elif et == "USER_VISUAL_PASS":

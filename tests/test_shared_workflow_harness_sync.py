@@ -97,6 +97,15 @@ class VerifyScriptTests(unittest.TestCase):
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["generated_core_hashes_match"], True)
 
+    def test_sync_and_verify_cover_the_same_canonical_modules(self):
+        sync = _load_module("p09_sync_module_order", SYNC_PY)
+        verify = _load_module("p09_verify_module_order", VERIFY_PY)
+        self.assertEqual(
+            sync.CORE_MODULE_ORDER,
+            verify.CORE_MODULE_ORDER,
+            "verify must hash every module included in the generated bundle",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

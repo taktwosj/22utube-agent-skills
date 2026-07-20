@@ -31,6 +31,7 @@ SHARED_VERSION_FILE = REPO_ROOT / "shared" / "workflow-harness" / "VERSION"
 CORE_MODULE_ORDER = [
     "ledger.py",
     "state_projection.py",
+    "legacy_compat.py",
     "gate_validation.py",
     "cost_guard.py",
     "context_manifest.py",

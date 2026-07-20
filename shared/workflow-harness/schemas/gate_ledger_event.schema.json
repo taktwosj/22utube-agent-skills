@@ -84,6 +84,19 @@
         "required": ["action_id", "max_cost_usd"],
         "properties": {"actor": {"const": "USER"}}
       }
+    },
+    {
+      "if": {
+        "properties": {"event_type": {"const": "LOCK_INVALIDATED"}},
+        "required": ["event_type"]
+      },
+      "then": {
+        "required": ["reason", "affected_sha256"],
+        "properties": {
+          "reason": {"type": "string", "minLength": 1},
+          "affected_sha256": {"minItems": 1}
+        }
+      }
     }
   ]
 }
