@@ -524,30 +524,31 @@ def _hash_canonical(canonical: Any) -> str:
 
 def _collect_records(
     value: Any,
-    segments: list[str] | None = None,
-) -> list[tuple[list[str], Any]]:
+    segments: list[list[str]] | None = None,
+) -> list[tuple[list[list[str]], Any]]:
     """Walk canonical recursively and return [(segments, value)] for every
     scalar leaf plus explicit markers for empty containers.
+
+    Each segment is a ``[kind, name]`` pair where ``kind`` is ``"key"``
+    (object property) or ``"idx"`` (array index, name is ``"[i]"``). This
+    disambiguates ``foo[0].bar`` (idx "[0]") from an object property
+    literally named ``"[0]"`` (key "[0]") — the two never collide because
+    the kind tag differs (RW-P04-03 round 6).
 
     Containers (dict / non-empty list) produce no record of their own but
     their children carry the parent segments. Empty containers emit a
     synthetic record so adding/removing them is detectable.
-
-    ``segments`` is a list of string segment names. Dict keys are appended
-    verbatim (a key may contain dots; that's fine because we never split
-    on dots — we transport the whole array). List indices are appended as
-    ``[i]`` strings to mirror the source structure.
     """
     if segments is None:
         segments = []
-    out: list[tuple[list[str], Any]] = []
+    out: list[tuple[list[list[str]], Any]] = []
     if isinstance(value, dict):
         if not value:
             out.append((list(segments), {"__empty__": "object"}))
             return out
         for k in sorted(value.keys()):
-            child = list(segments)
-            child.append(str(k))
+            child = [list(s) for s in segments]
+            child.append(["key", str(k)])
             out.extend(_collect_records(value[k], child))
         return out
     if isinstance(value, list):
@@ -555,8 +556,8 @@ def _collect_records(
             out.append((list(segments), {"__empty__": "list"}))
             return out
         for i, item in enumerate(value):
-            child = list(segments)
-            child.append(f"[{i}]")
+            child = [list(s) for s in segments]
+            child.append(["idx", f"[{i}]"])
             out.extend(_collect_records(item, child))
         return out
     # Scalar leaf — keep the original Python value so json.dumps preserves
@@ -570,9 +571,14 @@ def _serialize_record(segments: list[str], value: Any) -> str:
     return RECORD_PREFIX + json.dumps([segments, value], ensure_ascii=False)
 
 
-def _parse_record_line(line: str) -> tuple[list[str], Any] | None:
+def _parse_record_line(line: str) -> tuple[list[list[str]], Any] | None:
     """Parse a single record line. Returns (segments, value) or None if
-    the line is not a record line."""
+    the line is not a record line.
+
+    Each segment must be a ``[kind, name]`` pair where ``kind`` is
+    ``"key"`` or ``"idx"``. Round-6 requirement: kind tag is mandatory so
+    an array index never collides with an object key of the same text.
+    """
     s = line.strip()
     if not s.startswith(RECORD_PREFIX):
         return None
@@ -584,16 +590,22 @@ def _parse_record_line(line: str) -> tuple[list[str], Any] | None:
     if not isinstance(rec, list) or len(rec) != 2:
         return None
     segments, value = rec
-    if not isinstance(segments, list) or not all(
-        isinstance(x, str) for x in segments
-    ):
+    if not isinstance(segments, list):
         return None
+    for seg in segments:
+        if (
+            not isinstance(seg, list)
+            or len(seg) != 2
+            or seg[0] not in ("key", "idx")
+            or not isinstance(seg[1], str)
+        ):
+            return None
     return segments, value
 
 
-def _parse_records_from_md(md: str) -> list[tuple[list[str], Any]]:
+def _parse_records_from_md(md: str) -> list[tuple[list[list[str]], Any]]:
     """Parse every record line in the MD, preserving multiplicity and order."""
-    out: list[tuple[list[str], Any]] = []
+    out: list[tuple[list[list[str]], Any]] = []
     for raw in md.splitlines():
         rec = _parse_record_line(raw)
         if rec is not None:
@@ -662,11 +674,13 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
     canonical_records = _collect_records(canonical_norm)
     human_records = _parse_records_from_md(human_md)
 
-    # Sort key: deterministic ordering independent of source order. Segments
-    # are converted to tuples so the key is hashable for the Counter step.
-    def _key(rec: tuple[list[str], Any]) -> tuple:
+    # Sort key: deterministic ordering independent of source order. Each
+    # segment is a [kind, name] list; convert to nested tuple so the key
+    # is hashable for the Counter step.
+    def _key(rec: tuple[list[list[str]], Any]) -> tuple:
         segments, value = rec
-        return (tuple(segments), json.dumps(value, sort_keys=True, ensure_ascii=False))
+        segments_tuple = tuple(tuple(s) for s in segments)
+        return (segments_tuple, json.dumps(value, sort_keys=True, ensure_ascii=False))
 
     canonical_sorted = sorted(canonical_records, key=_key)
     human_sorted = sorted(human_records, key=_key)
@@ -698,7 +712,10 @@ def reconcile_human_md(*, canonical: Any, human_md: str) -> dict:
     # Render a short readable preview of the first few diffs.
     def _preview(key_tuple: tuple) -> str:
         segments_tuple, value_json = key_tuple
-        path = "/".join(segments_tuple) if segments_tuple else "<root>"
+        # segments_tuple is a tuple of (kind, name) tuples.
+        path = "/".join(
+            f"{kind}:{name}" for kind, name in segments_tuple
+        ) if segments_tuple else "<root>"
         return f"{path}={value_json}"
 
     detail = (
@@ -1090,5 +1107,5 @@ def plan_cache_invalidation(
 
 
 # WORKFLOW_HARNESS_SOURCE_VERSION = 'shared-gates-separated-lanes-v2'
-# WORKFLOW_HARNESS_SOURCE_SHA256 = '0D8D362A4AF320D746018094BAF860C697FB212703BCC2388883CC508F6A353E'
+# WORKFLOW_HARNESS_SOURCE_SHA256 = '64105B4F13BCA3E9AFCC9EF503A9D2E3F56FEEB90A0FE82D58FE490A3291C0F0'
 # DO NOT EDIT — regenerate via scripts/sync_shared_workflow_harness.py

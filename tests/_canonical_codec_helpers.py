@@ -1,11 +1,12 @@
 """Helpers for the canonical codec regression tests.
 
 These helpers manipulate record lines in rendered MD. They are written
-against the round-5 record format which encodes each record as a single
-JSON array of two elements: [path_segments_json, value_json]. The exact
-serialization is owned by canonical_render; these helpers parse records
-back into (segments, value) pairs so the tests can construct precise
-mutations (bool<->string, number<->string, duplicate, value rewrite).
+against the round-6 record format which encodes each record as a single
+JSON array of two elements: ``[path_segments, value]`` where each segment
+in ``path_segments`` is itself a ``[kind, name]`` pair (``kind`` is
+``"key"`` or ``"idx"``). The exact serialization is owned by
+canonical_render; these helpers parse records back into structured forms
+so the tests can construct precise mutations.
 """
 
 from __future__ import annotations
@@ -35,21 +36,47 @@ def _iter_record_lines(md: str):
             yield i, None
 
 
-def _find_record_line_for_path(md_lines: list[str], leaf_or_path: str):
-    """Find the first record line whose path encodes the given path tail
-    OR whose path equals the given dotted path."""
+def _segments_to_path_strings(segments: list[list[str]]) -> list[str]:
+    """Convert [[kind, name], ...] to dotted-path-friendly tokens.
+
+    For matching convenience, key segments contribute their name and idx
+    segments contribute their bracketed name (e.g. ``[0]``)."""
+    out: list[str] = []
+    for seg in segments:
+        if not isinstance(seg, list) or len(seg) != 2:
+            return []
+        kind, name = seg
+        if kind == "key":
+            out.append(name)
+        elif kind == "idx":
+            out.append(name)  # already in "[i]" form
+        else:
+            out.append(name)
+    return out
+
+
+def _find_record_line_for_path(md_lines: list[str], path: str):
+    """Find the first record line whose segments match the given path.
+
+    ``path`` may be a leaf name (e.g. ``"title"``) or a dotted path
+    (e.g. ``"chapter_a.title"``). For dotted paths we compare the dotted
+    reconstruction of key/idx names. For leaf names we match on the last
+    segment's name.
+    """
     for i, rec in _iter_record_lines("\n".join(md_lines)):
         if rec is None:
             continue
         segments, _value = rec
-        # segments is a list. Match if the leaf equals the given string OR
-        # the dotted-path reconstruction equals it.
-        if isinstance(segments, list):
-            if segments and segments[-1] == leaf_or_path:
-                return i, rec
-            dotted = ".".join(str(s) for s in segments)
-            if dotted == leaf_or_path:
-                return i, rec
+        if not isinstance(segments, list):
+            continue
+        names = _segments_to_path_strings(segments)
+        if not names:
+            continue
+        if names[-1] == path:
+            return i, rec
+        dotted = ".".join(names)
+        if dotted == path:
+            return i, rec
     return None, None
 
 
