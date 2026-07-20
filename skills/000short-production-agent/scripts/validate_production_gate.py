@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -17,11 +20,218 @@ class GateFail(Exception):
 
 
 ALLOWED_SCRIPT_LOCK_SOURCES = {
-    "validate_writer_agent",
-    "writer_agent_validator",
     "tikitaka_harness_runner",
-    "real_writer_agent_mode",
 }
+ALLOWED_SCRIPT_HANDOFF_GATE_GENERATORS = {
+    "tikitaka_harness_runner",
+    "validate_tikitaka_handoff",
+    "validate_tikitaka_handoff.py",
+}
+SCRIPT_HANDOFF_GATE_PATH_KEYS = (
+    "script_handoff_gate_path",
+    "script_handoff_gate_json",
+    "script_handoff_gate",
+)
+REPORT1_HANDOFF_GATE_PATH_KEYS = (
+    "report1_handoff_path",
+    "report1_handoff_json",
+    "report1_handoff_gate_path",
+    "report1_handoff_gate_json",
+    "report1_handoff_gate",
+)
+BLOCK_MAP_PATH_KEYS = (
+    "block_map_path",
+    "canonical_block_map_path",
+    "tikitaka_block_map_path",
+)
+BLOCK_VOICE_SWITCH_MAP_PATH_KEYS = (
+    "block_voice_switch_map_path",
+    "voice_switch_map_path",
+    "tikitaka_voice_switch_map_path",
+)
+CAPCUT_DRAFT_CONTENT_PATH_KEYS = (
+    "draft_content_path",
+    "draft_content_json",
+    "capcut_draft_content_path",
+    "capcut_draft_content_json",
+)
+TEMPLATE_REFERENCE_NAME_KEYS = (
+    "reference_project_name",
+    "template_reference_project_name",
+    "reference_capcut_project",
+    "catcup_reference_project",
+)
+TEMPLATE_REFERENCE_PATH_KEYS = (
+    "reference_project_path",
+    "template_reference_project_path",
+    "reference_capcut_project_path",
+    "catcup_reference_project_path",
+)
+TEMPLATE_REFERENCE_REQUIRED_KEYS = (
+    "template_reference_required",
+    "reference_project_required",
+    "template_backed_capcut_project",
+)
+TEMPLATE_REFERENCE_DERIVED_KEYS = (
+    "derived_from_reference_project",
+    "template_reference_derived",
+    "reference_project_cloned",
+    "template_copy_from_reference",
+)
+TEMPLATE_PROFILE_KEYS = (
+    "template_profile",
+    "catcup_text_template_profile",
+    "selected_template_profile",
+)
+USER_EXPLICIT_TEMPLATE_OVERRIDE_KEYS = (
+    "user_explicit_template_override",
+    "explicit_template_override",
+    "user_selected_non_default_template",
+    "non_default_template_user_approved",
+)
+STALE_BUILDER_REFERENCE_NAME_KEYS = (
+    "builder_reference_name",
+    "hardcoded_reference_name",
+    "reference_name_from_builder",
+    "REFERENCE_NAME",
+)
+DEFAULT_CAPCUT_BASE_PROJECT = "shrt white"
+DEFAULT_CAPCUT_BASE_PROFILE = "shrt_white_base_v1"
+DEFAULT_CAPCUT_BASE_ALIASES = {"shrt white", "short white"}
+DEFAULT_CAPCUT_BASE_PROFILE_ALIASES = {
+    "shrt_white_base_v1",
+    "shrt white",
+    "short white",
+}
+CHARACTER_COMMENTS_DERIVED_REFERENCE_PROJECT = "260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1"
+FORBIDDEN_DERIVED_REFERENCE_PROJECTS = {
+    CHARACTER_COMMENTS_DERIVED_REFERENCE_PROJECT,
+    "260708 short",
+}
+FORBIDDEN_DERIVED_REFERENCE_MARKERS = (
+    "_base_v2",
+    "_base_v3",
+)
+PRODUCTION_PROOF_PATHS = (
+    (("cut_manifest_path", "cut_manifest_json"), "cut_manifest.json", "cut_manifest"),
+    (
+        ("capcut_assembly_report_path", "capcut_assembly_report_json"),
+        "proof/capcut_assembly_report.json",
+        "capcut_assembly_report",
+    ),
+    (("contact_sheet_path", "contact_sheet_jpg"), "proof/contact_sheet.jpg", "contact_sheet"),
+    (("clip_durations_path", "clip_durations_csv"), "proof/clip_durations.csv", "clip_durations"),
+    (("timeline_order_path", "timeline_order_txt"), "proof/timeline_order.txt", "timeline_order"),
+)
+CAPCUT_ASSEMBLY_PROOF_FLAGS = (
+    "timeline_order_verified",
+    "visible_trim_verified",
+    "handle_extendable",
+    "independent_clips_verified",
+    "proof_files_verified",
+)
+DRAFT_FAST_REQUEST_TOKENS = (
+    "DRAFT_FAST",
+    "검토용 draft만",
+    "검토용 드래프트만",
+    "빠른 초안",
+    "기술 초안",
+)
+STAGE1_REQUEST_TOKENS = (
+    "대본만",
+    "대본까지",
+    "대본까지만",
+    "초벌",
+    "초벌대본",
+    "티키타카",
+    "초안만",
+    "검토용",
+    "스크립트만",
+)
+STAGE2_REQUEST_TOKENS = (
+    "끝까지",
+    "자동으로 다",
+    "자동모드",
+    "최종",
+    "다음단계",
+    "다음 단계",
+    "업로드까지",
+    "슈퍼톤",
+    "SUPERTONE",
+    "TTS 만들",
+    "TTS 생성",
+    "TTS mp3",
+    "캣컵프로젝트파일까지",
+    "캣컵 프로젝트 파일까지",
+    "캐컷프로젝트파일까지",
+    "캡컷프로젝트파일까지",
+    "CAPCUT PROJECT",
+)
+STAGE2_DECISION_VALUES = {
+    "STAGE_2_FULL",
+    "STAGE2_FULL",
+    "STAGE_2",
+    "AUTO_FULL",
+    "AUTO_FULL_CAPCUT_PROJECT",
+    "FINAL_LOCK",
+    "FULL",
+    "PRODUCTION",
+    "자동모드",
+    "자동으로 다",
+    "끝까지",
+    "최종",
+}
+STAGE1_DECISION_VALUES = {
+    "STAGE_1_SCRIPT",
+    "STAGE1_SCRIPT",
+    "STAGE_1_ONLY",
+    "SCRIPT_ONLY",
+    "DRAFT_SCRIPT",
+    "TIKITAKA_ONLY",
+    "대본까지",
+    "대본만",
+}
+STAGE_SCOPE_DECISION_KEYS = {
+    "user_stage_decision",
+    "stage_scope",
+    "requested_stage",
+}
+TRUSTED_STAGE_SCOPE_GENERATORS = {
+    "tikitaka_harness_runner",
+}
+USER_TTS_OR_SRT_PATH_KEYS = (
+    "user_tts_audio_path",
+    "user_tts_path",
+    "tts_audio_path",
+    "user_audio_path",
+    "user_mp3_path",
+    "provided_tts_audio_path",
+    "provided_mp3_path",
+    "user_srt_path",
+    "user_srt_audio_package_path",
+)
+REPORT1_APPROVAL_KEYS = (
+    "report1_approved",
+    "report_1_approved",
+    "script_approved_by_user",
+    "user_script_ok",
+    "user_ok_after_report1",
+    "report1_user_ok",
+)
+VOICE_AUDIO_ROUTE_DECISION_KEYS = (
+    "voice_audio_route_decided",
+    "tts_route_decided",
+    "audio_route_decided",
+    "tts_user_decision_done",
+    "no_tts_source_bgm_route_approved",
+)
+VOICE_AUDIO_ROUTE_VALUE_KEYS = (
+    "voice_audio_route",
+    "tts_route",
+    "audio_route",
+    "source_audio_route",
+    "selected_voice_audio_route",
+)
 
 SCENARIO_FIRST_MODES = {
     "scenario_first_montage",
@@ -365,6 +575,13 @@ CATCUP_TEMPLATE_MASTERS = {
             "260625-ig-contortion-top3-urakkai-instagram-tts",
         },
     },
+    "insta_white_audio_split_v1": {
+        "reference_project": "insta white",
+        "accepted_reference_projects": {
+            "insta white",
+            "260625-ig-contortion-top3-urakkai-instagram-tts",
+        },
+    },
     "black_template_master_v1": {
         "reference_project": "black",
         "accepted_reference_projects": {"black"},
@@ -509,11 +726,47 @@ def require_file(root: Path, rel_path: str, label: str) -> Path:
     return path
 
 
+def require_declared_file(
+    root: Path,
+    rel_path: str,
+    label: str,
+    base_dir: Path | None = None,
+) -> Path:
+    require(rel_path, f"{label} path is empty")
+    path = as_path(root, rel_path)
+    if not path.exists() and base_dir is not None and not Path(rel_path).is_absolute():
+        path = base_dir / rel_path
+    if not path.exists():
+        raise GateFail(f"{label} file missing: {path}")
+    return path
+
+
+def sha256_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
 def truthy(value: Any) -> bool:
     if value is True:
         return True
     if isinstance(value, str):
-        return value.strip().lower() in {"true", "pass", "passed", "yes", "complete", "completed"}
+        return value.strip().lower() in {
+            "true",
+            "pass",
+            "passed",
+            "yes",
+            "y",
+            "ok",
+            "okay",
+            "complete",
+            "completed",
+            "예",
+            "승인",
+            "완료",
+        }
     return False
 
 
@@ -622,8 +875,6 @@ def status_value(data: dict[str, Any]) -> str:
         value = summary.get("status")
         if isinstance(value, str):
             return value.strip().upper()
-    if data.get("pass") is True:
-        return "PASS"
     return ""
 
 
@@ -633,6 +884,1028 @@ def require_json_status_pass(root: Path, rel_path: str, label: str) -> dict[str,
     if status_value(data) != "PASS":
         raise GateFail(f"{label} status must be PASS: {path}")
     return data
+
+
+def default_or_declared_path(
+    sources: list[dict[str, Any]],
+    keys: tuple[str, ...],
+    default_path: str,
+) -> str:
+    value = first_status_value(sources, keys)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return default_path
+
+
+def normalized_stage_decision(value: Any) -> str:
+    return str(value or "").strip().upper()
+
+
+def is_stage2_decision(value: Any) -> bool:
+    return normalized_stage_decision(value) in STAGE2_DECISION_VALUES
+
+
+def status_block_passes(value: Any) -> bool:
+    return isinstance(value, dict) and status_value(value) == "PASS"
+
+
+def has_trusted_stage_scope_generator(source: dict[str, Any]) -> bool:
+    stage_scope_gate = source.get("stage_scope_gate")
+    script_lock = source.get("script_lock")
+    candidates: list[Any] = [
+        source.get("source"),
+        source.get("generated_by"),
+    ]
+    if isinstance(stage_scope_gate, dict):
+        candidates.extend((stage_scope_gate.get("source"), stage_scope_gate.get("generated_by")))
+    if isinstance(script_lock, dict):
+        candidates.extend((script_lock.get("source"), script_lock.get("generated_by")))
+    return any(str(item or "").strip() in TRUSTED_STAGE_SCOPE_GENERATORS for item in candidates)
+
+
+def trusted_stage_scope_source_allows(source: dict[str, Any], decision: Any) -> bool:
+    if not is_stage2_decision(decision):
+        return True
+
+    stage_scope_gate = source.get("stage_scope_gate")
+    if not isinstance(stage_scope_gate, dict):
+        return False
+    gate_status = normalized_stage_decision(stage_scope_gate.get("status"))
+    gate_decision = normalized_stage_decision(stage_scope_gate.get("decision"))
+    if gate_status != "PASS" or gate_decision not in STAGE2_DECISION_VALUES:
+        return False
+    if not has_trusted_stage_scope_generator(source):
+        return False
+    return all(
+        status_block_passes(source.get(key))
+        for key in ("validation", "evidence_pack", "harness_trace")
+    )
+
+
+def has_report1_approval(contract: dict[str, Any]) -> bool:
+    return any(truthy(contract.get(key)) for key in REPORT1_APPROVAL_KEYS)
+
+
+def has_voice_audio_route_decision(contract: dict[str, Any]) -> bool:
+    return any(truthy(contract.get(key)) for key in VOICE_AUDIO_ROUTE_DECISION_KEYS)
+
+
+def require_report1_approval_and_voice_route(contract: dict[str, Any]) -> None:
+    if has_report1_approval(contract) and has_voice_audio_route_decision(contract):
+        return
+    raise GateFail(
+        "WAIT_REPORT1_APPROVAL_TTS_DECISION: report1_approved and voice_audio_route_decided are required before 보고서2/CapCut stage"
+    )
+
+
+def project_file_request_mode(contract: dict[str, Any]) -> str:
+    explicit = str(
+        contract.get("project_file_request_mode")
+        or contract.get("requested_mode")
+        or contract.get("production_mode")
+        or ""
+    ).strip().upper()
+
+    request_text = " ".join(
+        str(contract.get(key) or "")
+        for key in (
+            "user_request",
+            "request_text",
+            "prompt",
+            "expected_output",
+            "requested_output",
+            "work_order",
+        )
+    )
+    request_text_upper = request_text.upper()
+    user_stage_decision = str(contract.get("user_stage_decision") or "").strip().upper()
+    has_draft_fast_token = any(
+        token.upper() in request_text_upper for token in DRAFT_FAST_REQUEST_TOKENS
+    )
+
+    if explicit in {"DRAFT_FAST", "DRAFT_FAST_EXPLICIT_ONLY"} and has_draft_fast_token:
+        require_report1_approval_and_voice_route(contract)
+        return "DRAFT_FAST"
+    if explicit in {"DRAFT_FAST", "DRAFT_FAST_EXPLICIT_ONLY"} and not has_draft_fast_token:
+        raise GateFail(
+            "WAIT_DRAFT_FAST_EXPLICIT_TOKEN: DRAFT_FAST requires a literal fast-draft request token"
+        )
+
+    has_stage2_asset = any(
+        isinstance(contract.get(key), str) and str(contract.get(key)).strip()
+        for key in USER_TTS_OR_SRT_PATH_KEYS
+    )
+    has_stage2_request = any(token.upper() in request_text_upper for token in STAGE2_REQUEST_TOKENS)
+    has_strong_stage2_request = any(
+        token.upper() in request_text_upper
+        for token in STAGE2_REQUEST_TOKENS
+        if token not in {"진행", "해줘", "쭉"}
+    )
+    has_stage1_request = user_stage_decision in STAGE1_DECISION_VALUES or any(
+        token.upper() in request_text_upper for token in STAGE1_REQUEST_TOKENS
+    )
+    verified_stage2_decision = (
+        user_stage_decision in STAGE2_DECISION_VALUES
+        and contract.get("_stage_scope_gate_verified") is True
+    )
+
+    if has_stage1_request and not has_stage2_asset and not has_strong_stage2_request:
+        raise GateFail(
+            "WAIT_USER_STAGE_DECISION: stage 1 request detected; ask user '어디까지 만들까?' before stage 2"
+        )
+
+    if (
+        user_stage_decision in STAGE2_DECISION_VALUES
+        and not verified_stage2_decision
+        and not has_stage2_asset
+        and not has_strong_stage2_request
+    ):
+        raise GateFail(
+            "WAIT_USER_STAGE_DECISION: stage 2 decision requires verified Stage Scope Gate PASS"
+        )
+
+    if verified_stage2_decision or has_stage2_asset or has_strong_stage2_request:
+        require_report1_approval_and_voice_route(contract)
+        if explicit == "FINAL_LOCK":
+            return "FINAL_LOCK"
+        if explicit == "DRAFT_FAST" and has_draft_fast_token:
+            return "DRAFT_FAST"
+        return "AUTO_FULL_CAPCUT_PROJECT"
+
+    if has_stage1_request:
+        raise GateFail(
+            "WAIT_USER_STAGE_DECISION: stage 1 request detected; ask user '어디까지 만들까?' before stage 2"
+        )
+
+    raise GateFail(
+        "WAIT_USER_STAGE_DECISION: URL+Gemini intake requires user_stage_decision, stage 2 request text, or user TTS/SRT path before stage 2"
+    )
+
+
+def status_source_allows_stage2_decision(source: dict[str, Any], decision: Any) -> bool:
+    return trusted_stage_scope_source_allows(source, decision)
+
+
+def status_source_allows_report1_voice_decision(source: dict[str, Any]) -> bool:
+    decision = (
+        source.get("user_stage_decision")
+        or source.get("stage_scope")
+        or source.get("requested_stage")
+    )
+    stage_scope_gate = source.get("stage_scope_gate")
+    if not decision and isinstance(stage_scope_gate, dict):
+        decision = stage_scope_gate.get("decision")
+    if not is_stage2_decision(decision):
+        return False
+    return trusted_stage_scope_source_allows(source, decision)
+
+
+def merged_request_scope_contract(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    merged = dict(contract)
+    merged.pop("_stage_scope_gate_verified", None)
+    verified_stage2_decision = False
+    for key in STAGE_SCOPE_DECISION_KEYS:
+        if key in merged and is_stage2_decision(merged.get(key)):
+            if status_source_allows_stage2_decision(contract, merged.get(key)):
+                verified_stage2_decision = True
+            else:
+                merged.pop(key, None)
+
+    scope_keys = (
+        "user_stage_decision",
+        "stage_scope",
+        "requested_stage",
+        "user_request",
+        "request_text",
+        "prompt",
+        "expected_output",
+        "requested_output",
+        "work_order",
+        *USER_TTS_OR_SRT_PATH_KEYS,
+    )
+    for index, source in enumerate(collect_status_sources(contract, root)):
+        for key in scope_keys:
+            if key not in merged and source.get(key):
+                if key in STAGE_SCOPE_DECISION_KEYS and is_stage2_decision(source.get(key)):
+                    if not status_source_allows_stage2_decision(source, source.get(key)):
+                        continue
+                    verified_stage2_decision = True
+                merged[key] = source[key]
+        if index > 0 and status_source_allows_report1_voice_decision(source):
+            for key in (*REPORT1_APPROVAL_KEYS, *VOICE_AUDIO_ROUTE_DECISION_KEYS):
+                if key not in merged and source.get(key):
+                    merged[key] = source[key]
+        stage_scope_gate = source.get("stage_scope_gate")
+        if isinstance(stage_scope_gate, dict) and "user_stage_decision" not in merged:
+            decision = stage_scope_gate.get("decision")
+            if decision and is_stage2_decision(decision):
+                if not status_source_allows_stage2_decision(source, decision):
+                    continue
+                verified_stage2_decision = True
+                merged["user_stage_decision"] = decision
+            elif decision:
+                merged["user_stage_decision"] = decision
+    if verified_stage2_decision:
+        merged["_stage_scope_gate_verified"] = True
+    return merged
+
+
+def upload_ready_state(contract: dict[str, Any], *, stage: str) -> dict[str, Any]:
+    user_approved = contract.get("user_upload_approval") is True
+    rights_acknowledged = contract.get("rights_risk_acknowledged") is True
+    allowed = stage == "production" and user_approved and rights_acknowledged
+    if allowed:
+        return {
+            "upload_ready_allowed": True,
+            "upload_ready": True,
+            "upload_ready_reason": "USER_APPROVAL_AND_RIGHTS_CHECK_PRESENT",
+        }
+    reason = (
+        "CAPCUT_OPENABLE_PROJECT_IS_NOT_UPLOAD_READY"
+        if stage != "production"
+        else "WAITING_FOR_USER_APPROVAL_AND_RIGHTS_CHECK"
+    )
+    return {
+        "upload_ready_allowed": False,
+        "upload_ready": False,
+        "upload_ready_reason": reason,
+    }
+
+
+def validate_declared_input_hashes(
+    contract: dict[str, Any],
+    root: Path,
+    required_source_path: Path | None = None,
+) -> dict[str, Any]:
+    declared = contract.get("input_files") or contract.get("declared_input_files") or []
+    if not declared:
+        raise GateFail("input_files must include at least one hashed input file")
+    if not isinstance(declared, list):
+        raise GateFail("input_files must be a list")
+
+    verified = 0
+    verified_paths: set[str] = set()
+    for index, item in enumerate(declared):
+        if isinstance(item, str):
+            raise GateFail(f"input_files[{index}] sha256 required; use object form")
+        if not isinstance(item, dict):
+            raise GateFail(f"input_files[{index}] must be a path string or object")
+        raw_path = item.get("path") or item.get("file") or item.get("rel_path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise GateFail(f"input_files[{index}] path missing")
+        path = require_file(root, raw_path, f"input_files[{index}]")
+        expected_hash = item.get("sha256") or item.get("sha_256")
+        if not isinstance(expected_hash, str) or not expected_hash.strip():
+            raise GateFail(f"input_files[{index}] sha256 missing")
+        actual_hash = sha256_file(path)
+        if actual_hash.lower() != expected_hash.strip().lower():
+            raise GateFail(
+                f"input_files[{index}] sha256 mismatch: {raw_path}"
+            )
+        verified += 1
+        verified_paths.add(str(path.resolve()).lower())
+    if required_source_path is not None:
+        resolved_source = str(as_path(root, required_source_path).resolve()).lower()
+        if resolved_source not in verified_paths:
+            raise GateFail("SOURCE_MEDIA_HASH_REQUIRED: source media must be a declared hashed input")
+    return {"input_file_hashes_verified": True, "input_file_count": verified}
+
+
+def source_segment_ids(source_segments: list[Any]) -> list[str]:
+    ids: list[str] = []
+    for index, item in enumerate(source_segments):
+        if isinstance(item, str):
+            ids.append(item)
+            continue
+        if not isinstance(item, dict):
+            raise GateFail(f"cut_manifest.source_segments[{index}] must be object or string")
+        segment_id = (
+            item.get("id")
+            or item.get("segment_id")
+            or item.get("source_segment_id")
+            or item.get("clip")
+            or item.get("clip_id")
+        )
+        if segment_id in (None, ""):
+            raise GateFail(f"cut_manifest.source_segments[{index}] id missing")
+        ids.append(str(segment_id))
+    return ids
+
+
+def validate_contact_sheet_file(path: Path) -> None:
+    data = path.read_bytes()
+    is_jpeg = len(data) >= 4 and data.startswith(b"\xff\xd8") and data.endswith(b"\xff\xd9")
+    is_png = len(data) >= 8 and data.startswith(b"\x89PNG\r\n\x1a\n")
+    if not is_jpeg and not is_png:
+        raise GateFail("contact_sheet must be a readable JPEG or PNG proof image")
+
+
+def validate_clip_durations_csv(path: Path, required_ids: list[str]) -> None:
+    rows = list(csv.DictReader(path.read_text(encoding="utf-8-sig").splitlines()))
+    if not rows:
+        raise GateFail("clip_durations.csv must contain PASS rows")
+    seen: set[str] = set()
+    for row in rows:
+        clip_id = (
+            row.get("clip")
+            or row.get("id")
+            or row.get("segment_id")
+            or row.get("source_segment_id")
+        )
+        if not clip_id:
+            continue
+        status = str(row.get("status") or row.get("result") or "").strip().upper()
+        if str(clip_id) in required_ids:
+            if status != "PASS":
+                raise GateFail(f"clip_durations.csv row is not PASS: {clip_id}")
+            seen.add(str(clip_id))
+    missing = [segment_id for segment_id in required_ids if segment_id not in seen]
+    if missing:
+        raise GateFail("clip_durations.csv missing PASS rows: " + ", ".join(missing))
+
+
+def validate_timeline_order_text(path: Path, expected_order: list[str]) -> None:
+    actual_order = [
+        line.strip()
+        for line in path.read_text(encoding="utf-8-sig").splitlines()
+        if line.strip()
+    ]
+    if actual_order != expected_order:
+        raise GateFail(
+            f"timeline_order.txt mismatch: expected={expected_order}, actual={actual_order}"
+        )
+
+
+def validate_production_proof_files(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    sources = collect_status_sources(contract, root)
+    paths: dict[str, str] = {}
+    for keys, default_path, label in PRODUCTION_PROOF_PATHS:
+        rel_path = default_or_declared_path(sources, keys, default_path)
+        path = require_file(root, rel_path, label)
+        paths[f"{label}_path"] = str(path)
+
+    cut_manifest = load_json(Path(paths["cut_manifest_path"]))
+    source_segments = cut_manifest.get("source_segments")
+    timeline_order = cut_manifest.get("timeline_order")
+    if not isinstance(source_segments, list) or not source_segments:
+        raise GateFail("cut_manifest.source_segments must be a non-empty list")
+    if not isinstance(timeline_order, list) or not timeline_order:
+        raise GateFail("cut_manifest.timeline_order must be a non-empty list")
+    required_segment_ids = source_segment_ids(source_segments)
+    timeline_order_ids = [str(item) for item in timeline_order]
+    unknown = sorted(set(timeline_order_ids) - set(required_segment_ids))
+    missing = [segment_id for segment_id in required_segment_ids if segment_id not in timeline_order_ids]
+    if unknown:
+        raise GateFail("cut_manifest.timeline_order contains unknown segment ids: " + ", ".join(unknown))
+    if missing:
+        raise GateFail("cut_manifest.timeline_order missing segment ids: " + ", ".join(missing))
+    validate_contact_sheet_file(Path(paths["contact_sheet_path"]))
+    validate_clip_durations_csv(Path(paths["clip_durations_path"]), required_segment_ids)
+    validate_timeline_order_text(Path(paths["timeline_order_path"]), timeline_order_ids)
+
+    assembly_report = load_json(Path(paths["capcut_assembly_report_path"]))
+    assembly_status = status_value(assembly_report)
+    if assembly_status and assembly_status != "PASS":
+        raise GateFail("capcut_assembly_report status must be PASS")
+    missing_flags = [
+        key for key in CAPCUT_ASSEMBLY_PROOF_FLAGS
+        if assembly_report.get(key) is not True
+    ]
+    if missing_flags:
+        raise GateFail(
+            "capcut_assembly_report missing true flags: " + ", ".join(missing_flags)
+        )
+
+    return {
+        "hard_fail_proof_status": "PASS",
+        **paths,
+    }
+
+
+def normalize_voice_switch_map(raw_value: Any) -> list[dict[str, Any]]:
+    if isinstance(raw_value, dict):
+        raw_value = raw_value.get("switches") or raw_value.get("block_voice_switch_map")
+    if not isinstance(raw_value, list):
+        return []
+    return [item for item in raw_value if isinstance(item, dict)]
+
+
+def validate_handoff_block_map(block_map: dict[str, Any], label: str = "block_map.json") -> None:
+    sequence = block_map.get("edit_block_sequence")
+    blocks = block_map.get("blocks") or block_map.get("edit_blocks")
+    voice_switch_map = normalize_voice_switch_map(
+        block_map.get("block_voice_switch_map") or block_map.get("voice_switches")
+    )
+
+    if not isinstance(sequence, list) or not sequence:
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} edit_block_sequence missing")
+    if not isinstance(blocks, list) or not blocks:
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} blocks missing")
+    if not voice_switch_map:
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} block_voice_switch_map missing")
+
+    required = {"edit_id", "source_block_id", "original_order", "urakkai_order"}
+    block_ids: list[str] = []
+    for index, block in enumerate(blocks):
+        if not isinstance(block, dict):
+            raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} blocks[{index}] must be object")
+        missing = sorted(key for key in required if block.get(key) in (None, ""))
+        if missing:
+            raise GateFail(
+                f"WAIT_SCRIPT_HANDOFF_GATE: {label} blocks[{index}] missing {', '.join(missing)}"
+            )
+        block_ids.append(str(block["edit_id"]))
+
+    sequence_ids = [str(item) for item in sequence]
+    if sequence_ids != block_ids:
+        raise GateFail(
+            f"WAIT_SCRIPT_HANDOFF_GATE: {label} edit_block_sequence must match blocks edit_id order"
+        )
+
+    switch_ids: list[str] = []
+    for index, switch in enumerate(voice_switch_map):
+        edit_id = switch.get("edit_id")
+        if edit_id in (None, ""):
+            raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: {label} voice switch missing edit_id")
+        if switch.get("source_audio") in (None, "") or switch.get("tts") in (None, ""):
+            raise GateFail(
+                f"WAIT_SCRIPT_HANDOFF_GATE: {label} voice switch {edit_id} missing source_audio or tts"
+            )
+        switch_ids.append(str(edit_id))
+
+    if sorted(switch_ids) != sorted(block_ids) or len(set(switch_ids)) != len(switch_ids):
+        raise GateFail(
+            f"WAIT_SCRIPT_HANDOFF_GATE: {label} voice switch coverage must match every edit block"
+        )
+
+
+def validate_script_handoff_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    sources = collect_status_sources(contract, root)
+    gate_rel_path = default_or_declared_path(
+        sources,
+        SCRIPT_HANDOFF_GATE_PATH_KEYS,
+        "20_script/script_handoff_gate.json",
+    )
+    gate_path = as_path(root, gate_rel_path)
+    if not gate_path.exists():
+        raise GateFail(f"WAIT_SCRIPT_HANDOFF_GATE: script_handoff_gate.json file missing: {gate_path}")
+    gate = load_json(gate_path)
+
+    if gate.get("gate_name") != "SCRIPT_HANDOFF_GATE":
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: gate_name must be SCRIPT_HANDOFF_GATE")
+    if str(gate.get("status") or "").upper() != "PASS":
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: script_handoff_gate status must be PASS")
+    if gate.get("script_status") != "SCRIPT_LOCK_PACKAGE":
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: script_status must be SCRIPT_LOCK_PACKAGE")
+    if gate.get("capcut_allowed") is not True:
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: capcut_allowed must be true")
+    generator = str(gate.get("generated_by") or "").strip()
+    if generator not in ALLOWED_SCRIPT_HANDOFF_GATE_GENERATORS:
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: script_handoff_gate must be validator generated")
+
+    block_map_rel_path = (
+        first_status_value(sources, BLOCK_MAP_PATH_KEYS)
+        or gate.get("block_map_path")
+        or "20_script/block_map.json"
+    )
+    if not isinstance(block_map_rel_path, str) or not block_map_rel_path.strip():
+        raise GateFail("WAIT_SCRIPT_HANDOFF_GATE: block_map.json path missing")
+    block_map_path = require_declared_file(root, block_map_rel_path, "block_map", gate_path.parent)
+    block_map = load_json(block_map_path)
+    voice_map_rel_path = (
+        first_status_value(sources, BLOCK_VOICE_SWITCH_MAP_PATH_KEYS)
+        or gate.get("block_voice_switch_map_path")
+        or gate.get("voice_switch_map_path")
+    )
+    if not voice_map_rel_path:
+        for input_file in gate.get("input_files") or []:
+            if isinstance(input_file, str) and "voice_switch" in input_file:
+                voice_map_rel_path = input_file
+                break
+    if isinstance(voice_map_rel_path, str) and voice_map_rel_path.strip():
+        voice_map_path = require_declared_file(
+            root,
+            voice_map_rel_path,
+            "block_voice_switch_map",
+            gate_path.parent,
+        )
+        block_map["block_voice_switch_map"] = normalize_voice_switch_map(load_json(voice_map_path))
+    validate_handoff_block_map(block_map)
+
+    for input_file in gate.get("input_files") or []:
+        if isinstance(input_file, str) and input_file.strip():
+            require_declared_file(root, input_file, "gate input file", gate_path.parent)
+
+    return {
+        "script_handoff_gate_status": "PASS",
+        "script_handoff_gate_path": str(gate_path),
+        "script_status": "SCRIPT_LOCK_PACKAGE",
+        "block_map_path": str(block_map_path),
+        "capcut_permission": "CAPCUT_OPENABLE_PROJECT_ALLOWED",
+    }
+
+
+def report1_handoff_gate_path(sources: list[dict[str, Any]], root: Path) -> Path:
+    declared = first_status_value(sources, REPORT1_HANDOFF_GATE_PATH_KEYS)
+    if isinstance(declared, str) and declared.strip():
+        return as_path(root, declared)
+    for rel_path in ("20_script/report1_handoff.json", "report1_handoff.json"):
+        candidate = as_path(root, rel_path)
+        if candidate.exists():
+            return candidate
+    return as_path(root, "20_script/report1_handoff.json")
+
+
+def validate_report1_handoff_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    sources = collect_status_sources(contract, root)
+    gate_path = report1_handoff_gate_path(sources, root)
+    if not gate_path.exists():
+        raise GateFail(f"WAIT_REPORT1_HANDOFF_GATE: report1_handoff.json file missing: {gate_path}")
+    gate = load_json(gate_path)
+
+    if gate.get("gate_name") != "REPORT1_HANDOFF_GATE":
+        raise GateFail("WAIT_REPORT1_HANDOFF_GATE: gate_name must be REPORT1_HANDOFF_GATE")
+    if str(gate.get("status") or "").upper() != "PASS":
+        raise GateFail("WAIT_REPORT1_HANDOFF_GATE: report1_handoff status must be PASS")
+    if gate.get("owner_skill") != "00-tikitaka":
+        raise GateFail("WAIT_REPORT1_HANDOFF_GATE: owner_skill must be 00-tikitaka")
+    if gate.get("next_skill") != "000short-production-agent":
+        raise GateFail("WAIT_REPORT1_HANDOFF_GATE: next_skill must be 000short-production-agent")
+    if gate.get("next_gate") != "CAPCUT_OPENABLE_PROJECT":
+        raise GateFail("WAIT_REPORT1_HANDOFF_GATE: next_gate must be CAPCUT_OPENABLE_PROJECT")
+
+    return {
+        "report1_handoff_gate_status": "PASS",
+        "report1_handoff_gate_path": str(gate_path),
+        "report1_handoff_owner_skill": gate["owner_skill"],
+        "report1_handoff_next_skill": gate["next_skill"],
+        "report1_handoff_next_gate": gate["next_gate"],
+    }
+
+
+def validate_stage2_tikitaka_handoff_gate(
+    contract: dict[str, Any],
+    root: Path,
+    *,
+    require_production_blueprint: bool = False,
+) -> dict[str, Any]:
+    validator_path = Path(__file__).with_name("validate_stage2_tikitaka_handoff.py")
+    spec = importlib.util.spec_from_file_location("_stage2_tikitaka_handoff", validator_path)
+    if spec is None or spec.loader is None:
+        raise GateFail("WAIT_TIMELINE_DESIGN_REQUIRED: stage2 Tikitaka handoff validator unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_stage2_tikitaka_handoff(
+            root,
+            contract,
+            require_production_blueprint=require_production_blueprint,
+        )
+    except Exception as exc:
+        raise GateFail(str(exc)) from exc
+
+
+def validate_capcut_media_link_gate(
+    root: Path,
+    draft_content_path: Path,
+    source_path: Path,
+) -> dict[str, Any]:
+    validator_path = Path(__file__).with_name("validate_capcut_media_links.py")
+    spec = importlib.util.spec_from_file_location("_capcut_media_links", validator_path)
+    if spec is None or spec.loader is None:
+        raise GateFail("WAIT_CAPCUT_SOURCE_MEDIA_LINK: media-link validator unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        return module.validate_capcut_media_links(root, draft_content_path, source_path)
+    except Exception as exc:
+        raise GateFail(f"WAIT_CAPCUT_SOURCE_MEDIA_LINK: {exc}") from exc
+
+
+def report_scalar(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, list):
+        return " ".join(str(item).strip() for item in value if str(item).strip())
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value).strip()
+
+
+def first_report_field(
+    sources: list[dict[str, Any]],
+    source_manifest: dict[str, Any],
+    keys: tuple[str, ...],
+) -> str:
+    value = first_status_value(sources, keys)
+    text = report_scalar(value)
+    if text:
+        return text
+    for key in keys:
+        text = report_scalar(source_manifest.get(key))
+        if text:
+            return text
+    return ""
+
+
+def report_yes_no(value: Any, default: str = "아니오") -> str:
+    if value in (None, ""):
+        return default
+    return "예" if truthy(value) else "아니오"
+
+
+def normalized_reference_text(value: Any) -> str:
+    return " ".join(report_scalar(value).lower().split())
+
+
+def is_default_capcut_base_name(value: Any) -> bool:
+    return normalized_reference_text(value) in DEFAULT_CAPCUT_BASE_ALIASES
+
+
+def is_default_capcut_base_profile(value: Any) -> bool:
+    return normalized_reference_text(value) in DEFAULT_CAPCUT_BASE_PROFILE_ALIASES
+
+
+def is_forbidden_derived_reference_name(value: Any) -> bool:
+    text = report_scalar(value)
+    normalized = normalized_reference_text(text)
+    if normalized in {item.lower() for item in FORBIDDEN_DERIVED_REFERENCE_PROJECTS}:
+        return True
+    text_lc = text.lower()
+    return any(marker in text_lc for marker in FORBIDDEN_DERIVED_REFERENCE_MARKERS)
+
+
+def stale_derived_builder_reference_files(root: Path) -> list[Path]:
+    files: list[Path] = []
+    for rel_dir in ("90_reports", "50_capcut_project", "scripts"):
+        base = root / rel_dir
+        if not base.exists():
+            continue
+        for path in base.rglob("build*.py"):
+            try:
+                text = path.read_text(encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            if "REFERENCE_NAME" not in text:
+                continue
+            if any(name in text for name in FORBIDDEN_DERIVED_REFERENCE_PROJECTS):
+                files.append(path)
+                continue
+            text_lc = text.lower()
+            if any(marker in text_lc for marker in FORBIDDEN_DERIVED_REFERENCE_MARKERS):
+                files.append(path)
+    return files
+
+
+def user_explicit_template_override(sources: list[dict[str, Any]]) -> bool:
+    return truthy(first_status_value(sources, USER_EXPLICIT_TEMPLATE_OVERRIDE_KEYS))
+
+
+def validate_default_capcut_base_policy(
+    sources: list[dict[str, Any]],
+    root: Path,
+) -> dict[str, Any]:
+    stale_reference_name = first_status_value(sources, STALE_BUILDER_REFERENCE_NAME_KEYS)
+    if is_forbidden_derived_reference_name(stale_reference_name):
+        raise GateFail(
+            "FAIL_STALE_DERIVED_REFERENCE_BUILDER: stale builder REFERENCE_NAME points to "
+            f"{report_scalar(stale_reference_name)}; default CapCut base must be shrt white"
+        )
+
+    stale_files = stale_derived_builder_reference_files(root)
+    if stale_files:
+        stale_list = ", ".join(str(path) for path in stale_files)
+        raise GateFail(
+            "FAIL_STALE_DERIVED_REFERENCE_BUILDER: stale build script uses a prior derived "
+            f"reference project; remove/ignore it before CapCut build: {stale_list}"
+        )
+
+    reference_name = report_scalar(first_status_value(sources, TEMPLATE_REFERENCE_NAME_KEYS))
+    profile = report_scalar(first_status_value(sources, TEMPLATE_PROFILE_KEYS))
+    override = user_explicit_template_override(sources)
+    if override:
+        if not reference_name or not profile:
+            raise GateFail(
+                "FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED: explicit template override requires "
+                "reference_project_name and template_profile"
+            )
+        return {
+            "default_capcut_base_gate": "USER_OVERRIDE",
+            "default_capcut_base_project": "USER_EXPLICIT_OVERRIDE",
+            "default_capcut_base_profile": profile,
+        }
+
+    if not reference_name:
+        raise GateFail(
+            "WAIT_SHRT_WHITE_BASE_REQUIRED: default CapCut base must be shrt white; "
+            "do not fall back to prior episode builders or derived projects"
+        )
+    if not is_default_capcut_base_name(reference_name):
+        raise GateFail(
+            "FAIL_DEFAULT_SHRT_WHITE_BASE_REQUIRED: default CapCut base must be shrt white; "
+            f"got {reference_name}"
+        )
+    if not profile:
+        raise GateFail(
+            "WAIT_SHRT_WHITE_BASE_REQUIRED: template_profile must be shrt_white_base_v1 "
+            "for the default shrt white base"
+        )
+    if not is_default_capcut_base_profile(profile):
+        raise GateFail(
+            "FAIL_DEFAULT_SHRT_WHITE_BASE_REQUIRED: template_profile must be "
+            f"shrt_white_base_v1 for shrt white; got {profile}"
+        )
+
+    reference_path_raw = report_scalar(first_status_value(sources, TEMPLATE_REFERENCE_PATH_KEYS))
+    if not reference_path_raw:
+        raise GateFail(
+            "WAIT_SHRT_WHITE_BASE_REQUIRED: reference_project_path for shrt white is missing"
+        )
+    reference_path = Path(reference_path_raw)
+    if not reference_path.is_absolute():
+        reference_path = root / reference_path
+    if not reference_path.exists():
+        raise GateFail(
+            f"WAIT_SHRT_WHITE_BASE_MISSING: shrt white reference_project_path not found: {reference_path}"
+        )
+    if not truthy(first_status_value(sources, TEMPLATE_REFERENCE_DERIVED_KEYS)):
+        raise GateFail(
+            "FAIL_SHRT_WHITE_BASE_NOT_CLONED: CapCut draft must be cloned/derived from shrt white"
+        )
+
+    return {
+        "default_capcut_base_gate": "PASS",
+        "default_capcut_base_project": DEFAULT_CAPCUT_BASE_PROJECT,
+        "default_capcut_base_profile": DEFAULT_CAPCUT_BASE_PROFILE,
+        "default_capcut_base_path": str(reference_path),
+    }
+
+
+def template_reference_required(sources: list[dict[str, Any]]) -> bool:
+    required_raw = first_status_value(sources, TEMPLATE_REFERENCE_REQUIRED_KEYS)
+    if required_raw not in (None, ""):
+        return truthy(required_raw)
+
+    if report_scalar(first_status_value(sources, TEMPLATE_PROFILE_KEYS)):
+        return True
+    if report_scalar(first_status_value(sources, TEMPLATE_REFERENCE_NAME_KEYS)):
+        return True
+    if report_scalar(first_status_value(sources, TEMPLATE_REFERENCE_PATH_KEYS)):
+        return True
+
+    request_text = " ".join(
+        report_scalar(first_status_value(sources, (key,)))
+        for key in ("user_request", "operator_request", "production_request")
+    ).lower()
+    return any(
+        token in request_text
+        for token in (
+            "reference project",
+            "template project",
+            "capcut reference",
+            "character-comments",
+            "game-character-comments",
+            "기준",
+            "템플릿",
+        )
+    )
+
+
+def validate_template_reference_resolution(
+    sources: list[dict[str, Any]],
+    root: Path,
+) -> dict[str, Any]:
+    if not template_reference_required(sources):
+        return {
+            "template_reference_resolution_gate": "NOT_REQUIRED",
+            "reference_project_name": "",
+            "reference_project_path": "",
+        }
+
+    reference_name = report_scalar(first_status_value(sources, TEMPLATE_REFERENCE_NAME_KEYS))
+    if not reference_name:
+        raise GateFail("FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED: reference_project_name missing")
+    if is_forbidden_derived_reference_name(reference_name):
+        raise GateFail(
+            "FAIL_TEMPLATE_ROOT_NOT_RESOLVED: "
+            f"{reference_name} is a prior derived project, not a root CapCut template authority"
+        )
+
+    reference_path_raw = report_scalar(first_status_value(sources, TEMPLATE_REFERENCE_PATH_KEYS))
+    if not reference_path_raw:
+        raise GateFail("FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED: reference_project_path missing")
+
+    reference_path = Path(reference_path_raw)
+    if not reference_path.is_absolute():
+        reference_path = root / reference_path
+    if not reference_path.exists():
+        raise GateFail(f"FAIL_TEMPLATE_REFERENCE_NOT_RESOLVED: reference_project_path not found: {reference_path}")
+
+    profile = report_scalar(first_status_value(sources, TEMPLATE_PROFILE_KEYS))
+    profile_text = f"{profile} {reference_name}".lower()
+    if "character" in profile_text and "comment" in profile_text:
+        if reference_name == CHARACTER_COMMENTS_DERIVED_REFERENCE_PROJECT:
+            raise GateFail(
+                "FAIL_TEMPLATE_ROOT_NOT_RESOLVED: "
+                f"{CHARACTER_COMMENTS_DERIVED_REFERENCE_PROJECT} is a prior derived project, "
+                "not the root character-comments template authority"
+            )
+
+    if not truthy(first_status_value(sources, TEMPLATE_REFERENCE_DERIVED_KEYS)):
+        raise GateFail(
+            "FAIL_TEMPLATE_REFERENCE_MISMATCH: derived_from_reference_project must be true"
+        )
+
+    return {
+        "template_reference_resolution_gate": "PASS",
+        "reference_project_name": reference_name,
+        "reference_project_path": str(reference_path),
+        "template_profile": profile,
+        "derived_from_reference_project": True,
+    }
+
+
+def build_report2_openable_report(result: dict[str, Any]) -> str:
+    project_name = result.get("capcut_project_name") or "N/A"
+    local_path = result.get("local_capcut_path") or "N/A"
+    reference_project_name = result.get("reference_project_name") or "N/A"
+    reference_project_path = result.get("reference_project_path") or "N/A"
+    upload_title = result.get("upload_title") or "N/A"
+    upload_description = result.get("upload_description") or "N/A"
+    source_tag = result.get("source_tag") or result.get("source_url") or "N/A"
+    upload_tags = result.get("upload_tags") or "N/A"
+    script_reflected = result.get("script_reflected") or "아니오"
+    tts_audio_reflected = result.get("tts_audio_reflected") or "아니오"
+    subtitle_reflected = result.get("subtitle_reflected") or "아니오"
+    source_video_reflected = result.get("source_video_reflected") or "아니오"
+    temp_files_cleaned = result.get("temp_files_cleaned") or "아니오"
+    return "\n".join(
+        [
+            "# 보고서2",
+            "",
+            "보고서2 시작: 예",
+            "최종보고서: 예",
+            "상태: REPORT2_FINAL",
+            "CapCut 프로젝트 생성 후 보고: 예",
+            f"CapCut 프로젝트명: {project_name}",
+            f"local_capcut_path: {local_path}",
+            f"reference_project_name: {reference_project_name}",
+            f"reference_project_path: {reference_project_path}",
+            "CapCut 열어보기 필요: 예",
+            "사용자 확인 대기: 예",
+            "업로드 준비 완료: 아니오",
+            "최종 잠금: 아니오",
+            "",
+            f"제목: {upload_title}",
+            "",
+            "내용(출처 태그 포함):",
+            str(upload_description).rstrip(),
+            f"출처: {source_tag}",
+            f"태그: {upload_tags}",
+            "",
+            f"대본 반영: {script_reflected}",
+            f"TTS/오디오 반영: {tts_audio_reflected}",
+            f"자막 반영: {subtitle_reflected}",
+            f"원본 영상 반영: {source_video_reflected}",
+            f"임시파일 정리: {temp_files_cleaned}",
+            "",
+            "현재 기준:",
+            f"- project_file_request_mode: {result.get('project_file_request_mode', 'N/A')}",
+            f"- script_handoff_gate_status: {result.get('script_handoff_gate_status', 'N/A')}",
+            f"- source_manifest_path: {result.get('source_manifest_path', 'N/A')}",
+            f"- draft_content_path: {result.get('draft_content_path', 'N/A')}",
+            f"- draft_meta_info_path: {result.get('draft_meta_info_path', 'N/A')}",
+            f"- template_reference_resolution_gate: {result.get('template_reference_resolution_gate', 'N/A')}",
+            f"- reference_project_name: {reference_project_name}",
+            f"- reference_project_path: {reference_project_path}",
+            f"- upload_ready_reason: {result.get('upload_ready_reason', 'N/A')}",
+            "",
+            "남은 일:",
+            "- 사용자가 CapCut에서 문제를 제시하면 수정 후 다시 보고서2",
+            "- 사용자가 직접 내보내기로 영상을 만들면 REPORT2_CLOSED_BY_USER_EXPORT",
+            "",
+        ]
+    )
+
+
+def validate_capcut_openable_project_entry(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    """Validate only the second-stage CapCut-openable entry contract.
+
+    This gate intentionally does not require FINAL_LOCK n8n or upload-readiness
+    fields. Those remain owned by validate_shared_requirements.
+    """
+
+    request_mode = project_file_request_mode(merged_request_scope_contract(contract, root))
+    report1_handoff_result = validate_report1_handoff_gate(contract, root)
+    script_handoff_result = validate_script_handoff_gate(contract, root)
+    stage2_tikitaka_handoff_result = validate_stage2_tikitaka_handoff_gate(contract, root)
+    sources = collect_status_sources(contract, root)
+    default_capcut_base_result = validate_default_capcut_base_policy(sources, root)
+    template_reference_result = validate_template_reference_resolution(sources, root)
+    source_manifest_rel_path = (
+        first_status_value(
+            sources,
+            (
+                "source_manifest_path",
+                "source_manifest_json",
+                "source_manifest",
+            ),
+        )
+        or "00_source/source_manifest.json"
+    )
+    if not isinstance(source_manifest_rel_path, str) or not source_manifest_rel_path.strip():
+        raise GateFail("source_manifest_path missing before CAPCUT_OPENABLE_PROJECT")
+    source_manifest_path = require_file(root, source_manifest_rel_path, "source_manifest")
+    source_manifest = load_json(source_manifest_path)
+    if status_value(source_manifest) != "PASS":
+        raise GateFail(f"source_manifest status must be PASS: {source_manifest_path}")
+    draft_content_rel_path = default_or_declared_path(
+        sources,
+        CAPCUT_DRAFT_CONTENT_PATH_KEYS,
+        "50_capcut_project/draft_content.json",
+    )
+    draft_content_path = require_file(root, draft_content_rel_path, "draft_content")
+    load_json(draft_content_path)
+    media_link_result = validate_capcut_media_link_gate(
+        root,
+        draft_content_path,
+        Path(stage2_tikitaka_handoff_result["source_path"]),
+    )
+    capcut_project_name = first_status_value(sources, ("capcut_project_name", "project_name"))
+    local_capcut_path = first_status_value(sources, ("local_capcut_path", "capcut_local_path"))
+    upload_title = first_report_field(
+        sources,
+        source_manifest,
+        ("upload_title", "youtube_title", "shorts_title", "video_title", "title"),
+    )
+    upload_description = first_report_field(
+        sources,
+        source_manifest,
+        ("upload_description", "youtube_description", "description", "content", "body"),
+    )
+    source_tag = first_report_field(
+        sources,
+        source_manifest,
+        ("source_tag", "source_credit", "source_url", "url", "original_url"),
+    )
+    upload_tags = first_report_field(
+        sources,
+        source_manifest,
+        ("upload_tags", "hashtags", "tags"),
+    )
+    draft_meta_info_path = first_report_field(
+        sources,
+        source_manifest,
+        ("draft_meta_info_path", "draft_meta_path", "draft_meta_info"),
+    )
+    script_reflected = "예" if script_handoff_result.get("script_handoff_gate_status") == "PASS" else "아니오"
+    tts_audio_reflected = report_yes_no(
+        first_status_value(sources, ("tts_audio_reflected", "tts_reflected", "audio_reflected", "tts_audio_applied"))
+    )
+    subtitle_reflected = report_yes_no(
+        first_status_value(sources, ("subtitle_reflected", "srt_reflected", "caption_reflected", "subtitles_applied"))
+    )
+    source_video_reflected = report_yes_no(
+        first_status_value(sources, ("source_video_reflected", "original_video_reflected", "source_media_applied"))
+    )
+    temp_files_cleaned = report_yes_no(
+        first_status_value(sources, ("temp_files_cleaned", "cleanup_done", "project_cleanup_passed"))
+    )
+
+    result = {
+        "status": "CAPCUT_OPENABLE_PROJECT_ALLOWED",
+        "mode": "CAPCUT_OPENABLE_PROJECT",
+        "project_file_request_mode": request_mode,
+        "script_handoff_gate_status": script_handoff_result["script_handoff_gate_status"],
+        "report1_handoff_gate_status": report1_handoff_result["report1_handoff_gate_status"],
+        "report1_handoff_gate_path": report1_handoff_result["report1_handoff_gate_path"],
+        **stage2_tikitaka_handoff_result,
+        "script_status": script_handoff_result["script_status"],
+        "capcut_permission": script_handoff_result["capcut_permission"],
+        "block_map_path": script_handoff_result["block_map_path"],
+        "source_manifest_path": str(source_manifest_path),
+        "draft_content_path": str(draft_content_path),
+        "draft_meta_info_path": draft_meta_info_path,
+        "capcut_project_name": capcut_project_name or "",
+        "local_capcut_path": local_capcut_path or "",
+        "upload_title": upload_title,
+        "upload_description": upload_description,
+        "source_tag": source_tag,
+        "upload_tags": upload_tags,
+        "script_reflected": script_reflected,
+        "tts_audio_reflected": tts_audio_reflected,
+        "subtitle_reflected": subtitle_reflected,
+        "source_video_reflected": source_video_reflected,
+        "temp_files_cleaned": temp_files_cleaned,
+        **media_link_result,
+        **default_capcut_base_result,
+        **template_reference_result,
+        "next_gate": "ASSET_PREP_GATE",
+        "final_lock_required": False,
+        **upload_ready_state(contract, stage="capcut-openable"),
+    }
+    result["report2"] = build_report2_openable_report(result)
+    return result
 
 
 def require_scalar_list(value: Any, label: str) -> list[Any]:
@@ -2292,32 +3565,13 @@ def validate_scenario_first_montage(
     }
 
 
-def validate_shared_requirements(contract: dict[str, Any], root: Path) -> None:
+def validate_shared_requirements(contract: dict[str, Any], root: Path) -> dict[str, Any]:
+    script_handoff_result = validate_script_handoff_gate(contract, root)
+    report1_handoff_result = validate_report1_handoff_gate(contract, root)
+
     if contract.get("similarity_breaker_harness") != "PASS":
         if contract.get("similarity_breaker_harness") != "N/A_SCENARIO_FIRST_MONTAGE":
             raise GateFail("similarity_breaker_harness is not PASS")
-
-    writer_agent_source = contract.get("writer_agent_source")
-    if writer_agent_source in {"INLINE_FALLBACK", "VISIBLE_WRITER_BATTLE"}:
-        raise GateFail(f"{writer_agent_source} cannot produce SCRIPT_LOCK")
-    if writer_agent_source not in {"REAL_AGENT", "REAL_WRITER_AGENT_MODE"}:
-        raise GateFail("writer_agent_source must be REAL_AGENT or REAL_WRITER_AGENT_MODE")
-
-    if contract.get("writer_agent_mode_status") != "REAL_RUN":
-        raise GateFail("writer_agent_mode_status must be REAL_RUN")
-    if int(contract.get("writer_persona_total", 0)) < 5:
-        raise GateFail("writer_persona_total must be at least 5")
-    if int(contract.get("writer_persona_pass_count", 0)) < 4:
-        raise GateFail("writer_persona_pass_count must be at least 4")
-
-    evidence_files = contract.get("writer_agent_evidence_files")
-    if not isinstance(evidence_files, list) or not evidence_files:
-        raise GateFail("writer_agent_evidence_files must be a non-empty list")
-    for file_path in evidence_files:
-        require_file(root, str(file_path), "writer_agent_evidence")
-
-    if contract.get("hard_veto") is True:
-        raise GateFail("hard_veto is true")
 
     script_lock_path = require_file(
         root,
@@ -2330,11 +3584,6 @@ def validate_shared_requirements(contract: dict[str, Any], root: Path) -> None:
     lock_source = script_lock.get("source") or script_lock.get("generated_by")
     if lock_source not in ALLOWED_SCRIPT_LOCK_SOURCES:
         raise GateFail("SCRIPT_LOCK must be generated by a validator, not a human report")
-    if int(script_lock.get("writer_persona_pass_count", contract.get("writer_persona_pass_count", 0))) < 4:
-        raise GateFail("script_lock_evidence writer_persona_pass_count must be at least 4")
-    if script_lock.get("hard_veto", contract.get("hard_veto")) is True:
-        raise GateFail("script_lock_evidence hard_veto is true")
-
     if contract.get("watch_direct_frame_status") != "PASS":
         raise GateFail("watch_direct_frame_status must be PASS")
     require_json_status_pass(
@@ -2356,6 +3605,19 @@ def validate_shared_requirements(contract: dict[str, Any], root: Path) -> None:
         contract.get("harness_report_assets", ""),
         "harness_report_assets",
     )
+    validation_report_path = contract.get("validation_report_path") or "reports/validation_report.json"
+    validation_report = require_json_status_pass(
+        root,
+        validation_report_path,
+        "validation_report",
+    )
+
+    return {
+        **script_handoff_result,
+        **report1_handoff_result,
+        "validation_report_path": str(as_path(root, validation_report_path)),
+        "validation_report_status": status_value(validation_report),
+    }
 
 
 def validate_youtube_restriction_guideline(
@@ -2564,9 +3826,21 @@ def validate_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
         or contract.get("source_file")
     )
     require(source_pointer, "source_url or source_path is required")
+    request_mode = project_file_request_mode(merged_request_scope_contract(contract, root))
+    stage2_tikitaka_handoff_result = validate_stage2_tikitaka_handoff_gate(
+        contract,
+        root,
+        require_production_blueprint=True,
+    )
 
     render_plan_path = require_file(root, contract.get("render_plan_path", ""), "render_plan")
     render_plan = load_json(render_plan_path)
+    proof_result = validate_production_proof_files(contract, root)
+    input_hash_result = validate_declared_input_hashes(
+        contract,
+        root,
+        Path(stage2_tikitaka_handoff_result["source_path"]),
+    )
     mode = assembly_mode(contract, render_plan)
 
     if mode in SCENARIO_FIRST_MODES:
@@ -2588,20 +3862,26 @@ def validate_gate(contract: dict[str, Any], root: Path) -> dict[str, Any]:
 
     policy_result = validate_youtube_restriction_guideline(contract, root)
     report_voice_result = validate_report_first_voice_gate(contract, root)
-    validate_shared_requirements(contract, root)
+    shared_result = validate_shared_requirements(contract, root)
 
     result = {
         "gate": "PRODUCTION_GATE",
         "status": "PASS",
         "gate_stage": "pre_capcut",
         "source_pointer": source_pointer,
+        "project_file_request_mode": request_mode,
         "script_lock_status": "SCRIPT_LOCK",
         "production_allowed": True,
         "ignored_contract_production_allowed": contract.get("production_allowed", "not_provided"),
     }
     result.update(policy_result)
     result.update(report_voice_result)
+    result.update(shared_result)
+    result.update(stage2_tikitaka_handoff_result)
     result.update(assembly_result)
+    result.update(proof_result)
+    result.update(input_hash_result)
+    result.update(upload_ready_state(contract, stage="production"))
     return result
 
 
@@ -2617,10 +3897,16 @@ def fail_result(reason: str) -> dict[str, Any]:
     }
 
 
+def serialize_result(result: dict[str, Any]) -> str:
+    """Serialize gate output, including pathlib values returned by Windows validators."""
+    return json.dumps(result, ensure_ascii=False, indent=2, default=str)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("job_dir")
     parser.add_argument("contract_json")
+    parser.add_argument("--stage", choices=("capcut-openable", "production"), default="production")
     parser.add_argument("--out")
     args = parser.parse_args()
 
@@ -2631,7 +3917,10 @@ def main() -> int:
 
     try:
         contract = load_json(contract_path)
-        result = validate_gate(contract, root)
+        if args.stage == "capcut-openable":
+            result = validate_capcut_openable_project_entry(contract, root)
+        else:
+            result = validate_gate(contract, root)
         exit_code = 0
     except GateFail as exc:
         result = fail_result(str(exc))

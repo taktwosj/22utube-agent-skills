@@ -1,6 +1,11 @@
 # Shorts Academy Reference
 
-Use this reference for Korean Shorts channel planning, source-remake scripts, and 11short/Tikitaka work when the user mentions 쇼츠학개론, 마라하기, 한계선, 돈통, 에셋, 결, 가단야, 우라까이, 일치율 0%, 벤치영상, 채널기획, or category selection.
+Use this reference as a read-only production check after an explicit production
+request and script authority already exist. It can validate Korean Shorts /
+Shorts Academy concerns such as 쇼츠학개론, 마라하기, 한계선, 돈통, 에셋, 결,
+가단야, 우라까이, 일치율 0%, 벤치영상, 채널기획, or category constraints before
+SRT/layout/CapCut work. It does not authorize script creation, source-remake
+intake, hook/channel planning, or draft polishing.
 
 This reference is distilled from 쇼츠학개론 1-3강 text/PDF analysis and the user's added 한계선/Q&A notes. It is a decision guide, not a replacement for source verification, YouTube policy gates, or the current 11short caption contract.
 
@@ -78,7 +83,7 @@ Required flow fields:
 }
 ```
 
-For current 11short work, this rule must obey the active caption constitution: output `상단 + timed 중단 + TTS 만들 글자만 복사`; do not reintroduce legacy `하단`.
+For current 11short work, this rule must obey the active caption constitution: output `상단 + timed 중단 + 중단 TTS 글자만 복사`; do not reintroduce legacy `하단`.
 
 ## 가단야
 
@@ -210,7 +215,7 @@ User channel families:
 | `연예인/팬튜브` | Idol, celebrity, fan moment, behind clip | Fandom context -> moment -> reaction | Rumor, private life, minors, and harassment risk are high. |
 | `군림보` | Photo/still-image explainer, personality/background summary, list-style image narration | Continuous TTS explanation over photos/images; simple visual support | Treat as `photo_tts_explainer`; do not force dialogue or heavy `(상황설명)` when the source is just photos plus TTS. |
 | `군사` | Military, weapon, soldier, tactics, defense story | Object/capability -> tension -> result | Weapon/geopolitical claims need high factual discipline. |
-| `동기부여/명언` | Motivation, quote, mindset, success/failure lesson | One memory anchor + one takeaway | Weak ceiling unless the figure, pain, or visual proof is strong. |
+| `동기부여/명언` | Motivation, quote, mindset, success/failure lesson | One concrete takeaway | Weak ceiling unless the figure, pain, or visual proof is strong. |
 | `게임` | Game ranking, player legend, patch, funny bug, gaming incident | Setup -> mechanic/conflict -> payoff | Use exact game terms; avoid claims unsupported by source/community evidence. |
 | `랭킹` | Ranked list, TOP-N, best/worst, compilation | Count/list pressure, strongest payoff last | Ranking order must be remixed; set `source_order_allowed=false`. |
 | `유머` | Funny clip, skit, absurd moment, fail, reaction | Setup -> beat -> laugh/reaction | Do not over-explain the joke; cut timing is part of the rewrite. |
@@ -237,8 +242,7 @@ order.
   Keep jokes restrained.
 - `관찰/리액션형`: explain what the viewer should notice with
   `(현장상황설명)`. Do not replace visible evidence with narrator opinion.
-- `지식/설명형`: turn abstract information into one concrete object, number, or
-  visual memory anchor.
+- `지식/설명형`: turn abstract information into one concrete object or number.
 
 ## Pre-Draft Checklist
 
@@ -254,6 +258,6 @@ Before drafting or revising a Shorts script, answer:
 - What caption layer mix is justified by source evidence: TTS, verified quotes, and `(상황설명)`?
 - What changes keyword, sound, and pixel/frame similarity?
 - What is the policy risk tier?
-- Does the output follow current `상단 + 중단 + TTS 만들 글자만 복사`?
+- Does the output follow current `상단 + 중단 + 중단 TTS 글자만 복사`?
 
 If any of ceiling, benchmark evidence, source truth, or policy is missing, mark the script as DRAFT or REWRITE_REQUIRED, not PASS.

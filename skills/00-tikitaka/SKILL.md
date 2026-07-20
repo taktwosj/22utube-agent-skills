@@ -1,2351 +1,1939 @@
 ---
 name: 00-tikitaka
-description: Use when the user says 티키타카, 티키타카 시작, 티키타카 대본, 이거 분석해줘, 이걸로 해보자, 후크 5개, 쇼츠학개론, 마라하기 공식, 한계선, 돈통/에셋, 결, 가단야, 우라까이, 일치율 0%, channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/랭킹/유머, or provides Gemini Shorts JSON plus top comments and wants a hook-first Korean Shorts remake script with top/middle captions. Produces analysis, pre-script hook review, one-question-at-a-time decisions, segment-map/flow-urakkai/order-remix/word-rewrite similarity-breaker harness, final copyable 상단/중단 output, and optional final_script_ko.txt handoff inputs for 000short-production-agent.
+description: Use only when the user explicitly asks for Tikitaka Korean Shorts source analysis, remake scripting, 티키타카 하자, 우라까이, hook candidates, 상단/timed 중단 draft creation, Gemini raw intake for Shorts URLs, or Gemini Shorts source notes. Do not use for SRT, CapCut, production packages, or polishing-only existing scripts.
 ---
 
 # 00 Tikitaka
 
-## Mandatory arajun Style Memory Gate - 2026-06-22
+## Active Instruction Authority - 2026-07-06
 
-For 11short Tikitaka/remake scripts, load the local style memory before writing
-hooks, `상단`, timed `중단`, or `TTS 만들 글자만 복사`:
+Authority: `shorts_script_analysis_single_source_v20260706.md`.
 
-```text
-$env:UTUBE_ROOT\11short\style_bank\STYLE_MEMORY_CONTRACT.md
-$env:UTUBE_ROOT\11short\style_bank\arajun_shorts_voice_profile.md
-$env:UTUBE_ROOT\11short\style_bank\final_script_corpus_index.json
-```
+For current Shorts script analysis and Tikitaka drafts, use only the
+2026-07-06 single-source contract:
 
-Pick 3-5 recent genre-matched final scripts and use them for user tone,
-caption cadence, reaction rhythm, and situational parentheses. Do not copy
-their exact wording. Source evidence, verified speech, policy safety, and the
-user's latest direction outrank style memory.
+- Output `상단 + timed 중단 + 중단 TTS 글자만 복사`.
+- Do not output legacy `하단`, `하단 원문`, 3-layer script packages, or bottom
+  first-line candidate blocks.
+- Treat any legacy reference that says `TTS 만들 글자만 복사` as
+  `중단 TTS 글자만 복사`.
+- Use quoted lines only for verified source speech.
+- Use parenthesized lines for reaction, emotion, situation, visual, SFX, or
+  meme captions.
+- Derive the TTS copy block only from timed `중단` lines intended for voice.
 
-If style memory is unavailable, mark `WAIT_STYLE_REFERENCE` and do not present
-the script as locked/final.
+## TTS Copy Text Naming Rule
 
-## Mandatory Channel/Template Proposal Gate - 2026-06-25
-
-For every 11short/Tikitaka Shorts remake, classify the upload channel and
-CapCut template before hook review, source-beat analysis, or script drafting.
-If the task starts from a YouTube URL, print this proposal before the
-`1. 감독모드 / 2. 자동모드` prompt.
-
-Routing authority:
+Canonical contract label:
 
 ```text
-$env:UTUBE_ROOT\tools\youtube_channel_router\channel_routing_rules.json
+중단 TTS 글자만 복사
 ```
 
-If the routing file exists, read and apply it. If it is missing, use this
-fallback:
-
-- `우니웃니` -> `블랙기본`: shopping, 생활꿀팁, 살림템, 상품실험, 신비템,
-  쿠팡파트너스. `정보/지식` is allowed only when the source is a product,
-  tool, household problem, or product experiment.
-- `난감동란` -> `인스타템플릿`: 웃긴 장면, 해외유머, 웃긴 해짜, 예짜, 예능,
-  웃긴 랭킹, 몸개그, 챌린지/실패/황당 반전.
-- `별별지구인g9` -> `인스타템플릿`: 인물 랭킹, 정보 위주, 지식정보, 지식,
-  정보, 브랜드/장인/세상 이야기.
-
-Required visible output near the start:
+Accepted legacy alias:
 
 ```text
-[채널/템플릿 제안]
-- 추천 업로드 채널:
-- 추천 템플릿:
-- 주제/카테고리 판정:
-- 추천 이유:
-- 제외/보류 채널:
-- 라우팅 확신도:
-```
-
-When a Tikitaka handoff package or `production_gate_contract.json` is created,
-carry these fields forward:
-
-```json
-{
-  "recommended_upload_channel": "",
-  "recommended_capcut_template": "",
-  "detected_topic": "",
-  "detected_category": "",
-  "routing_reason": "",
-  "routing_confidence": "high|medium|low",
-  "routing_source": "channel_routing_rules.json|fallback|user_override",
-  "excluded_channel_reason": ""
-}
-```
-
-If the user explicitly overrides the channel or template, respect it and record
-`routing_source=user_override`. Otherwise the routing proposal is the default
-production handoff value.
-
-## URL Mode Selection Override v1.0
-
-When the user provides a YouTube URL or asks to start a 11short/Tikitaka remake, ask for mode before production/script work starts:
-
-```text
-1. 감독모드
-2. 자동모드
-```
-
-- `1` 감독모드: report one stage at a time and stop before continuing.
-- `2` 자동모드: continue through stages, but still report each step in order.
-- If the user sends only `1` during a run, immediately switch to 감독모드.
-- If the user sends only `2` during a run, switch to 자동모드, while hard gates still block.
-
-## Shorts Academy Reference Gate
-
-When the user mentions 쇼츠학개론, 마라하기, 한계선, 돈통, 에셋, 결, 가단야,
-우라까이, 일치율 0%, 벤치영상, 채널기획, channel-family labels such as
-한짜/국뽕/해짜/드짜/영짜/랭킹/유머/군림보, or asks to apply/learn those
-lecture rules, read `references/shorts-academy.md` before hook review or
-script drafting.
-
-Apply it as a pre-draft lens:
-
-- Judge the channel/category ceiling before treating a source as worth remaking.
-- Classify the channel family such as 한짜, 국뽕, 해짜, 스포츠, 동물, 인물,
-  드짜, 영짜, 예능, 정치, 애니/3D, 연예인/팬튜브, 군림보, 군사,
-  동기부여/명언, 게임, 랭킹, or 유머; then separately classify the
-  `content_mode`.
-- Build a composite label before writing: `source_region`, `emotion_intent`,
-  `channel_family`, `content_mode`, and `source_surface`.
-- Decide `caption_layer_mix` / `source_layer_mix` from source/script evidence before writing:
-  TTS density, verified quote density, parenthesized situation-caption density,
-  and source-audio priority. Do not use a fixed TTS ratio.
-- Treat `군림보` as `photo_tts_explainer`: usually photos/images plus continuous
-  TTS explanation, with little or no verified speech and only light
-  `(상황설명)` unless the source itself supports more.
-- Identify the 돈통/에셋 and 결 behind the benchmark, not only the visible clip.
-- Apply 가단야: guideline first, word rewrite second, 야부리/comment-message
-  pressure third.
-- 우라까이는 every remake's mandatory structure rule. Set
-  `urakkai_required=true` and `same_flow_allowed=false`. If the literal source
-  order cannot move, change hook entry, tension placement, reaction timing,
-  caption interpretation, cut emphasis, and payoff recovery.
-- Break similarity across keyword, sound/Hz, and pixel/frame. Ranking videos
-  must not keep the original order, but non-ranking videos still must not keep
-  the same functional flow.
-- The current Tikitaka output contract still wins: write `상단 + timed 중단`
-  and optional `TTS 만들 글자만 복사`; do not create legacy `하단`.
-
-## Current Caption Contract Override v3.0
-
-This section is the latest authority. Current Tikitaka scripts use one fixed title block, timed middle captions, and an optional voice-copy block derived from timed middle captions.
-
-Current default script structure:
-
-```text
-상단
-2줄 제목
-
-중단
-[0~3초]
-"검증된 실제 발화"
-(상황/감정/반응)
-일반 텍스트
-```
-
-Rules:
-
-- The current visible/script system has no separate third script layer.
-- The hook/memory anchor is the first strong `중단` cue.
-- Do not ask for separate first-line candidates outside timed `중단`.
-- If voice/TTS is requested, derive voice text from timed `중단`.
-- `중단` is the timed visible-caption authority and uses three forms:
-  - `" ... "` = verified source speech/source subtitle/reliable transcript only. Do not invent or rewrite unverified speech inside quotes.
-  - `( ... )` = creative situation, emotion, reaction, viewer read, sound/impact cue, or tone cue.
-  - plain text = direct visible explanation, OCR-style label, context sentence, or narration-like caption shown as middle text.
-- Downstream production maps `중단` to `onscreen_ko.srt`, `onscreen_layout.json`, and the CapCut middle overlay track.
-- Compatibility files, when a downstream tool requires them, must be generated from timed `중단`; they are not separate script authority.
-
-Notation constitution:
-
-- `[00:00-00:03]`, `[몇초]`, or bracketed timing means the source/video segment marker for the writer/operator; it is never copied into CapCut as visible text.
-- Only these three text forms become CapCut `중단` text: plain text such as `소녀는 소년에게 다가갔다`, verified quoted speech such as `"야 이 새끼야!"`, and parenthesized reaction captions such as `(순간 움찔하는 소년)`.
-- A plain narration sentence is plain timed `중단` caption text by default. If voice/TTS is requested, derive the voice line from that same `중단` text.
-- `"안녕하세요"` or any double-quoted line means verified source dialogue/speech/subtitle only. Never invent quoted speech.
-- `(이거 괜히 뻘쭘하네)` or any parenthesized line means caption-only reaction/emotion/situation text for timed `중단`.
-- In all current jobs, write only `상단` and timed `중단` as the script package.
-
-Humanizer/tool priority:
-
-- `humanize-korean` or any humanizer may polish only plain Korean wording after
-  the Tikitaka structure is decided. It sits below source evidence, YouTube
-  safety, 우라까이 structure, and this `상단 + timed 중단` caption contract.
-- A humanizer must not create or change verified quoted speech, speaker
-  identity, source timing, facts, names, numbers, policy-sensitive wording, or
-  the `TTS 만들 글자만 복사` inclusion rule. If it changes those, reject that
-  pass and rewrite manually.
-- Extra memory tools such as `agentmemory` are not Tikitaka authority. Repeated
-  failure rules must be reflected in skills/harnesses or an explicitly
-  user-approved memory store, not silently stored in a separate tool.
-
-## Current 11short Handoff Override v3.0
-
-This section is the latest Tikitaka authority for 11short handoff work. It uses scenario-first handoff, timed `중단`, and optional voice-copy extraction from timed `중단`.
-
-Output contract:
-
-- Default Tikitaka output is `상단 + timed 중단` only.
-- If voice/TTS text is needed, output it as `TTS 만들 글자만 복사`, derived only from timed `중단` lines intended for voice.
-- `TTS 만들 글자만 복사` excludes visual-only parenthesized captions by default: `(퍽)`, `(가소롭군)`, `(뭐지..??)`, `(순간 얼어붙음)`.
-- In Tikitaka-only script output, put `TTS 만들 글자만 복사` as the last copy block.
-
-Middle text type and color rules:
-
-- Plain unquoted `중단` text is TTS/narration. It must be white in production handoff and `include_in_tts=true` unless marked otherwise.
-- Quoted `중단` text such as `"더 때려봐라"` is verified/source speech or a user-cleared speaker line. It must not be white.
-- Speaker colors for quoted lines:
-  - male speaker: red-family color
-  - female speaker: blue-family color
-  - unknown/mixed speaker: non-white speaker color with a short reason
-- Parenthesized `중단` text such as `(퍽)`, `(뭐지..??)`, `(가소롭군)` is visual-only situation/effect/emotion text. It must not be white and defaults to `include_in_tts=false`.
-- Parenthesized SFX/reaction colors should match the effect: impact/SFX green or strong effect color, emotion/inner-read pink/green, shock/caution yellow or red-family highlight.
-- When writing a production handoff, include or imply these fields for each timed middle beat: `middle_text_type`, `include_in_tts`, `text_color_role`, `speaker_gender` when known.
-
-Scenario-first production handoff:
-
-- Tikitaka decides the macro story frame, hook, and caption logic. It does not treat the final edit as only `12345 -> 54123`.
-- For 000short production, hand off a `scenario_timeline` concept rather than only `selected_remix_order`.
-- The handoff is not a fixed visual order such as `상황영상 -> 발언 -> 자막음성`. It is a script-beat mapping contract: each timed `중단` beat must carry a stable `script_beat_id`, and production attaches the matching situation video, verified source speech audio, and/or user TTS audio to that same beat.
-- Mark parenthesized lines `( ... )` as visual/situation beats, double-quoted lines `" ... "` as verified source-speech beats, and plain lines as user TTS/caption-voice beats.
-- Mark text display rows explicitly as editable CapCut row/track positions:
-  - row 1: 화면 위에 크게 올릴 대사형/후킹형 문구
-  - row 2: `(감정, 상황설명)`
-  - row 3: TTS 자막
-- Row 1 may use verified source dialogue when it exists, but it is not limited to source dialogue. For source-free emotional clips, row 1 should be a strong hook line such as `푸바오는 자신을 키워준 사육사를 잊지 못했습니다.`
-- In handoff JSON, prefer `display_text_lines=[{"line_index":1,...},{"line_index":2,...},{"line_index":3,...}]` instead of forcing a semantic text layer role.
-- For every plain TTS/caption-voice beat, mark that production must fill the full TTS time with a visual clip: `tts_visual_fill_required=true`.
-- Add these handoff fields when production may continue to 000short:
-  - `script_aligned_timeline_required=true`
-  - `script_aligned_timeline_status=PASS` only when each timed beat has a `script_beat_id` and expected visual/audio role.
-  - `audio_normalization_required=true`
-  - `timeline_content_start_sec=0.0`
-  - `original_source_media_required=true`
-  - `three_line_text_layout_required=true`
-  - `tts_visual_fill_required=true`
-  - `video_track_contract=caption_video_plus_situation_speaker_video`
-- GPT/Gemini structure is macro guidance only. 000short must still use `watch`/direct-frame analysis to split the real source into `source_beat_library`, then assign clips to scenario beats.
-- Do not force the remake duration to match the original source duration.
-- Default visual assignment is one matching clip per scenario beat. Split into 2-3 clips only when the beat is too long, the speaker/subject changes, action changes, or the caption meaning needs a different visual.
-- Match caption subject to visual subject: if the line is about the man, use the man's shot; if about the woman, use the woman's shot. If no matching visual exists, leave the beat `blank`, `caption_only`, or `neutral` and mark `needs_user_fill=true`.
-- Mention that the original full source video should be imported into the CapCut media bin by 000short production.
-- If the source has visible black bands, burned source captions, title text, OCR, or lower-screen credits, flag this in the handoff so 000short crops/zooms/pre-renders clean vertical clips before placing them on the main edit.
-- Keep middle caption lines short enough for one-line CapCut display. If a plain TTS line is too long, split it into sequential shorter `중단` lines before handoff.
-- Mark verified source speech as quoted `중단` so 000short can keep the matching source audio. Plain TTS/narration lines go to `TTS 만들 글자만 복사`; quoted source speech and parenthesized reaction captions do not unless explicitly voiced.
-- Tell 000short that the original downloaded source video must be imported into the CapCut media bin with its audio stream intact. Extracted source audio is only a helper track, not a replacement for the original media import.
-
-TTS handoff and meaning gate:
-
-- Tikitaka outputs `TTS 만들 글자만 복사` for user copy/paste, but it does not generate voice files.
-- Default voice status is `voice_status=WAIT_USER_TTS`.
-- If the user provided Gemini analysis, 초벌 분석, or 우라까이 direction, Tikitaka must mark the handoff as `requires_000short_source_download=true`, `elevenlabs_dialogue_analysis_required=true`, `final_report_before_capcut=true`, and `requires_user_srt_audio_before_capcut=true`.
-- This route is report-first: Tikitaka may prepare `final_script_ko.txt` and the copy block, but it must not imply that 000short can create CapCut before ElevenLabs source-dialogue analysis and user-supplied SRT/audio/ZIP are complete.
-- After `TTS 만들 글자만 복사`, tell production to ask the user for the TTS/SRT/ZIP/audio package before final CapCut assembly.
-- Do not route to Edge TTS, ElevenLabs, Supertone, Kokoro, browser TTS, or any fallback provider unless the user explicitly authorizes that provider for the current job.
-- Before handoff, read only the `TTS 만들 글자만 복사` block and ask: `그래서 뭔데? / 왜 그렇게 됐는데?`
-- If the TTS-only copy does not explain the core event, cause, or reversal, rewrite the plain `중단`/TTS lines before production handoff.
-- For police, rescue, hospital, accident, justice, exposure, or conflict videos, the TTS copy must state the verified cause before the resolution. Do not hide the core reason behind vague wording such as `수상한 행동` if the source supports a clearer restrained phrase such as `성추행 정황`, `몹쓸 짓`, `피해 사실`, or `위험한 행동`.
-- Sensitive wording must stay source-supported and restrained. Do not invent allegations, diagnoses, motives, identities, insults, threats, or offscreen facts.
-
-SFX handoff:
-
-- Tikitaka may suggest Marahagi SFX cues when they support a visible beat, but SFX remains optional unless the user requests it.
-- Suggested SFX should be written as production notes or `sfx_timeline` cues, not as a replacement for captions.
-- When 000short uses selected SFX, it should place them on the timeline and also register them in the CapCut project media/material bin as `sfx_media_bin` whenever the draft schema allows it.
-- Do not claim global CapCut sound-effect DB registration.
-
-## 11short Functional Structure Remake Output Override v4.0
-
-For 11short 우라까이 and Shorts factory script work, do not split the source as
-`1-2-3-4-5` numeric beat order and then merely reorder those numbers. The
-writer must first translate every source beat into a functional story role, then
-write three distinct remake versions from those roles.
-
-Numeric labels such as `1/2/3/4/5` may still be used as temporary source-segment
-IDs when the user wants to provide the exact source time ranges manually. In
-that case the numbers are only handles for the user's timecode sheet, not the
-remake structure.
-
-Functional labels may include:
-
-- 원인
-- 오해
-- 갈등
-- 미끼
-- 티저
-- 반전
-- 정체 공개
-- 감정 상승
-- 웃음 포인트
-- 감동 포인트
-- 화해
-- 결과
-- 회수
-- 엔딩
-
-Default output for 우라까이 requests:
-
-```text
-1. 원본 기능 구조 분석
-
-| 원본 장면 | 기능 | 내용 |
-| --- | --- | --- |
-| 원본 00:00~00:05 | 원인 | 사건이 시작되는 이유 |
-| 원본 00:05~00:10 | 오해 | 시청자가 처음 착각하게 되는 지점 |
-| 원본 00:10~00:18 | 갈등 | 인물 간 긴장 또는 궁금증이 커지는 구간 |
-| 원본 00:18~00:25 | 반전 | 예상과 다른 정보가 드러나는 구간 |
-| 원본 00:25~00:35 | 결과 | 사건의 결말 |
-| 원본 00:35~00:40 | 회수 | 앞에서 깔아둔 포인트를 마지막에 터뜨리는 구간 |
-
-2. 우라까이 대본 3가지 버전
-
-버전 A. 반전 선공개형
-- 원본 / 우라까이 구조 비교
-- 구조 요약
-- 우라까이 최종 대본
-- TTS용 자막
-
-버전 B. 갈등 증폭형
-- 원본 / 우라까이 구조 비교
-- 구조 요약
-- 우라까이 최종 대본
-- TTS용 자막
-
-버전 C. 감동 회수형
-- 원본 / 우라까이 구조 비교
-- 구조 요약
-- 우라까이 최종 대본
-- TTS용 자막
-```
-
-If exact source ranges are not already user-confirmed, the first deliverable is
-the rough script plus `PROPOSED_SOURCE_TIMECODE` and
-`USER_TIMECODE_CHECK_REQUIRED`, not a lockable production script. Tikitaka should
-still propose the best source ranges from source evidence/watch/direct-frame
-review. Do not output only a scene list or only a blank timecode sheet; the user
-checks whether Tikitaka's proposed seconds match the rough script.
-
-```text
-중단 초벌대본
-
-[블록 1 | 편집 00:00-00:03 | 원본 제안 00:22-00:30 | 상태 PROPOSED_SOURCE_TIMECODE]
-{plain narration / "verified source speech" / (situation or emotion)}
-
-[블록 2 | 편집 00:03-00:06 | 원본 제안 00:07-00:13 | 상태 PROPOSED_SOURCE_TIMECODE]
-{plain narration / "verified source speech" / (situation or emotion)}
-
-구간 초단위 확인표
-1번: {블록 1 초벌대본 문장/장면 설명} | 기능: {기능 역할} | Codex 제안 원본: 00:22-00:30 | 사용자 확인: USER_TIMECODE_CHECK_REQUIRED
-2번: {블록 2 초벌대본 문장/장면 설명} | 기능: {기능 역할} | Codex 제안 원본: 00:07-00:13 | 사용자 확인: USER_TIMECODE_CHECK_REQUIRED
-3번: {블록 3 초벌대본 문장/장면 설명} | 기능: {기능 역할} | Codex 제안 원본: 00:30-00:40 | 사용자 확인: USER_TIMECODE_CHECK_REQUIRED
-
-사용자 입력 예:
-1번 맞음
-2번 00:08-00:13으로 수정
-3번은 빼고 4번 먼저
-```
-
-After the user confirms or corrects the proposed ranges, rewrite the selected
-version with the exact `[편집 ... | 원본 ...]` pairs and set
-`user_source_timecode_status=CONFIRMED`. Before that, set
-`user_source_timecode_required=true`,
-`user_source_timecode_status=USER_TIMECODE_CHECK_REQUIRED`,
-`source_timecode_authority=user_confirmed`, and
-`proposed_source_timecode_status=PROPOSED_SOURCE_TIMECODE`.
-The user's replies are validation or correction values for the rough script
-blocks. Do not reinterpret the user-supplied `1/2/3/4/5` numbers as a new
-creative order unless the user explicitly changes the order too.
-
-Version defaults:
-
-- 버전 A. 반전 선공개형: 반전/결과/wow point를 먼저 보여주고, 뒤에서 원인과 과정을 역추적한다.
-- 버전 B. 갈등 증폭형: 갈등이나 오해가 가장 커 보이는 장면으로 시작해 이유를 쌓고 반전을 공개한다.
-- 버전 C. 감동 회수형: 결과나 감정 장면을 먼저 보여주고, 그 결과가 왜 감동적인지 원인부터 회수한다.
-
-Each version must include a structure comparison table:
-
-```text
-| 원본 구조 | 우라까이 구조 |
-| --- | --- |
-| 원인 | 반전 티저 |
-| 오해 | 갈등 |
-| 갈등 | 원인 |
-| 반전 | 정체 공개 |
-| 결과 | 결과 |
-| 회수 | 회수 |
-```
-
-Each `우라까이 최종 대본` uses only the current script structure:
-
-```text
-상단
-{상단 제목 2줄}
-
-중단
-
-[편집 00:00-00:03 | 원본 00:36-00:42]
-{plain narration / "verified source speech" / (situation or emotion)}
-```
-
-Rules:
-
-- Every timed middle block must include both edit time and original source time
-  only after the source range is verified or user-confirmed:
-  `[편집 00:00-00:03 | 원본 00:36-00:42]`.
-- If the user reserved source-time authority or said they will provide `1/2/3/4/5`
-  checks after the draft, do not treat Codex's first source time as final. Use
-  `원본 제안 ... | 상태 PROPOSED_SOURCE_TIMECODE` and block production handoff
-  until the user confirms or corrects it.
-- In this mode, the rough script must come before the user's time check. The
-  timecode sheet exists so the user can correct the exact source seconds for the
-  script blocks, not so Tikitaka can avoid writing the rough script.
-- The original time attached to a speaker line must point to the real source
-  segment for that speaker line.
-- `"`...`"` is only for verified source speech, source subtitle, reliable
-  transcript, or user-corrected source dialogue.
-- `( ... )` is only for emotion, situation, reaction, SFX, impact, or visual
-  explanation.
-- Plain text is narration/TTS candidate text.
-- Do not invent source speech. If the line is a creative rewrite, make it plain
-  narration or a parenthesized reaction, not a quoted speaker line.
-- Each version must end with `TTS용 자막`, containing only plain narration lines
-  from that version. Exclude verified speaker dialogue, parenthesized situation
-  captions, and time markers. If no plain narration should be spoken, write
-  `없음`.
-- If the user explicitly asks for only one version or locks a version, output
-  only that requested/locked version, but still base it on the functional
-  structure analysis.
-- If production continues to 000short, mark the selected version and hand off the
-  functional roles as `scenario_timeline`/`scenario_beats`, not only as
-  `selected_remix_order`.
-- If `user_source_timecode_required=true`, production may continue only after the
-  user-supplied source ranges are copied into the selected version and
-  `user_source_timecode_status=CONFIRMED`.
-- For ranking/TOP-N videos, the ranking order itself must be remixed. Never keep
-  the original rank sequence such as `5->4->3->2->1` or `1->2->3->4->5` unless
-  the user explicitly asks to preserve it. Record the original order, selected
-  remix order, and why the new order lowers source similarity.
-
-## Current Tikitaka Final Output Shape v3.0
-
-This is the required final user-facing Tikitaka result shape before 000short production.
-
-When the user provides Gemini/JSON/source analysis and asks Tikitaka to decide the remake direction, output this structure:
-
-```text
-첨부 JSON 기준으로 바로 진행하겠습니다.
-{source/risk/context one-paragraph note}
-
-추천은 {recommended_structure_name} = {macro_structure} 구조입니다.
-즉, {why this order works in one or two sentences}
-
-흠. 이런 영상이군.
-
-요약
-{short source summary}
-
-원본 단위 분해
-(1) {beat_name} {source_time}
-{what happens / key verified speech or visual}
-
-(2) ...
-
-작동 이유
-1. {reason} {weight_if_useful}
-2. {reason} {weight_if_useful}
-3. {reason} {weight_if_useful}
-
-가장 강한 기억앵커
-{memory anchor}
-
-주의할 점
-{policy/source/speech/timing caution}
-
-구조 비교
-{compare 2-3 viable macro structures, including original-order and recommended-order when useful}
-
-최종 판단
-{which structure wins and why}
-
-최종 대본
-
-상단
-{line 1}
-{line 2}
-
-중단
-
-[0~3초]
-{verified quote / parenthesized reaction / plain TTS line}
-{more middle lines if needed}
-
-[3~6초]
-...
-
 TTS 만들 글자만 복사
-{only TTS/voice-intended plain middle lines}
 ```
 
-Rules:
+`TTS 만들 글자만 복사` is a legacy alias of `중단 TTS 글자만 복사`.
+The legacy alias is allowed only as a backward-compatible label for the same
+block. It must be interpreted as `중단 TTS 글자만 복사`, not as a separate legacy
+output.
 
-- The final Tikitaka output must show the reasoning path, not only the final script.
-- The structure comparison should compare actual viewer-retention strategies, such as original order, payoff-first, reaction-first, or mystery-backtrack.
-- The final script remains `상단 + 중단` only.
-- Do not add a third script layer or separate copy-only caption layer.
-- In `중단`, verified source speech uses quotes only when confirmed by source audio/subtitle/transcript.
-- In `중단`, non-script situation/SFX/emotion captions use parentheses.
-- In `중단`, plain lines are TTS/narration candidates and should be readable as spoken Korean.
-- `TTS 만들 글자만 복사` must be the final block and include only voice/TTS-intended lines. Exclude parenthesized captions by default.
-- If quoted source speech should remain source audio only, exclude it from `TTS 만들 글자만 복사`.
-- Do not generate TTS audio in Tikitaka. The next production step must request user-supplied TTS/SRT/ZIP/audio unless the user explicitly says no TTS or explicitly authorizes a provider.
-- The TTS copy block must pass the meaning gate by itself: a viewer should understand what happened, why it mattered, and why the ending occurred without reading the visual-only parenthesized captions.
-- This Tikitaka result becomes the macro/story handoff to 000short. 000short still performs `watch` segmentation, clip assignment, CapCut media insertion, SFX insertion, and gates.
-
-Remake rewriting and edit-point rules:
-
-- Replace most words from the benchmark/source script so the Korean caption wording fits the new video flow.
-- Paraphrase source speech naturally in Korean while preserving meaning and support from the source; do not invent unsupported speech or facts.
-- Change edit points accurately around the verified `wow point` and the timed `중단`/voice-derived line when voice is requested.
-- The hook must get shock pressure from both the `wow point` and the top title/subtitle wording. A soft summary hook fails.
-- If the user provides already changed footage, a recut order, or Korean 우라까이/caption direction, treat it as the creative authority unless it violates source truth, safety, or harness contracts.
-- Preserve the user's chosen flow, wow point, and caption intent. Polish the script for retention, readability, timing, and policy instead of replacing the concept from scratch.
-- When handing off to production, make the intended CapCut result explicit enough for natural cuts, readable timed `중단`, natural Korean paraphrase, stable title/middle timing, audio/SFX/BGM timing, and no awkward overlaps.
-
-## YouTube Restriction Guideline Gate v1.0
-
-Use the user's YouTube exposure-restriction chart as a mandatory policy scan before writing, after drafting, and before any `SCRIPT_LOCK` or 000short handoff. This is a practical 11short gate, not a substitute for official YouTube policy lookup when current legal/platform precision is needed.
-
-Required output in Tikitaka reasoning:
+Internal artifact:
 
 ```text
-YouTube 제한 가이드라인
-- guideline_gate_complete: true
-- policy risk tier: LOW / MEDIUM / HIGH / BLOCK
-- platform verdict: PASS / REWRITE_REQUIRED / FAIL
-- flagged categories: 아동/미성년자 / 동물 / 마약 / 자살자해 / 혐오 / 테러전쟁 / 폭력 / 선정 / none
-- rewrite/block reason:
+tts_copy_text.txt
 ```
 
-Block or rewrite these before the final `상단/중단` draft:
+Meaning:
 
-- 아동/미성년자: any under-18 scene with drinking, smoking, vaping, fireworks misuse, unsupervised firearms, fear/crying, emotional suffering, or purposeless dangerous/confusing behavior. Do not use child distress as the hook.
-- 동물/마약/자살자해/혐오/테러전쟁: human-induced animal fights; non-standard animal cruelty outside ordinary hunting, food processing, or medical treatment; poison/explosive/non-standard hunting; animal abuse, neglect, staged rescue, or glorification; blood/body closeups in predator-prey footage; animal-pain thumbnails; drug/self-harm/hate/terror/war framing.
-- 폭력/선정: violence incitement or glorification toward a person/group; perpetrator-shot violence; sexual assault scenes; shock-first accidents, assault, corpse, blood, or injury without context; blood/injury/corpse as the screen center; violence as the video's main purpose; firearm/war scenes; direct sensitive body exposure; direct sex depiction or strong implication; sexual jokes or sexual conversation as the center; bed/kiss scenes that may limit exposure depending on intensity.
+- timed `중단` 중 voice/TTS 의도 줄만 시간표 없이 모은 순수 복사용 텍스트
+- 음성파일 아님
+- SRT 아님
+- CapCut production asset 아님
+- 사용자가 직접 복사해서 TTS/나레이션 툴에 붙여넣는 원문 블록
+- visual-only `(...)` 상황설명은 기본 제외
+- verified `"..."` 화자발언은 기본 제외
 
-Animal and emotional Shorts rule:
+## Tikitaka Current Order
 
-- Natural animal behavior, animal affection, caretaking, or ordinary cute/emotional moments can proceed when no distress, injury, abuse, staged rescue, or blood/body focus is present.
-- Do not infer an animal's exact inner state as fact. Prefer `사람처럼 안긴`, `먼저 품으로 간`, `울컥하게 만든 장면` over unsupported claims such as `이별을 알고 울었다`, `버림받는 줄 알았다`, or `놓치기 싫어 발버둥쳤다`.
-- For serious or emotional animal clips, choose restrained A/B captions. Avoid loud meme captions, mocking, or SFX that makes distress look funny.
-- If any guideline category is uncertain, mark `policy risk tier: MEDIUM` or `HIGH`, state the uncertainty in `주의할 점`, and keep the script `DRAFT` until 000short/watch evidence resolves it.
-- If the chart category is clearly hit, mark `policy risk tier: BLOCK` or `platform verdict: REWRITE_REQUIRED`; do not create `SCRIPT_LOCK`, handoff folders, or production instructions.
-
-## Purpose
-
-Use Gemini video-analysis JSON plus optional top-liked comments to find why a Short works, then guide the user through one-question-at-a-time decisions before writing a transformed 3-layer Korean remake script.
-
-The primary Tikitaka goal is not translation. It is to rebuild the script so the visible structure, narration flow, and word choices no longer resemble the original script, while preserving the source video's real event, verified speech, emotional payoff, and viewer comprehension.
-
-Operational target: practical 0% recognizable script similarity. Do not claim an exact external plagiarism/similarity score unless a real checker was run. In normal writing mode, treat `0%` as a strict creative goal:
-
-- no same beat order unless the user explicitly chooses it
-- no translated sentence skeleton
-- no copied explanatory words except names, unavoidable nouns, and verified quoted speech
-- no same opening frame unless it is intentionally repeated as a hook
-- no source-speech fabrication
-
-Do not download videos in this skill. Use only the provided JSON, comments, transcript, screenshots, or user-provided observations unless the user explicitly asks for download/production.
-
-## Inputs
-
-- Required: Gemini video analysis JSON or equivalent scene analysis.
-- Optional: top-liked comments, view count, channel context, original title, existing script.
-
-## Shared 11short SFX Cue Library
-
-When a Tikitaka script is intended for `11short` CapCut production, use the shared SFX library as a cue reference, not as a mandatory insert list:
+Current Tikitaka work is a reproducible design stage, not an abstract script
+stage. The stage order is:
 
 ```text
-${env:UTUBE_ROOT}\11short\assets\sfx\marahagi
-${env:UTUBE_ROOT}\11short\assets\sfx\marahagi\sfx_manifest.json
+tikitaka_source_request.json
+-> source evidence
+-> source_identity_lock.json + verified source_fingerprint_sha256
+-> SOURCE_VOICE_SEPARATION_GATE
+-> 10_analysis/audio/full_source_audio.wav
+-> 10_analysis/audio/vocals.wav
+-> 1차설계서
+-> timeline_design.json
+-> caption_beat_map.json
+-> timeline_design_gate.json
+-> chatgpt_review/round1_review_packet.md
+-> chatgpt_review/round1_chatgpt_raw.md
+-> chatgpt_review/round1_codex_decisions.json
+-> humanize_korean_gate.json
+-> block_map.json / block_role_map.json / block_voice_switch_map.json
+-> tts_copy_text.txt
+-> tts_duration_probe.json
+-> tts_timing_reconciliation_gate.json
+-> chatgpt_review/round2_audit_packet.md
+-> chatgpt_review/round2_chatgpt_raw.md
+-> chatgpt_review_gate.json
+-> script_handoff_gate.json
+-> report1_handoff.json
 ```
 
-- Suggest SFX cues only when they support a visible beat, such as surprise, transition, impact, comedy, water/liquid, UI click, or positive reaction.
-- Keep the Tikitaka output text-first. Put SFX suggestions as optional production notes; do not let SFX replace the top/middle caption contract.
-- Do not claim a CapCut global library registration. The 11short production agent attaches selected files to individual drafts as local audio materials.
+`1차설계서` is the operator-facing CapCut timeline design. It must show the real
+track/time layout as a table, including expandable rows for `T1/T2/TTS`,
+`"" 화자발언 A/B/C...`, `() 상황설명 A/B/C...`, video, and audio lanes. If a
+speaker quote or situation caption needs multiple rows, add rows; do not
+compress them into one abstract paragraph.
 
-## Gemini Raw Signal Intake v2.1
-
-Treat Gemini JSON as first-pass source notes, not final truth. Use it to decide what to ask and what to draft, but normalize overstatements during the Tikitaka writing pass.
-
-Priority raw fields when present:
+`timeline_design.json` is the machine-readable version of that design. Every
+segment must preserve protected fields:
 
 ```text
-source_audio_mode
-source_audio_mode_evidence_ko
-youtube_category_raw
-content_mode_raw
-category_point_inventory
-implemented_point_timeline
-emotion_timeline
-visual_focus_timeline
-dialogue_timeline
-dialogue_function_timeline
-music_lyric_timeline
-reaction_timeline
-character_state_timeline
-edit_impact_points
-wow_point_candidates_raw
-viewer_confusion_risks
-turning_points
-shorts_structure_raw
-remake_notes_for_codex
+edit_id/source_ref/source_order/timeline_order/assembly_role/
+caption_type/visible_text_role/audio_role/time_start/time_end/track/
+duration_basis/duration_status/audio_policy/visual_strategy
 ```
 
-Use them like this:
+`timeline_design_gate.json` must be PASS before the design can be treated as a
+handoff artifact.
+
+## Full-Source Demucs Preprocessing
+
+After `source_identity_lock.json` and before `1차설계서`, run:
 
 ```text
-youtube_category_raw + content_mode_raw
--> decide the broad lane and actual Shorts working mode
-
-category_point_inventory + implemented_point_timeline
--> identify which object/action/reaction actually functions as the hook
-
-wow_point_candidates_raw + edit_impact_points + turning_points
--> choose hook candidates and the first strong middle/TTS line candidates
-
-emotion_timeline + reaction_timeline + character_state_timeline
--> identify the emotional turn and reaction captions
-
-visual_focus_timeline
--> decide what the viewer must look at and what middle captions must not cover
-
-dialogue_timeline + dialogue_function_timeline
--> decide whether quoted/adapted speech is allowed and which lines are setup/twist/payoff
-
-music_lyric_timeline
--> use song-lyric sync as a separate music signal, never as character speech
-
-viewer_confusion_risks
--> decide what timed middle TTS/plain-caption lines must explain for Korean viewers
+source.mp4
+-> extract the complete audio to 10_analysis/audio/full_source_audio.wav
+-> run Demucs on that complete WAV with separation_scope=FULL_SOURCE_AUDIO
+-> save the stable vocal stem as 10_analysis/audio/vocals.wav
+-> validate SOURCE_VOICE_SEPARATION_GATE
+-> identify and lock speaker ranges from vocals.wav
 ```
 
-Rules:
-
-- Do not treat Gemini's category, wow point, or timing as final.
-- If `content_mode_raw.content_mode` is generic such as `other`, use `mode_label_ko`, evidence fields, comments, and visible structure to choose a more useful working mode.
-- Gemini `possible_caption_angles_ko` and `remake_notes_for_codex` are idea notes, not source facts. Remove raw overstatement before final script.
-- When asking a decision question, briefly mention the strongest raw signal and the uncertainty if any.
-- When writing `상단 / 중단 / TTS 만들 글자만 복사`, preserve the selected category point, wow point, visual focus, emotion turn, and viewer-confusion fix.
-
-## Pre-Script Hook Review Gate
-
-Run this gate after source/comment analysis and before writing any final-looking script.
-
-This gate is not the final script. It is the short operating check that fixes the direction of the first 3 seconds, the first strong `중단`/TTS line, the top title, and any middle reaction caption. If this gate is missing, the output is only `DRAFT`.
-
-Always use `references/pre_script_hook_review.md` as the detailed reference when available.
-
-Mandatory checks:
-
-1. 3-second killer point
-   - Pick exactly one first-3-seconds stopping point: expression, action, object, result, subtitle issue, line, reversal, surrounding reaction, or final action preview.
-   - Tie it to `wow_point_candidates_raw`, `edit_impact_points`, `visual_focus_timeline`, `turning_points`, or `remake_notes_for_codex.strongest_visual_moment_ko`.
-   - If comments are provided, check whether the comment reaction supports the same point.
-
-2. Four hook-type candidates
-   - Create one candidate each: `충격형`, `숫자/시간형`, `정체 숨김형`, `리액션형`.
-   - Each candidate must be a complete sentence, not a word fragment.
-   - Each candidate must include one line explaining why the viewer should keep watching after hearing it.
-   - If a candidate has no concrete continue-watching reason, discard or rewrite it.
-
-3. Answer/interpretation/result hiding provocation
-   - Do not limit this to products. For 11short, the hidden target can be an answer, interpretation, result, identity, expression, final action, subtitle, or comment reaction.
-   - Keep enough context visible so the viewer knows what to look at in the first 3 seconds.
-   - Do not hide key subjects in high-accuracy lanes such as news, incidents, health, finance, politics, or unresolved allegations.
-
-4. Comment/viewer reaction cross-check
-   - If comments are provided, weigh real comment reactions strongly.
-   - Use comments as viewer reaction, not as verified fact.
-   - Do not factualize rumor, conspiracy, crime, medical, sexual, or defamatory comment claims.
-   - If Gemini and comments disagree, prefer comments for hook/emotion only when the video gives visible support.
-
-5. Audio-off comprehension reinforcement
-   - Check whether the viewer understands setup / turn / payoff with source audio muted.
-   - If `viewer_confusion_risks` exists, decide what timed middle TTS/plain-caption lines must explain.
-   - Middle captions should reinforce reaction, emotion, visual focus, OCR, or comment-code; they must not merely repeat the TTS/plain line.
-
-Required output:
-
-```text
-대본 전 보조 검토
-
-1. 3초 킬러 포인트
-- 시간:
-- 핵심 화면:
-- 멈추는 이유:
-- 첫 중단/TTS 줄에 반영할 요소:
-
-2. 후킹 유형 4종 후보
-- 충격형:
-  - 계속 봐야 하는 이유:
-- 숫자/시간형:
-  - 계속 봐야 하는 이유:
-- 정체 숨김형:
-  - 계속 봐야 하는 이유:
-- 리액션형:
-  - 계속 봐야 하는 이유:
-My recommendation:
-Reason:
-
-3. 숨김 도발 검토
-- 숨길 수 있는 것:
-- 드러내야 하는 것:
-- 사용 여부:
-- 이유:
-
-4. 댓글/반응 교차 확인
-- 댓글 핵심 반응:
-- Gemini 핵심 반응:
-- 일치 여부:
-- 대본에 반영할 포인트:
-
-5. 오디오오프 이해 보강
-- 원본 오디오 상태:
-- 설명이 필요한 맥락:
-- 중단/TTS에서 반드시 설명할 것:
-- 중단에서 보여줄 반응/감정:
-```
-
-## Workflow
-
-1. First impression
-   - Start with: `흠. 이런 영상이군.`
-   - Summarize in 2-3 short lines.
-2. Five fan-agent read
-   - Use the five fixed personas below.
-   - Each gives favorite timestamp/beat and one reason.
-   - Extract common or competing hot zones.
-3. Multi-reason extraction
-   - Find 4-7 possible working reasons with rough percentages.
-   - Keep the real working reasons to the top 2-3.
-4. Comment analysis
-   - Run only when comments are provided.
-   - Reweight the working reasons from comment evidence.
-5. Tone classification
-   - Pick one of the six tone lanes.
-6. Pre-script hook review gate
-   - Run the mandatory `대본 전 보조 검토` block.
-   - Do not write a final-looking script until each hook-type candidate has a concrete continue-watching reason.
-7. Similarity breaker harness
-   - Split the original script flow into numbered beats for comparison: `12345`, `1234567`, or more if needed.
-   - Generate at least two or three macro-structure candidates before drafting, such as original-order, payoff-first, reaction-first, or mystery-backtrack.
-   - Include a scenario-first candidate that starts from the strongest visual/payoff beat when useful.
-   - Run a word-rewrite pass so narration does not keep the original's sentence skeleton or common phrasing.
-8. Decision tree dialogue
-   - Ask one question at a time.
-   - Give recommendation and reason.
-   - Use numeric choices only.
-   - Stop and proceed when the user chooses.
-9. Script writing
-   - Write the reasoning path first: summary, source beat breakdown, working reasons, memory anchor, caution, structure comparison, and final judgment.
-   - Then write the final `상단`, timed `중단`, and final `TTS 만들 글자만 복사`.
-   - Do not add a third script layer or separate copy-only caption layer.
-10. SCRIPT AGENT MODE
-   - Always run five parallel writer personas after the draft. Do not wait for the user to ask for agent mode.
-   - Use real subagent tools by default whenever they are available and allowed by the current tool policy.
-   - Top title, first timed `중단` cue, and core hook selection require `REAL_WRITER_AGENT_MODE`.
-   - If real writer-agent execution is unavailable, blocked, or fails, stop at `DRAFT`; do not replace it with inline fallback, chat-visible fallback, or `visible_writer_battle`.
-   - This is mandatory for every Tikitaka draft, serious rewrite, `오토`, `너가 알아서`, `바로 진행`, `프로젝트 만들어`, and every production handoff phrase.
-   - Each writer persona must output actual replacement material, not only a review.
-   - A chief editor integrates the five outputs into one script candidate.
-   - The same five personas recheck the candidate.
-   - SCRIPT_LOCK requires at least 4 of 5 PASS, source-similarity hard veto PASS, fact/risk hard veto PASS, and no hard veto.
-   - If the five persona outputs, chief editor output, or final recheck result is missing, status is `WAIT - agent result missing` or `SCRIPT_REWRITE`; do not continue.
-11. DRAFT_EYE_REVIEW MODE (11short Factory Default)
-   - 티키타카의 기본 출력은 영상 분류, 우라까이, `상단 + timed 중단 + 중단 TTS 글자만 복사` 블록까지이다.
-   - 이 단계의 상태는 `DRAFT_EYE_REVIEW`이다. 사용자가 눈검수한다.
-   - 이 단계에서 `SCRIPT_LOCK`, `PASS`, `locked`, `완료`, `production_handoff_allowed`를 쓰지 않는다.
-   - 5-persona reader gate, chief editor integration, SCRIPT_LOCK, similarity breaker full pass는 사용자가 명시적으로 `FINAL_LOCK`을 요청할 때만 실행한다.
-   - 대본 line replacement나 serious rewrite 후에도 기본 상태는 `DRAFT_EYE_REVIEW`로 돌아간다. 이전 gate 결과를 무효화하되, full harness 재실행은 FINAL_LOCK일 때만 한다.
-   - `00-tikitaka`는 대본/스크립트 authority이지 production factory가 아니다. SRT, voice files, CapCut drafts, prompts, exports, upload packages는 `00-tikitaka`에서 만들지 않는다.
-   - production handoff는 사용자가 `000short-production-agent`로 진행하라고 할 때 또는 FINAL_LOCK 시에만 한다.
-12. Production input handoff
-   - Only after SCRIPT_LOCK, create `final_script_ko.txt` and an optional production input folder.
-   - Do not create screen plans, cut plans, SRT files, voice files, CapCut drafts, prompts, exports, or upload packages in `00-tikitaka`.
-
-## Decision Order
-
-```text
-1. 작동 이유 확정: 1-3개
-2. 후크 결정
-3. 대본 전 보조 검토 5개 출력
-4. 원본 구간 지도 작성: 12345 / 1234567 / 필요한 만큼 확장
-5. 구조 후보 제시: 원본순서 / payoff-first / reaction-first / mystery-backtrack 등
-6. 추천 구조 확정: scenario-first handoff 포함
-7. 단어/문장 겹침 파괴 패스
-8. 자막 톤 결정
-9. 티키타카 최종 출력 양식으로 대본 작성
-10. TTS 만들 글자만 복사 최종 블록 작성
-11. 5명 병렬 대본작가 에이전트가 실제 수정안 생성
-12. 총괄 편집자 통합
-13. 동일 5명 최종 재검수
-14. SCRIPT_LOCK / SCRIPT_REWRITE 판정
-15. SCRIPT_LOCK일 때만 final_script_ko.txt 또는 000short 입력 폴더 생성
-```
-
-## Tikitaka Script Lock And Production Input Contract
-
-`00-tikitaka` is the script authority, not the production factory. It locks the script and prepares a minimal production input. `000short-production-agent` verifies SCRIPT_LOCK, then creates screen timing, SRT, voice text, layout, and CapCut drafts.
-
-Mandatory order:
-
-```text
-1. source analysis
-2. working reason / hook / tone / scenario-first macro structure
-3. pre-script hook review gate
-4. source beat breakdown / structure comparison / final judgment
-5. final `상단 / 중단 / TTS 만들 글자만 복사` draft
-6. five parallel writer persona generation
-7. chief editor integration
-8. final five-persona recheck
-9. SCRIPT_LOCK / SCRIPT_REWRITE decision
-10. final_script_ko.txt creation
-11. optional production input folder for `000short-production-agent`
-```
-
-The words `오토`, `자동`, `너가 알아서`, `바로 진행`, `다음 진행`, `프로젝트 만들어`, `CapCut 만들어`, or `제작해` choose the recommended options automatically, but they do not skip SCRIPT AGENT MODE.
-
-## Super Harness Scrollback And Production Gate Contract
-
-Every Tikitaka production-intended task must leave a visible, scrollback-auditable checkpoint trail in chat. Do not work silently through the analysis, reorder, script, or lock stages. After each major step, print this compact board and update the TODO statuses instead of only reporting at the end:
-
-```text
-[작업 체크포인트 #{number}]
-- active skill: 00-tikitaka
-- 현재 단계:
-- 지금 하는 일:
-- 방금 완료:
-- 다음 단계:
-- blocker:
-- 증거 파일:
-- 상태: WAIT / RUNNING / PASS / FAIL / BLOCKED
-
-[00-tikitaka TODO]
-- [ ] 원본 작동 이유 분석
-- [ ] Source Voice Check
-- [ ] 원본 beat 번호화
-- [ ] 구조 후보 비교
-- [ ] 추천 구조 + 이유
-- [ ] scenario_first_montage handoff 확인
-- [ ] Tikitaka Similarity Breaker Harness
-- [ ] 최종 출력 양식: 요약/분해/구조비교/최종판단/대본
-- [ ] 최종 `상단 + 중단 + TTS 만들 글자만 복사`
-- [ ] REAL_WRITER_AGENT_MODE
-- [ ] 5-agent pass count 4/5 이상
-- [ ] hard veto false
-- [ ] SCRIPT_LOCK evidence
-- [ ] production_gate_contract partial fields saved
-```
-
-For any 11short handoff, Tikitaka must create or update a partial `production_gate_contract.json` or equivalent order contract before handoff. Tikitaka owns these fields:
-
-```json
-{
-  "source_url": "",
-  "source_path": "",
-  "original_beat_order": [1, 2, 3, 4, 5],
-  "edit_assembly_mode": "scenario_first_montage",
-  "timeline_content_start_sec": 0.0,
-  "scenario_timeline": [],
-  "script_aligned_timeline_required": true,
-  "script_aligned_timeline_status": "PASS",
-  "script_aligned_timeline_structure": [],
-  "three_line_text_layout_required": true,
-  "three_line_text_layout_status": "PASS",
-  "tts_visual_fill_required": true,
-  "audio_normalization_required": true,
-  "original_source_media_required": true,
-  "video_track_contract": "caption_video_plus_situation_speaker_video",
-  "remix_candidates": [
-    [3, 1, 2, 4, 5],
-    [4, 1, 2, 3, 5],
-    [2, 4, 1, 3, 5]
-  ],
-  "selected_remix_order": [3, 1, 2, 4, 5],
-  "same_order_exception_reason": "",
-  "user_approved_same_order": false,
-  "allowed_repeated_beats": [],
-  "declared_removed_or_compressed_beats": [],
-  "similarity_breaker_harness": "PASS",
-  "writer_agent_source": "REAL_WRITER_AGENT_MODE",
-  "writer_agent_mode_status": "REAL_RUN",
-  "writer_persona_total": 5,
-  "writer_persona_pass_count": 4,
-  "writer_agent_evidence_files": [],
-  "hard_veto": false,
-  "script_lock_evidence_path": "script_lock.json",
-  "final_script_ko_path": "final_script_ko.txt",
-  "tikitaka_decision_log_path": "tikitaka_decision_log.json"
-}
-```
-
-Fail closed:
-
-- If `remix_candidates` has fewer than 3 orders, status is `DRAFT` and production handoff is `NO`.
-- If `selected_remix_order` is not one of `remix_candidates`, status is `SCRIPT_REWRITE`.
-- If `selected_remix_order` equals `original_beat_order`, require both `same_order_exception_reason` and `user_approved_same_order=true`; otherwise production handoff is `NO`.
-- If a repeated beat or removed/compressed beat is intentional, declare it in `allowed_repeated_beats` or `declared_removed_or_compressed_beats`; otherwise the production gate must fail.
-- If `REAL_WRITER_AGENT_MODE` evidence is missing, report `writer_agent_mode_status=NOT_RUN`, `script_lock_status=DRAFT`, and `production_handoff_allowed=NO`.
-- `INLINE_FALLBACK` and `visible_writer_battle` may help ideation only. They cannot select the final hook, cannot create `SCRIPT_LOCK`, and cannot permit production handoff.
-- Do not write `production_allowed=true` from Tikitaka. That value is created only by `000short-production-agent/scripts/validate_production_gate.py` after watch/direct-frame, render-plan, and harness evidence exist.
-
-Tikitaka must also keep this live report block updated in chat so the user can scroll back and audit the work:
-
-```text
-[보고서 초안 업데이트]
-
-원본대비변경요약
-- 원본 흐름:
-- 최종 흐름:
-- 실제 변경된 컷:
-- 유지한 컷:
-- 제거/압축한 컷:
-- 반복 사용한 컷:
-- 왜 이렇게 바꿨는지:
-
-일치도 0% 목표 세팅
-- 순서 변경:
-- 첫 장면 변경:
-- 문장 골격 변경:
-- 원본 단어 치환:
-- OCR/중단 문구 변경:
-- 중단/TTS 설명 방식 변경:
-- 원본과 여전히 같은 부분:
-
-검수상태
-- tikitaka similarity breaker:
-- writer agent mode:
-- SCRIPT_LOCK:
-- production handoff:
-- blocker:
-```
-
-## [LOCK] HARNESS / SCRIPT_LOCK / FINAL REPORTING RULE
-
-Purpose:
-
-This skill separates draft text, reviewed draft text, harness-checked text, and locked production input. Verbal claims are not evidence. Do not report `PASS`, `SCRIPT_LOCK`, `완료`, or `최종본` unless the required evidence files, logs, callbacks, and validation tables exist and support that status.
-
-State definitions:
-
-```text
-DRAFT: 작성 또는 수정만 된 상태
-REVIEWED_DRAFT: 내부 검토 문구가 있으나 외부 증거가 없는 상태
-HARNESS_RUNNING: 하네스 실행 중인 상태
-HARNESS_FAILED: 하네스 또는 검증 실패 상태
-HARNESS_PASS: 하네스 검증 산출물이 존재하고 통과한 상태
-SCRIPT_LOCKED: 모든 필수 증거가 존재하고 최종 잠금 조건을 만족한 상태
-```
-
-Required evidence before `SCRIPT_LOCKED`:
-
-```text
-work_order.md
-execution_spec.md
-implementation_log.md
-persona_outputs/
-script_gate_report.json
-validation_report.json
-evidence_pack.json
-harness_trace.log
-visual_gate.md
-job_state.json
-```
-
-Evidence mode note:
-
-```text
-- File-backed `SCRIPT_LOCKED` or production handoff requires the evidence files above.
-- Top title, first timed `중단` cue, and core hook selection require `REAL_WRITER_AGENT_MODE`.
-- Inline fallback and `visible_writer_battle` are emergency idea sketches only. They are not Writer Agent Mode, cannot satisfy the five-writer gate, cannot select the final hook, cannot create `SCRIPT_LOCK`, and cannot hand off to production.
-- Do not claim real spawned subagents, Writer Agent Mode, or multi-agent execution unless the actual writer-agent execution ran and left evidence.
-- File-backed `SCRIPT_LOCKED` still requires the evidence files above.
-```
-
-The recommended local wrapper is:
+Invoke:
 
 ```powershell
-py -3 $HOME\agent-skills\skills\00-tikitaka\scripts\tikitaka_harness_runner.py {work_dir} --job-id {job_id}
+py -3 skills/00-tikitaka/scripts/prepare_source_voice.py --root <episode-root> --source 00_source/source.mp4
 ```
 
-The wrapper reads the available evidence, writes `job_state.json`, `validation_report.json`, `evidence_pack.json`, and `visual_gate.md`, and fails closed when anything is missing. Generated files with `FAILED`, `MISSING`, `NOT_RUN`, or `UNVERIFIED` statuses do not permit final reporting.
+This is a narrow Stage 1 source-analysis preprocessing exception. It creates
+only the full-source analysis WAV and Demucs vocal stem. It does not create Q
+clips, TTS, SRT, CapCut, render, export, upload, or other production assets.
+The harness calls `validate_source_voice_separation.py`; it never launches
+Demucs or the next skill.
 
-n8n evidence rule:
-
-To report n8n as executed, at least one of these must exist:
+The only valid skip is:
 
 ```text
-n8n execution id
-n8n callback log
-n8n webhook response log
-n8n output artifact
-job_state.json with n8n.status = DONE and an execution_id or evidence path
+NOT_REQUIRED_NO_SOURCE_SPEECH
 ```
 
-Without that evidence, write `n8n: NOT_RUN` or `n8n: UNVERIFIED`. Never write `n8n: DONE`.
+Use it only when the source has no audio stream or when the user/source
+evidence explicitly confirms that no human speech exists. Missing Demucs is
+`WAIT_DEMUCS_AVAILABLE`; never fall back to mixed source audio.
 
-Forbidden phrases without required evidence:
-
-```text
-SCRIPT_LOCK: PASS
-HARNESS: PASS
-n8n: DONE
-최종본
-완료했습니다
-검수 완료
-락 걸었습니다
-배포 가능
-```
-
-Fail-closed rules:
-
-```text
-validation_report.json missing or FAILED -> no file-backed completion report
-evidence_pack.json missing or FAILED -> no file-backed completion report
-script_gate_report.json missing or FAILED -> no file-backed SCRIPT_LOCK
-persona_outputs/ missing or fewer than 5 outputs -> do not claim file-backed 5-writer mode ran
-writer-agent execution evidence missing -> do not claim REAL_WRITER_AGENT_MODE ran
-n8n execution id/callback/output missing -> do not claim n8n ran
-job_state.json final_report_allowed=false -> final status must be DRAFT or NOT_LOCKED
-```
-
-Final report board:
-
-Every final-looking answer must print this board first. Values must be copied from `visual_gate.md` or `job_state.json` when those files exist. If they do not exist, mark missing evidence explicitly and keep final status as `DRAFT`.
-
-```text
-[VISUAL HARNESS BOARD]
-작업 ID:
-요청 원문 보존:
-Work Order:
-Execution Spec:
-5작가 모드:
-Script Gate:
-n8n:
-Validation Report:
-Evidence Pack:
-SCRIPT_LOCK:
-최종 상태:
-완료 보고 가능 여부:
-```
-
-Status decision table:
-
-```text
-원문 수정만 함 -> DRAFT
-5작가 문서만 있음 -> REVIEWED_DRAFT
-script gate 실패 -> HARNESS_FAILED
-n8n 미실행 -> NOT_LOCKED
-validation 없음 -> NOT_LOCKED
-evidence_pack 없음 -> NOT_LOCKED
-모든 증거 있음 -> SCRIPT_LOCKED
-```
-
-Core principle:
-
-```text
-말로 된 완료는 완료가 아니다.
-파일, 로그, 콜백, 검증표가 없으면 DRAFT다.
-```
-
-Before any production handoff, output this lock board:
-
-```text
-[SCRIPT_LOCK Board]
-- final_script_ko drafted:
-- writer_persona_generation_complete:
-- chief_editor_integration_complete:
-- final_persona_recheck_complete:
-- writer_persona_pass_count:
-- hard veto:
-- production_handoff_allowed:
-- production_allowed: NOT_SET_BY_TIKITAKA
-- blocking failures:
-- status: DRAFT / SCRIPT_REWRITE / SCRIPT_LOCK / WAIT
-```
-
-Before any final-looking Tikitaka script answer or after any user-requested script edit, output this harness board:
-
-```text
-[Tikitaka Harness Mode]
-- trigger:
-- script changed this turn: yes/no
-- previous lock invalidated: yes/no/n/a
-- writer_agent_mode: NOT_RUN / REAL_RUN / FAILED
-- writer_count: 0/5 / 5/5
-- inline_fallback: DISALLOWED_FOR_HOOK
-- visible_writer_battle: NOT_ACCEPTED_AS_AGENT_MODE
-- top_title_status: WAIT / SELECTED
-- first_middle_cue_status: WAIT / SELECTED
-- selected first middle cue:
-- similarity breaker harness: NOT RUN / PASS / REWRITE_REQUIRED
-- guideline + word + yaburi gate: NOT RUN / PASS / REWRITE_REQUIRED
-- term replacement report: NOT RUN / PASS / N/A
-- writer persona generation: NOT RUN / PASS / WAIT
-- chief editor integration: NOT RUN / PASS / WAIT
-- final persona recheck: NOT RUN / PASS / WAIT
-- policy/fact risk gate: NOT RUN / LOW / MEDIUM / HIGH / BLOCK
-- n8n: NOT RUN / WAIT - local run / PASS / FAIL
-- production harness: NOT RUN / analysis PASS / assets PASS / capcut PASS / all PASS / FAIL
-- script_lock_status: DRAFT / WAIT - harness result missing / SCRIPT_REWRITE / SCRIPT_LOCK
-- production_handoff_allowed: NO / YES_AFTER_SCRIPT_GATE
-- allowed next action:
-```
-
-Harness wording rules:
-
-- `PASS` is allowed only for a named gate that actually ran and has visible evidence in the answer or decision log.
-- Top title, first timed `중단` cue, and core hook cannot be selected while `writer_agent_mode` is `NOT_RUN` or `FAILED`.
-- Inline fallback and `visible_writer_battle` are disallowed for hook selection evidence.
-- `SCRIPT_LOCK` is allowed only when all required gate fields are complete, at least 4 of 5 writer personas pass, both hard-veto personas pass, and no field is `NOT RUN` or `WAIT`.
-- If the answer only applies a user's wording change, call it `DRAFT`, show which gates are `NOT RUN`, and do not say `final`, `locked`, `PASS`, or `완료` except to say they are not yet valid.
-
-Fixed hook-selection reports:
-
-```text
-[Tikitaka Harness Mode]
-
-writer_agent_mode: NOT_RUN
-inline_fallback: DISALLOWED_FOR_HOOK
-visible_writer_battle: NOT_ACCEPTED_AS_AGENT_MODE
-top_title_status: WAIT
-first_middle_cue_status: WAIT
-script_lock_status: DRAFT
-production_handoff_allowed: NO
-allowed_next_action: RUN_WRITER_AGENT_MODE
-```
-
-```text
-[Tikitaka Harness Mode]
-
-writer_agent_mode: REAL_RUN
-writer_count: 5/5
-chief_editor: PASS
-recheck: PASS
-top_title_status: SELECTED
-first_middle_cue_status: SELECTED
-script_lock_status: LOCK_CANDIDATE
-production_handoff_allowed: YES_AFTER_SCRIPT_GATE
-```
-
-Minimum `job_state.json` for hook selection:
+Every `speaker_quote` must record:
 
 ```json
 {
-  "episode_id": "",
-  "current_stage": "HOOK_SELECTION",
-  "writer_agent_mode": {
-    "required": true,
-    "status": "NOT_RUN",
-    "writer_count": "0/5",
-    "chief_editor": "NOT_RUN",
-    "recheck": "NOT_RUN",
-    "evidence": null
-  },
-  "inline_fallback": {
-    "allowed": false,
-    "reason": "top_title_and_first_middle_cue_require_real_writer_agent_mode"
-  },
-  "top_title_status": "WAIT",
-  "first_middle_cue_status": "WAIT",
-  "script_lock_status": "DRAFT",
-  "production_handoff_allowed": false,
-  "blocker": "REAL_WRITER_AGENT_MODE_NOT_RUN"
+  "source_audio_ref": "10_analysis/audio/vocals.wav",
+  "source_audio_provenance": "demucs_full_source_vocals"
 }
 ```
-- If the assistant previously claimed `SCRIPT_LOCK` without the board and agent outputs, the next response must correct the report and reset to `DRAFT`.
 
-Role split:
+Missing or different provenance is `WAIT_SOURCE_VOICE_Q_PROVENANCE`.
+`source_audio=on` now means the separated speaker/Q lane is audible. It never
+authorizes embedded source-video audio in CapCut. `no_vocals.wav` is not used.
 
-```text
-00-tikitaka owns:
-- source interpretation
-- script writing
-- five parallel writer persona generation
-- chief editor integration
-- final five-persona recheck
-- SCRIPT_LOCK decision
-- final_script_ko.txt creation
-- production input folder preparation
+## Vmake Clean Visual Preprocessing
 
-000short-production-agent owns:
-- SCRIPT_LOCK verification
-- source download / source verification when needed
-- analysis.json final normalization
-- compatibility guide_ko.srt creation only when the toolchain requires it
-- onscreen_ko.srt creation
-- onscreen_layout.json creation
-- `TTS 만들 글자만 복사` extraction from timed `중단` when voice/TTS is requested
-- screen timing / cut plan / CapCut draft creation
-- production harness validation
-```
-
-`00-tikitaka` must not create:
+When the user requests `stage_2_full`, CapCut, or an automatic production run,
+prepare a second video through Vmake after `source_identity_lock.json` exists:
 
 ```text
-guide_ko.srt
-onscreen_ko.srt
-onscreen_layout.json
-voice helper text files
-voice helper subtitle files
-voiceover mp3 files
-source_original_audio.mp3
-screen plan
-cut split plan
-image prompts
-video prompts
-CapCut draft
-CapCut project folder
-exports
-upload package
+00_source/source.mp4
+-> source identity, OCR, STT, frame checks, full-source Demucs
+
+Vmake link import
+-> 00_source/clean_source.mp4
+-> production visual only
+-> embedded_audio_policy=muted_always
 ```
 
-## SCRIPT AGENT MODE - 5 Parallel Writer Personas
+The original `source.mp4` remains the only analysis and source-truth video.
+Never replace it with the Vmake result for OCR, STT, timing verification,
+source identity, or Demucs. The Vmake result is the later production visual;
+its embedded audio is never authorized.
 
-The five personas are not static role labels and not simple reviewers. They are five lively script writers who compete from different real viewer voices, generate actual replacement material, then act as final failure-detection gates.
+### User-Confirmed Existing Vmake Result
 
-Run exactly these five writer personas every time:
+Use `USER_CONFIRMED_VMAKE_REUSE` only when the user explicitly says the Vmake
+result is already complete or confirmed and also says not to download or test
+it again. This current-request instruction overrides the default Vmake browser,
+download, registration, and validation steps below for the named existing clean
+files.
+
+- Do not open Vmake, download or re-download, replay, inspect, or re-analyze the
+  confirmed clean files.
+- Do not run `register_vmake_clean_source.py` or `validate_vmake_clean_source.py`.
+  Do not run ffprobe duration/aspect-ratio
+  parity, OCR, STT, frame analysis, or visual quality review on those files.
+- Keep the original-source analysis, timing, edit order, captions, and audio plan unchanged.
+  The clean files replace only the production visuals, one-for-one
+  and in the already approved order.
+- Keep every clean file's embedded audio muted. Use only the separately approved
+  narration/source-audio lanes.
+- Place the user-specified narration at the first scene when the user requests
+  that placement. Do not redesign later beats merely because the visual file was
+  cleaned.
+- Pass the existing clean paths and this reuse state to
+  `000short-production-agent`; `00-tikitaka` still does not build CapCut.
+
+Record:
 
 ```text
-1. 10대 고딩여 드립작가
-   - default battle name: 김하린
-   - 눈치, 관계 공감, 읽씹/답장/표정 해석, 댓글 감성
-   - 장점: 어색함과 민망함을 바로 공감되는 말로 바꿈
-   - 주의: 특정 인물의 마음이나 관계를 사실처럼 단정하면 안 됨
-
-2. 10대 고딩남 드립작가
-   - default battle name: 박도윤
-   - 학교 복도, 반 단톡, 쉬는 시간 밈, 짧고 센 비유
-   - 장점: 첫 2초에 꽂히는 장난기와 날것의 반응
-   - 주의: 너무 내부자 밈이 되면 모르는 시청자가 이탈함
-
-3. 20대 대딩여 드립작가
-   - default battle name: 최서연
-   - 관계 텐션, 사회성 버퍼링, 현실 공감, 말맛 있는 관찰
-   - 장점: 이름을 몰라도 상황이 잡히는 공감형 첫마디
-   - 주의: 감정 과잉이나 팬덤식 과몰입으로 흐르면 안 됨
-
-4. 20대 대딩남 드립작가
-   - default battle name: 이준서
-   - 과방/술자리/팀플/커뮤니티식 비유, 건조한 분석 개그
-   - 장점: 상황 구조를 한 줄로 정리하고 반전 포인트를 세움
-   - 주의: 설명충처럼 길어지면 TTS 리듬이 죽음
-
-5. 20대 백수남/백수여 와일드카드 드립작가
-   - default battle names: 강민재(남) / 윤지아(여)
-   - 영상마다 남/여 중 하나만 선택한다. 둘 다 쓰지 않는다.
-   - 선택 기준: 더 강한 생활감, 댓글창 말투, TTS 리듬을 낼 쪽
-   - 장점: 정제되지 않은 커뮤니티식 한 방과 자조 개그
-   - 주의: 비하, 조롱, 루머, 혐오 표현으로 넘어가면 즉시 FAIL
+vmake_reuse_mode=USER_CONFIRMED_NO_REDOWNLOAD_NO_RETEST
+user_vmake_confirmation=true
+analysis_authority=original_sources
+timeline_authority=existing_approved_design
+clean_visual_review_status=USER_CONFIRMED
 ```
 
-The five writers must not converge too early. Each writer should submit a different entry angle, sentence ending, and TTS rhythm. Avoid all five lines ending with `입니다`.
+This is a user-confirmed reuse state, not a newly agent-validated
+`VMAKE_CLEAN_SOURCE_GATE=PASS`. If any named existing clean file is missing or
+inaccessible, stop with `WAIT_EXISTING_VMAKE_CLEAN_FILE`; do not start a new
+Vmake download unless the user asks.
 
-Agent runner policy:
+Read `references/vmake_clean_source_workflow.md` before browser action. Use the
+existing signed-in Chrome session and browser DOM control. Do not use OS-level
+mouse/keyboard control. The workflow covers `Import from link`, the rights
+checkbox, `Apply`, `Processing...`, `Download`, IDM/browser interception, and
+the exact signed-download recovery rule.
+
+Rights confirmation is URL-specific. Check Vmake's rights checkbox only when
+the user explicitly authorized it for the current source. Otherwise stop with:
 
 ```text
-- SCRIPT AGENT MODE is default, not opt-in.
-- Do not ask the user whether to run 5 writer personas after a draft. Run them.
-- "Run them" means `REAL_WRITER_AGENT_MODE`: five actual named writer-agent outputs, chief editor integration, final five-persona recheck, selection reason, and decision-log evidence.
-- If real subagent/spawn tools are available and the current tool policy permits their use, dispatch the five writers as real subagents.
-- If real subagent/spawn tools exist but the current tool policy requires explicit user authorization and the user has not provided it, do not violate the tool policy. Stop at `DRAFT` and report `writer_agent_mode: NOT_RUN`.
-- User phrases such as `서브에이전트`, `병렬 에이전트`, `5작가 에이전트`, `에이전트 모드`, or `무조건 써` may be treated as authorization only if the active tool policy accepts user authorization in that form.
-- Inline fallback or `visible_writer_battle` is allowed only as a clearly labeled emergency idea sketch. It is not accepted as Writer Agent Mode, does not satisfy the five-writer gate, and cannot support SCRIPT_LOCK or production handoff.
-- Do not describe inline fallback or `visible_writer_battle` as real parallel subagent execution.
+WAIT_VMAKE_RIGHTS_CONFIRMATION
 ```
 
-Battle mode output:
+After download, register and validate:
 
-Use battle mode whenever SCRIPT AGENT MODE generates first lines, rewrites a selected first line, or presents a draft for user approval. The user should be able to watch the five writers compete.
+```powershell
+py -3 skills/00-tikitaka/scripts/register_vmake_clean_source.py --root <episode-root> --download <File_from_link_*.mp4> --source-url <shorts-url> --job-id <vmake-job-id> --rights-confirmed --confirmation-source user
+py -3 skills/00-tikitaka/scripts/validate_vmake_clean_source.py --root <episode-root>
+```
+
+The validator writes no production assets. It verifies
+`VMAKE_CLEAN_SOURCE_GATE`, the locked source/video ID, the Vmake job and
+download filename, clean-file hash, duration/aspect-ratio parity, and:
 
 ```text
-[5작가 배틀모드]
-- battle target:
-- agent runner: REAL_WRITER_AGENT_MODE
-- auto mode: yes/no
-
-1번 참가 - 10대 고딩여 김하린
-- 나는 이렇게 정했다:
-- 첫 중단 큐:
-- 왜 계속 보게 되나:
-- TTS 리듬:
-- 약점:
-
-2번 참가 - 10대 고딩남 박도윤
-- 나는 이렇게 정했다:
-- 첫 중단 큐:
-- 왜 계속 보게 되나:
-- TTS 리듬:
-- 약점:
-
-3번 참가 - 20대 대딩여 최서연
-- 나는 이렇게 정했다:
-- 첫 중단 큐:
-- 왜 계속 보게 되나:
-- TTS 리듬:
-- 약점:
-
-4번 참가 - 20대 대딩남 이준서
-- 나는 이렇게 정했다:
-- 첫 중단 큐:
-- 왜 계속 보게 되나:
-- TTS 리듬:
-- 약점:
-
-5번 참가 - 20대 백수남/백수여 와일드카드
-- selected wildcard:
-- 나는 이렇게 정했다:
-- 첫 중단 큐:
-- 왜 계속 보게 되나:
-- TTS 리듬:
-- 약점:
-
-[탈락자 선별]
-- 탈락:
-- 탈락 이유:
-- 생존:
-
-[최종 후보 3개]
-1.
-2.
-3.
-
-[1위 결정]
-- 1위:
-- 이유:
-- 그대로 진행 여부:
+00_source/clean_source.mp4
+embedded_audio_policy=muted_always
+source_voice_policy=separate_demucs_q_only
 ```
 
-Battle mode rules:
+For `stage_1_script`, this gate is `NOT_REQUIRED_STAGE1_ONLY`. For
+`stage_2_full`, missing or invalid clean visual evidence is
+`WAIT_VMAKE_CLEAN_SOURCE`. The harness validates the manifest only; it never
+opens Vmake, clicks the UI, downloads a file, or launches the next skill.
 
-- Keep the battle entertaining, but every candidate must still be TTS-readable and understandable to viewers who do not know the source people.
-- Treat top title, first timed `중단` cue, and core hook as high-stakes creative assets.
-- For first-line/top-title/core-hook work, inline fallback and `visible_writer_battle` are not valid primary generation modes and are not valid selection evidence.
-- If `REAL_WRITER_AGENT_MODE` cannot run, keep `top_title_status: WAIT`, `first_middle_cue_status: WAIT`, `script_lock_status: DRAFT`, and `production_handoff_allowed: NO`.
-- Each participant must use a different sentence ending or rhythm. Do not let all five end with `입니다`.
-- The elimination round must name the removed candidates and why they lost.
-- The final three candidates must be ranked.
-- If the user approves, proceed with the current 1st place.
-- If the user chooses another finalist, change 1st place to the user's pick and proceed from that line.
-- If the user says `오토`, `자동`, `너가 알아서`, `바로 진행`, or equivalent, do not ask for approval. Run the battle, choose the 1st place, and proceed with that candidate.
-- Battle mode never bypasses source-similarity hard veto, fact/risk hard veto, chief editor integration, or final recheck.
+## CAPTION_BEAT_MAP_HANDOFF
 
-First pass required output for each persona:
+Every timed middle-caption row that continues to CapCut must carry a reference
+to `caption_beat_map.json`. This is the timing contract for visible text; it is
+not a TTS audio file and it does not replace `tts_duration_probe.json`.
+
+Each beat records `beat_id`, `edit_id`, `caption_role`, `audio_basis`, `text`,
+`start_sec`, `end_sec`, `timing_source`, `max_chars_per_line`, `max_lines`,
+and `y`. The design owner assigns the semantic role and the production skill
+resolves the CapCut text track. A missing beat map blocks Stage 2 with
+`CAPTION_BEAT_MAP_REQUIRED`.
+
+The handoff preserves these production profiles:
 
 ```text
-[Pn persona name]
-1. 원본 핵심 해석
-2. 살릴 재미/감정/정보 포인트
-3. 상단 제목 수정안
-4. 중단 자막 수정안
-5. TTS 만들 글자만 복사 수정안
-6. 버릴 문장 / 줄일 문장
-7. TTS 리듬/어미 체크
-8. 모르는 사람 이해도 체크
-9. 문제점 / 리스크
-10. 원본 해체 체크: PASS / FAIL
-11. 팩트/리스크 체크: PASS / FAIL
-12. PASS or FAIL
-13. PASS/FAIL 이유
+profile_version=caption_profiles_v2
+TTS: y=-900, max_chars_per_line=10, max_lines=1
+speaker_quote: y=-500, max_chars_per_line=10, max_lines=1
+situation_caption: y=700, max_chars_per_line=10, max_lines=1
+video_scale=1.20
+face_avoidance=fixed_lower_safe_zone_v1
 ```
 
-Hard veto checks:
+`audio_basis` distinguishes `tts_audio`, `source_speech`, and `caption_only`.
+The caption beat map controls visible-text timing only; it must never shorten
+source speech or TTS audio.
+
+Humanize Korean runs after the 1차설계서 is structurally fixed and before the
+handoff gate. Humanize may change wording only: visible Korean in T1/T2/TTS,
+`"" 화자발언`, and `() 상황설명`. It must not change time ranges, track rows,
+caption roles, edit order, audio policy, verified quotes, source facts, names,
+numbers, or the separation between quote/situation/TTS roles. Record the result
+as `humanize_korean_gate.json` with `humanize_korean_gate.json status=PASS`.
+
+Do not run SCRIPT_HANDOFF_GATE before humanize_korean_gate.json status=PASS. If
+Humanize needs a structural change, return to Tikitaka design repair instead of
+silently patching the script.
+
+Wording polish is an optional pass inside this skill when the user explicitly
+asks for a rewrite or when the 1차설계서 text fails readability/hook pressure.
+That pass may patch wording only; it may not change
+`time_start/time_end/track/caption_type/audio_policy`.
+
+## Purpose Of 1차설계서
+
+`00-tikitaka` is not a pretty-script generator. It is the Stage 1 design owner
+for reproducible Shorts production.
+
+The purpose of `1차설계서` is to lock the production contract before CapCut work:
+what the viewer sees, when it appears, which semantic lane owns it, whether it
+is TTS narration, verified speaker quote, situation caption, source video, or
+audio policy, and what the next production skill must implement without
+reinterpretation.
+
+Human operators approve `1차설계서`.
+Production agents implement `timeline_design.json`.
+
+Downstream production must not rewrite hooks, reorder beats, change time ranges,
+change tracks, change caption_type, change audio_policy, convert speaker_quote
+to TTS, convert situation_caption to speaker_quote, or add BGM/SFX unless the
+locked handoff explicitly allows it.
+
+## Assembly Role Sequence Contract
+
+`00-tikitaka` does not only reorder source blocks.
+
+The purpose of Tikitaka design is to create a new editable Shorts assembly plan:
+the sequence of narration audio, visible captions, verified speaker quotes,
+situation captions, source video, source audio, TTS audio, SFX, and BGM policy.
+
+`source_order` records where the material came from.
+`timeline_order` records where it appears in the remake.
+`assembly_role` records what function the segment performs in the new Shorts
+design.
+
+A valid Tikitaka design may transform:
 
 ```text
-- If source-similarity hard veto returns FAIL, SCRIPT_LOCK is impossible.
-- If fact/risk hard veto returns FAIL, SCRIPT_LOCK is impossible.
-- If any required persona output is missing, SCRIPT_LOCK is impossible.
+source 1-2-3-4-5
 ```
 
-Hard veto is a check, not a separate static writer persona. It is computed from the five writers' `원본 해체 체크` and `팩트/리스크 체크`, then confirmed again after chief editor integration.
-
-Chief editor integration:
+into a new role sequence such as:
 
 ```text
-The chief editor integrates the five outputs into one script candidate.
-The chief editor has no PASS vote.
-The chief editor must not override hard veto or silently ignore persona FAIL.
+TTS narration -> situation caption -> speaker quote -> TTS narration -> payoff quote
 ```
 
-Final recheck required output:
+or:
 
 ```text
-최종 대본 검수 결과:
-- 10대 고딩여 드립작가: PASS / FAIL
-- 10대 고딩남 드립작가: PASS / FAIL
-- 20대 대딩여 드립작가: PASS / FAIL
-- 20대 대딩남 드립작가: PASS / FAIL
-- 20대 백수남/백수여 와일드카드 드립작가: PASS / FAIL
-- source-similarity hard veto: PASS / FAIL
-- fact/risk hard veto: PASS / FAIL
+narration -> caption -> caption -> speaker quote -> situation caption
 ```
 
-SCRIPT_LOCK requires all of these:
+This is not a script rewrite after handoff. This is the Stage 1 design itself.
+
+Production must implement this assembly role sequence without reinterpretation.
+
+## Assembly Role Enum
+
+Allowed `assembly_role` values:
 
 ```text
-- 5인 중 4인 이상 PASS
-- source-similarity hard veto PASS
-- fact/risk hard veto PASS
-- writer_persona_hard_veto = false
-- all five first-pass persona outputs exist
-- chief editor integrated script exists
-- final five-persona recheck result exists
+intro_narration
+context_narration
+payoff_narration
+ending_narration
+verified_speaker_quote
+situation_caption
+reaction_caption
+card_or_comment_caption
+source_visual_hold
+source_visual_action
+transition_or_separator
+ranking_item
 ```
 
-SCRIPT_REWRITE if any of these happens:
+Meaning:
 
 ```text
-- 4인 미만 PASS
-- source-similarity hard veto FAIL
-- fact/risk hard veto FAIL
-- hard veto 발생
-- any required agent result is missing
+caption_type = 자막/오디오의 종류
+assembly_role = 쇼츠 안에서 이 beat가 수행하는 기능
+source_order = 원본에서 몇 번째 재료인가
+timeline_order = 리메이크에서 몇 번째로 보여주는가
 ```
 
-If any agent result is missing, report `WAIT - agent result missing` and do not proceed to handoff. Do not summarize, infer, or fake a missing persona result.
-
-## Five Fan Agents
-
-```text
-[10대 - 김찬우]
-관심: 챌린지, 밈, 짧고 강한 임팩트
-패턴: 가장 어이없거나 충격적인 구간
-
-[20대 - 박지은]
-관심: 반전, 케미, 리얼리티
-패턴: 의외성/반전
-
-[30대 - 이상민]
-관심: 사연, 인생사, 공감
-패턴: 감정/억울/통쾌
-
-[40대 - 정혜진]
-관심: 자녀/가족/사회
-패턴: 교훈/메시지/현실
-
-[50대 - 박철수]
-관심: 향수, 권력, 사연
-패턴: 반전/통쾌/회한
-```
-
-## Tone Lanes
-
-```text
-A. 일본 예능 / 실험 / 검증
-대본: 상황 설명 + 호기심 후크
-시점: 3인칭
-
-B. 사연 / 감동 / 인터뷰
-대본: 감정 진입 + 시-풀이
-시점: 1인칭 가능
-
-C. 음악 / 반전 / 성덕
-대본: 역설 후크 + 점층
-시점: 3인칭
-
-D. 인물 / 띠동갑 / 발언
-대본: 최강 인용 후크
-시점: 3인칭 + 인용 살림
-
-E. 동물 / 일상 / 귀여움
-대본: 의인화 + 시각 우선
-시점: 1인칭 의인화 가능
-
-F. 추리 / 사건 / 야담
-대본: Mystery-Sacrifice 템플릿
-시점: 3인칭 또는 1인칭
-```
-
-## Order Transformations
-
-```text
-원본 5구간 예시:
-1(도입) - 2(상황) - 3(충격) - 4(점층) - 5(Payoff)
-
-원본 7구간 예시:
-1(결과/최강 장면) - 2(인물/관계) - 3(질문/문제) - 4(첫 반응) - 5(장치/행동) - 6(점층) - 7(최종 발언/밈)
-
-기본 변환:
-1. 31245: 충격 먼저
-2. 51234: 결과 먼저
-3. 2134567: 상황과 도입 뒤집기
-4. 7125436: 최종 발언/밈 먼저, 원인 역추적
-5. 31234+5: 충격 후 정상 흐름
-6. 12354: Payoff 직전 충격
-
-반복 노출 변환:
-1. 21134765: 2번 구간을 첫 훅과 설명 회수로 두 번 사용
-2. 1552346: 결과 장면을 훅과 중반 리마인드로 두 번 사용
-3. 73312456: 밈/발언을 먼저 던지고, 중간에 다시 회수
-```
-
-Extra options:
-
-- 닭 표정 루프형: 의인화 영상.
-- 미스터리 자막 + 티저: 반전 영상.
-- 인용 폭격형: 인물/발언 영상.
-
-Rules:
-
-- Always map the source into numbered beats before choosing the rewrite flow.
-- A repeated number means the same source beat is intentionally shown twice with a different function.
-- Repetition must change the viewer function: first use = hook, second use = explanation, proof, or payoff.
-- Never repeat the same narration sentence when repeating a beat.
-- If the original already starts with the strongest result, choose a different entry angle or repeat the result with a new meaning.
-- Prefer `51234`, `7125436`, or repeated-beat variants when similarity risk is high.
-
-## Similarity Breaker Harness
-
-Run this harness before writing and again after drafting any Tikitaka script.
-
-```text
-[Tikitaka Similarity Breaker Harness]
-- guideline checked first:
-- source segment map:
-- selected remix order:
-- repeated beat use:
-- removed or compressed beats:
-- added Korean-viewer context:
-- wow point changed accurately:
-- TTS punch point:
-- hook shock charge:
-- opening frame changed:
-- sentence skeleton changed:
-- key noun/verb/adjective overlap reduced:
-- source term inventory count:
-- unchanged source terms remaining:
-- term replacement ledger:
-- five-agent validation:
-- verified quoted speech preserved:
-- middle/voice-copy timing conflict checked:
-- final status: DRAFT / REWRITE_REQUIRED / PASS
-```
-
-Pass rules:
-
-- `guideline checked first` must be complete before writing. Confirm the source's safety, source-audio mode, dialogue truth, visual flow, caption lane, and word-rewrite target before drafting.
-- `source segment map` must use numbered beats, not paragraphs.
-- `selected remix order` must differ from source order unless the user explicitly requests source order.
-- `wow point changed accurately` must identify the real visual peak and move the edit/script emphasis to fit the new flow.
-- `TTS punch point` must mark the exact line where narration pierces the visual moment instead of merely describing it.
-- `hook shock charge` must combine the wow point and the strongest subtitle/top-title pressure. A soft summary hook fails.
-- `sentence skeleton changed` fails if a line is just a Korean translation of the source line.
-- `key noun/verb/adjective overlap reduced` fails if the same descriptive words dominate the new narration.
-- `source term inventory count` must count source content words when an original script or student draft is available.
-- `unchanged source terms remaining` must list which source terms still appear in the new script.
-- `term replacement ledger` must show what each important source word became.
-- `five-agent validation` must run after drafting when a script is created or seriously rewritten.
-- Repeated beats are allowed only when the function changes.
-- Verified quoted speech in `" "` is exempt from word-rewrite, but surrounding narration must be rewritten.
-- If the output still feels like `원본을 한국어로 풀어쓴 버전`, mark `REWRITE_REQUIRED`.
-- PASS means structurally and verbally transformed for creative remake use. It does not mean a measured external similarity score unless a checker was run.
-
-## Word Rewrite Pass
-
-When an original script, transcript, OCR, or student draft is available, actively replace wording.
-
-Rewrite by changing all four layers where possible:
-
-```text
-1. 관점: what the viewer is supposed to notice
-2. 문장 구조: sentence order, subject, predicate, and cause/effect direction
-3. 단어: nouns, verbs, adjectives, connective words
-4. 기능: description -> judgment, setup -> question, result -> proof, quote -> reaction
-```
-
-Forbidden weak rewrites:
-
-```text
-원본: 식사 준비가 귀찮은 미국의 엄마가 아이들을 위해 요리를 시작합니다
-약함: 귀찮은 미국 엄마가 아이들을 위해 식사를 준비합니다
-```
-
-Strong rewrite:
-
-```text
-원본 기능: 귀찮은 엄마 소개
-새 기능: 대충처럼 보이는데 낭비를 안 하는 사람으로 프레임 변경
-새 문장: 이 엄마는 요리를 대충 하는데, 낭비는 절대 안 합니다.
-```
-
-Rules:
-
-- Preserve proper nouns, relationships, numbers, and verified quotes when needed.
-- Replace generic description words first: `시작합니다`, `준비합니다`, `완성됩니다`, `먹어봅니다`, `놀랍니다`, `말합니다`.
-- Prefer new verbs that describe the function: `버팁니다`, `털어 씁니다`, `받아칩니다`, `회수합니다`, `증명합니다`, `무너집니다`.
-- Avoid keeping the same connective spine: `그리고`, `그런데`, `하지만`, `그래서` can be replaced with implication, contrast, or omitted.
-- If two consecutive voice-copy lines can be aligned one-to-one with the original script, rewrite again.
-
-## Guideline + Word + Yaburi Gate
-
-Use this gate before final Tikitaka drafting and again before production handoff.
-
-```text
-[Guideline + Word + Yaburi]
-- guideline first check:
-- benchmark/source words changed:
-- source speaker lines naturally paraphrased:
-- edit points changed:
-- wow point:
-- TTS punch:
-- subtitle/top hook pressure:
-- final hook shock:
-- status: DRAFT / REWRITE_REQUIRED / PASS
-```
-
-Rules:
-
-- Check the guideline before writing: source truth, source-audio mode, visible action, quote allowance, policy risk, and caption layout.
-- For benchmark/source scripts, change most content words to fit the new video flow. Do not keep the benchmark wording just because the meaning is similar.
-- If a person in the source video actually speaks, paraphrase naturally while preserving speaker, meaning, emotion, and story function. Do not invent speech when the source has no speech.
-- Change the edit point, not only the sentence. Move or repeat the visual wow point when that makes the hook stronger.
-- The hook must carry shock pressure from both the wow point and the subtitle/top-title wording.
-- `와우포인트` is the strongest visible moment. `TTS punch` is the narration line that pierces that moment. They must be named separately.
-- If the opening feels like a kind summary rather than a charged hook, mark `REWRITE_REQUIRED`.
-
-## Term Replacement Report
-
-When an original script, transcript, OCR, or student draft is provided, report the word-level changes after drafting. This report is mandatory before calling the Tikitaka draft `PASS`.
-
-Count only content terms:
-
-```text
-count: nouns, verbs, adjectives, adverbs, ingredient/object names, action words, emotion words, repeated catchphrases
-exclude: particles, endings, punctuation, timestamps, speaker labels, unavoidable names/numbers, verified quoted speech that must remain exact
-```
-
-Output this report before the final script or immediately after it:
-
-```text
-원단어 치환 보고
-- 원대본 핵심 단어 수:
-- 최종 대본에 그대로 남은 핵심 단어 수:
-- 잔존 단어:
-
-치환표
-| 원대본 단어 | 최종 대본 표현 | 처리 방식 | 비고 |
-|---|---|---|---|
-| 시금치 | 바질 | 단어 치환 | 화면 사실과 충돌하면 케일/채소처럼 한 단어로 조정 |
-| 올리브유 | 엑스트라버진오일 | 세부어 치환 | 띄어쓰기 없이 한 토큰 |
-| 소시지 | 소세지 | 표기 치환 | 실제 발화면 보존 |
-| 소금 | salt | 한영 전환 | 화면 OCR이면 보존 |
-```
-
-Replacement options:
-
-```text
-1. 유사어: 시금치 -> 바질, 기름 -> 오일
-2. 세부어/상위어: 올리브유 -> 엑스트라버진오일, 시금치 -> 채소
-3. 표기 변형: 소시지 -> 소세지
-4. 한영 전환: 소금 -> salt, sauce -> 소스
-5. 기능어 전환: 버리다 -> 회수하다, 넣다 -> 투하하다, 만들다 -> 끝내다
-6. 관점어 전환: 귀찮다 -> 효율파, 대충 -> 즉흥식
-```
-
-Fact-lock rules:
-
-- Do not change verified quoted speech inside `" "`.
-- Do not falsify a visible object if the changed word would make the viewer see a contradiction.
-- If a direct replacement would be inaccurate, use one broader single word instead: `시금치 -> 채소`, `버터 -> 지방`, `소금 -> 염분`.
-- Proper nouns, names, relationship labels, numbers, and meme catchphrases can remain if replacing them damages comprehension.
-- Even when a source word must remain, change the surrounding sentence skeleton.
-
-Single-word replacement rules:
-
-- A replacement must be one word or one token, not a descriptive phrase.
-- Prefer no-space replacements for compound food/object terms: `엑스트라버진오일`, `파스타면`, `치킨스톡`, `주부9단`.
-- Do not use broad phrase replacements such as `초록잎 재료`, `간 맞추는 것`, `고기 토핑`.
-- If a term needs a broader category, still keep it as one word: `채소`, `지방`, `염분`, `양념`, `오일`, `육류`.
-- The replacement ledger must show one selected final replacement per source term, not several alternatives.
-
-## Post-Draft Script Agent Result Gate
-
-After creating or seriously rewriting a Tikitaka script, run SCRIPT AGENT MODE before PASS, handoff, or production. This is the default post-draft path, not a mode that waits for user request.
-
-The required agent results are not optional. Top title, first timed `중단` cue, and core hook selection require `REAL_WRITER_AGENT_MODE`: five actual writer-agent outputs, chief editor integration, final recheck, selection reason, and decision-log evidence. If the runtime cannot spawn writer agents or the current tool policy blocks spawning, mark `writer_agent_mode: NOT_RUN`, keep `script_lock_status: DRAFT`, and stop. Do not replace this gate with inline fallback, chat-visible fallback, or `visible_writer_battle`.
-
-This gate also applies to small user edits that change final wording, such as replacing one timed `중단` line, adding a comment quote, or changing the first sentence. Those edits reset the script to `DRAFT` unless the complete post-edit harness is rerun.
-
-Forbidden shortcuts:
-
-```text
-- Do not write `SCRIPT_LOCK: PASS` after only drafting or editing text.
-- Do not write `script-gate: PASS inline`.
-- Do not treat a status board with `NOT RUN` fields as a pass.
-- Do not call an output final when `script_lock_status` is `DRAFT`, `WAIT`, or `SCRIPT_REWRITE`.
-- Do not claim "agent mode ran" unless actual writer-agent execution ran and left evidence.
-```
-
-Required final gate:
-
-```text
-- 10대 고딩여 드립작가: PASS / FAIL
-- 10대 고딩남 드립작가: PASS / FAIL
-- 20대 대딩여 드립작가: PASS / FAIL
-- 20대 대딩남 드립작가: PASS / FAIL
-- 20대 백수남/백수여 와일드카드 드립작가: PASS / FAIL
-- source-similarity hard veto: PASS / FAIL
-- fact/risk hard veto: PASS / FAIL
-- writer_persona_pass_count:
-- writer_persona_hard_veto:
-- hard_veto_personas:
-- script_lock_status: SCRIPT_LOCK / SCRIPT_REWRITE / WAIT
-```
-
-PASS rules:
-
-- SCRIPT_LOCK requires at least 4 of 5 PASS.
-- source-similarity hard veto and fact/risk hard veto must PASS.
-- If fewer than 4 PASS, rewrite from the concrete feedback and run SCRIPT AGENT MODE again.
-- If any required agent result block is missing, do not infer a PASS. Stop at `WAIT - agent result missing`.
-- If any agent flags a fake visible object term, fix the term before SCRIPT_LOCK.
-
-## Class A/B
-
-```text
-분류 A: 자막 없이 봐도 이해됨
-- 동물, 웃긴 상황, 시각 충격
-- 음악 우선
-- 자막 자립 필수
-- 의인화 적극
-
-분류 B: 상황 설명 후킹 필요
-- 예능, 사연, 스포츠, 사건
-- 대본 우선
-- 인물/사건 명확
-```
-
-## TTS Length
-
-```text
-분류 A: 분당 200-250자
-분류 B: 분당 280-320자
-
-10초: 35-50자
-15초: 50-80자
-20초: 70-100자
-25초: 90-135자
-30초: 100-160자
-38초: 130-200자
-60초: 200-320자
-```
-
-## Current Script Blocks
-
-```text
-[상단] 고정 제목
-- 2줄 이내
-- Do not prefix the top title with lane markers such as `(감동)` or `난감_` by default. Use a natural hook title only; add a marker only when the user explicitly requests that visible label.
-
-[중단] 초단위 상황 설명
-- ( ) = 감정/상태/상황/반응/의성어/댓글코드. 자유 창작.
-- " " = 영상 인물 실제 말. 수정 금지.
-- 일반 텍스트 = 화면에 보이는 설명 또는 TTS 후보 문장.
-
-[TTS 만들 글자만 복사]
-- timed `중단` 중 voice/TTS 의도 줄만 시간표 없이 모은다.
-- 자막 자립 필수.
-- 위치 선언, 모순 진입, 결정적 장면 한 줄 압축.
-```
-
-## First Middle Cue Rule
-
-The first timed `중단` cue is the win-or-lose hook and memory anchor. It is not a generic intro.
-
-The five candidates must come after `대본 전 보조 검토`. Each candidate must be a complete sentence that shows what the script is trying to say. Do not output clipped phrase fragments such as only a name, object, or unfinished setup.
-
-Before the final script, present only five candidate first timed `중단` cues:
-
-```text
-첫 중단 큐 후보 5개
-1. ...
-   - 계속 봐야 하는 이유:
-2. ...
-   - 계속 봐야 하는 이유:
-3. ...
-   - 계속 봐야 하는 이유:
-4. ...
-   - 계속 봐야 하는 이유:
-5. ...
-   - 계속 봐야 하는 이유:
-
-My recommendation: ...
-Reason: ...
-Your choice:
-1
-2
-3
-4
-5
-```
-
-After the user chooses 1-5, combine the selected first line with the body. Do not create five full versions. If the user says `오토`, `자동`, `너가 알아서`, or `바로 진행`, choose the recommended number or battle-mode 1st place and proceed.
-
-Good first-line patterns:
-
-```text
-나는 사도세자의 아들이다
-주차장 1미터 움직였는데 300만원을 냈습니다
-강아지가 주인을 맥이기 시작했습니다
-이 닭은 치킨값으로 산 촬영 장비였습니다
-이 장면이 웃긴 이유는 영상보다 댓글이 더 과몰입했기 때문입니다
-비욘세는 한마디도 안 했는데, 댓글창은 이미 눈빛 해석을 끝냈습니다
-```
-
-Avoid:
-
-```text
-지금부터 보여드리겠습니다
-이 영상은
-여기 보시면
-도대체 뭘 하는 걸까요
-비욘세 눈빛이
-엘런이 다가오자
-이 장면 댓글창이
-```
-
-Candidate quality gate:
-
-- If a candidate does not imply a concrete visual, reaction, result, or comment payoff, rewrite it.
-- If the continue-watching reason is only "궁금해서" or "재밌어서", rewrite it with the exact thing the viewer will verify.
-- For comment-driven Shorts, the reason should usually be one of: "which expression caused the comment reaction", "how the comments interpreted the expression", "how the video and comments disagree", or "what the final reaction payoff is".
-- Do not use rumor or allegation comments as factual hooks. Convert them into safe viewer-reaction framing such as `댓글창이 과몰입했다`, `시청자들이 눈빛을 해석했다`, or `영상보다 댓글 반응이 커졌다`.
-
-## v5 Writing Rules
-
-- 시-풀이 교차.
-- 한 줄 압축.
-- 단정체.
-- 감정 단어 적극 사용.
-- 위치 선언: `여기`, `이 닭`, `이 사람`.
-- 모순 진입.
-- 결정적 장면 한 줄 압축.
-- 괄호 자막으로 시청자 반응 강제.
-
-## Comment Categories
-
-1. 특정 구간 언급.
-2. 시점/연령 단서.
-3. 공감 코드.
-4. 바이럴 인용: 가장 중요.
-5. 부정 신호.
-6. 의미 없음: 제외.
-
-## Dialogue Rules
-
-```text
-" " = source speech truth zone. Use only when real speech, source subtitle speech, or a reliable transcript is verified.
-( ) = creative zone. Emotion, situation, reaction, comment code, sound effect, and tone are free.
-plain timed `중단` = our visible narration and optional TTS source.
-```
-
-## Source Voice Check And Seasoning Gate
-
-Before writing any Tikitaka script, check whether the source has narration, character speech, captions, or only music.
-
-```text
-[Source Voice Check]
-- source_audio_mode:
-- source narration exists:
-- character speech exists:
-- reliable transcript/caption exists:
-- quoted middle text allowed:
-- creative seasoning allowed:
-- seasoning lane:
-- fact lock:
-- final decision:
-```
-
-Rules:
-
-- Run this check before hook, order remix, word replacement, and full script writing.
-- If source narration or character speech exists, do not overwrite it with extra narration at the same moment. Preserve or naturally paraphrase verified speech only.
-- If `source_audio_mode=background_music_only`, quoted middle text is forbidden and creative seasoning is allowed.
-- Creative seasoning means adding interpretation, reaction, emotional framing, comment-code, TTS punch, and subtitle pressure in `( )`, middle `script_beat`, and plain timed `중단` narration.
-- Creative seasoning must still obey fact lock: do not invent diagnosis, relationship, motive, recovery result, hidden conversation, or offscreen backstory.
-- When there is no source speech, it is acceptable to make the Korean narration more assertive, poetic, or hooky because it is not colliding with source dialogue.
-- Record the decision as `creative_seasoning_allowed=true` in production notes when creating files.
-
-### Source Audio Mode And Dialogue Use
-
-Check `source_audio_mode` before writing middle dialogue.
-
-```text
-original_scene_audio
-background_music_only
-mixed_scene_audio_and_music
-muted_or_unknown
-```
-
-Rules:
-
-- If `source_audio_mode` is `background_music_only`, do not create quoted character speech in `중단`.
-- For `background_music_only`, use bracket captions, visual-situation captions, OCR labels, music-lyric labels, or plain timed `중단` as visual narration.
-- For `background_music_only`, you may add stronger Korean commentary and hook seasoning when grounded in the visible action.
-- If source audio is missing, uncertain, or not yet verified, avoid double quotes until `000short-production-agent` verifies the source.
-- If real speech exists, quoted lines may be natural Korean adaptations, but they must preserve speaker, meaning, emotion, relationship, and story function.
-- Song lyrics are not character speech. If lyrics matter, label them as music/lyric context or explain them in plain timed `중단`.
-- Do not turn visible action into imagined spoken dialogue.
-
-For `background_music_only`, record this decision when creating files:
+Examples:
 
 ```json
 {
-  "dialogue_mode": "no_speech_visual_narration",
-  "middle_quoted_speech_allowed": false,
-  "middle_caption_basis": ["visual_situation", "reaction", "ocr", "music_lyric_text"],
-  "voice_copy_mode": "derived_from_timed_middle",
-  "bgm_only_dialogue_lock_applied": true
+  "caption_type": "tts_narration",
+  "assembly_role": "intro_narration"
 }
 ```
-
-## Conversation Rules
-
-- Keep answers short.
-- Be objective.
-- Ask one question at a time.
-- Always recommend one answer and give a reason.
-- Use numeric choices only.
-- Do not write the full script before the user chooses the five first-line hook candidates.
-- Respect stop/proceed signals: `그만`, `됐어`, `다음`, `바로 써`, `프로젝트 만들어`.
-- When the user asks for a wording change after a draft, apply the change but label the result `DRAFT` unless MANDATORY HARNESS MODE is rerun.
-- Never answer a user challenge about whether agent mode ran with a vague pass claim. State exactly which gates ran, which did not, and reset invalid locks to `DRAFT`.
-
-## Final Output Format
-
-Output as plain copyable Markdown text only. Keep the layers separate in this exact order:
-
-```text
-상단
-고정 후킹 제목.
-원칙적으로 최대 2줄까지 허용한다.
-화면 전체에서 반복 유지되는 제목이며, 시간표를 붙이지 않는다.
-
-중단
-[0~3초]
-( ) 감정 / 반응 / 상황 / 장난 / 밈 / 화면 포인트
-" " 실제 인물 발언
-일반 텍스트 TTS/설명 후보
-
-TTS 만들 글자만 복사
-timed 중단 중 voice/TTS 의도 줄만 시간표 없이 모은 순수 원문
-```
-
-Rules:
-
-- `상단` contains only the fixed hook title.
-- `상단` is not a timed caption. Do not attach timestamps to it.
-- `상단` is not required to be two lines. It may be one line or two lines, with two lines as the maximum default.
-- `상단` should not start with lane markers such as `(감동)` or `난감_` by default. Write a natural hook title without a category prefix unless the user explicitly asks for one.
-- `중단` contains timed middle captions: emotion, reaction, meme framing, joke, actual quote, situation, OCR explanation, or visual point.
-- Plain timed `중단` lines can be included in `TTS 만들 글자만 복사` when they are intended for voice.
-- Use no voice-copy line for a beat when the source speaker is talking, when quoted middle text must be read by the viewer, or when narration would overlap the source moment.
-- `TTS 만들 글자만 복사` is not a source-preservation note and is not raw original transcript.
-- `00-tikitaka` must not create voice files.
-- Do not create a second timed narration timeline separate from `중단`.
-- Do not output production files in the final chat response unless the user asks for production handoff.
-
-## Middle Layer Notation Rule
-
-Use this notation inside `중단`:
-
-```text
-( ... )
-= emotion, reaction, situation, joke, meme, visual cue, OCR explanation, screen-point note
-
-" ... "
-= actual spoken line from source audio or on-camera person
-
-plain text
-= very short factual situation label only
-```
-
-Visual observation must not be placed inside quotation marks unless someone actually said it.
-
-Wrong:
-
-```text
-"STANLEY 로고가 보임"
-```
-
-Correct:
-
-```text
-(STANLEY 로고가 보임)
-```
-
-Better:
-
-```text
-(광고각 잡힘 ㅋㅋ)
-(STANLEY 의문의 승리)
-(로고까지 살아남음)
-```
-
-## Shorts Playfulness Caption Rule
-
-`중단` is the Shorts reaction layer. It should answer why the scene is funny, why the viewer stops, what visual point can be teased, and what line can be remembered.
-
-Do not write middle captions like a newspaper, report, or dry scene label unless the source is serious, legal, medical, financial, tragic, or risk-sensitive.
-
-Middle caption priority for normal Shorts:
-
-```text
-1. 웃긴 해석
-2. 리액션
-3. 반전 / 모순
-4. 밈화 가능한 한 줄
-5. 화면 속 핵심 정보
-6. 건조한 설명
-```
-
-If a middle caption only describes what is visible, generate three options before selecting one:
-
-```text
-A안 안전설명형:
-B안 웃긴훅형:
-C안 강한밈형:
-```
-
-Default:
-
-```text
-- Normal comedy / reaction / animal / experiment Shorts: choose B or C.
-- Serious, factual, legal, medical, financial, tragedy, or risk-sensitive Shorts: choose A or restrained B.
-```
-
-A `중단` caption passes only if it makes the scene funnier, sharpens contradiction, reacts like a viewer, preserves an important actual quote, or explains a visual point memorably. If it only says what the viewer can already see, mark `SCRIPT_REWRITE`.
-
-## 000short Handoff
-
-Use this only when the user asks to create a production input folder, project, or handoff for `000short-production-agent`.
-
-`00-tikitaka` creates a OneDrive production input package, not a finished CapCut package. Use this structure:
-
-```text
-${UTUBE_ROOT}/11short/11short_handoff/{episode_id}/
-  tikitaka_input_manifest.json
-  work/
-    final_script_ko.txt
-    status.json
-    analysis_raw_gemini.json
-    analysis.json
-    source.mp4
-    source_url.txt
-    comments_top_liked.json
-    audience_signal_analysis.md
-    tikitaka_decision_log.md
-    production_gate_contract.json
-    script_lock.json
-  capcut_jobs/
-    macmini/
-    home_windows/
-    office_windows/
-```
-
-Required files:
-
-```text
-work/final_script_ko.txt
-work/status.json
-```
-
-At least one source pointer must exist:
-
-```text
-work/source.mp4
-or
-work/source_url.txt / status.json source_url
-```
-
-Rules:
-
-- Save the final `상단` / `중단` / `TTS 만들 글자만 복사` package to `final_script_ko.txt` when creating files.
-- Treat `final_script_ko.txt` as the text authority for the downstream factory.
-- Do not create a handoff package until SCRIPT_LOCK succeeds.
-- Save the five persona outputs, chief editor integration summary, final recheck result, and SCRIPT_LOCK decision in `tikitaka_decision_log.md` or `status.json`.
-- Do not download source videos in this skill. If `source.mp4` is missing but a URL exists, record the URL and route to `000short-production-agent`.
-- Do not create `guide_ko.srt`, `onscreen_ko.srt`, `onscreen_layout.json`, voice helper files, CapCut drafts, or final production assets.
-- Prefer saving raw Gemini input as `analysis_raw_gemini.json`.
-- `analysis.json` is optional in `00-tikitaka`. Create it only as a light draft when the structure is obvious.
-- `000short-production-agent` owns final `analysis.json` normalization.
-- Save `source_url.txt` when `source.mp4` is absent and a source URL exists.
-- Save `comments_top_liked.json`, `audience_signal_analysis.md`, and `tikitaka_decision_log.md` when those inputs are available.
-- Save `production_gate_contract.json` with Tikitaka-owned fields: `original_beat_order`, `edit_assembly_mode=scenario_first_montage`, `timeline_content_start_sec=0.0`, `scenario_timeline`, `script_aligned_timeline_required`, `script_aligned_timeline_status`, `script_aligned_timeline_structure`, `three_line_text_layout_required`, `three_line_text_layout_status`, `tts_visual_fill_required`, `video_track_contract=caption_video_plus_situation_speaker_video`, `audio_normalization_required`, `original_source_media_required`, optional legacy `remix_candidates`/`selected_remix_order` only when simple order-remix is explicitly used, `similarity_breaker_harness`, writer-agent evidence paths, `script_lock_evidence_path`, `final_script_ko_path`, `requires_000short_source_download`, `elevenlabs_dialogue_analysis_required`, `final_report_before_capcut`, and `requires_user_srt_audio_before_capcut`.
-- Save `script_lock.json` only when the real writer-agent validator or Tikitaka harness runner produced it. Do not hand-write `SCRIPT_LOCK` as a prose status.
-- Do not set `production_allowed=true` in Tikitaka output. That field is generated only by `000short-production-agent/scripts/validate_production_gate.py` after downstream watch/direct-frame, render plan, and harness evidence pass.
-
-Set `status.json` input state like this:
-
-```text
-ready_for_000short:
-- final_script_ko.txt exists
-- script_lock_status = SCRIPT_LOCK
-- writer_agent_mode_status = REAL_RUN
-- production_gate_contract.json exists
-- production_allowed = not set by Tikitaka
-- writer_persona_gate_complete = true
-- writer_persona_pass_count >= 4
-- writer_persona_hard_veto = false
-- source.mp4 or source_url exists
-
-ready_for_000short_needs_analysis:
-- final_script_ko.txt exists
-- script_lock_status = SCRIPT_LOCK
-- writer_agent_mode_status = REAL_RUN
-- production_gate_contract.json exists
-- production_allowed = not set by Tikitaka
-- source.mp4 or source_url exists
-- analysis_raw_gemini.json and analysis.json are both missing
-- 000short-production-agent must run Gemini/watch analysis first
-
-blocked_input_missing:
-- final_script_ko.txt is missing
-- or SCRIPT_LOCK is missing or failed
-- or production_gate_contract.json is missing
-- or source.mp4 and source_url are both missing
-- or there is no final script, source, analysis, or URL clue for 000short-production-agent to continue
-```
-
-If only `source.mp4` is missing, do not block when `source_url` exists. Record `source_status=missing_source_mp4_needs_000short_download`.
-
-Use this `status.json` shape:
 
 ```json
 {
-  "package_type": "tikitaka_production_input",
-  "handoff_version": "tikitaka_input_v3",
-  "created_by": "00-tikitaka",
-  "next_skill": "000short-production-agent",
-  "input_status": "ready_for_000short",
-  "episode_id": "",
-  "profile_name": "",
-  "source_url": "",
-  "source_status": "source_mp4_ready",
-  "final_script_file": "final_script_ko.txt",
-  "analysis_raw_file": "analysis_raw_gemini.json",
-  "analysis_file": "analysis.json",
-  "analysis_is_draft": true,
-  "script_agent_mode": "REAL_WRITER_AGENT_MODE",
-  "writer_agent_mode_status": "REAL_RUN",
-  "script_lock_status": "SCRIPT_LOCK",
-  "writer_persona_generation_complete": true,
-  "chief_editor_integration_complete": true,
-  "final_persona_recheck_complete": true,
-  "writer_persona_gate_complete": true,
-  "writer_persona_pass_count": 5,
-  "writer_persona_hard_veto": false,
-  "hard_veto_personas": [],
-  "source_audio_mode": "",
-  "source_audio_mode_source": "gemini_raw / user_confirmed / unknown",
-  "source_audio_mode_evidence_ko": "",
-  "detected_youtube_category": "",
-  "detected_youtube_subcategory": "",
-  "detected_content_mode": "",
-  "recommended_upload_channel": "",
-  "recommended_capcut_template": "",
-  "detected_topic": "",
-  "detected_category": "",
-  "routing_reason": "",
-  "routing_confidence": "high|medium|low",
-  "routing_source": "channel_routing_rules.json|fallback|user_override",
-  "excluded_channel_reason": "",
-  "selected_wow_point_ko": "",
-  "selected_wow_point_time": "",
-  "selected_visual_focus_ko": "",
-  "selected_emotion_peak_ko": "",
-  "viewer_confusion_fix_ko": "",
-  "dialogue_mode": "source_speech / adapted_speech / no_speech_visual_narration / unverified",
-  "middle_quoted_speech_allowed": null,
-  "extended_gemini_raw_signals_used": false,
-  "tikitaka_final_script_complete": true,
-  "tikitaka_handoff_ready": true,
-  "production_gate_contract_file": "production_gate_contract.json",
-  "production_gate_precheck_status": "NOT_RUN_BY_TIKITAKA",
-  "factory_mapping_required": true,
-  "tikitaka_mapping_complete": false,
-  "capcut_created": false,
-  "upload_ready": false,
-  "notes": ""
+  "caption_type": "situation_caption",
+  "assembly_role": "reaction_caption"
 }
 ```
 
-When SCRIPT_LOCK fails, record actual values and do not route to production:
+## TTS Caption vs Narration Audio
+
+`TTS` alone can mean visible text only. It does not automatically mean an audio
+file exists or must be generated.
+
+Narration audio is locked only when the design explicitly uses a narration
+signal such as:
+
+```text
+caption_type=tts_narration
+audio_role=audio.narration_tts
+오디오 / 나레이션·TTS
+```
+
+If the segment is only a visible TTS-style caption, use:
+
+```text
+caption_type=tts_caption
+audio_role=none
+```
+
+`tts_duration_probe.json` and `tts_timing_reconciliation_gate.json` are required
+only for narration-audio segments, not for TTS caption-only text.
+
+## Duration Basis Enum
+
+Allowed `duration_basis` values:
+
+```text
+source_range
+estimated_tts_duration
+actual_tts_duration
+fixed_design_duration
+visual_hold
+```
+
+Allowed `duration_status` values:
+
+```text
+SOURCE_AUDIO_LOCKED
+ESTIMATED_ACCEPTED
+ACTUAL_AUDIO_LOCKED
+FIXED_DESIGN_LOCKED
+WAIT_ACTUAL_TTS_AUDIO
+```
+
+## TTS Timing Reconciliation Gate
+
+If any `caption_type=tts_narration` or `audio_role=audio.narration_tts` segment
+exists, Tikitaka must distinguish estimated timing from actual-audio timing.
+
+Before final `SCRIPT_HANDOFF_GATE`, one of these must be true:
+
+1. `tts_duration_status=ESTIMATED_ACCEPTED`
+   - no actual TTS audio file is available yet
+   - timeline uses estimated narration duration
+   - Stage 2 must stop with `WAIT_TTS_TIMING_RELOCK` if generated/provided audio exceeds tolerance
+
+2. `tts_duration_status=ACTUAL_AUDIO_LOCKED`
+   - actual TTS/audio duration was measured
+   - `timeline_design.json` was reconciled to the measured duration
+   - `tts_timing_reconciliation_gate.json` is PASS
+
+Actual TTS duration must not be solved by cutting narration.
+
+If actual narration is longer than the planned visual beat, return to Tikitaka
+design repair unless the locked design explicitly allows one of:
+
+```text
+none
+extend_visual
+shift_later_beats
+hold_frame
+freeze_frame
+repeat_visual
+shorten_text_and_regenerate_tts
+```
+
+`tts_duration_probe.json` shape:
 
 ```json
 {
-  "package_type": "tikitaka_production_input",
-  "handoff_version": "tikitaka_input_v3",
-  "created_by": "00-tikitaka",
-  "next_skill": "00-tikitaka",
-  "input_status": "blocked_input_missing",
-  "script_agent_mode": "REAL_WRITER_AGENT_MODE",
-  "writer_agent_mode_status": "FAILED",
-  "script_lock_status": "SCRIPT_REWRITE",
-  "writer_persona_generation_complete": true,
-  "chief_editor_integration_complete": true,
-  "final_persona_recheck_complete": true,
-  "writer_persona_gate_complete": true,
-  "writer_persona_pass_count": 3,
-  "writer_persona_hard_veto": true,
-  "hard_veto_personas": ["source-similarity hard veto"],
-  "production_gate_contract_file": "",
-  "production_gate_precheck_status": "BLOCKED_BEFORE_TIKITAKA_HANDOFF",
-  "capcut_created": false,
-  "upload_ready": false,
-  "notes": "Rewrite required before production handoff."
+  "status": "PASS",
+  "source": "user_tts_audio|generated_tts|estimated_text",
+  "tts_items": [
+    {
+      "edit_id": "E1",
+      "tts_text_ref": "tts_001",
+      "text": "이 사람이 성공한 이유는 3가지라고 합니다.",
+      "planned_duration_sec": 3.0,
+      "actual_duration_sec": 4.0,
+      "estimated_duration_sec": null,
+      "delta_sec": 1.0,
+      "within_tolerance": false,
+      "reconciliation_action": "extend_visual"
+    }
+  ]
 }
 ```
 
-Do not leave `writer_persona_pass_count` as `0` in real output unless the gate was not run. If the gate was not run, the status is `WAIT - agent result missing`, not `ready_for_000short`.
+`tts_timing_reconciliation_gate.json` shape:
 
-### Final Handoff Report With Script Output
+```json
+{
+  "status": "PASS",
+  "gate_name": "TTS_TIMING_RECONCILIATION_GATE",
+  "duration_basis": "actual_audio|estimated_text",
+  "tts_duration_status": "ACTUAL_AUDIO_LOCKED|ESTIMATED_ACCEPTED",
+  "timeline_design_updated": true,
+  "protected_fields_changed": true,
+  "change_reason": "actual TTS duration exceeded planned slot",
+  "reconciliation_action": "extend_visual",
+  "requires_new_timeline_design_gate": true,
+  "requires_new_humanize_korean_gate": true,
+  "requires_new_script_handoff_gate": true
+}
+```
 
-When `00-tikitaka` creates a OneDrive production input folder, report the folder and print the final script in chat. Do not only say that it was saved to a file.
+`protected_fields_changed=true` is allowed only inside design repair before
+`SCRIPT_HANDOFF_GATE`. After `SCRIPT_HANDOFF_GATE`, protected field changes are
+forbidden.
 
-The final report must include:
+## User Design Revision Loop
 
-1. production input folder path
-2. included files
-3. input status
-4. local Windows instruction prompt for the user to copy
-5. final script copy block
+If the user changes the assembly order, narration order, role sequence,
+duration, or audio policy after seeing `1차설계서`, this is not Humanize.
 
-Use this format:
+It is Tikitaka design repair.
+
+Examples:
 
 ```text
-티키타카 입력 폴더 생성 완료
+34215 구조를 32145로 변경
+나레이션을 먼저 넣기
+화자발언을 뒤로 밀기
+TTS 3초 구간을 실제 음성 4초에 맞추기
+상황설명 beat를 추가하기
+speaker_quote를 TTS narration으로 바꾸기
+나레이션 -> 자막 -> 자막 -> 화자발언 순서로 변경하기
+```
 
-폴더:
-{package_path}
+When design repair occurs, invalidate and regenerate:
 
-포함 파일:
-- work/source.mp4: 있음/없음
-- work/source_url.txt: 있음/없음
-- work/final_script_ko.txt: 있음
-- work/analysis_raw_gemini.json: 있음/없음
-- work/analysis.json: 있음/없음
-- work/status.json: 있음
-- work/production_gate_contract.json: 있음
-- work/script_lock.json: 있음/없음
-- tikitaka_input_manifest.json: 있음
+```text
+1차설계서
+timeline_design.json
+caption_beat_map.json
+timeline_design_gate.json
+humanize_korean_gate.json
+block_map.json
+block_role_map.json
+block_voice_switch_map.json
+tts_copy_text.txt
+tts_duration_probe.json
+tts_timing_reconciliation_gate.json
+chatgpt_review/round1_review_packet.md
+chatgpt_review/round1_chatgpt_raw.md
+chatgpt_review/round1_codex_decisions.json
+chatgpt_review/round2_audit_packet.md
+chatgpt_review/round2_chatgpt_raw.md
+chatgpt_review_gate.json
+script_handoff_gate.json
+report1_handoff.json
+```
+
+Humanize may only change Korean wording. Humanize must not change
+`assembly_role`, `source_order`, `timeline_order`, time ranges, `caption_type`,
+`audio_policy`, `duration_basis`, or semantic audio lanes.
+
+## timeline_design.json audio track
+
+Audio rows in `timeline_design.json` must not leave `track` empty.
+Stage 1에서는 A9/A10/A11/A12 같은 real CapCut track id를 직접 잠그지 않는다.
+Tikitaka locks semantic audio tracks only; 실제 CapCut A-track 매핑은 Stage 2의
+`000short-production-agent`가 `shrt white` 기준으로 해결한다.
+
+Required audio track shape:
+
+```json
+{
+  "track": "audio.narration_tts",
+  "semantic_lane": "narration_tts",
+  "resolved_capcut_track": null,
+  "resolved_by": "000short-production-agent"
+}
+```
+
+Allowed semantic tracks:
+
+```text
+audio.narration_tts
+audio.speaker_source
+audio.sfx
+audio.bgm
+```
+
+1차설계서 audio row labels:
+
+```text
+오디오 / 나레이션·TTS
+오디오 / 화자발언·원본화자
+오디오 / SFX
+오디오 / BGM
+```
+
+## Optional Gemini Raw Observation
+
+Gemini is optional raw observation, not an intake gate.
+
+Use this routing order:
+
+1. If Gemini JSON or notes are already supplied, do not rerun Gemini. Read them
+   as unverified raw observation notes for likely `T1`, `T2`, TTS, `""`
+   speaker quotes, `()` situation captions, and useful source ranges.
+2. If no Gemini result is supplied and a URL or local source is available,
+   acquire or confirm `source.mp4` and continue with direct source analysis.
+3. Run the AI Studio raw-intake path only when the user explicitly asks for Gemini,
+   AI Studio analysis, or Gemini raw notes.
+
+Do not block Tikitaka only because Gemini raw intake is absent.
+Gemini failure alone is not a WAIT condition when source media is available or can be acquired.
+Final timing, dialogue, OCR, source identity, and design decisions must come from
+`source.mp4`, ffprobe, STT, OCR, and frame checks. Gemini ranges and labels remain
+`PROPOSED_SOURCE_TIMECODE` until that verification is complete.
+
+When Gemini is explicitly requested, use the complete second-by-second
+raw-observation prompt in `references/gemini_raw_intake_prompt.md`. Require this
+exact completion value before accepting the response:
+
+```text
+final_warning_ko=이 JSON은 Gemini 초벌 초단위 관찰값이다. 최종 대본, 화자발언 확정, 컷타이밍, TTS/상황설명 배치, CapCut 제작은 Codex가 source.mp4와 STT/OCR/프레임 검증으로 확정해야 한다.
+```
+
+Save the result as JSON/Markdown through AI Studio web UI automation.
+
+For unattended/background work, use the shared no-API dedicated-profile runner:
+
+```powershell
+$env:PYTHONPATH = ""
+py -3 "$env:USERPROFILE\OneDrive\22utube\22factory_20260628\00_asset_tools\ai_studio_runner\scripts\run_ai_studio_short.py" "<SHORTS_URL>" --retries 0 --run-timeout-sec 240
+```
+
+Compatibility wrapper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\OneDrive\22utube\22factory_20260628\00_asset_tools\tools\gemini_raw_paste_run.ps1" -Url "<SHORTS_URL>"
+```
+
+When the user explicitly asks to watch or control ordinary Chrome, use the
+normal-Chrome extension instead of forcing the dedicated profile:
+
+```text
+%USERPROFILE%\OneDrive\22utube\22factory_20260628\00_asset_tools\browser_extensions\ai-studio-shorts-runner
+```
+
+This Chrome extension is allowed because it is still AI Studio web UI only. It
+pastes the Shorts URL first, waits at least 3 seconds for the `YouTube Video`
+attachment, pastes the URL-free prompt, submits with Ctrl+Enter, and copies the
+last fresh Model JSON. URL context is not required for this attachment flow.
+The CDP runner uses this extension artifact
+automatically: it launches only the dedicated AI Studio Chrome profile with
+`--load-extension`, checks for the extension content-script marker, and if Chrome
+ignores command-line unpacked extension loading, injects the same extension files
+(`src/core-browser.js` + `content.js`) into the dedicated AI Studio page via CDP
+Runtime. This fallback is still web-UI automation, not API usage, and it does not
+touch the user's normal Chrome. When using the extension manually, reload it
+after file changes, use `/u/0`, and still reject any copied JSON that fails
+source identity/duration/id checks. The extension is not an API path and must not
+upload source videos unless the user explicitly approves upload.
+
+Runner contract:
+
+- It opens only the dedicated AI Studio Chrome profile under local app data; it
+  must not touch the user's normal Chrome profile/tabs.
+- Gemini raw intake is **web UI only** for this user. Do not ask for, suggest,
+  or implement Gemini API fallback. If the web UI fails or returns source
+  mismatch, report the Gemini result as unavailable. Continue through direct
+  source analysis when `source.mp4` is available or can be acquired. Use a WAIT
+  state only when the required source evidence is also unavailable.
+- It launches real installed Chrome with the dedicated `--user-data-dir` and a
+  `--remote-debugging-port`, then attaches through Playwright CDP. Do not switch
+  back to Playwright `launch_persistent_context`; on this Windows PC that path
+  can click Run but AI Studio returns `permission denied` even for `안녕`.
+- The successful AI Studio account currently redirects to `/u/0`; do not force
+  stale `/u/1` unless the user explicitly changes the logged-in account.
+- Use `py -3` with `PYTHONPATH` cleared. Hermes venv `python` may not have
+  Playwright, while the Windows Python 3 runtime does.
+- Before launching, the runner may kill only Chrome processes whose command line
+  contains the dedicated AI Studio profile path. It must never kill normal Chrome.
+- The user may continue other work while the runner is active. The runner uses
+  CDP/DOM control, not OS-level keyboard/mouse focus stealing, so normal Chrome,
+  CapCut, Telegram, VS Code, and other apps can be used during the run.
+- Before filling a new prompt, explicitly click the AI Studio left-nav
+  `Playground` item (`span.nav-item-main-text` text `Playground`) and then force
+  `/prompts/new_chat` again. This prevents stale restored chats/old Model JSON
+  from being treated as the new Shorts result.
+- The extension bridge result is accepted only when all run-binding fields are
+  present: `playgroundStatus=VERIFIED_NEW_CHAT`,
+  `urlContextStatus=NOT_REQUIRED_YOUTUBE_ATTACHMENT`,
+  `urlStageVerified=true`, `mediaAttachmentStatus=VERIFIED_YOUTUBE_VIDEO`,
+  `promptStageVerified=true`, `promptStageUrlAbsent=true`,
+  `promptInputMode=SEQUENTIAL_URL_THEN_PROMPT`, and `generationStarted=true`.
+- Generate a unique internal `run_nonce` per attempt and verify it in the
+  extension bridge/run manifest. Do not inject `run_nonce`, `source_video_id`,
+  or `observed_source_title` into the Gemini prompt and do not require Gemini
+  JSON to echo them. Bind the requested URL/video id/title/duration using trusted
+  yt-dlp metadata, the verified YouTube attachment, and the saved run manifest.
+- Missing URL metadata, title/duration/id mismatch, a stale internal nonce, or a bridge
+  status outside the allowlist is `RESULT_SOURCE_MISMATCH` or a WAIT blocker;
+  it must never reach the save function.
+- When source media exists, bind raw intake, script handoff, and production to
+  `10_analysis/source_identity_lock.json`. The lock contains canonical URL,
+  video id, local source path, SHA256, and duration. Raw JSON without the same
+  source identity remains analysis hint only.
+- At Shorts intake, write `10_analysis/tikitaka_source_request.json` from the
+  exact URL in the current request before Gemini or source acquisition. Match
+  its URL/video id to the source identity lock before design lock. Then carry the lock SHA256 as
+  `source_fingerprint_sha256` in `timeline_design.json`,
+  `script_handoff_gate.json`, and `report1_handoff.json`. A missing or unequal
+  fingerprint is `WAIT_SOURCE_HANDOFF_FINGERPRINT`, never a valid Stage 2 handoff.
+
+```json
+{
+  "status": "PASS",
+  "owner_skill": "00-tikitaka",
+  "requested_source_url": "https://www.youtube.com/shorts/<video-id>",
+  "requested_video_id": "<video-id>"
+}
+```
+- The runner may launch the dedicated Chrome window offscreen/minimized and must
+  close it cleanly when done so Chrome does not show a next-run restore-pages
+  bubble. If the dedicated window is visible, do not ask the user to interact
+  with it unless login or a human Google challenge is required.
+- Success is `status: SAVED` plus real files under the default save folder below.
+  `permission denied`, `RESULT_TIMEOUT`, source identity mismatch, duration/id
+  mismatch, unrelated animal/old-video output, or missing `final_warning_ko` is
+  FAIL, not a saved result. `final_warning_ko` alone is never enough.
+- Manual copy/save follows the same run nonce and source-identity checks. Never
+  save a copied JSON merely because it contains `final_warning_ko`.
+
+Only use manual AI Studio copy/save as a fallback when the runner is blocked and
+report the blocker. Do not use the old `+ Create new instruction` -> `0701경`
+preset-selection path for this Gemini raw intake flow.
+
+Default save folder:
+
+```text
+%USERPROFILE%\OneDrive\22utube\22factory_20260628\01_shorts_factory\germini
+```
+
+Default filename shape:
+
+```text
+YYYYMMDD_<shorts_title>_gemini_raw.md
+```
+
+Do not use Google Docs by default. Treat the saved Gemini JSON as raw source
+notes only; it is not verified timing, OCR, STT, source dialogue, or final
+script truth.
+
+For Tikitaka work that needs an actual draft, do not stop at Gemini raw notes.
+Download or confirm `source.mp4`, then verify the important beats with source
+evidence: duration, frame checks, OCR/STT when needed, and raw-vs-source
+timecode mismatch notes. Keep any unverified Gemini ranges as
+`PROPOSED_SOURCE_TIMECODE`.
+
+## Ownership Matrix
+
+- `00-tikitaka`: Shorts source analysis, full-source Demucs analysis
+  preprocessing, remake script draft, hook, top/timed-middle, and script
+  handoff. It creates `full_source_audio.wav` and `vocals.wav`; for an approved
+  `stage_2_full` route it also registers `clean_source.mp4` as a production
+  visual handoff. It does not create final Q clips or other production assets.
+- `000short-production-agent`: SRT, layout JSON, CapCut, validation, exports, upload packages, and other production assets only.
+
+## Stage Transition And n8n Contract
+
+Use this default routing contract:
+
+```text
+n8n_stage_transition=NOT_USED
+stage_transition_owner=Codex
+harness_role=VALIDATOR_ONLY
+n8n_default_status=NOT_REQUIRED
+```
+
+The harness validates artifacts and writes gate/status files. It does not launch
+the next skill. After user approval and `SCRIPT_HANDOFF_GATE` PASS, Codex reads
+`report1_handoff.json` and invokes `000short-production-agent`.
+
+Require n8n only when the current package explicitly sets `n8n_required=true`
+or selects `orchestration.route=n8n`. Without that explicit selection, record
+`n8n=NOT_REQUIRED`, not `NOT_RUN`, and do not block Stage 1, Stage 2, or final
+validation because n8n evidence is absent.
+
+## Escalation Rule
+
+Do not move to the next owner unless the user explicitly asks for that owner's
+stage.
+
+Adjacent intent is not permission to escalate. A Tikitaka request does not imply
+production, `production_allowed`, `SCRIPT_LOCK`, `PASS`, export, upload,
+completion, audio generation, SRT generation, layout JSON, or CapCut work.
+
+If the user already has a draft and asks only for wording, rhythm, retention,
+or review, perform that wording-only pass here without changing the story plan.
+
+## Stage Scope Gate
+
+When the user provides a Shorts URL plus Gemini/source notes, first separate the
+scope before any production escalation:
+
+```text
+stage_1_script = 대본/티키타카 only
+stage_2_full = source/TTS/SRT/CapCut project
+```
+
+If the scope is unclear, stop at `WAIT_USER_STAGE_DECISION` and ask where to
+stop before any TTS, SRT, layout, CapCut, render, export, or upload work.
+
+If the user says `대본까지`, `대본만`, `초벌`, `티키타카`, `초안만`, `검토용`,
+or `스크립트만`, this skill produces the stage-1 package only: `1차설계서`,
+상단, timed 중단, `중단 TTS 글자만 복사`, `timeline_design.json`,
+`timeline_design_gate.json`, `humanize_korean_gate.json`, `block_map.json`,
+`block_role_map.json`, `block_voice_switch_map.json`,
+`script_handoff_gate.json`, and 설계도. Then stop at
+`WAIT_REPORT1_APPROVAL_TTS_DECISION` until the user says OK and chooses the
+TTS/audio route.
+
+If the user already says `끝까지`, `자동으로 다`, `최종`, `다음단계`,
+`업로드까지`, `슈퍼톤`, `슈퍼톤으로`, `supertone`, `TTS 만들어`, `tts 만들`,
+`TTS 생성`, `tts 생성`, `TTS mp3`, `tts mp3`, `캣컵프로젝트파일까지`,
+`캣컵 프로젝트 파일까지`, `캐컷프로젝트파일까지`, or `capcut project`, mark
+`user_stage_decision=stage_2_full` as future intent. Still output 설계도 and
+wait for `report1_approved=true` plus `voice_audio_route_decided=true` before
+route to `000short-production-agent`. A generic `진행/해줘` next to stage-1
+wording is not stage-2 permission.
+
+`자동모드` is an explicit stage-2 token: user says 자동모드 = stage_2_full.
+
+Mandatory gate map for URL + Gemini/source intake:
+
+```text
+G0 INTAKE = ask "어디까지 만들까?" unless the user text already says stage_1_script or stage_2_full
+G1 STAGE 1 = create 1차설계서, timeline_design.json, caption_beat_map.json, timeline_design_gate.json, ChatGPT Project Round 1, Codex decisions, humanize_korean_gate.json, block_map.json, block_role_map.json, block_voice_switch_map.json, tts_copy_text.txt, ChatGPT Project Round 2, chatgpt_review_gate.json, and script_handoff_gate.json
+G2 STAGE 1 STOP = output 설계도 and stop until report1_approved + voice_audio_route_decided
+G3 STAGE 2 ENTRY = only after stage_2_full intent plus report1_approved, voice_audio_route_decided, and either VMAKE_CLEAN_SOURCE_GATE PASS for a new Vmake run or USER_CONFIRMED_VMAKE_REUSE for named existing clean files
+G4 FINAL = only the production owner may output [FINAL_LOCK 최종 보고] after all production gates pass
+```
+
+The harness must write `stage_gate_todo.md` and `stage_scope_report.md` when it
+audits a package. The todo/report are not optional narration: they are the
+visible checklist that proves where the run stopped.
+
+RE-ENTRY rule:
+
+```text
+REWORK_IN_NEW_CHAT_ANALYZE_FIRST
+MIDDLE_PACKAGE_REWORK_REVIEW_GATE
+REPORT_BEFORE_ACTION
+```
+
+If the user brings a middle package, old handoff folder, or a CapCut project
+rework request in a new chat, analyze the package before action and report the
+resume point:
+
+- `draft_content.json` + `script_handoff_gate.json` PASS + `block_map.json`
+  exists => this reached CapCut; resume at CapCut rework.
+- `draft_content.json` alone is not enough; report `WAIT_SCRIPT_HANDOFF_GATE`
+  and resume at `stage_1_repair`.
+- `script_handoff_gate.json` FAIL or invalid => report
+  `WAIT_SCRIPT_HANDOFF_GATE_REPAIR` and resume at `stage_1_repair`.
+- `script_handoff_gate.json` PASS with `SCRIPT_LOCK_PACKAGE` => stage 1 is done; resume at stage 2 only after user decision.
+- neither exists => restart from G0 and ask where to stop.
+
+Use `INTERACTIVE_SCRIPT_APPROVAL` when the user asks to choose or decide during
+the script process. Stop and ask at the requested checkpoints:
+
+```text
+URAKKAI_DIRECTION_CHECKPOINT
+SCRIPT_APPROVAL_CHECKPOINT
+TEMPLATE_APPROVAL_CHECKPOINT
+```
+
+Use `DRAFT_FAST_EXPLICIT_ONLY` only for an explicit fast CapCut draft request,
+not for `대본/초벌/티키타카` stage-1 script work. Do not choose DRAFT_FAST just
+because the output is not upload-ready.
+
+Do not choose DRAFT_FAST just because the output is not upload-ready.
+
+## 설계도 계약
+
+`설계도` is the Tikitaka 제작 승인용 blueprint. It combines the operator-facing
+`1차설계서` with the locked script, time, track, caption-role, video, and audio
+lane decisions required before CapCut assembly. It is not a CapCut, export,
+upload, or production result.
+
+Write 설계도 in 한글 우선, short, scan-friendly form. Use 예/아니오 단답 for
+gate items whenever possible. The operator should be able to approve or reject
+the complete Stage 1 production design without reading implementation labels.
+
+Required 설계도 shape:
+
+```text
+# 설계도
+
+대본 승인용: 예
+CapCut 생성: 아니오
+TTS 생성: 아니오
+업로드 준비: 아니오
+
+1차설계서:
+메타:
+episode_id:
+source_url:
+source_title:
+source_evidence_status: VERIFIED | PARTIAL | PROPOSED
+source_fingerprint_sha256:
+source_tags:
+upload_tags:
+remake_title_ko:
+upload_title_candidate:
+content_summary_ko:
+channel_family:
+story_type:
+production_type:
+shorts_design_type:
+caption_policy:
+audio_policy:
+template_direction:
+default_capcut_base: shrt white
+tts_route:
+source_speech_policy:
+card_asset_role:
+
+조립 역할 순서:
+E1 intro_narration        | source=S4 | timeline=1 | 나레이션·TTS | source_audio=off | duration=4.0s | duration_basis=actual_tts_duration
+E2 verified_speaker_quote | source=S3 | timeline=2 | "화자발언" | source_audio=on | duration=2.0s | duration_basis=source_range
+E3 reaction_caption       | source=S2 | timeline=3 | (상황설명) | source_audio=off | duration=2.0s | duration_basis=fixed_design_duration
+E4 payoff_narration       | source=S1 | timeline=4 | 나레이션·TTS | source_audio=off | duration=3.0s | duration_basis=estimated_tts_duration
+E5 verified_speaker_quote | source=S5 | timeline=5 | "화자발언" | source_audio=on | duration=2.5s | duration_basis=source_range
+
+| 트랙 / 시간 | 0-3초 | 3.1-5초 | ... |
+| T1 | ... | ... | ... |
+| T2 | ... | ... | ... |
+| TTS | ... | 없음 | ... |
+| "" 화자발언 A | 없음 | "..." | 없음 |
+| "" 화자발언 B | 없음 | 없음 | "..." |
+| () 상황설명 A | (...) | 없음 | 없음 |
+| 영상 | ... | ... | ... |
+| 오디오 / 나레이션·TTS | ... | 없음 | ... |
+| 오디오 / 화자발언·원본화자 | 없음 | source_audio | ... |
+| 오디오 / SFX | 없음 | optional | 없음 |
+| 오디오 / BGM | optional | optional_duck | optional |
+
+상단:
+...
+
+timed 중단:
+[블록 1 | 편집 00:00-00:03 | 원본 제안 ... | 상태 PROPOSED_SOURCE_TIMECODE]
+...
+
+중단 TTS 글자만 복사:
+...
+
+확인:
+- 이 대본으로 갈까요? 예/아니오
+- TTS는 사용자가 줄까요? 예/아니오
+- Codex/API TTS 생성으로 갈까요? 예/아니오
 
 상태:
-{ready_for_000short / ready_for_000short_needs_analysis / blocked_input_missing}
+- 사용자 OK 대기
+- TTS_USER_DECISION_WAIT
+- timeline_design_gate.json 확인
+- humanize_korean_gate.json 확인
 
-SCRIPT_LOCK:
-- 상태: SCRIPT_LOCK / SCRIPT_REWRITE / WAIT
-- 5인 PASS 수:
-- hard veto:
-- production_gate_contract:
-- production_allowed: NOT_SET_BY_TIKITAKA
-
-다음 작업:
-아래 지시문을 로컬 윈도우 ChatGPT/000short-production-agent에 붙여 넣으십시오.
+handoff:
+- 다음 스킬: 000short-production-agent
+- 다음 단계: 보고서2 / CAPCUT_OPENABLE_PROJECT
+- 다음 채팅에 붙일 지시: Use $000short-production-agent
+- 필요 조건: 설계도 승인 + TTS/오디오 방식 결정
+- 00-tikitaka는 보고서2를 작성하지 않는다
 ```
 
-Then print this local Windows instruction prompt:
+After 설계도, stop until the user approves the design. Only after 사용자가 OK한 뒤
+and one TTS route is chosen may the work move to 보고서2:
+
+- 사용자 제공 TTS
+- Codex/API TTS 생성
+- no-TTS/source/BGM route explicitly approved
+
+If the user approves the script and asks for CapCut, route to
+`000short-production-agent` and mark the next stage as 보고서2로 이동.
+The Tikitaka harness must also write the legacy-compatible internal
+`report1_handoff.json` with `report=설계도` and
+`next_skill=000short-production-agent`; if it is missing, treat the package as
+not ready for a new-chat stage-2 handoff.
+
+CapCut base handoff note: `00-tikitaka` does not build CapCut, but when it names
+the next production stage it must not name an old derived project as the base.
+Unless the user explicitly names another root CapCut template later in
+`000short-production-agent`, the stage-2 default base is `shrt white`.
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`, `260708 short`,
+`*_base_v2`, `*_base_v3`, and previous episode projects are prior derived/style
+samples only.
+
+## Default Boundary
+
+Default state is `DRAFT_EYE_REVIEW`.
+
+This skill owns only Korean Shorts remake scripting:
+
+- hook candidates
+- `우라까이`
+- `상단`
+- timed `중단`
+- copy text that may later be used by a voice tool
+
+Voice-copy text is part of the draft script only. Except for the required
+full-source analysis artifacts `full_source_audio.wav` and `vocals.wav`, plus
+the `stage_2_full` Vmake handoff visual `clean_source.mp4`, this skill does not
+create voice clips, TTS, SRT files, layout JSON, render plans, CapCut drafts,
+exports, upload packages, or production packages.
+
+## Supertone TTS Handoff
+
+When the user says the script will become TTS/voice in a YouTube production,
+make the handoff obvious, but do not generate audio from this skill.
+
+- The production-side default TTS route is Supertone via:
+  `${env:WORKSPACE_ROOT}\22factory_20260628\00_asset_tools\tools\make_supertone_tts.py`.
+- On Windows, the safe launcher is `py -3.14`, not bare `python`.
+- The script reads `SUPERTONE_API_KEY`, `SUPERTONE_VOICE_ID`,
+  `SUPERTONE_PITCH`, `SUPERTONE_SPEED`, and `SUPERTONE_MODEL` from environment
+  variables; never paste, print, or store the API key in chat, files, JSON,
+  CapCut drafts, reports, or Git.
+- On `home_windows`, User-scope Supertone variables may exist even when the
+  current Codex process does not show them. The shared script checks Windows
+  User environment as a fallback.
+- Default voice/model are whatever the environment variables specify
+  (`SUPERTONE_VOICE_ID` is currently the Chunsik setup on home_windows).
+- If the user explicitly asks to generate audio, route to
+  `000short-production-agent`; do not silently use Edge TTS, ElevenLabs,
+  browser TTS, or any fallback provider.
+
+If the user asks to make the video, create SRT/layout, build CapCut, render,
+export, package upload files, or continue production, switch to
+`000short-production-agent`.
+
+If the user asks to polish an already-written script without production, keep
+the work in this skill and preserve all locked timing/source fields.
+
+For folder/root/rule policy, follow the workspace `AGENTS.md` and
+`docs/YOUTUBE_PRODUCTION_WORK_ORDER.md` directly.
+
+## Active Root
+
+For current 22utube work, check:
 
 ```text
-로컬 윈도우 000short-production-agent 작업 지시문
-
-[11short Routing]
-- active skill: 000short-production-agent
-- source package type: tikitaka_production_input
-- package path: {package_path}
-- work path: {package_path}\work
-- text authority: final_script_ko.txt
-- next gate: Tikitaka intake validation and production build
-
-작업 지시:
-OneDrive handoff 폴더의 Tikitaka 입력 패키지를 이어받아 11short/CapCut 제작을 진행하십시오.
-
-입력 폴더:
-{package_path}
-
-필수 확인:
-1. work/final_script_ko.txt를 텍스트 권위로 사용하십시오.
-2. final_script_ko.txt의 상단 / 중단 / TTS 만들 글자만 복사 순서를 검증하십시오.
-2-1. status.json에서 script_lock_status=SCRIPT_LOCK, writer_persona_pass_count>=4, writer_persona_hard_veto=false인지 확인하십시오.
-2-2. writer_persona_generation_complete, chief_editor_integration_complete, final_persona_recheck_complete, writer_persona_gate_complete가 모두 true인지 확인하십시오.
-2-3. work/production_gate_contract.json과 work/script_lock.json을 확인하십시오.
-2-4. 필수 에이전트 결과값이 없으면 SRT/TTS/CapCut을 만들지 말고 00-tikitaka rewrite mode로 돌리십시오.
-3. source.mp4가 있으면 그것을 사용하십시오.
-4. source.mp4가 없고 source_url이 있으면 000short-production-agent가 원본을 다운로드하거나 locate하십시오.
-5. analysis_raw_gemini.json 또는 analysis.json이 있으면 원본 관찰 자료로만 사용하십시오.
-6. Gemini는 최종 권위가 아닙니다. watch/direct-frame으로 타이밍, 발화, OCR, 장면 순서를 검증하십시오.
-7. source_audio_mode, 음악 가사, 실제 대사 여부를 다시 확인하십시오.
-7-1. Gemini/초벌/우라까이 입력 패키지는 000short가 source.mp4를 먼저 확보하고 ElevenLabs/Scribe로 영상 안 대화를 분석해야 합니다. 이 분석 없이 중단의 `"..."` 화자대화, SRT, 음성, CapCut을 만들지 마십시오.
-7-2. 최종 대본/보고서를 먼저 사용자에게 제출하고, 사용자가 그 보고서로 만든 SRT와 음성파일/ZIP을 제공할 때까지 CapCut 생성은 `BLOCKED_UNTIL_USER_SRT_AUDIO`입니다.
-8. source_audio_mode=background_music_only이면 중단의 "..." 대사는 금지하고 괄호/OCR/시각상황 중심으로 변환하십시오.
-9. quoted speech, 즉 중단의 "..." 문장은 실제 음성/자막/OCR과 맞는지 확인하십시오. 확인이 안 되면 괄호 자막으로 바꾸십시오.
-10. 중단은 onscreen_ko.srt / onscreen_layout.json / CapCut middle overlay로 변환하십시오.
-11. TTS 만들 글자만 복사는 timed 중단 중 voice/TTS 의도 줄만 추출한 복사용 텍스트로 사용하십시오.
-12. 괄호 상황/SFX/감정 자막은 사용자가 명시하지 않는 한 TTS에서 제외하십시오.
-13. 별도 script layer를 새로 만들지 마십시오.
-14. legacy tool compatibility가 guide_ko.srt를 요구하면 빈 compatibility 또는 중단 display duplicate로만 만들고 독립 script layer로 취급하지 마십시오.
-15. audio-off comprehension gate, policy gate, persona/readability gate를 확인하십시오.
-16. render_plan_pre_capcut.json은 기본 `edit_assembly_mode=scenario_first_montage`, `source_beat_library`, `scenario_timeline`, `clip_assignments` 기준으로 만드십시오.
-17. onscreen_ko.srt / onscreen_layout.json 생성 후 analysis/assets harness를 실제로 통과시키십시오.
-18. CapCut 생성 직전에 `000short-production-agent/scripts/validate_production_gate.py`를 실행하고 production_gate_result.json이 PASS일 때만 draft를 만드십시오.
-19. CapCut draft 생성 후 capcut_timeline_manifest.json을 만들고 `000short-production-agent/scripts/validate_capcut_timeline_order.py`를 실행하십시오.
-20. scenario_first_montage에서는 selected_remix_order가 아니라 scenario_timeline과 clip_assignments 보존 여부를 검증하십시오.
-21. shorts_remake_harness.py --stage capcut, all을 실제로 통과시키십시오.
-22. post timeline gate와 all harness가 PASS 전까지 upload_ready=false를 유지하십시오.
-
-완료 보고:
-- 생성된 guide_ko.srt
-- 생성된 onscreen_ko.srt
-- 생성된 onscreen_layout.json
-- 생성된 voice/TTS helper file, if explicitly authorized
-- CapCut draft name/path
-- harness analysis/assets/capcut/all PASS/FAIL
-- 수정한 대본/타이밍이 있으면 repair summary
+${env:WORKSPACE_ROOT}\22factory_20260628\AGENTS.md
 ```
 
-Then print the final script in chat:
+Treat `${env:WORKSPACE_ROOT}` as a portable placeholder, not proof that the
+current process has the variable. Resolve the active factory root from the
+opened workspace or OneDrive location and verify both `AGENTS.md` and
+`docs/YOUTUBE_PRODUCTION_WORK_ORDER.md` exist before running commands. If the
+root cannot be resolved, stop with `WAIT_FACTORY_ROOT_NOT_RESOLVED`.
+
+For new Tikitaka/Shorts script work, create or use an episode folder under:
 
 ```text
-최종 대본 복사용
+22factory_20260628\01_shorts_factory\episodes\SH_YYYYMMDD_slug
+```
+
+Legacy `11utube/11short` paths are read-only reference or explicit repair
+targets unless the user asks for legacy work.
+
+## Input Authority
+
+Treat Gemini Shorts JSON, model summaries, pasted analysis, comments, and user
+notes as source notes for remake scripting. They are not production truth.
+
+Do not invent verified source timing, source dialogue, OCR, or scene order from
+Gemini alone. Mark any proposed source range as
+`PROPOSED_SOURCE_TIMECODE` until the user confirms it or a source-evidence tool
+verifies it.
+
+For script confidence, use the current source-evidence workflow only. Acquire or
+confirm `source.mp4`, lock its identity, run full-source Demucs preprocessing,
+and then create the required frame/STT/OCR evidence and speaker ranges from
+`10_analysis/audio/vocals.wav`. If source media cannot be acquired or
+confirmed, stop and ask the user to provide it; do not invoke a separate
+video-watching skill or invent final timing.
+
+`00_source/clean_source.mp4` is never source evidence. When `stage_2_full` is
+selected, bind it to the locked original through
+`10_analysis/vmake_clean_source.json` and keep all analysis on `source.mp4`.
+
+## Story And Production Type Gate
+
+Tikitaka must decide these before writing the first draft. This is the first
+routing gate for Shorts remake work: the story structure decides how the script
+opens and pays off, and the production type decides the audio, caption, and
+later CapCut direction.
+
+Required fields before drafting:
+
+- `story_type`: one of the S1-S7 story structures below.
+- `production_type`: one of the A-F production types below.
+- `shorts_design_type`: one of `SD1`, `SD2`, `SD3`, `SD4`, or `unknown`.
+  Use `unknown` when source ambiguity remains; do not force SD1-SD4 before the
+  design evidence supports it.
+- `audio_policy`: the high-level source/TTS/BGM choice.
+- `caption_policy`: top, timed middle, quote, situation/card, or explicit
+  template exception.
+- `caption_layer_mix`: which visible text layers are expected.
+- `source_speech_policy`: `verified_only`, `none_verified`, or
+  `selected_verified_speech`.
+- `card_asset_role`: `visual_situation_card` only for card/comment/community
+  formats; otherwise `none`.
+
+### Story Type Matrix (S1-S7)
+
+```text
+S1 reversal_preview    | 반전 선공개형       | 제일 센 장면을 앞에 먼저 보여줌
+S2 ranking_reorder     | 랭킹 재배열형       | TOP-N, 순서 재배열 필수
+S3 tikitaka_variety    | 티키타카/예능형    | 실제 대사/리액션/말맛 중심
+S4 observation_caption | 관찰/상황설명형    | 화면 행동을 자막이 짚어줌
+S5 emotion_payoff      | 감동 회수형         | 오해/긴장 -> 감정 회수
+S6 info_explainer      | 정보/설명형         | 하나의 지식/사건을 쉽게 설명
+S7 card_story          | 카드사연형          | 커뮤니티글/댓글/사연 카드화
+```
+
+Story type is not the same thing as production type. `반전형`, `랭킹형`,
+`티키타카형`, and `카드사연형` are story structures; TTS/BGM, source audio,
+speaker quotes, original audio preservation, and card assets are production
+implementation choices.
+
+Default caption policy is `top + timed_middle + situation_caption`.
+yellow_lower_caption is not default. Use a yellow lower caption only when a
+specific template explicitly locks it.
+
+CapCut layers: T1/T2 top, T3 TTS, T4/T5 quote, T6 situation/card.
+
+## Output Contract
+
+Default chat output:
+
+```text
+쇼츠 유형
+- story_type: S5 emotion_payoff
+- production_type: narration_plus_speaker
+- shorts_design_type: unknown
+- audio_policy: tts_narration + selected_original_speech + bgm_optional
+- caption_policy: top + timed_middle + situation_caption
+- caption_layer_mix: top + timed_middle + quote/situation as needed
+- source_speech_policy: verified_only
+- card_asset_role: none
+- template: none
 
 상단
 ...
 
-중단
-[0~3초]
+중단 초벌대본
+[블록 1 | 편집 00:00-00:03 | 원본 제안 00:00-00:00 | 상태 PROPOSED_SOURCE_TIMECODE]
 ...
 
-TTS 만들 글자만 복사
+구간 오디오 정책표
+1구간 | caption_type=speaker_quote | source_audio=on | tts=off | bgm=optional_duck
+2구간 | caption_type=tts_narration | source_audio=off | tts=on | bgm=optional
 ...
+
+중단 TTS 글자만 복사
+...
+
+1차설계서
+| 트랙 / 시간 | 0-3초 | 3.1-4초 | 4.1-8초 |
+| T1 | 텍스트 | 텍스트 | 텍스트 |
+| T2 | 텍스트 | 텍스트 | 텍스트 |
+| TTS | 없음 | 없음 | 텍스트 |
+| "" 화자발언 A | 텍스트 | 텍스트 | 없음 |
+| "" 화자발언 B | 없음 | 텍스트 | 텍스트 |
+| () 상황설명 A | (행복한표정) | 없음 | 없음 |
+| 영상 | source_visual | source_visual | source_visual |
+| 오디오 / 나레이션·TTS | intro_narration | 없음 | 없음 |
+| 오디오 / 화자발언·원본화자 | 없음 | source_audio | source_audio |
+| 오디오 / SFX | 없음 | optional | 없음 |
+| 오디오 / BGM | optional | optional_duck | optional |
+
+상태
+- script_status: DRAFT_EYE_REVIEW
+- production_status: WAIT_EXPLICIT_000SHORT_REQUEST
+- timeline_design_gate: PASS|WAIT|FAIL
+- humanize_korean_gate.json: PASS|WAIT|FAIL
 ```
 
-Always print the final script in chat even if `final_script_ko.txt` was saved.
+## Urakkai Edit-Order Handoff Contract
 
-## Version
+`urakkai` complete does not mean script-only complete. It means the short has a
+block-by-block edit design that can be consumed by production. The downstream
+target is `CAPCUT_EDIT_READY`, not upload-ready and not a final production pass.
+
+Stage 1 = SCRIPT_LOCK_PACKAGE. This is the only stage this skill may lock. It
+does not create CapCut, audio files, SRT, exports, or upload packages.
+
+`SCRIPT_LOCK_PACKAGE` must contain:
+
+- `shorts type locked`: `story_type`, `production_type`,
+  `shorts_design_type`, and template direction.
+- `source structure summary`: original title/core, source block order, and key
+  source captions/dialogue.
+- `urakkai structure locked`: changed viewpoint, hook, reversal, and emotional
+  line.
+- `1차설계서`: operator-facing CapCut timeline table with track/time rows.
+- `timeline_design.json`: machine-readable design with protected time, track,
+  caption role, and audio policy fields.
+- `caption_beat_map.json`: timed visible-text beats and fixed layout profile.
+- `timeline_design_gate.json`: PASS before handoff.
+- `humanize_korean_gate.json`: PASS after visible Korean cleanup and before
+  `script_handoff_gate.json`.
+- `wow point reordered`: strongest payoff/visual point moved to the edit order
+  where it creates the best retention.
+- `source-to-urakkai delta table`: original block -> remake block changes.
+- `block role map`: each block marked as `"..."`, `(...)`, or TTS narration.
+- `block audio map`: source_audio, TTS, SFX, and BGM policy by edit block.
+- `tts_copy_text.txt`: narration-only copy text.
+- `TTS copy body`: narration-only copy text.
+- `source voice ON/OFF/duck ranges locked`: original/source voice switch ranges.
+
+Status wording:
 
 ```text
-v3.5: removed legacy third-layer/TTS wording from current contracts, harness board fields, battle mode, and final output templates.
-v3.4: super harness scrollback checkpoints and partial production_gate_contract are mandatory for 11short handoff; Tikitaka cannot set production_allowed.
-v3.3: top title / first timed middle cue / core hook require REAL_WRITER_AGENT_MODE; inline fallback and visible_writer_battle cannot satisfy hook selection, SCRIPT_LOCK, or production handoff.
-v3.2: mandatory Tikitaka Harness Mode board after every script draft/edit; user edits invalidate prior SCRIPT_LOCK; PASS/SCRIPT_LOCK forbidden without visible gate evidence.
-v3.1: SCRIPT AGENT MODE is mandatory; 5 writer personas generate rewrite material, chief editor integrates, final recheck locks SCRIPT_LOCK; missing agent results block handoff.
-v2.2: single-word term replacement + mandatory post-draft five-agent validation
-v2.1: similarity breaker harness + source term replacement report + shared timed middle timeline
-v2.0: Gemini raw signal v2.1 intake + source_audio_mode dialogue lock
-v1.9: OneDrive Tikitaka input package final report + local Windows instruction prompt
-v1.8: 000short handoff contract + voice-copy standardization
+script_status: SCRIPT_LOCK_PACKAGE
+production_status: WAIT_CAPCUT_OPENABLE_PROJECT
 ```
+
+Do not confuse this with final/upload lock. When `SCRIPT_HANDOFF_GATE` is PASS,
+record:
+
+```text
+capcut_permission: CAPCUT_OPENABLE_PROJECT_ALLOWED
+production_status: WAIT_CAPCUT_OPENABLE_PROJECT
+```
+
+n8n is a FINAL_LOCK blocker only when the current package explicitly sets
+`n8n_required=true`; otherwise its status is `NOT_REQUIRED`.
+`final_report_allowed=false` means the final or upload report is blocked; it
+does not block the second stage. continue to 000short-production-agent for
+`CAPCUT_OPENABLE_PROJECT` when the handoff gate is PASS.
+
+Required handoff files or equivalent machine-readable blocks before production
+may start:
+
+- `original_block_map`: source blocks in original order.
+- `wow_point_map`: the strongest visual or emotional point to pull forward.
+  `wow_overlay_text is optional`; the user may add these in CapCut manually.
+- `urakkai_order_map`: original order vs remake order, for example
+  `1-2-3-4-5 -> 4-3-5-1-2-3`.
+- `10_analysis/source_voice_separation.json`: full-source Demucs gate bound to
+  the locked source fingerprint. `10_analysis/audio/vocals.wav` is required
+  when source speech exists.
+- `timeline_design.json`: canonical design table for tracks, time ranges, text
+  roles, video, and audio lanes.
+- `timeline_design_gate.json`: design validation result.
+- `humanize_korean_gate.json`: visible Korean cleanup result, with no protected
+  structure changes.
+- `edit_block_sequence`: the actual edit timeline order that production must
+  implement.
+- `block_map.json`: canonical source-of-truth map for every edit block.
+- `block_role_map.json`: readable table for `"..."`, `(...)`, and TTS roles.
+- `block_voice_switch_map.json`: readable table for source audio, TTS, SFX, and
+  BGM switching by edit block.
+- `tts_copy_text.txt`: narration-only copy text. Text with
+  `included_in_tts_copy=false` must not be placed into the TTS body.
+- `tts_duration_probe.json`: required only when narration audio is planned.
+- `tts_timing_reconciliation_gate.json`: required only when narration audio is
+  planned.
+- `chatgpt_review_gate.json`: proves both ChatGPT project review rounds
+  completed, Round 1 suggestions were dispositioned by Codex, Round 2 returned
+  `PASS_RECOMMENDED`, and packet/response hashes match the preserved files.
+- `script_handoff_gate.json`: the `SCRIPT_HANDOFF_GATE` result.
+
+Legacy aliases without extensions are accepted only for old packages.
+
+`block_map.json` must keep both source and edit identities:
+
+```text
+edit_id
+source_block_id
+original_order
+urakkai_order
+source_order
+timeline_order
+assembly_role
+source_time
+edit_time
+mid_caption
+caption_type
+display_zone=middle_under_video
+source_audio=on/off/duck
+tts=on/off
+audio_lane
+sfx_policy
+bgm_policy
+source_range_status
+exception_reason
+```
+
+Middle captions are one screen zone with different semantic roles. `"..."`,
+`(...)`, and TTS-visible text all use `display_zone=middle_under_video`, directly
+under the video. Do not move narration body text to a lower body-caption zone.
+
+```text
+"..."          -> caption_type=speaker_quote    -> source_audio=on,  tts=off
+(...)          -> caption_type=situation_caption -> source_audio=off, tts=off by default
+plain narration -> caption_type=tts_narration   -> source_audio=off, tts=on
+```
+
+Bottom/body captions are not a Tikitaka remake lane:
+
+```text
+bottom_body_caption_forbidden
+```
+
+`SCRIPT_HANDOFF_GATE` may set `capcut_allowed=true` only when the edit order,
+roles, and audio switches are locked:
+
+```json
+{
+  "gate_name": "SCRIPT_HANDOFF_GATE",
+  "status": "PASS",
+  "edit_blocks_locked": true,
+  "caption_roles_locked": true,
+  "voice_switch_locked": true,
+  "capcut_allowed": true
+}
+```
+
+Hard fails:
+
+- `original_block_map`, `wow_point_map`, `urakkai_order_map`,
+  `10_analysis/source_voice_separation.json`, `timeline_design.json`,
+  `timeline_design_gate.json`,
+  `humanize_korean_gate.json`, `edit_block_sequence`, `block_map.json`,
+  `block_role_map.json`, `block_voice_switch_map.json`, `tts_copy_text.txt`, or
+  `script_handoff_gate.json` is missing when production handoff is requested.
+- `timeline_design.json` segment is missing `source_order`, `timeline_order`,
+  `assembly_role`, `visible_text_role`, `audio_role`, `duration_basis`,
+  `duration_status`, or `visual_strategy`.
+- narration-audio segment exists but `tts_duration_probe.json` or
+  `tts_timing_reconciliation_gate.json` is missing.
+- `chatgpt_review_gate.json status=PASS` is missing, either ChatGPT project
+  review round is missing, or Round 2 is not `PASS_RECOMMENDED`.
+- actual narration duration exceeds the planned visual slot without an allowed
+  reconciliation action; use `WAIT_TTS_TIMING_RELOCK`.
+- `speaker_quote` has no verified or explicitly proposed source range.
+- `speaker_quote` does not reference `10_analysis/audio/vocals.wav` with
+  `source_audio_provenance=demucs_full_source_vocals`.
+- `tts_narration` keeps `source_audio=on`.
+- `situation_caption` has `tts=on` without an `exception_reason`.
+- `capcut_allowed=true` appears before role and voice switch maps are locked.
+
+Use `1/2/3/4/5` labels only as temporary source-range confirmation IDs, not as
+the creative structure. The creative structure must be functional: hook,
+misread, escalation, reversal, payoff, or another stated role.
+
+## Segment Audio Policy Contract
+
+Tikitaka must decide the segment audio policy at script time, before production
+starts. `000short-production-agent` must validate and implement this plan; it
+must not be the first place where quote/TTS/source-audio policy is guessed.
+
+For every timed `중단` block, include one explicit row in `구간 오디오 정책표`.
+
+Allowed values:
+
+```text
+caption_type:
+- speaker_quote        = original/source speaker line, shown with "..."
+- tts_narration        = generated voice narration
+- tts_caption          = TTS-style visible caption only; no voice file implied
+- situation_caption    = visual/situation explanation, shown with (...)
+- tts_plus_source      = TTS while source audio remains intentionally audible
+- ranking_item         = ranking/TOP-N beat
+
+source_audio:
+- on     = separated speaker/Q audio from vocals.wav must be audible
+- off    = original/source video audio must be muted
+- duck   = separated speaker/Q audio remains low under TTS/BGM
+
+tts:
+- on
+- off
+
+bgm:
+- optional       = no BGM is forced; user may choose it later
+- optional_duck  = no BGM is forced; if user later chooses BGM, duck it here
+- on             = BGM is explicitly required by the user or locked plan
+- off            = no BGM in this segment
+- duck           = required BGM remains low in this segment
+```
+
+Default mapping:
+
+```text
+"화자발언" / speaker_quote      -> source_audio=on,   tts=off, bgm=optional_duck
+TTS 나레이션 / tts_narration    -> source_audio=off,  tts=on,  bgm=optional
+TTS 자막만 / tts_caption        -> source_audio=off,  tts=off, bgm=optional
+(상황설명) / situation_caption  -> source_audio=off,  tts=off, bgm=optional
+TTS+원본현장음 / tts_plus_source -> source_audio=duck, tts=on,  bgm=optional_duck
+랭킹형 / ranking_item           -> source_audio=off by default; use on only for verified quote/reaction beats
+```
+
+BGM is never mandatory by default. Use `bgm=on` or `bgm=duck` only when the user
+explicitly chose a BGM/SFX asset, asked for a specific music mood, or the locked
+production plan names a BGM file. Otherwise keep BGM as `optional` or
+`optional_duck` so production can continue without adding music.
+
+If the user gives a remix such as `원본 1-2-3-4-5 -> 우라까이 4-3-1-5-2`,
+audio policy follows the remixed timeline order, not the original source order.
+Every row must keep both:
+
+```text
+source_order: original source segment id such as 1,2,3,4,5
+timeline_order: remixed position such as 4,3,1,5,2
+```
+
+Narration is an audio authority, not disposable filler. If a TTS narration line
+is longer than the planned visual beat, do not shorten or cut the narration in
+the handoff. Mark the segment for production expansion instead:
+
+```text
+narration_duration_policy=preserve_full_tts
+production_adjustment=extend_visual_or_shift_source_audio
+```
+
+The handoff must let production assemble separate lanes:
+
+```text
+narration=TTS lane
+source_audio=on/off/duck by segment
+bgm=separate optional/required lane
+source_video_audio=muted_always
+speaker_q=separate_vocals.wav
+```
+
+Legacy compatibility wording:
+
+```text
+source_video_audio=muted unless explicitly extracted as source_audio
+```
+
+Here, `explicitly extracted as source_audio` means the separately approved
+Demucs speaker/Q lane. It never authorizes embedded source-video audio; the
+production video itself remains `muted_always`.
+
+Example:
+
+```text
+구간 오디오 정책표
+1구간 | source_order=4 | timeline_order=1 | caption_type=speaker_quote | source_audio=on | tts=off | bgm=optional_duck
+2구간 | source_order=3 | timeline_order=2 | caption_type=tts_narration | source_audio=off | tts=on | bgm=optional
+3구간 | source_order=1 | timeline_order=3 | caption_type=speaker_quote | source_audio=on | tts=off | bgm=optional_duck
+4구간 | source_order=5 | timeline_order=4 | caption_type=tts_plus_source | source_audio=duck | tts=on | bgm=optional_duck
+5구간 | source_order=2 | timeline_order=5 | caption_type=tts_narration | source_audio=off | tts=on | bgm=optional
+```
+
+When production is likely to continue, also provide a copyable JSON handoff:
+
+```json
+{
+  "story_type": "emotion_payoff",
+  "story_type_code": "S5",
+  "production_type": "narration_plus_speaker",
+  "shorts_design_type": "SD3",
+  "audio_policy": "tts_narration + selected_original_speech + bgm_optional",
+  "caption_policy": "top + timed_middle + situation_caption",
+  "caption_layer_mix": ["top", "timed_middle", "quote", "situation_caption"],
+  "source_speech_policy": "verified_only",
+  "card_asset_role": "none",
+  "tikitaka_segment_audio_plan": [
+    {
+      "segment_id": "seg_001",
+      "source_order": 4,
+      "timeline_order": 1,
+      "edit_range": "00:00-00:03",
+      "source_range_status": "PROPOSED_SOURCE_TIMECODE",
+      "caption_type": "speaker_quote",
+      "source_audio_policy": "on",
+      "tts_policy": "off",
+      "bgm_policy": "optional_duck",
+      "visible_text_role": "speaker_quote"
+    }
+  ]
+}
+```
+
+Hard fails:
+
+- timed `중단` blocks exist but `구간 오디오 정책표` is missing
+- `"..."` speaker quote block has `source_audio=off`
+- TTS narration block keeps source audio `on` without explicit
+  `caption_type=tts_plus_source`
+- remixed order is shown, but `source_order` and `timeline_order` are not both
+  recorded
+- production handoff is requested, but no machine-readable
+  `tikitaka_segment_audio_plan` is provided
+- the first draft omits `story_type`, `production_type`, or
+  `shorts_design_type` or sets it to a value outside
+  `SD1|SD2|SD3|SD4|unknown`
+- `instagram_card_tts` card/comment/community text is marked as
+  `speaker_quote` or `tts_narration`
+- `yellow_lower_caption` is used without an explicit locked template
+
+## Shorts A-F Production Type Matrix
+
+Before writing the draft, classify the video into one of 6 production types.
+The type determines the entire audio/mute/TTS/caption/asset policy.
+
+```text
+코드 | production_type          | 이름                              | 오디오/자막 정책
+A    | full_tts_bgm             | TTS 나레이션 + BGM형              | source_audio mostly off, TTS leads, BGM optional/on
+B    | bgm_caption_only         | BGM 위주 + 자막형                 | TTS off, source audio off/low, captions lead
+C    | narration_plus_speaker   | 나레이션 + 화자발언형             | TTS explanation + selected verified source speech
+D    | original_audio_caption   | 원본음성 살림 + 번역/해설자막형   | original/source audio leads, Korean captions support
+E    | tts_intro_original_body  | TTS 도입 + 원본 후킹형            | first 2-5s TTS, then original/source body leads
+F    | instagram_card_tts       | 인스타/커뮤니티 카드형            | card/comment/community/story asset + TTS/BGM
+```
+
+### F Card Role Rule
+
+`instagram_card_tts` is a production format, not a dialogue type. In the script
+and handoff, card/comment/community/story card text is treated as a visual
+situation/card asset:
+
+```text
+production_type=instagram_card_tts
+caption_type=situation_caption
+visible_text_role=situation
+capcut_text_layer=T6
+card_asset_role=visual_situation_card
+not speaker_quote
+not tts_narration
+```
+
+This means a card image, comment card, community post card, or story card is
+shown as `(상황설명)`, `(댓글 카드 표시)`, `(커뮤니티 글 카드 표시)`, or
+`(사연 카드 이미지 표시)`. It is not a verified source speaker line, not a
+source quote, and not the TTS narration body itself.
+
+### Muting Decision Rule
+
+```text
+원본 음성 ON  → 해당 구간이 "" 화자발언으로 표기되어 있을 때
+원본 음성 OFF → "" 가 아닌 구간 (TTS/자막/BGM만 쓸 때)
+예외          → "" 구간이더라도 원본 음질이 너무 나쁘면 TTS로 대체 (작가 판단)
+```
+
+### Per-Type Mute Detail
+
+- **A full_tts_bgm**: source audio mostly off. Use TTS narration as the main
+  carrier and keep BGM optional unless the user/template locks it.
+- **B bgm_caption_only**: TTS off. Source audio off/low unless a verified
+  reaction beat is intentionally preserved.
+- **C narration_plus_speaker**: TTS explains the arc; only verified source
+  speaker lines use `speaker_quote` and source audio on/duck.
+- **D original_audio_caption**: original/source audio is the main carrier.
+  Korean captions translate, explain, or frame the source.
+- **E tts_intro_original_body**: TTS only establishes context in the first 2-5s;
+  the body follows original/source audio unless a later segment explicitly
+  switches policy.
+- **F instagram_card_tts**: card/comment/community/story visual assets plus
+  TTS/BGM. Card text uses `caption_type=situation_caption` and
+  `card_asset_role=visual_situation_card`, never `speaker_quote`.
+
+## Shorts Design Type Matrix (SD1-SD4)
+
+`shorts_design_type` is the practical Shorts 설계유형. It does not replace
+`story_type` or `production_type`; it locks how TTS, BGM, verified quotes, and
+situation captions are mixed in the 1차설계서 and `timeline_design.json`.
+
+Allowed values:
+
+```text
+SD1
+SD2
+SD3
+SD4
+unknown
+```
+
+```text
+코드 | 설계 의미
+SD1  | TTS나레이션초반 only 이후 BGM/자막형
+SD2  | TTS 설명 / BGM형
+SD3  | TTS 설명 / "" 화자발언 / () 상황설명형
+SD4  | "" 화자발언 / () 상황설명 / TTS 혼합형
+unknown | source/design ambiguity remains
+```
+
+### SD1 Intro TTS Then BGM Caption
+
+Use when TTS should hook only the first 2-5 seconds, then the video continues
+with BGM, visual captions, or light situation captions. Source audio is off by
+default except for explicitly verified reaction or quote beats.
+
+### SD2 TTS Explain BGM
+
+Use when TTS explanation carries the whole short and BGM is the support bed.
+Most source audio stays off, and verified `"..."` 화자발언 is absent or rare.
+
+### SD3 TTS Explain Quote Situation
+
+Use when TTS explains the arc, selected verified source speech appears as
+`"..."` 화자발언, and visual/emotional context appears as `()` 상황설명. This is
+the default mixed remake design for many Tikitaka Shorts.
+
+### SD4 Quote Situation TTS Mix
+
+Use when verified `"..."` 화자발언, `()` 상황설명, and TTS are all active across
+the timeline. Every segment must lock source_audio on/off/duck, tts on/off, and
+BGM/SFX policy before handoff.
+
+## Dual Writer Mode (Explicit Optional Mode)
+
+Use two CLI-based writer agents only when the user explicitly asks for
+`작가모드`, `2명 토론`, `울트라 검토`, or an equivalent multi-writer review.
+Ordinary Tikitaka Stage 1 must not be blocked when either CLI is unavailable.
+
+### CLI Tools
+
+- **Writer A (Codex CLI)**: aggressive hook, emotional escalation,
+  retention-first, willing to dramatize for engagement.
+  ```bash
+  codex exec "당신은 후킹·리텐션 중심 작가입니다. ... <분석 지시> ..." 2>&1
+  ```
+- **Writer B (Claude CLI)**: fact-grounded, structural balance,
+  risk-aware, prioritizes coherence and policy safety.
+  ```bash
+  claude -p --bare "당신은 사실·구조 중심 작가입니다. ... <분석 지시> ..." 2>&1
+  ```
+
+### Debate Protocol
+
+1. **Round 1**: Both CLIs receive the same video context independently.
+   Each outputs: type recommendation, wow point, urakai, disagreement point.
+2. **Round 2**: Share Round 1 outputs cross-wise. Each CLI responds:
+   동의/부분동의/유지 with reasoning.
+3. **Synthesis**: The orchestrator resolves cross-convergence (both writers
+   moving to each other's position = middle ground) into a final decision.
+
+Both writers must output:
+
+- recommended `story_type` (S1-S7) with reasoning
+- recommended `production_type` (A-F canonical code) with reasoning
+- recommended `shorts_design_type` (`SD1`, `SD2`, `SD3`, `SD4`, or `unknown`)
+  with reasoning
+- wow point confirmation or correction
+- urakai structure recommendation
+- one concrete disagreement point
+
+The final decision is the synthesis of both perspectives. If they disagree on
+production type, the higher-audio-fidelity type wins unless the source has no
+usable speech at all. If they disagree on story type, the type that best
+preserves the strongest source-backed viewer question wins.
+
+## ChatGPT Project Two-Pass Review (Required)
+
+Every new Tikitaka Stage 1 design must be reviewed twice in the existing
+ChatGPT project `쇼츠대본분석`:
+
+```text
+https://chatgpt.com/g/g-p-6a245b804c2c8191907088f317842a55-syoceudaebonbunseog/project
+```
+
+Use one new project chat per episode and keep both review rounds in that same
+chat. Use the logged-in normal Chrome session through available Chrome/browser
+control. Do not substitute a generic ChatGPT chat, API call, Claude CLI, or a
+different project. If the project cannot be opened, login is unavailable, or a
+fresh response cannot be copied, stop with:
+
+```text
+WAIT_CHATGPT_PROJECT_REVIEW
+```
+
+Read the complete Shorts two-pass contract in
+`shorts_script_analysis_single_source_v20260706.md` before creating either
+packet. The ChatGPT project's Shorts-only instructions must match
+`references/chatgpt_project_router_instruction.md`; if the live project router
+does not require `content_type: shorts` and `review_round: 1|2`, or still
+contains a `politics_longform`/`politics_shortform` route or political review
+contract, stop with `WAIT_CHATGPT_PROJECT_ROUTER_UPDATE`.
+
+Round 1 occurs only after `timeline_design_gate.json status=PASS`:
+
+```yaml
+content_type: shorts
+review_round: 1
+```
+
+Save the exact sent packet and unedited response:
+
+```text
+chatgpt_review/round1_review_packet.md
+chatgpt_review/round1_chatgpt_raw.md
+```
+
+ChatGPT performs `INDEPENDENT_REVIEW` and `REVISION_PROPOSAL`. Its result always
+remains `PENDING_CODEX_REVIEW`. Codex then verifies every suggestion against
+source evidence and records one of `ADOPTED`, `PARTIALLY_ADOPTED`, `REJECTED`,
+or `PENDING_EVIDENCE` in:
+
+```text
+chatgpt_review/round1_codex_decisions.json
+```
+
+Apply accepted changes and rerun invalidated design, caption, Humanize, and TTS
+timing gates.
+
+Round 2 occurs after the revised candidate, Humanize, block maps, TTS copy, and
+TTS timing reconciliation are ready, but before `SCRIPT_HANDOFF_GATE`:
+
+```yaml
+content_type: shorts
+review_round: 2
+```
+
+Save:
+
+```text
+chatgpt_review/round2_audit_packet.md
+chatgpt_review/round2_chatgpt_raw.md
+```
+
+Round 2 performs `EVIDENCE_AUDIT` and returns one external recommendation:
+`PASS_RECOMMENDED`, `REVISE_REQUIRED`, or `EVIDENCE_REQUIRED`. All responses
+still end in `PENDING_CODEX_REVIEW`; ChatGPT cannot make the final adoption or
+handoff decision.
+
+Codex may write `chatgpt_review_gate.json status=PASS` only when both exact
+packets and raw responses are preserved, every Round 1 suggestion is
+dispositioned, Round 2 says `PASS_RECOMMENDED`, the source fingerprint matches,
+and no protected field changed silently. The gate name is:
+
+```text
+CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE
+```
+
+`REVISE_REQUIRED`, `EVIDENCE_REQUIRED`, a missing response, a mismatched packet
+hash, or a different project blocks `SCRIPT_HANDOFF_GATE`.
+
+### Browser-Assisted Automation Sequence
+
+Use `scripts/chatgpt_review_workflow.py` for deterministic packets, response
+checks, and gate creation. Use the signed-in normal Chrome session only to send
+the packets and copy fresh responses from project `쇼츠대본분석`.
+
+```powershell
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py build-round1 --work-dir <20_script-dir> --review-cycle-id <cycle-id>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py record-response --work-dir <20_script-dir> --round 1 --input <copied-round1-response.md>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py build-round2 --work-dir <20_script-dir> --review-cycle-id <cycle-id>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py record-response --work-dir <20_script-dir> --round 2 --input <copied-round2-response.md>
+py -3 skills/00-tikitaka/scripts/chatgpt_review_workflow.py finalize-gate --work-dir <20_script-dir>
+```
+
+If the project returns `SOURCE_CONTRACT_MISSING`, attach only
+`shorts_script_analysis_single_source_v20260706.md` to the project sources,
+remove any political review contract, keep the Shorts-only instructions from
+`references/chatgpt_project_router_instruction.md`, and rerun the same packet
+in a fresh episode chat. Do not use Computer Use or an OS-level mouse/keyboard
+fallback.
+
+## Draft Workflow
+
+1. State the frame: what situation the remake is using and why.
+2. **Run Story And Production Type Gate**: choose `story_type`,
+   `production_type`, `shorts_design_type`, audio policy, caption policy,
+   source speech policy, and card asset role before the first draft.
+3. Map source notes into functional beats.
+4. Write hook candidates if requested or useful.
+5. If the user explicitly selected Dual Writer Mode, run it to review wow point,
+   urakai, story type, and production type. Otherwise continue with the single
+   Tikitaka design owner.
+6. Produce `1차설계서`: a CapCut-style time/track layout table, not an abstract
+   script report.
+7. Write `timeline_design.json` from the same layout and pass
+   `timeline_design_gate.json`.
+8. Send ChatGPT Project Round 1, save the raw response, adjudicate every
+   suggestion, and rerun invalidated design gates.
+9. Run Humanize Korean on visible text only and record
+   `humanize_korean_gate.json` before handoff.
+10. Produce `상단 + timed 중단`, `block_map.json`, `block_role_map.json`,
+   `block_voice_switch_map.json`, and `tts_copy_text.txt` from
+   `중단 TTS 글자만 복사`.
+11. Complete the TTS duration probe and timing reconciliation when narration
+    audio is planned.
+12. Send ChatGPT Project Round 2 and pass
+    `CHATGPT_PROJECT_TWO_PASS_REVIEW_GATE`.
+13. Run `SCRIPT_HANDOFF_GATE`; keep status at `DRAFT_EYE_REVIEW` unless the
+    user explicitly asks for the next owner.
+
+## Shorts TTS Storytelling Mode
+
+If a Shorts remake can be told as TTS narration, story, or 썰풀이, this mode is
+mandatory, not optional.
+
+This mode is not separate from 우라까이. 우라까이는 the baseline condition: the
+remake must not keep the same expression, scene-entry order, emotional angle, or
+payoff wording. The TTS story gate decides how aggressively the same visual
+source must be reframed through a stronger writer premise.
+
+Do not start as a flat event summary. Lead with the strongest hookable
+emotional premise, deadline, loss, desire, misunderstanding, or irreversible
+action. In Tikitaka writer mode, the hook is allowed to use a plausible dramatic
+premise that is not directly verifiable when it is needed to make the story work,
+especially for TTS-heavy videos with little or no source speech.
+
+If the user says `후킹 쎄게`, `작가모드`, `우라까이`, or directly corrects the
+agent to make the opening more provocative, treat that as a hard routing signal:
+choose `hook_first_writer_premise` unless the video is clearly an information,
+news, politics, medical, legal, safety, accident, crime, finance, or other
+fact-first lane. Ask the user only when the lane is genuinely unclear.
+
+```text
+weak: 할아버지가 손자를 만났다
+strong: 시한부 할아버지가 마지막으로 손자를 보러 왔다
+```
+
+The strong version is a writer premise, not source evidence. Use it when it fits
+the visual/emotional arc and creates a better hook. Do not flatten the opening
+just because the premise is not independently verified.
+
+For example, if the source only proves "a soldier met his daughter at a
+graduation ceremony", do not write the flat version first. Build a hookable
+story premise such as:
+
+```text
+못 만날 줄 알았던 딸이,
+수료식장에 와 있었습니다.
+```
+
+or:
+
+```text
+수료식만 끝나면 다시 기다려야 할 줄 알았습니다.
+그런데 뒤돌자마자, 딸이 품에 안겼습니다.
+```
+
+This is valid Tikitaka story framing even when the source does not prove the
+father literally heard "she cannot come." The public script may use the premise
+to create curiosity; internal reports must still avoid calling it verified
+source evidence.
+
+Avoid only inventions that create a materially different or harmful claim, such
+as crime accusations, medical diagnoses, death, abuse, political/news claims,
+or other high-risk facts that would change the video's basic meaning. For
+ordinary emotional/family/TTS story hooks, prefer dramatic premise over flat
+fact-reporting.
+
+Required TTS story fields:
+
+- `tts_story_mode_required: true|false`
+- `truth_mode: fact_first|hook_first_writer_premise`
+- `source_supported_emotional_condition`
+- `writer_premise_for_hook`
+- `writer_premise_status: verified|plausible_unverified|fictionalized_hook`
+- `flat_event_summary`
+- `emotional_entry_line`
+- `changed_scene_entry_order`
+- `changed_korean_expression_strategy`
+- `viewer_emotion_target`
+- `payoff_recovery_line`
+
+For emotional story/remake Shorts, prefer:
+
+- person before explanation
+- loss or deadline before background
+- concrete action before abstract feeling
+- one emotional question before the answer
+- final line that returns to the first emotional anchor
+
+Do not over-explain visible action when TTS is the main carrier. Use captions to
+hit the emotional angle and leave simple visuals to do their own work.
+
+Hard fails:
+
+- flat event summary when TTS narration can carry the story
+- synonym-only Korean replacement
+- same source flow with only different words
+- refusing a strong hook only because the emotional premise is not directly
+  verifiable in a TTS-heavy ordinary story
+- invented high-risk facts such as illness, death, crime, abuse, political/news
+  claims, or other materially harmful claims unless the source actually supports
+  them
+- emotionally strong wording where a first-time viewer cannot tell who wants
+  what and what may be lost
+
+## Required Gates Before Stronger Claims
+
+- Do not claim generic `SCRIPT_LOCK` from this skill alone. This skill may emit
+  `SCRIPT_LOCK_PACKAGE` only when `script_handoff_gate.json status=PASS` and all
+  required Stage 1 artifacts, including `caption_beat_map.json`, exist.
+- Do not claim production allowed.
+- Do not claim source-verified truth from raw Gemini notes.
+- Do not run `SCRIPT_HANDOFF_GATE` before `timeline_design_gate.json` and
+  `humanize_korean_gate.json` are PASS.
+- Do not run `SCRIPT_HANDOFF_GATE` before
+  `chatgpt_review_gate.json status=PASS` proves both required ChatGPT project
+  review rounds completed.
+- Do not replace a missing ChatGPT project review with Claude, a generic chat,
+  an API call, or Codex self-review.
+- Do not skip human Korean cleanup before any final visible Korean text.
+- Do not proceed past missing source evidence when the script depends on exact
+  timing, OCR, or dialogue.
+- Do not call a TTS-capable story/remake draft eye-ready unless the TTS
+  storytelling mode has been considered and, when applicable, the emotional
+  entry line is source-supported and non-flat.
+
+## Reference Routing
+
+- Active Shorts script analysis authority is
+  `shorts_script_analysis_single_source_v20260706.md`; apply it before any
+  reference file below. This same file is the single Shorts contract attached
+  to the ChatGPT project and contains the two-pass review protocol.
+- For hook review, read `references/pre_script_hook_review.md`.
+- When configuring or auditing the ChatGPT project, read
+`references/chatgpt_project_router_instruction.md` and use it as the complete
+  Shorts-only project instruction.
+- For Shorts craft rules, read `references/shorts-academy.md`.
+- For old contract details or legacy repair only, read
+  `references/archived-full-skill-20260629.md`.
+
+Keep this `SKILL.md` as the active router. Do not re-expand it with legacy
+examples, PASS templates, production reports, CapCut details, or long handoff
+instructions.
+
+## Integrated Blueprint Output Contract
+
+The human-facing artifact is always `20_script/design_blueprint.md`. Stage 1
+must create it with the exact first heading `# 설계도` and H2 sections `기본 정보`,
+`제작 판단`, `상단 고정 문구`, `조립 역할 순서`, `트랙별 타임라인`,
+`TTS 복사용 문구`, and `승인 전 점검`. The two timeline sections must be
+markdown tables and the TTS section must be non-empty.
+
+Stage 1 owns only the design portion. Stage 2 appends `## 조립도` and the
+production skill owns that section. The final section is reserved for the
+production skill's `## 업로드 패키지`.

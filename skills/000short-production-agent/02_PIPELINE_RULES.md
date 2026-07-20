@@ -2,6 +2,9 @@
 
 ## Current Pipeline
 
+If Tikitaka v3 handoff exists, use the Tikitaka v3 Handoff-First Pipeline below
+before the source-first sequence. Do not reinterpret the locked script.
+
 1. Confirm `input/video_url.txt`.
 2. Save user Gemini/VLM/GPT content as `input/analysis_hint_raw.txt`.
 3. Download or locate `source/source.mp4`; for YouTube sources, prefer
@@ -21,15 +24,95 @@
 12. If user or story mentions specific speech, write
     `evidence/target_phrase_check.json`.
 13. Create `decisions/segment_decision_table.json`.
-14. If Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N,
-    or benchmark-remake strategy applies, create
+14. If the script came from `00-tikitaka`, import or create
+    `decisions/tikitaka_segment_audio_plan.json` from `구간 오디오 정책표`.
+15. If the script came from `00-tikitaka`, require `SCRIPT_HANDOFF_GATE` before
+    SRT/TTS/layout/asset prep or CapCut creation:
+    `20_script/script_handoff_gate.json`, `20_script/block_map.json`, and
+    `20_script/block_voice_switch_map.json` must pass with every edit block
+    covered by explicit `source_audio` and `tts` decisions.
+16. If an explicit production request and script authority already exist, and
+    Tikitaka, Shorts Academy, 마라하기, 우라까이, 일치율 0%, ranking/TOP-N, or
+    benchmark-remake strategy applies, create
     `decisions/shorts_academy_gate.json`.
-15. Create `decisions/capcut_layout_plan.json`.
-16. Create CapCut draft files.
-17. Normalize the draft to `capcut/normalized_draft.json`.
-18. Run harness validation.
-19. Create `reports/evidence_pack.json`.
-20. Create `reports/final_report.md`.
+17. Create `decisions/capcut_layout_plan.json`.
+18. Create CapCut draft files.
+19. Normalize the draft to `capcut/normalized_draft.json`.
+20. Run harness validation.
+21. Create `reports/evidence_pack.json`.
+22. Create `reports/final_report.md`.
+
+## Tikitaka v3 Handoff-First Pipeline
+
+If Tikitaka v3 handoff exists, start from the locked handoff package.
+
+1. Read `20_script/report1_handoff.json`.
+2. Confirm `owner_skill=00-tikitaka`.
+3. Confirm `next_skill=000short-production-agent`.
+4. Confirm `report1_approved=true`.
+5. Confirm `voice_audio_route_decided=true`.
+6. Read `20_script/script_handoff_gate.json`.
+7. Confirm `SCRIPT_HANDOFF_GATE` PASS and `capcut_allowed=true`.
+8. Read `20_script/timeline_design.json`.
+9. Validate expanded segment fields:
+
+```text
+source_ref
+source_order
+timeline_order
+assembly_role
+visible_text_role
+audio_role
+duration_basis
+duration_status
+visual_strategy
+```
+
+10. Confirm `20_script/timeline_design_gate.json` PASS.
+11. Confirm `20_script/humanize_korean_gate.json` PASS.
+12. Read `20_script/block_map.json`.
+13. Read `20_script/block_role_map.json`.
+14. Read `20_script/block_voice_switch_map.json`.
+15. If narration-audio exists, read `20_script/tts_copy_text.txt`,
+    `20_script/tts_duration_probe.json`, and
+    `20_script/tts_timing_reconciliation_gate.json`.
+16. If only `tts_caption/audio_role=none` exists, do not require TTS timing
+    files and do not generate narration audio.
+17. Confirm `00_source/source_manifest.json` or `00_source/source.mp4`.
+18. Resolve template. Default is `shrt white`.
+19. Resolve semantic audio tracks:
+
+```text
+audio.narration_tts  -> A9
+audio.speaker_source -> A10
+audio.sfx            -> A11
+audio.bgm            -> A12
+```
+
+20. Generate `10_analysis/capcut_layout_plan.json` from `timeline_design.json`
+    while preserving source_order/timeline_order/assembly_role/duration fields.
+21. Generate `cut_manifest.json`.
+22. Clone `shrt white`.
+23. Implement `timeline_design.json` into `draft_content.json`.
+24. Generate `capcut_timeline_manifest.json` proving protected field
+    preservation.
+25. Normalize draft.
+26. Run media link gate.
+27. Run T1/T2 full-duration gate.
+28. Run visible text clean gate.
+29. Run timeline implementation gate.
+30. Create `90_reports/report2_handoff.json` and report.
+27. Create `90_reports/report2_handoff.json` and 보고서2.
+
+`capcut_layout_plan.json` is a derived implementation plan. It is not allowed to
+override `timeline_design.json`.
+
+Do not derive timeline_order from source_order.
+Do not treat source_order as playback order.
+Do not collapse tts_caption into tts_narration.
+Do not generate narration audio when audio_role=none.
+Do not modify assembly_role sequence.
+Do not modify duration_basis/duration_status without WAIT_TIKITAKA_DESIGN_REPAIR.
 
 ## Input URL Rule
 
@@ -66,11 +149,16 @@ They cannot be used as evidence for:
 
 ## Shorts Academy Production Gate
 
-Run this gate when the job enters production from `00-tikitaka`,
-`00script-writer`, or user wording such as 쇼츠학개론, 마라하기 공식, 한계선,
-돈통/에셋, 결, 가단야, 우라까이, 일치율 0%, 벤치영상, 채널기획, ranking/TOP-N,
-benchmark remake, or channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/
-랭킹/유머/군림보.
+Run this gate only after an explicit production request and script authority
+exist. Broad Shorts Academy wording alone does not start production. It only
+validates handed-off script decisions before SRT/layout, CapCut, harness, or
+final-report work.
+
+The gate can apply when the production job came from `00-tikitaka` or a
+user-approved script package that contains terms such
+as 쇼츠학개론, 마라하기 공식, 한계선, 돈통/에셋, 결, 가단야, 우라까이,
+일치율 0%, 벤치영상, 채널기획, ranking/TOP-N, benchmark remake, or
+channel-family labels such as 한짜/국뽕/해짜/드짜/영짜/랭킹/유머/군림보.
 
 Read `references/shorts-academy.md` before segment decisions, render plan,
 SRT/layout, CapCut draft creation, harness, or final report.
@@ -148,8 +236,10 @@ Required output:
     "T4": "화자발언1",
     "T5": "화자발언2",
     "T6": "현장상황 / 행동 / 감정설명",
-    "A9": "원본음성 / BGM / 랭킹 기본 배경음",
-    "A10": "TTS / 효과음 / 나의 사전 설정 효과음"
+    "A9": "narration / TTS audio",
+    "A10": "speaker source audio / original speech",
+    "A11": "SFX",
+    "A12": "BGM"
   },
   "catcup_text_role_rows": [
     {"role": "top_title_1", "active": true, "planned_track_id": "T1"},
@@ -189,17 +279,19 @@ content modes may preserve unavoidable factual/source chronology only when the
 functional viewing flow is changed through hook entry, tension placement,
 reaction timing, caption interpretation, cut emphasis, or payoff recovery.
 
-For current CatCup/11short template-backed projects, use one of the two local
-default sample projects:
+For current CatCup/11short template-backed projects, the default base is the
+local draft named `shrt white`. Use `black` or `insta white` only when the user
+explicitly selects that variant.
 
 ```text
+$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\shrt white
 $env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\black
 $env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\260625-ig-contortion-top3-urakkai-instagram-tts
 ```
 
-The second folder displays in CapCut as `insta white`. Both sample projects use
-test media internally; generated drafts must replace that media with the job
-source while preserving the sample project structure.
+The third folder displays in CapCut as `insta white`. Variant sample projects
+use test media internally; generated drafts must replace that media with the job
+source while preserving the selected project structure.
 
 The hard check is the role-separated placement in `catcup_text_role_rows`, not
 the presence of SFX, BGM, transition effects, or decorative animation. Effects
@@ -301,6 +393,54 @@ Required fields per detected phrase:
 
 `decisions/segment_decision_table.json` is required before CapCut.
 
+When Tikitaka is the script authority, `decisions/tikitaka_segment_audio_plan.json`
+is also required before CapCut. It must be copied from the Tikitaka
+`구간 오디오 정책표` / `tikitaka_segment_audio_plan`, not guessed in production.
+
+Required fields per Tikitaka segment:
+
+```json
+{
+  "segment_id": "seg_001",
+  "source_order": 4,
+  "timeline_order": 1,
+  "edit_range": "00:00-00:03",
+  "caption_type": "speaker_quote|tts_narration|situation_caption|tts_plus_source|ranking_item",
+  "source_audio_policy": "on|off|duck",
+  "tts_policy": "on|off",
+  "bgm_policy": "optional|optional_duck|on|off|duck",
+  "visible_text_role": "speaker_quote|tts|situation|ranking"
+}
+```
+
+Tikitaka handoff rows may use `edit_range` as the human-readable timing label.
+The normalized `segment_decision_table.json` must still expand that into numeric
+`start` and `end` fields for validators and CapCut workers.
+
+Validation rules:
+
+- `caption_type=speaker_quote` or visible `"..."` requires `source_audio_policy=on`
+- `caption_type=tts_narration` requires `source_audio_policy=off`
+- `caption_type=tts_plus_source` requires `source_audio_policy=duck` or `on`
+  with a recorded reason
+- `caption_type=situation_caption` defaults to `source_audio_policy=off`
+- ranking items default to `source_audio_policy=off`, except verified quote or
+  reaction beats
+- `bgm_policy=optional` or `optional_duck` means no BGM is required yet. Do not
+  fail production for missing BGM unless the user selected a BGM/SFX asset or the
+  locked plan says `bgm_policy=on` or `duck`.
+- `source_order` and `timeline_order` are both required when the script remixes
+  source order
+
+If this plan is missing or conflicts with the script, stop with:
+
+```json
+{
+  "status": "WAIT",
+  "reason": "WAIT_TIKITAKA_SEGMENT_AUDIO_PLAN"
+}
+```
+
 Each segment must include:
 
 - `segment_id`
@@ -315,6 +455,9 @@ Each segment must include:
 - `segment_type`
 - `story_function`
 - `audio_action`
+- `source_audio_policy`
+- `tts_policy`
+- `bgm_policy`
 - `text_action`
 - `capcut_text_layer`
 - `capcut_audio_layer`

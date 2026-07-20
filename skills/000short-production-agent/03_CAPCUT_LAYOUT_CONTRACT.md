@@ -10,10 +10,16 @@ This contract separates the script-writing role from the CapCut production role:
 
 ## Template Selection Gate
 
+- If the user does not explicitly name another root CapCut template, the root
+  base is `shrt white`. This default wins over old episode-local builder
+  scripts, previous CapCut outputs, and any hard-coded `REFERENCE_NAME`.
+
 - Generic 11short/쇼츠공장 production has no third silent format default. The
-  current official presets are the two defaults in
+  current official presets are the named defaults in
   `manifests/capcut-template-set.json`.
 - Current named presets:
+  - `shrt white`: current default white-base Shorts draft. Use this when the
+    operator says `shrt white`, `short white`, or the 기본베이스 for this lane.
   - `black` / `블랙기본` / `블랙템플릿`: black-band layout draft base.
   - `insta white` / `인스타템플릿` / `인스타 템플릿`: Instagram/Reels draft base.
 - Future presets such as `정치템플릿` may be added. If the user names a new template, use that exact user-selected template and record it in the manifest.
@@ -23,8 +29,8 @@ This contract separates the script-writing role from the CapCut production role:
 ## CapCut T-track Contract
 
 `T1/T2/T3` are not work-stage names. They are the internal CapCut text-track order.
-Keep this order in every selected template (`black`, `insta white`, or a future
-user-named template):
+Keep this order in every selected template (`shrt white`, `black`, `insta white`,
+or a future user-named template):
 
 ```text
 T1 = 소제목1
@@ -36,19 +42,131 @@ T6 = (현장상황 / 행동 / 감정설명)
 
 V7 = 템플릿 배경 / 랭킹중간 / 전환용 클립
 V8 = 실제 영상 짜집은 source clip
-A9 = 원본음성 / BGM / 랭킹 기본 배경음
-A10 = TTS / 효과음 / 나의 사전 설정 효과음
+For current `shrt white` work, ignore old generic A9/A10 mappings.
+Use the shrt white canonical audio mapping only:
+A9  = narration / TTS audio
+A10 = speaker source audio / original speech
+A11 = SFX
+A12 = BGM
 ```
+
+## Shrt White Base - 2026-07-08
+
+Default editable CapCut base project:
+
+```text
+shrt white
+```
+
+For `shrt white`, preserve this CapCut row order exactly as shown in the
+operator's timeline, top to bottom:
+
+```text
+T1 = top title 1
+T2 = top title 2
+T3 = TTS / 나레이션 자막
+T4 = "화자발언"
+T5 = (상황설명)
+V6 = 인스타 또는 블랙 템플릿 이미지
+E7 = 미러링 편집효과
+V8 = 원본영상, 음소거상태
+A9 = 나레이션
+A10 = 화자발언 / 원본화자 오디오
+A11 = 효과음, optional and usually filled manually by the operator
+A12 = BGM
+```
+
+`shrt white` is the default base. `black` and `insta white` are template image
+or style variants used inside the same lane, not permission to change the row
+order. Do not replace `shrt white` with `260708 short`,
+`260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1`, or any previous episode
+copy. If a candidate base has `.bak`, `before_*`, `*_backup_*`, `template.tmp`,
+old active audio, or old active text, treat it as contaminated and stop before
+using it as the base.
+
+Old scripts such as `90_reports/build_*_base_v2.py` or
+`90_reports/build_*_base_v3.py` are not template authority. If they contain
+`REFERENCE_NAME = "260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1"` or
+point at any previous episode output, do not run them as the base builder; stop
+with `FAIL_STALE_DERIVED_REFERENCE_BUILDER` or rebuild from `shrt white`.
+
+For `shrt white`, this section overrides the older generic `T1~T6` table above:
+there is no `source_speech_2` row. `T5` is the situation row.
 
 Rules:
 
-- Do not change the role or order of `T1~T6` to make room for audio, BGM, SFX, or imported media.
-- Insert original audio, TTS, BGM, ranking BGM, and SFX only on A-tracks (`A9/A10` or additional audio rows). Never write audio/video segments into T-tracks.
-- After adding audio, re-open the actual `draft_content.json` and verify track order and track type. If `T1~T6` order/role/segment identity changed, FAIL.
-- `T4/T5` may contain only source-verified speech/subtitle/STT/OCR. Do not invent quoted speech.
-- `T6` may overlap `T3/T4/T5` when it explains the same visual moment.
+- Do not change the role or order of the `shrt white` rows above to make room for audio, BGM, SFX, or imported media.
+- Insert original audio, TTS, BGM, ranking BGM, and SFX only on A-tracks (`A9/A10/A11/A12` or additional audio rows). Never write audio/video segments into T-tracks.
+- After adding audio, re-open the actual `draft_content.json` and verify track order and track type. If row order/role/segment identity changed, FAIL.
+- `T4` may contain only source-verified speech/subtitle/STT/OCR. Do not invent quoted speech.
+- `T5` is the situation row and may overlap `T3/T4` when it explains the same visual moment.
 - No `하단`, `하단 원문`, bottom-caption, or bottom-TTS layer is allowed.
 - Bracketed timecodes such as `[00:00-00:03]` are operator markers and must never become visible text.
+
+## Tikitaka v2 Semantic Audio Resolution
+
+`00-tikitaka` v2 does not lock real CapCut A-track ids. It locks semantic audio
+lanes:
+
+```text
+audio.narration_tts
+audio.speaker_source
+audio.sfx
+audio.bgm
+```
+
+For `shrt_white_base_v1`, resolve them as:
+
+```text
+audio.narration_tts  -> A9
+audio.speaker_source -> A10
+audio.sfx            -> A11
+audio.bgm            -> A12
+```
+
+Any other resolution under `shrt_white_base_v1` is `FAIL_AUDIO_TRACK_MAPPING`.
+
+## Tikitaka v3 Expanded Timeline Implementation
+
+`000short-production-agent` must implement the expanded `timeline_design.json`
+as an assembly contract.
+
+source_order is source provenance.
+timeline_order is playback/edit order.
+assembly_role is the function of the beat in the remake.
+duration_basis and duration_status are timing authority.
+
+Do not derive playback order from source order.
+Do not derive timeline_order from source_order.
+
+Do not change:
+
+```text
+source_ref
+source_order
+timeline_order
+assembly_role
+caption_type
+visible_text_role
+audio_role
+time_start
+time_end
+track
+duration_basis
+duration_status
+audio_policy
+visual_strategy
+```
+
+If a change is required, stop with:
+
+```text
+WAIT_TIKITAKA_DESIGN_REPAIR
+```
+
+`tts_caption/audio_role=none` is caption-only and must not trigger TTS generation or TTS timing requirements.
+`tts_narration/audio_role=audio.narration_tts` requires TTS timing
+reconciliation before CapCut audio insertion.
 
 ## Template Style Preservation Gate
 
@@ -74,11 +192,12 @@ Rules:
 Official CatCup template masters:
 
 ```text
+shrt white
 black
 insta white
 ```
 
-Use these two CapCut sample projects as current defaults.
+Use these CapCut sample projects as current defaults.
 `insta white` is the display name of local draft folder
 `260625-ig-contortion-top3-urakkai-instagram-tts`. Do not use
 `260625-ig-contortion-top3-urakkai-instagram-tts-fixed`; it contains
@@ -112,6 +231,24 @@ Required creation mode:
 - Keep the top/bottom black bands.
 - `T1/T2`: white bold centered text inside the top black band.
 - `T3/T6`: inside the visible video-safe area; do not cover important action.
+
+## CAPTION_BEAT_MAP_LAYOUT_PROFILES
+
+The production builder consumes `caption_beat_map.json` for timed middle text.
+The profile values are fixed and are not inferred from the number of words:
+
+```text
+profile_version=caption_profiles_v2
+T3 TTS: y=-900, max_chars_per_line=10, max_lines=1
+T4/T5 speaker quote: y=-500, max_chars_per_line=10, max_lines=1
+T6 situation caption: y=700, max_chars_per_line=10, max_lines=1
+V1 source video scale: video_scale=1.20
+```
+
+The character limit includes whitespace. Text exceeding a profile is split into
+sequential non-overlapping beats; the audio and video ranges remain unchanged.
+Face placement uses `fixed_lower_safe_zone_v1`; fixed lower-safe-zone placement
+is required before manual CapCut polish.
 - Ranking/TOP-N jobs insert `랭킹중간` or the selected separator clip between rank/item sections, with 0.2~0.4 second precision for transition points.
 
 ## FFmpeg Render-Match Contract
@@ -130,6 +267,42 @@ no visible timecodes
 no bottom-caption layer
 no unverified quoted speech
 ```
+
+## Tikitaka Segment Audio Plan
+
+When the script came from `00-tikitaka`, the Tikitaka
+`구간 오디오 정책표` / `tikitaka_segment_audio_plan` is the source of truth for
+CapCut audio states.
+
+CapCut implementation must match each segment:
+
+```text
+caption_type=speaker_quote        -> source video/audio audible, TTS off, BGM optional_duck
+caption_type=tts_narration        -> source video/audio muted, TTS on, BGM optional
+caption_type=situation_caption    -> source video/audio muted by default, TTS off, BGM optional
+caption_type=tts_plus_source      -> source video/audio duck/on as planned, TTS on, BGM optional_duck
+caption_type=ranking_item         -> source video/audio muted by default unless the row is a verified quote/reaction
+```
+
+The post-CapCut gate must compare actual CapCut audio/video segment volumes and
+audio tracks against `decisions/tikitaka_segment_audio_plan.json`.
+
+BGM is optional unless the user selected or required a specific BGM/SFX asset.
+Rows with `bgm_policy=optional` or `optional_duck` must not fail only because no
+BGM audio track exists.
+`optional_duck` means no BGM track is required; if the user later selects BGM,
+that segment must duck the BGM under source speech or TTS instead of leaving it
+full volume.
+
+Hard fails:
+
+- speaker quote row has source video/audio volume `0`
+- TTS narration row keeps source video/audio fully audible without
+  `caption_type=tts_plus_source`
+- TTS row has no corresponding TTS audio material/track
+- BGM required row (`bgm_policy=on` or `duck`, or user-selected BGM/SFX) has no
+  BGM audio material/track
+- remixed order in CapCut differs from `timeline_order`
 
 Use this JSON shape for FFmpeg workers:
 

@@ -1,5 +1,13 @@
 # 티키타카 대본 만들기 스킬 v1.7
 
+Legacy-only reference. Do not use this file as current Tikitaka script
+authority. Current Shorts script analysis must follow
+`skills/00-tikitaka/shorts_script_analysis_single_source_v20260706.md` and the
+active output contract `상단 + timed 중단 + 중단 TTS 글자만 복사`.
+
+Use this file only when repairing or interpreting old packages that already
+used the legacy lower-caption / 3-layer / bottom-first-line structure.
+
 ## 목적
 
 Gemini 영상 분석 JSON과 상위 댓글을 받아서 작동 이유를 다중 추출하고, 5명 광팬 에이전트 관점으로 좋아하는 구간을 본 뒤, 한 번에 1질문으로 원본과 다른 후크, 순서, 시점의 3단 분리 짜깁기 대본을 만든다.

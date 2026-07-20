@@ -209,6 +209,35 @@ TRACK_ROLE_ALIASES = {
     "speaker_video": "situation_speaker_video",
 }
 CATCUP_TEMPLATE_MASTERS = {
+    "shrt_white_base_v1": {
+        "reference_project": "shrt white",
+        "accepted_reference_projects": {
+            "shrt white",
+            "short white",
+        },
+        "rejected_reference_projects": {
+            "260708 short",
+            "260707-Fk5D_FboO6M-game-character-comments-CAPCUT_v1",
+        },
+        "track_count": 12,
+        "text_track_count": 5,
+        "required_role_order": (
+            "top_title_1",
+            "top_title_2",
+            "tts",
+            "source_speech_1",
+            "situation_emotion",
+        ),
+        "required_active_roles": {
+            "top_title_1",
+            "top_title_2",
+            "tts",
+            "source_speech_1",
+            "situation_emotion",
+        },
+        "draft_text_track_index_order": "descending",
+        "frame_keywords": ("white",),
+    },
     "insta_white_template_master_v1": {
         "reference_project": "insta white",
         "accepted_reference_projects": {
@@ -219,6 +248,19 @@ CATCUP_TEMPLATE_MASTERS = {
             "260625-ig-contortion-top3-urakkai-instagram-tts-fixed",
         },
         "track_count": 10,
+        "text_track_count": 4,
+        "frame_keywords": ("insta", "white"),
+    },
+    "insta_white_audio_split_v1": {
+        "reference_project": "insta white",
+        "accepted_reference_projects": {
+            "insta white",
+            "260625-ig-contortion-top3-urakkai-instagram-tts",
+        },
+        "rejected_reference_projects": {
+            "260625-ig-contortion-top3-urakkai-instagram-tts-fixed",
+        },
+        "track_count": 9,
         "text_track_count": 4,
         "frame_keywords": ("insta", "white"),
     },
@@ -374,8 +416,6 @@ def status_value(data: dict[str, Any]) -> str:
         value = summary.get("status")
         if isinstance(value, str):
             return value.strip().upper()
-    if data.get("pass") is True:
-        return "PASS"
     return ""
 
 
@@ -385,6 +425,23 @@ def require_json_status_pass(root: Path, rel_path: str, label: str) -> dict[str,
     if status_value(data) != "PASS":
         raise GateFail(f"{label} status must be PASS: {path}")
     return data
+
+
+def upload_ready_state(contract: dict[str, Any] | None) -> dict[str, Any]:
+    user_approved = bool(contract) and contract.get("user_upload_approval") is True
+    rights_acknowledged = bool(contract) and contract.get("rights_risk_acknowledged") is True
+    allowed = user_approved and rights_acknowledged
+    if allowed:
+        return {
+            "upload_ready_allowed": True,
+            "upload_ready": True,
+            "upload_ready_reason": "USER_APPROVAL_AND_RIGHTS_CHECK_PRESENT",
+        }
+    return {
+        "upload_ready_allowed": False,
+        "upload_ready": False,
+        "upload_ready_reason": "WAITING_FOR_USER_APPROVAL_AND_RIGHTS_CHECK",
+    }
 
 
 def require_order(value: Any, label: str) -> list[Any]:
@@ -776,11 +833,16 @@ def normalize_catcup_role(raw_role: Any) -> str:
     return CATCUP_ROLE_ALIASES.get(role, role)
 
 
-def parse_catcup_role_order(value: Any, label: str) -> list[str]:
+def parse_catcup_role_order(
+    value: Any,
+    label: str,
+    allowed_roles: tuple[str, ...] = CATCUP_REQUIRED_ROLE_ORDER,
+) -> list[str]:
+    allowed = set(allowed_roles)
     normalized: list[str] = []
     for raw_item in parse_order_items(value, label):
         role = normalize_catcup_role(raw_item)
-        if role not in CATCUP_REQUIRED_ROLE_ORDER:
+        if role not in allowed:
             raise GateFail(f"{label} has unsupported CatCup role: {raw_item}")
         normalized.append(role)
     return normalized
@@ -1304,6 +1366,8 @@ def validate_catcup_reference_layout_actual(
             "timeline manifest catcup_reference_project must be "
             f"{template['reference_project']}"
         )
+    required_role_order = tuple(template.get("required_role_order", CATCUP_REQUIRED_ROLE_ORDER))
+    required_active_roles = set(template.get("required_active_roles", CATCUP_REQUIRED_ACTIVE_ROLES))
 
     rows = first_list_any(sources, CATCUP_TEXT_ROLE_ROWS_KEYS)
     if not rows:
@@ -1311,7 +1375,11 @@ def validate_catcup_reference_layout_actual(
 
     order_raw = first_value_any(sources, CATCUP_ROLE_ORDER_KEYS)
     if order_raw not in (None, ""):
-        declared_order = parse_catcup_role_order(order_raw, "catcup_text_role_order_top_to_bottom")
+        declared_order = parse_catcup_role_order(
+            order_raw,
+            "catcup_text_role_order_top_to_bottom",
+            required_role_order,
+        )
     else:
         declared_order = []
 
@@ -1328,7 +1396,7 @@ def validate_catcup_reference_layout_actual(
             or row.get("track_role")
             or row.get("caption_role")
         )
-        if role not in CATCUP_REQUIRED_ROLE_ORDER:
+        if role not in required_role_order:
             raise GateFail(f"timeline catcup_text_role_rows[{idx}] has invalid role: {role or '<empty>'}")
         if not catcup_row_active(row):
             continue
@@ -1344,7 +1412,7 @@ def validate_catcup_reference_layout_actual(
         active_roles.append(role)
         active_track_ids[role] = track_id
 
-    missing = CATCUP_REQUIRED_ACTIVE_ROLES - set(active_roles)
+    missing = required_active_roles - set(active_roles)
     if missing:
         raise GateFail(f"actual draft missing active catcup required roles: {sorted(missing)}")
     if catcup_source_speech_present(sources) and "source_speech_1" not in active_roles:
@@ -1353,11 +1421,11 @@ def validate_catcup_reference_layout_actual(
         raise GateFail("source_speech_2 cannot be active without source_speech_1")
 
     ordered_active = [role for role in (declared_order or active_roles) if role in active_roles]
-    canonical_positions = {role: idx for idx, role in enumerate(CATCUP_REQUIRED_ROLE_ORDER)}
+    canonical_positions = {role: idx for idx, role in enumerate(required_role_order)}
     if ordered_active != sorted(ordered_active, key=lambda role: canonical_positions[role]):
         raise GateFail(
-            "actual catcup text rows must follow CapCut T1~T6 order: "
-            + " > ".join(CATCUP_REQUIRED_ROLE_ORDER)
+            "actual catcup text rows must follow CapCut profile row order: "
+            + " > ".join(required_role_order)
         )
 
     # Re-check actual draft_content.json track order after audio insertion.
@@ -1371,7 +1439,12 @@ def validate_catcup_reference_layout_actual(
         if track_type and track_type != "text":
             raise GateFail(f"actual CapCut role {role} must stay on a text/T-track, got {track_type}")
         draft_text_track_positions.append((role, track_index))
-    if [idx for _, idx in draft_text_track_positions] != sorted(idx for _, idx in draft_text_track_positions):
+    track_indices = [idx for _, idx in draft_text_track_positions]
+    expected_track_indices = sorted(
+        track_indices,
+        reverse=template.get("draft_text_track_index_order") == "descending",
+    )
+    if track_indices != expected_track_indices:
         raise GateFail("actual draft_content.json T-track order changed after audio insertion")
 
     template_master_result = validate_catcup_template_master_actual(
@@ -1977,6 +2050,7 @@ def validate_scenario_post_gate(
         contract,
         draft_path,
     )
+    draft = load_draft_content_for_catcup(root, timeline_manifest, contract, draft_path)
     script_alignment_result = validate_manifest_script_alignment(
         timeline_manifest,
         pre_gate_result,
@@ -2036,7 +2110,7 @@ def validate_scenario_post_gate(
         **script_alignment_result,
         "draft_name": draft_name,
         "draft_path": draft_path or "",
-        "upload_ready_allowed": True,
+        **upload_ready_state(contract),
     }
 
 
@@ -2050,6 +2124,10 @@ def validate_post_gate(
         raise GateFail("pre production gate status must be PASS")
     if pre_gate_result.get("production_allowed") is not True:
         raise GateFail("pre production gate production_allowed must be true")
+    if pre_gate_result.get("report1_handoff_gate_status") != "PASS":
+        raise GateFail(
+            "WAIT_REPORT1_HANDOFF_GATE: pre production gate must include report1_handoff_gate_status PASS"
+        )
 
     draft_name = timeline_manifest.get("draft_name") or timeline_manifest.get("capcut_draft_name")
     draft_path = timeline_manifest.get("draft_path") or timeline_manifest.get("capcut_draft_path")
@@ -2101,7 +2179,7 @@ def validate_post_gate(
         "actual_render_order": actual,
         "draft_name": draft_name,
         "draft_path": draft_path or "",
-        "upload_ready_allowed": True,
+        **upload_ready_state(contract),
     }
 
 

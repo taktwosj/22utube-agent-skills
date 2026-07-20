@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "humanize_korean_gate",
+  "type": "object",
+  "required": ["status", "structure_changed", "protected_fields_changed"],
+  "properties": {
+    "status": { "const": "PASS" },
+    "structure_changed": { "const": false },
+    "protected_fields_changed": { "const": false }
+  }
+}

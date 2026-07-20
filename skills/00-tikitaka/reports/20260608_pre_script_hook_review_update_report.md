@@ -8,10 +8,10 @@
 
 ## 수정 범위
 
-- source skill: `{UTUBE_ROOT}/codex_skills_source/00-tikitaka/SKILL.md`
-- reference: `{UTUBE_ROOT}/codex_skills_source/00-tikitaka/references/pre_script_hook_review.md`
-- copy guide: `{UTUBE_ROOT}/codex_skills_source/INSTALL_MACMINI_WINDOWS_SKILL_COPY_20260608_PRE_SCRIPT_HOOK_REVIEW.md`
-- report: `{UTUBE_ROOT}/codex_skills_source/00-tikitaka/reports/20260608_pre_script_hook_review_update_report.md`
+- source skill: `$HOME/agent-skills/skills/00-tikitaka/SKILL.md`
+- reference: `$HOME/agent-skills/skills/00-tikitaka/references/pre_script_hook_review.md`
+- runtime install: `$HOME/agent-skills/scripts/install.*`
+- report: `$HOME/agent-skills/skills/00-tikitaka/reports/20260608_pre_script_hook_review_update_report.md`
 
 ## 추가된 규칙
 
@@ -89,13 +89,14 @@
 수정 전 백업:
 
 ```text
-{UTUBE_ROOT}/codex_skills_source/_backups/tikitaka_pre_script_hook_review_20260608-142431/source_00-tikitaka_SKILL.md
-{UTUBE_ROOT}/codex_skills_source/_backups/tikitaka_pre_script_hook_review_20260608-142431/INSTALL_MACMINI_WINDOWS_SKILL_COPY_20260607.md
+Pre-Git OneDrive backup paths were retired during the agent-skills Git migration.
+Use Git history and runtime target backups for rollback.
 ```
 
 ## 로컬 동기화 결과
 
-현재 Windows 로컬 런타임에는 `skil-down`으로 `00-tikitaka`만 선택 동기화했다.
+현재 Windows 로컬 런타임에는 Git 소스의 `00-tikitaka`와
+`000short-production-agent`만 동기화한다.
 
 ```text
 SYNCED 00-tikitaka
@@ -117,7 +118,7 @@ DONE synced=00-tikitaka
 2. local `00-tikitaka/SKILL.md`에 `Pre-Script Hook Review Gate` 존재
 3. source/local `SKILL.md` SHA256 일치
 4. source/local `references/pre_script_hook_review.md` SHA256 일치
-5. copy guide 존재
+5. runtime install guide 존재
 6. report 존재
 7. UTF-8 mojibake 검사 통과
 ```
