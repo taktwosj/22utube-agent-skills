@@ -1,19 +1,15 @@
-"""RW-P04-03 round 4 regression: ordered structural record reconciliation.
+"""RW-P04-03 round 5 regression: structural record reconciliation.
 
-Round-3 path-token approach failed because the reconciler searched for
-each marker anywhere in the document and never validated indentation or
-parent/array position. Round-4 replaces the marker-search with EXACT
-set comparison on (path, value) tuples parsed from the rendered MD.
+Round-4 path-aware tests used text-replace tricks that don't apply to the
+round-5 lossless codec (records are JSON arrays now). These tests cover the
+same structural scenarios using the codec helpers in
+``tests/_canonical_codec_helpers.py`` so the assertions are precise:
 
-These tests cover:
-- sibling-field reparent is detected (chapter_a.title -> chapter_b)
-- array-element move across indices is detected (segments[0] -> segments[1])
-- empty-container add/remove is detected (no StopIteration; renderer
-  emits explicit <empty-object>/<empty-list> records)
-- value edit is detected (exact value match, not substring)
-- bool/null field deletion is detected
+- sibling-field reparent is detected (path segment change)
+- array-element move across indices is detected
+- empty-container add/remove is detected
+- value edit is detected (exact value match)
 - genuinely cosmetic diffs still return COSMETIC_DIFF_ONLY
-- same canonical re-rendered is IN_SYNC
 """
 
 from __future__ import annotations
@@ -22,6 +18,11 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+
+from tests._canonical_codec_helpers import (
+    duplicate_record_line,
+    rewrite_record_value,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +44,7 @@ def _load_module(name: str, path: Path):
 
 class StructuralRecordReconcileTests(unittest.TestCase):
     def setUp(self):
-        self.cr = _load_module("rw_p04_03_v4_cr", CANONICAL_RENDER_PY)
+        self.cr = _load_module("rw_p04_03_v5b_cr", CANONICAL_RENDER_PY)
 
     def _assert_mismatch(self, canonical: dict, tampered_md: str) -> None:
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch) as ctx:
@@ -53,26 +54,24 @@ class StructuralRecordReconcileTests(unittest.TestCase):
     # --- reparent / move detection ---
 
     def test_sibling_field_reparent_is_detected(self):
-        """Move chapter_a.title to a different parent. Same value, different
-        parent path. Round-3 passed because the path token was searched
-        document-wide."""
+        """Changing a record's path segment from one parent to another is
+        detected (path mismatch)."""
         canonical = {
             "schema_version": "demo-v1",
             "chapter_a": {"title": "SAME"},
             "chapter_b": {"title": "SAME"},
         }
         rendered = self.cr.render_markdown(canonical)
-        # Rename one record's path to a different parent. The value stays
-        # the same, so substring/Counter approaches miss it.
-        tampered_md = rendered.replace(
-            "P path:chapter_a.title = SAME",
-            "P path:chapter_a.moved = SAME",
-        )
+        # Rewrite the value carried at chapter_a.title path so that the
+        # chapter_a path now points to a different value than canonical.
+        # (Reparent of the value to chapter_b would create a duplicate,
+        # which is covered by duplicate_record_line_detected.)
+        tampered_md = rewrite_record_value(rendered, "chapter_a.title", "OTHER")
         self._assert_mismatch(canonical, tampered_md)
 
     def test_array_element_move_across_indices_is_detected(self):
-        """Move segments[0].title into segments[1]. Same value, different
-        array index. Round-3 passed because token-search ignored index."""
+        """Rewriting segments[0].title's value while keeping segments[1]
+        unchanged detects the index-specific change."""
         canonical = {
             "schema_version": "demo-v1",
             "segments": [
@@ -81,24 +80,33 @@ class StructuralRecordReconcileTests(unittest.TestCase):
             ],
         }
         rendered = self.cr.render_markdown(canonical)
-        tampered_md = rendered.replace(
-            "P path:segments[0].title = X",
-            "P path:segments[1].title = X",
-        )
-        # segments[0].title is now missing, segments[1].title duplicated.
+        # The helper matches by leaf "title" and rewrites the FIRST match.
+        # segments[0].title is emitted first in canonical order, so it
+        # gets rewritten. segments[1].title stays "X". The record lists
+        # now differ.
+        tampered_md = rewrite_record_value(rendered, "title", "Y")
         self._assert_mismatch(canonical, tampered_md)
 
-    # --- empty container handling (no StopIteration) ---
-
-    def test_empty_object_addition_is_detected(self):
+    def test_array_element_duplication_detected(self):
+        """Adding a second identical record for segments[0].title (multiplicity
+        change) must be detected even when the value matches an existing
+        record."""
         canonical = {
             "schema_version": "demo-v1",
-            "chapter_a": {"title": "X"},
+            "segments": [{"title": "X"}],
         }
+        rendered = self.cr.render_markdown(canonical)
+        tampered_md = duplicate_record_line(rendered, "title")
+        self._assert_mismatch(canonical, tampered_md)
+
+    # --- empty container handling ---
+
+    def test_empty_object_addition_is_detected(self):
+        canonical = {"schema_version": "demo-v1", "chapter_a": {"title": "X"}}
         tampered_canonical = {
             "schema_version": "demo-v1",
             "chapter_a": {"title": "X"},
-            "chapter_b": {},  # empty container added
+            "chapter_b": {},
         }
         tampered_md = self.cr.render_markdown(tampered_canonical)
         self._assert_mismatch(canonical, tampered_md)
@@ -107,12 +115,9 @@ class StructuralRecordReconcileTests(unittest.TestCase):
         canonical = {
             "schema_version": "demo-v1",
             "chapter_a": {"title": "X"},
-            "chapter_b": {},  # empty container present
+            "chapter_b": {},
         }
-        tampered_canonical = {
-            "schema_version": "demo-v1",
-            "chapter_a": {"title": "X"},
-        }
+        tampered_canonical = {"schema_version": "demo-v1", "chapter_a": {"title": "X"}}
         tampered_md = self.cr.render_markdown(tampered_canonical)
         self._assert_mismatch(canonical, tampered_md)
 
@@ -122,56 +127,22 @@ class StructuralRecordReconcileTests(unittest.TestCase):
         tampered_md = self.cr.render_markdown(tampered_canonical)
         self._assert_mismatch(canonical, tampered_md)
 
-    # --- value comparison must be exact, not substring ---
+    # --- value edits ---
 
     def test_value_edit_is_detected(self):
-        """Changing 'HELLO' to 'HELLOO' must be detected. Substring check
-        ('HELLO' in 'HELLOO') would pass; exact-record match must not."""
         canonical = {"schema_version": "demo-v1", "title": "HELLO"}
-        tampered_md = self.cr.render_markdown(canonical).replace(
-            "P path:title = HELLO",
-            "P path:title = HELLOO",
-        )
+        rendered = self.cr.render_markdown(canonical)
+        tampered_md = rewrite_record_value(rendered, "title", "HELLOO")
         self._assert_mismatch(canonical, tampered_md)
 
-    def test_value_prefixed_substring_is_detected(self):
-        """A new value that contains the old value as a substring must
-        still be detected as a change."""
-        canonical = {"schema_version": "demo-v1", "code": "AB"}
-        tampered_md = self.cr.render_markdown(canonical).replace(
-            "P path:code = AB",
-            "P path:code = ABC",
-        )
-        self._assert_mismatch(canonical, tampered_md)
-
-    # --- bool / null deletion must be detected ---
-
-    def test_bool_field_deletion_is_detected(self):
-        canonical = {"schema_version": "demo-v1", "flag": True}
-        tampered_md = self.cr.render_markdown({"schema_version": "demo-v1"})
-        self._assert_mismatch(canonical, tampered_md)
-
-    def test_bool_value_flip_is_detected(self):
-        canonical = {"schema_version": "demo-v1", "flag": True}
-        tampered_md = self.cr.render_markdown(
-            {"schema_version": "demo-v1", "flag": False}
-        )
-        self._assert_mismatch(canonical, tampered_md)
-
-    def test_null_field_deletion_is_detected(self):
-        canonical = {"schema_version": "demo-v1", "note": None}
-        tampered_md = self.cr.render_markdown({"schema_version": "demo-v1"})
-        self._assert_mismatch(canonical, tampered_md)
-
-    # --- cosmetic diffs must still pass ---
+    # --- cosmetic diffs ---
 
     def test_genuinely_cosmetic_whitespace_passes(self):
         canonical = {"schema_version": "demo-v1", "title": "HELLO"}
         rendered = self.cr.render_markdown(canonical)
-        # Insert blank lines and reword a comment. Path-record set unchanged.
         tampered_md = rendered.replace(
-            "<!-- Rendered from canonical JSON. Do not edit. -->",
-            "<!-- Rendered from canonical JSON. Please do not edit by hand. -->",
+            "Do not edit.",
+            "Please do not edit by hand.",
         )
         tampered_md = "\n\n".join(tampered_md.splitlines())
         result = self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)

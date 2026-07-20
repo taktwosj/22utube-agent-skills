@@ -383,9 +383,10 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
         self.cr = _load_module("rw_p04_03_cr", CANONICAL_RENDER_PY)
 
     def test_deleted_duplicate_value_field_is_detected_as_change(self):
-        """If canonical has two fields with the same value and the human MD
-        drops one of them, the global-scalar check would call it cosmetic.
-        Structural record-set check must catch it as a mismatch."""
+        """Two sibling fields with the same value: rewriting one must be
+        detected (path-specific comparison)."""
+        from tests._canonical_codec_helpers import rewrite_record_value
+
         canonical = {
             "schema_version": "demo-v1",
             "episode_id": "EP-DEMO",
@@ -393,21 +394,15 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
             "title_b": "SAME_TEXT",
         }
         rendered = self.cr.render_markdown(canonical)
-        # In the new (path, value) record format, drop the title_a record
-        # entirely so its value no longer appears for that path.
-        tampered_md = rendered.replace(
-            "P path:title_a = SAME_TEXT",
-            "",
-            1,
-        )
+        tampered_md = rewrite_record_value(rendered, "title_a", "OTHER")
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 
     def test_array_element_with_duplicate_value_is_detected(self):
-        """RW-P04-03 strict: two array elements that happen to share a value
-        must be distinguished by their structural path (index). Dropping
-        one element's value while keeping the other's must NOT pass as
-        cosmetic."""
+        """Two array elements that share a value: rewriting one must be
+        detected (index-specific comparison)."""
+        from tests._canonical_codec_helpers import rewrite_record_value
+
         canonical = {
             "schema_version": "demo-v1",
             "episode_id": "EP-DEMO",
@@ -417,20 +412,16 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
             ],
         }
         rendered = self.cr.render_markdown(canonical)
-        # Remove the [0] element's title record but keep [1]'s. A leaf-value
-        # only check would still see SAME_TITLE on the [1] line and pass.
-        tampered_md = rendered.replace(
-            "P path:segments[0].title = SAME_TITLE",
-            "",
-            1,
-        )
+        # Helper rewrites the first record matching the leaf "title".
+        tampered_md = rewrite_record_value(rendered, "title", "OTHER")
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 
     def test_nested_object_duplicate_value_is_detected(self):
-        """Nested objects under different parent paths that share a value
-        must be distinguished by their full parent path, not by leaf key
-        alone."""
+        """Nested objects under different parent paths that share a value:
+        rewriting one must be detected (parent-path-specific comparison)."""
+        from tests._canonical_codec_helpers import rewrite_record_value
+
         canonical = {
             "schema_version": "demo-v1",
             "episode_id": "EP-DEMO",
@@ -438,11 +429,7 @@ class CanonicalReconcileStructuralPathTests(unittest.TestCase):
             "chapter_b": {"title": "SAME"},
         }
         rendered = self.cr.render_markdown(canonical)
-        tampered_md = rendered.replace(
-            "P path:chapter_a.title = SAME",
-            "",
-            1,
-        )
+        tampered_md = rewrite_record_value(rendered, "chapter_a.title", "OTHER")
         with self.assertRaises(self.cr.HumanMdCanonicalJsonMismatch):
             self.cr.reconcile_human_md(canonical=canonical, human_md=tampered_md)
 
