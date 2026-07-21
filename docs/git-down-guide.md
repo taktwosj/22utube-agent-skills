@@ -12,7 +12,17 @@ https://github.com/taktwosj/22utube-agent-skills.git
 Minimum required implementation commit:
 
 ```text
-3ca5107 Split draft fast and final lock gates
+9e98c27f5401 or newer
+```
+
+Skill authority rule:
+
+```text
+Git is the constitution for skills.
+OneDrive skill-source or skill-sync mirrors are forbidden.
+If another PC still has old OneDrive skill mirrors, delete them and do not
+restore them through OneDrive sync.
+Local runtime folders are installed from Git only.
 ```
 
 ## Office Windows
@@ -39,9 +49,9 @@ Expected result:
 
 ```text
 VERIFY PASS warnings=0
-Codex marker source_commit = 3ca5107 or newer
-Claude marker source_commit = 3ca5107 or newer
-Hermes marker source_commit = 3ca5107 or newer
+Codex marker source_commit = 9e98c27f5401 or newer
+Claude marker source_commit = 9e98c27f5401 or newer
+Hermes marker source_commit = 9e98c27f5401 or newer
 ```
 
 ## Mac Mini
@@ -68,9 +78,9 @@ Expected result:
 
 ```text
 VERIFY PASS warnings=0
-Codex marker source_commit = 3ca5107 or newer
-Claude marker source_commit = 3ca5107 or newer
-Hermes marker source_commit = 3ca5107 or newer
+Codex marker source_commit = 9e98c27f5401 or newer
+Claude marker source_commit = 9e98c27f5401 or newer
+Hermes marker source_commit = 9e98c27f5401 or newer
 ```
 
 ## Optional Telegram Hermes Check

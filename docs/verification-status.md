@@ -5,7 +5,7 @@ Current source of truth:
 - Repo: `https://github.com/taktwosj/22utube-agent-skills.git`
 - Local working repo: `$HOME/agent-skills`
 - Skill source: `skills/<skill>`
-- OneDrive role: production data only, not skill authority
+- OneDrive role: production data and handoff packages only, never skill authority
 
 ## Verified On This Windows Machine
 
