@@ -53,3 +53,11 @@ evidence/
 drafts/
 uploads/
 capcut/
+
+# Locked fixtures for the managed HyperFrames politics template.
+!skills/112-politics-longform-hyperframes/assets/templates/politics-longform-template-v1/style_tokens.json
+!skills/112-politics-longform-hyperframes/assets/templates/politics-longform-template-v1/assets/media/source-placeholder.mp4
+!skills/112-politics-longform-hyperframes/assets/templates/politics-longform-template-v1/assets/audio/source-placeholder.wav
+!skills/112-politics-longform-hyperframes/assets/templates/politics-longform-template-v1/evidence/
+!skills/112-politics-longform-hyperframes/assets/templates/politics-longform-template-v1/evidence/first-frame-at-0s.png
+!skills/112-politics-longform-hyperframes/assets/templates/politics-longform-template-v1/evidence/template-v1-approved.png

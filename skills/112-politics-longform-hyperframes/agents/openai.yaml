@@ -1,0 +1,4 @@
+interface:
+  display_name: "112 정치롱폼 HyperFrames"
+  short_description: "HyperFrames 정치롱폼 템플릿 제작·검증"
+  default_prompt: "Use $112-politics-longform-hyperframes to create and validate a reusable Korean politics longform HyperFrames template."

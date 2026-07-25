@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "TEMPLATE_V1_LOCKED",
+  "hashes_valid": true,
+  "template_id": "politics-longform-template-v1",
+  "version": "v1",
+  "locked_at": "2026-07-25T15:12:32.3329401+09:00",
+  "hash_algorithm": "SHA-256",
+  "approved_snapshot": "evidence/template-v1-approved.png",
+  "style_tokens_sha256": "122625c360c732c75f7f985cdd4565eca47486117fb5e6938acb40f053a18fbd",
+  "template_manifest_sha256": "97268847bde2d1dda01e542cde4829e1a791f3e5058ee70ee700ea18baeb8f40",
+  "files": {
+    "hyperframes.json": "15e23600be4d7830bd6200035544f433c560930cfe56f19ffc43dbdf99da2356",
+    "package.json": "846a4a8365a69d40c59b561f359dae9c990acf24a19f4f8680bc302f5e48ee0a",
+    "index.html": "d8f84c4bee3f6b4657614cfc50635160c8b403513306406aa37fc9112f81fefa",
+    "fonts.css": "029d7c4128a4618f532abc4548a196e23d53a20f6c478768f259c81f4166a3c8",
+    "style_tokens.json": "122625c360c732c75f7f985cdd4565eca47486117fb5e6938acb40f053a18fbd",
+    "template_manifest.json": "97268847bde2d1dda01e542cde4829e1a791f3e5058ee70ee700ea18baeb8f40",
+    "design.md": "dc8d464659df23415101e6e258a81ae4ef7320a1c521e67ff37a3a7477fa8908",
+    "validation_report.json": "9bae9700f9e4ca23aef26ac00f62e67b939d541f3d1a7cc9bc2908c673ceeaca",
+    "tests/test_template_contract.py": "c215c969081286aadf8b612aa38dbd89df162f0d5a73675e956bfdb1b6f5f110",
+    "compositions/timeline_manifest.json": "32e393cd176add2dcb1110b7af39697f4b3e7f327f1c26df003678a68e0f39f1",
+    "compositions/narration-explainer.html": "9acb04733da341c0bd2821b374e35e0530e4514132b709a5747f3a2b6d13c7ba",
+    "compositions/source-video.html": "1ba0c0dfa641439dfb577fb6808f4d5b81980d87fad428f438765c714a5cba48",
+    "compositions/chapter-transition.html": "1f90c8f2842badf68466e2916b8388f302c721db5278a3a112037a8743525ee2",
+    "src/styles.css": "ed7708c23a70e1da10b089a1be61f593d321d22310f3cae7851821ed8f0e3248",
+    "src/template.js": "067973dd688638ec0a1145b0798fb265552cc24c7a75e3c6b876235abd385c94",
+    "assets/fonts/ChosunGs.TTF": "4e191bc30d23ce34797dcaf7a0965dedd67a2d85cc5dd87325ee96626cba7bea",
+    "assets/media/source-placeholder.mp4": "09c3c32ea85a40b26a431e59b0554c7a0e5f1a0c27723c0c1c9a77fa7f1ce5c5",
+    "assets/audio/source-placeholder.wav": "86ded4bee55cfc45513a5517ddd88b4052e7d0c1eae1e32b423c49971b022f24",
+    "evidence/template-v1-approved.png": "2656cef96fcbeece7904c0e49b142cf6f2694a5e0c743cd49dc43a00fb12a6f8"
+  },
+  "protected_boundaries": {
+    "existing_osehun_project_modified": false,
+    "git_commit": false,
+    "git_push": false,
+    "final_mp4_rendered": false
+  },
+  "next": "오세훈 전체 챕터에 공용 템플릿 적용"
+}

@@ -1,0 +1,35 @@
+{
+  "status": "TEMPLATE_V1_LOCKED",
+  "template": "politics-longform-template-v1",
+  "checks": {
+    "contract_tests": "PASS_8_OF_8",
+    "skill_validator": "PASS",
+    "hyperframes_lint": "PASS_0_ERRORS_0_WARNINGS",
+    "hyperframes_check_strict_snapshots": "PASS_RUNTIME_0_LAYOUT_0_MOTION_0_CONTRAST_43_OF_43",
+    "first_frame_zero_seconds": "PASS_NON_BLANK",
+    "preview_server": "RUNNING_HTTP_200"
+  },
+  "preview": {
+    "port": 3018,
+    "pid": 35728,
+    "url": "http://localhost:3018/#project/politics-longform-template-v1",
+    "user_approved": true,
+    "approved_at": "2026-07-25T15:12:32.3329401+09:00"
+  },
+  "snapshots": [
+    "evidence/first-frame-at-0s.png",
+    "snapshots/frame-00-at-1.3s.png",
+    "snapshots/frame-01-at-6.7s.png",
+    "snapshots/frame-02-at-12.0s.png",
+    "snapshots/frame-03-at-17.3s.png",
+    "snapshots/frame-04-at-22.7s.png"
+  ],
+  "render": "NOT_RUN_TEMPLATE_LOCK_ONLY",
+  "lock": {
+    "version": "v1",
+    "status": "TEMPLATE_V1_LOCKED",
+    "manifest": "template_manifest.json",
+    "lock_file": "template_lock.json",
+    "approved_snapshot": "evidence/template-v1-approved.png"
+  }
+}

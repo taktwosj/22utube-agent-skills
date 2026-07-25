@@ -1,0 +1,92 @@
+{
+  "canvas": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "background": "#020812"
+  },
+  "safeArea": {
+    "top": 36,
+    "right": 48,
+    "bottom": 36,
+    "left": 48
+  },
+  "frame": {
+    "topHeight": 132,
+    "bottomHeight": 238,
+    "borderWidth": 6,
+    "borderColor": "rgba(0,217,255,0.72)",
+    "topColor": "rgba(5,47,102,0.96)",
+    "bottomColor": "rgba(3,31,70,0.96)"
+  },
+  "focusLines": {
+    "color": "rgba(0,217,255,0.40)",
+    "opacity": 0.72,
+    "thickness": 2
+  },
+  "chapter": {
+    "numberX": 48,
+    "numberY": 32,
+    "numberSize": 34,
+    "titleX": 340,
+    "titleY": 28,
+    "titleWidth": 1240,
+    "titleSize": 50,
+    "titleColor": "#fff200"
+  },
+  "source": {
+    "labelX": 48,
+    "labelY": 154,
+    "labelSize": 38,
+    "dateX": 48,
+    "dateY": 84,
+    "dateSize": 34
+  },
+  "comment": {
+    "x": 1420,
+    "y": 154,
+    "width": 450,
+    "size": 31
+  },
+  "subscribe": {
+    "x": 1430,
+    "y": 760,
+    "width": 410,
+    "size": 30
+  },
+  "captionBand": {
+    "x": 0,
+    "y": 842,
+    "width": 1920,
+    "height": 238,
+    "opacity": 0.96,
+    "color": "#031f46"
+  },
+  "captionText": {
+    "x": 190,
+    "y": 866,
+    "width": 1540,
+    "height": 202,
+    "fontFamily": "ChosunGs, serif",
+    "fontSize": 60,
+    "lineHeight": 1.16,
+    "outlineWidth": 7,
+    "color": "#ffffff",
+    "outlineColor": "#000000",
+    "maxLines": 2
+  },
+  "animation": {
+    "enterSeconds": 0.45,
+    "exitSeconds": 0.35,
+    "focusPulseSeconds": 2.4,
+    "translateY": 22
+  },
+  "zIndex": {
+    "media": 1,
+    "frame": 20,
+    "focusLines": 22,
+    "captionBand": 30,
+    "metadata": 40,
+    "captionText": 50
+  }
+}

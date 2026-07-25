@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "template_id": "politics-longform-template-v1",
+  "version": "v1",
+  "status": "TEMPLATE_V1_LOCKED",
+  "owner": "112-politics-longform-hyperframes",
+  "approved_at": "2026-07-25T15:12:32.3329401+09:00",
+  "approval": {
+    "type": "USER_VISUAL_APPROVAL",
+    "evidence": "User stated: 잠그고. 핸드오프 내용써",
+    "snapshot": "evidence/template-v1-approved.png"
+  },
+  "typography": {
+    "font_family": "ChosunGs",
+    "font_asset": "assets/fonts/ChosunGs.TTF",
+    "scope": "ALL_TEXT_ELEMENTS"
+  },
+  "authority": {
+    "entrypoint": "index.html",
+    "style_tokens": "style_tokens.json",
+    "timeline_manifest": "compositions/timeline_manifest.json",
+    "validation_report": "validation_report.json",
+    "lock_file": "template_lock.json"
+  },
+  "compositions": [
+    "compositions/narration-explainer.html",
+    "compositions/source-video.html",
+    "compositions/chapter-transition.html"
+  ],
+  "production_boundary": {
+    "existing_osehun_project_modified": false,
+    "final_mp4_rendered": false,
+    "git_commit": false,
+    "git_push": false
+  },
+  "next": "오세훈 전체 챕터에 공용 템플릿 적용"
+}

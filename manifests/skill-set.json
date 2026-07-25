@@ -1,6 +1,6 @@
 {
   "repo_name": "22utube-agent-skills",
-  "version": "2026.07.14",
+  "version": "2026.07.25",
   "source_of_truth": "git",
   "active_shorts_script_authority": "skills/00-tikitaka/shorts_script_analysis_single_source_v20260706.md",
   "onedrive_role": "production-data-only",
@@ -19,6 +19,12 @@
     },
     {
       "name": "111-politics-longform",
+      "category": "22utube",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
+      "name": "112-politics-longform-hyperframes",
       "category": "22utube",
       "targets": ["codex", "claude", "hermes"],
       "enabled": true

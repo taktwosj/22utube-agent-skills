@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>정치롱폼 HyperFrames 템플릿 v1</title>
+    <link rel="stylesheet" href="fonts.css">
+    <link rel="stylesheet" href="src/styles.css">
+  </head>
+  <body>
+    <main id="politics-longform-template-v1" data-hf-id="politics-longform-template-v1-root" data-composition-id="politics-longform-template-v1" data-start="0" data-duration="24" data-width="1920" data-height="1080">
+      <audio id="root-narration-audio" class="clip" data-hf-id="root-narration-audio" src="assets/audio/source-placeholder.wav" preload="auto" data-start="0" data-duration="8" data-track-index="40" data-volume="1"></audio>
+      <video id="root-source-video" class="clip media-surface" data-hf-id="root-source-video" muted src="assets/media/source-placeholder.mp4" playsinline preload="auto" data-start="8" data-duration="8" data-track-index="0" style="position:absolute;inset:0;width:1920px;height:1080px;object-fit:contain"></video>
+      <audio id="root-source-audio" class="clip" data-hf-id="root-source-audio" src="assets/audio/source-placeholder.wav" preload="auto" data-start="8" data-duration="8" data-track-index="40" data-volume="1"></audio>
+      <section id="host-narration-explainer" class="clip" data-hf-id="host-narration-explainer" data-composition-id="narration-explainer" data-composition-src="compositions/narration-explainer.html" data-start="0" data-duration="8" data-track-index="5" style="position:absolute;inset:0;width:1920px;height:1080px"></section>
+      <section id="host-source-video" class="clip" data-hf-id="host-source-video" data-composition-id="source-video" data-composition-src="compositions/source-video.html" data-start="8" data-duration="8" data-track-index="5" style="position:absolute;inset:0;width:1920px;height:1080px"></section>
+      <section id="host-chapter-transition" class="clip" data-hf-id="host-chapter-transition" data-composition-id="chapter-transition" data-composition-src="compositions/chapter-transition.html" data-start="16" data-duration="8" data-track-index="5" style="position:absolute;inset:0;width:1920px;height:1080px"></section>
+    </main>
+    <script src="src/template.js" data-tokens="style_tokens.json"></script>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["politics-longform-template-v1"] = {
+        duration: () => 24,
+        seek: () => window.__timelines["politics-longform-template-v1"],
+        pause: () => window.__timelines["politics-longform-template-v1"]
+      };
+    </script>
+  </body>
+</html>

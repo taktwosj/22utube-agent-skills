@@ -1,0 +1,27 @@
+{
+  "project_id": "politics-longform-template-v1",
+  "canvas": { "width": 1920, "height": 1080, "fps": 30 },
+  "compositions": [
+    {
+      "id": "narration-explainer",
+      "name": "narration-explainer",
+      "file": "compositions/narration-explainer.html",
+      "start": 0,
+      "duration": 8
+    },
+    {
+      "id": "source-video",
+      "name": "source-video",
+      "file": "compositions/source-video.html",
+      "start": 8,
+      "duration": 8
+    },
+    {
+      "id": "chapter-transition",
+      "name": "chapter-transition",
+      "file": "compositions/chapter-transition.html",
+      "start": 16,
+      "duration": 8
+    }
+  ]
+}

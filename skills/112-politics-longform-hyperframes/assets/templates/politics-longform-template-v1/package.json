@@ -1,0 +1,14 @@
+{
+  "name": "politics-longform-template-v1",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reusable Korean politics longform HyperFrames template",
+  "scripts": {
+    "lint": "hyperframes lint",
+    "check": "hyperframes check --strict --snapshots",
+    "preview": "hyperframes preview --port 3018 --no-open"
+  },
+  "devDependencies": {
+    "hyperframes": "0.7.70"
+  }
+}

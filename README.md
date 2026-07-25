@@ -20,6 +20,7 @@ Active production skills:
 00-tikitaka
 000short-production-agent
 111-politics-longform
+112-politics-longform-hyperframes
 ```
 
 Bundled knowledge and planning skills:
