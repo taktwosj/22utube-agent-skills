@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short render evidence",
+  "type": "object",
+  "required": [
+    "schema_version", "status", "episode_id", "capcut_project_evidence_path",
+    "capcut_project_evidence_sha256", "render_path", "render_sha256",
+    "stage09_review_evidence_path", "stage09_review_evidence_sha256",
+    "stage09_events", "post_open_project_revalidated", "measured_duration_us",
+    "video_stream_verified", "decode_verified"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "001short-render-evidence-v2"},
+    "status": {"type": "string", "const": "PASS"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "capcut_project_evidence_path": {"type": "string", "minLength": 1},
+    "capcut_project_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "stage09_review_evidence_path": {"type": "string", "minLength": 1},
+    "stage09_review_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "stage09_events": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "USER_VISUAL_CHECKED"},
+        {"const": "CAPCUT_POST_OPEN_REVALIDATED"},
+        {"const": "USER_APPROVED"}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "post_open_project_revalidated": {"type": "boolean", "const": true},
+    "render_path": {"type": "string", "minLength": 1},
+    "render_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "measured_duration_us": {"type": "integer", "minimum": 1},
+    "video_stream_verified": {"type": "boolean", "const": true},
+    "decode_verified": {"type": "boolean", "const": true}
+  },
+  "additionalProperties": false
+}

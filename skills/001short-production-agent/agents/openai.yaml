@@ -1,0 +1,4 @@
+interface:
+  display_name: "001short Compact Production"
+  short_description: "Analyze, blueprint, clean, assemble, and validate Shorts"
+  default_prompt: "Use $001short-production-agent to analyze the original Short, create the compact matrix blueprints, then assemble and validate the approved CapCut project."

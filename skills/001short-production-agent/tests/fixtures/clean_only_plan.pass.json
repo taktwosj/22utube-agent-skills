@@ -1,0 +1,54 @@
+{
+  "schema_version": "001short-production-plan-v1",
+  "episode_id": "SH_PROTOCOL_PASS",
+  "root_profile": "shrt_white_root_01",
+  "project_name": "SH_PROTOCOL_PASS_Hermes",
+  "production_mode": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY",
+  "total_duration_us": 8000000,
+  "order_signature": ["1"],
+  "timeline": [
+    {
+      "segment_key": "1",
+      "target_range_us": [0, 8000000],
+      "placements": [
+        {
+          "anchor": "VIDEO",
+          "operation": "clone_template_segment",
+          "asset_key": "clean_video",
+          "source_range_us": [0, 8000000],
+          "target_range_us": [0, 8000000],
+          "volume": 0
+        },
+        {
+          "anchor": "A10",
+          "operation": "clone_template_segment",
+          "asset_key": "source_original_audio",
+          "source_range_us": [0, 8000000],
+          "target_range_us": [0, 8000000],
+          "volume": 1
+        },
+        {
+          "anchor": "T1",
+          "operation": "replace_template_text",
+          "text": "첫 줄",
+          "target_range_us": [0, 8000000]
+        },
+        {
+          "anchor": "T2",
+          "operation": "replace_template_text",
+          "text": "둘째 줄",
+          "target_range_us": [0, 8000000]
+        }
+      ]
+    }
+  ],
+  "cleared_anchors": ["STATE", "A10_TEXT", "A9_TEXT", "A9", "A11", "A12"],
+  "locks": {
+    "source_order_unchanged": true,
+    "speed_unchanged": true,
+    "original_audio_required": true,
+    "bottom_captions": false,
+    "tts": false,
+    "sfx": false
+  }
+}
