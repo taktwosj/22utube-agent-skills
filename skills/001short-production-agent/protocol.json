@@ -42,7 +42,10 @@
       "video_audio_mapping_must_match": true,
       "requires_original_blueprint": true,
       "requires_human_approval": true,
-      "unchanged_error": "URAKKAI_STRUCTURE_UNCHANGED"
+      "unchanged_error": "URAKKAI_STRUCTURE_UNCHANGED",
+      "fake_split_forbidden": true,
+      "approved_final_order_required": true,
+      "a10_sync_required_for_all_used_ranges": true
     },
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
       "trigger": "operator explicitly requests clean-only, source-order unchanged, title-only, or equivalent",
@@ -64,7 +67,11 @@
         "A11",
         "A12"
       ],
-      "skip_fake_urakkai_gate": true
+      "skip_fake_urakkai_gate": true,
+      "explicit_exception_to_multi_cut_gate": true,
+      "video_duration": "FULL_LENGTH",
+      "original_audio_duration": "FULL_LENGTH",
+      "source_order_change": "FORBIDDEN"
     }
   },
   "invariants": {
@@ -90,7 +97,11 @@
     "capcut_cloud_row_readback_required": true,
     "capcut_cloud_reopen_playback_required": true,
     "public_upload_requires_explicit_approval": true,
-    "completion_report_requires_upload_metadata": true
+    "completion_report_requires_upload_metadata": true,
+    "source_file_evidence_required": true,
+    "vmake_final_download_evidence_required": true,
+    "vmake_substitute_file_forbidden": true,
+    "capcut_visual_confirmation_required_before_completion": true
   },
   "anchors": {
     "VIDEO": "clean visual; embedded audio muted when A10 is present",
@@ -165,7 +176,8 @@
       "requires_state": "FINAL_DESIGN_LOCKED_OR_EXPLICIT_CLEAN_ONLY",
       "produces": [
         "40_assets_used/clean_source.mp4",
-        "40_assets_used/clean_visual_manifest.json"
+        "40_assets_used/clean_visual_manifest.json",
+        "40_assets_used/vmake_final_download_evidence.json"
       ],
       "validators": [
         "scripts/validate_clean_visual.py"
@@ -224,6 +236,10 @@
       "T1",
       "T2",
       "validation_status",
+      "source_file_evidence",
+      "vmake_final_download",
+      "capcut_visual_confirmation",
+      "completion_claim",
       "capcut_cloud_destination",
       "capcut_cloud_row",
       "upload_title",
@@ -252,7 +268,39 @@
       "SCHEDULED"
     ],
     "public_upload_approval_field": "public_upload_approval",
-    "missing_error_prefix": "UPLOAD_METADATA_MISSING"
+    "missing_error_prefix": "UPLOAD_METADATA_MISSING",
+    "source_file_evidence_required_fields": [
+      "local_path",
+      "sha256",
+      "duration",
+      "approved_source_time_ranges"
+    ],
+    "vmake_final_download_required_fields": [
+      "downloaded_file_path",
+      "sha256",
+      "size_bytes",
+      "duration",
+      "is_actual_vmake_final_download"
+    ],
+    "capcut_visual_confirmation_required_fields": [
+      "actual_project_name",
+      "screen_confirmation_status",
+      "screen_evidence_path",
+      "screen_evidence_sha256",
+      "draft_readback",
+      "final_project_hash"
+    ],
+    "render_claim_values": [
+      "RENDER_COMPLETE",
+      "UPLOAD_READY",
+      "PUBLIC_UPLOAD_COMPLETE"
+    ],
+    "render_evidence_required_fields": [
+      "mp4_path",
+      "mp4_sha256",
+      "size_bytes",
+      "duration"
+    ]
   },
   "errors": {
     "STOP_PROTOCOL_CONFLICT": "SKILL.md, protocol.json, and workflow.json conflict; do not guess",
@@ -268,6 +316,16 @@
     "CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY": "clean-only forbidden track contains segments",
     "UPLOAD_METADATA_MISSING": "completion report lacks title, description, or sources",
     "CAPCUT_CLOUD_ROW_MISSING": "completion report lacks a verified cloud-row field",
-    "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval"
+    "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval",
+    "URAKKAI_FAKE_SPLIT": "urakkai uses contiguous fake splits without an effective structural reorder",
+    "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH": "used A10 source/target ranges do not exactly match VIDEO",
+    "SOURCE_FILE_EVIDENCE_MISSING": "completion report lacks verified source file evidence",
+    "SOURCE_FILE_EVIDENCE_INVALID": "source file evidence does not match the actual file",
+    "VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING": "completion report lacks actual VMake final download evidence",
+    "VMAKE_FINAL_DOWNLOAD_EVIDENCE_INVALID": "VMake download evidence does not match the actual downloaded file",
+    "CAPCUT_VISUAL_CONFIRMATION_MISSING": "completion report lacks actual CapCut screen confirmation",
+    "CAPCUT_VISUAL_CONFIRMATION_INVALID": "CapCut screen or draft readback evidence is invalid",
+    "RENDER_EVIDENCE_MISSING": "render/upload claim lacks MP4 evidence",
+    "RENDER_EVIDENCE_INVALID": "render MP4 evidence does not match the actual file"
   }
 }

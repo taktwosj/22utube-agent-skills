@@ -28,11 +28,21 @@
     },
     "schemas": {
       "type": "object",
-      "required": ["protocol", "production_plan", "completion_report"],
+      "required": [
+        "protocol",
+        "production_plan",
+        "completion_report"
+      ],
       "properties": {
-        "protocol": {"const": "schemas/executable_protocol.schema.json"},
-        "production_plan": {"const": "schemas/executable_production_plan.schema.json"},
-        "completion_report": {"const": "schemas/completion_report.schema.json"}
+        "protocol": {
+          "const": "schemas/executable_protocol.schema.json"
+        },
+        "production_plan": {
+          "const": "schemas/executable_production_plan.schema.json"
+        },
+        "completion_report": {
+          "const": "schemas/completion_report.schema.json"
+        }
       },
       "additionalProperties": false
     },
@@ -42,7 +52,70 @@
         "URAKKAI",
         "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "properties": {
+        "URAKKAI": {
+          "type": "object",
+          "required": [
+            "meaningful_reorder_required",
+            "minimum_video_segments",
+            "fake_split_forbidden",
+            "approved_final_order_required",
+            "a10_sync_required_for_all_used_ranges"
+          ],
+          "properties": {
+            "meaningful_reorder_required": {
+              "const": true
+            },
+            "minimum_video_segments": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "fake_split_forbidden": {
+              "const": true
+            },
+            "approved_final_order_required": {
+              "const": true
+            },
+            "a10_sync_required_for_all_used_ranges": {
+              "const": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
+          "type": "object",
+          "required": [
+            "explicit_exception_to_multi_cut_gate",
+            "video_segments",
+            "original_audio_segments",
+            "video_duration",
+            "original_audio_duration",
+            "source_order_change"
+          ],
+          "properties": {
+            "explicit_exception_to_multi_cut_gate": {
+              "const": true
+            },
+            "video_segments": {
+              "const": 1
+            },
+            "original_audio_segments": {
+              "const": 1
+            },
+            "video_duration": {
+              "const": "FULL_LENGTH"
+            },
+            "original_audio_duration": {
+              "const": "FULL_LENGTH"
+            },
+            "source_order_change": {
+              "const": "FORBIDDEN"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
     },
     "invariants": {
       "type": "object",
@@ -56,7 +129,11 @@
         "capcut_cloud_row_readback_required",
         "capcut_cloud_reopen_playback_required",
         "public_upload_requires_explicit_approval",
-        "completion_report_requires_upload_metadata"
+        "completion_report_requires_upload_metadata",
+        "source_file_evidence_required",
+        "vmake_final_download_evidence_required",
+        "vmake_substitute_file_forbidden",
+        "capcut_visual_confirmation_required_before_completion"
       ]
     },
     "stages": {
@@ -64,15 +141,123 @@
       "minItems": 9,
       "maxItems": 9,
       "prefixItems": [
-        {"type": "object", "properties": {"id": {"const": "01"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "02"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "03"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "04"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "05"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "06"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "07"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "08"}}, "required": ["id", "name", "pass_state"]},
-        {"type": "object", "properties": {"id": {"const": "09"}}, "required": ["id", "name", "pass_state"]}
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "01"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "02"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "03"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "04"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "05"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "06"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "07"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "08"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "09"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        }
       ],
       "items": false
     },
@@ -88,7 +273,9 @@
       "properties": {
         "required_fields": {
           "type": "array",
-          "contains": {"const": "upload_title"}
+          "contains": {
+            "const": "upload_title"
+          }
         },
         "source_required_fields": {
           "type": "array",
@@ -97,11 +284,21 @@
         "cloud_row_required_fields": {
           "type": "array",
           "prefixItems": [
-            {"const": "name"},
-            {"const": "size"},
-            {"const": "duration"},
-            {"const": "type"},
-            {"const": "modified_time"}
+            {
+              "const": "name"
+            },
+            {
+              "const": "size"
+            },
+            {
+              "const": "duration"
+            },
+            {
+              "const": "type"
+            },
+            {
+              "const": "modified_time"
+            }
           ],
           "minItems": 5,
           "maxItems": 5,

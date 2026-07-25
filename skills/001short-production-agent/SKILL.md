@@ -17,6 +17,10 @@ Load `protocol.json` before mode routing, stage selection, production-plan compi
 - `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` must use one full-length muted VIDEO, one full-length A10 original-audio segment, full-length T1/T2, and zero STATE/A10_TEXT/A9_TEXT/A9/A11/A12 segments.
 - A completion report missing upload title, upload description, or source credit must fail with `UPLOAD_METADATA_MISSING`; conversational memory or a previous message is not substitute evidence.
 - Public upload states require explicit approval evidence and otherwise fail with `PUBLIC_UPLOAD_NOT_APPROVED`.
+- 최종 완료 전 실제 CapCut 편집기를 열어 프리뷰·타임라인·트랙을 확인해야 한다. `application_open_or_playback=REQUIRED_BEFORE_COMPLETION`이며 Home 카드, JSON 존재, 정적 validator만으로 완료 처리하지 않는다. 완료보고에는 실제 프로젝트명, 화면 증거 파일+SHA, 종료 후 draft readback+SHA, final project hash가 필요하다.
+- Stage 06의 raw VMake 최종 다운로드본은 canonical clean/hybrid 결과와 별도 증거다. 실제 다운로드 경로·SHA-256·size_bytes·ffprobe duration·`is_actual_vmake_final_download=true`를 기록하며 원본 또는 로컬 대체 파일을 raw VMake 다운로드로 제출하지 않는다. hybrid 후처리는 허용하되 raw VMake 다운로드 증거를 보존하고 canonical clean manifest에 처리 범위를 따로 기록한다.
+- `URAKKAI`는 유효 VIDEO 구조 2개 이상, 승인 final order, 가짜 연속 분할 금지, 사용한 모든 VIDEO source/target range와 A10의 1:1 동기를 강제한다. `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY`는 이 다중 컷 gate의 명시적 예외로 VIDEO/A10 각 1개 전체 길이와 source 순서 불변만 허용한다.
+- `RENDER_COMPLETE`, `UPLOAD_READY`, `PUBLIC_UPLOAD_COMPLETE`를 주장할 때는 실제 MP4 경로·SHA-256·size_bytes·ffprobe duration이 완료보고에 있어야 한다.
 - Before deployment to another computer or agent, run the isolated-copy procedure and pressure scenarios in `references/executable-protocol-testing.md`.
 - Never invent a simplified machine contract that differs from the files the production builders actually consume. Before enforcing or publishing a production-plan schema, read at least one recent real clean-only plan and one recent real urakkai plan. The canonical episode shape is `timeline[].placements` with `order_signature`, explicit anchors, source/target ranges, and `cleared_anchors`; adapters may normalize legacy forms, but the schema and fixtures must model the actual builder input.
 - A skill update is not complete while the newest test is RED, errors before assertions, or has not been rerun after the latest edit. Report it as unfinished and do not promote, deploy, or replace the known-good version until the complete suite, protocol self-check, real-plan compatibility check, and positive/negative fixtures are GREEN.
@@ -99,6 +103,29 @@ matches[0].click();
 
 우라까이 설계·production plan·다중 VIDEO/A10 조립·눈검수·post-open 검증을 수행할 때는 `references/urakkai-structural-reorder-capcut.md`를 읽는다.
 
+### BGM + 화면 텍스트 전용 우라까이
+
+운영자가 `나레이션 아니고 BGM에 텍스트만`, `음성 없이 글자만`, `TTS 말고 화면 글자`, 또는 동등한 표현으로 정정하면 이를 **음성 TTS가 없는 화면 텍스트 모드**로 해석한다. 운영자가 나레이션을 명시적으로 거부한 문맥에서 `텍스트 TTS`라고 표현해도 음성 합성을 뜻한다고 되묻거나 자동 생성하지 않는다.
+
+```text
+spoken_narration=false
+tts_audio=false
+original_audio_volume=0
+bgm_required=true
+screen_text_anchor=STATE
+clear_anchors=A9,A9_TEXT
+```
+
+- 원본 A10은 source range와 함께 재배치하되 `volume=0`으로 유지해 기존 내레이션이 새 순서와 충돌하지 않게 한다.
+- 승인된 BGM은 A12에 전체 길이로 배치한다. 제작 단계에서 BGM 자산이 아직 정해지지 않았으면 `WAIT_BGM_SELECTION`으로 남기되 대본·구조 설계 단계는 계속할 수 있다.
+- 설명 문구는 `STATE` 화면 텍스트이며 `A9_TEXT` 또는 TTS-linked caption으로 부르지 않는다.
+- `tts_spoken_copy.txt`, 음성용 문장 manifest, A9 TTS 계획을 만들지 않는다. 이전 초안에 있으면 제거하고 `screen_text_copy.txt`와 production plan의 `screen_text`를 정본으로 갱신한다.
+- T1/T2는 고정 상단 제목, STATE는 시간별 설명 문구로 분리한다.
+- 수정 후 사람눈 설계도, 추천안, production-plan draft, writer gate를 함께 갱신하고 공통 script contract와 executable protocol validator를 다시 실행한다.
+- 사용자가 나레이션을 거부하지 않은 채 `텍스트 TTS`만 단독으로 말해 음성 여부가 실제로 불명확한 경우에만 최소 질문으로 확인한다.
+- BGM 모드 쇼츠의 완료 보고에는 영상 주제·정서·편집 속도에 맞는 **노래 후보를 정확히 3개** 추천한다. 각 후보는 곡명 또는 실제 검색 가능한 트랙 키워드와 추천 이유를 한 줄로 쓰고, 저작권·플랫폼 제공 여부를 확인하지 못했으면 `사용 전 권리/제공 여부 확인`을 표시한다.
+- BGM-only의 A12 배치, 음성 stem 검증, VMAKE transient overlay fallback, CDP 완료 이벤트 다운로드, CapCut cloud-safe mirror·Windows-path scrub 절차는 `references/bgm-a12-capcut-cloud.md`를 따른다.
+
 우라까이는 원본 장면 순서 `1→2→3→4→5`를 유지한 채 제목·크롭·TTS·자막만 바꾸는 리패키징이 아니다. 최소 한 번 이상 의미 있는 장면 재배치로 훅·충돌·맥락·검증·결말의 서사 순서를 새로 만들어야 한다. 예: `1→2→3→4→5`를 `3→4→1→2→5` 또는 결과 훅을 분할한 `5A→2→1→3→4→5B→6`으로 변경한다.
 
 - Stage 02 원본 설계도에는 모든 변화 구간에 원본 순번과 source range를 붙인다.
@@ -125,6 +152,18 @@ Stage 02 원본 설계도는 줄거리 요약이 아니라 **원본 멀티모달
 - 자세한 보고 규칙은 `references/structure-blueprint-reporting.md`를 따른다.
 
 ## Human-Readable Approval Gate
+
+### 자동모드로 우라까이 대본까지 진행 후 수정 대기
+
+운영자가 `자동모드로 대본까지 우라까이한 다음 보고`, `우라까이 대본 먼저 만들어 내가 수정`, 또는 동등한 범위를 명시하면 이를 Stage 01~03의 조사·원본 설계·실제 구조 재배치·대본 초안 작성까지 승인한 것으로 본다. 같은 범위 안에서 카테고리·추천 방향을 다시 묻지 않는다.
+
+- 원본 구조를 먼저 증거 기반으로 번호화하고, 최종 후보의 `order_signature`가 실제로 달라야 한다.
+- `20_script/original-blueprint.md`, `20_script/first-recommendation.md`, `20_script/URAKKAI_BLUEPRINT.md`를 작성한다.
+- 기계 검증이 필요하면 비정본 `20_script/production_plan.draft.json`을 만들고 executable protocol validator를 실행할 수 있다. PASS는 구조 계약 통과만 뜻하며 운영자 승인이나 최종 잠금을 뜻하지 않는다.
+- canonical `20_script/production_plan.json`, `final-blueprint.md`, `FINAL_DESIGN_LOCKED`, TTS, VMAKE, CapCut은 운영자 수정·승인 전 만들거나 실행하지 않는다.
+- episode state는 `current_stage=04`, `status=WAIT_EXTERNAL_REVIEW`, `final_design_locked=false`로 멈춘다.
+- 보고 본문에는 `원본 순서 → 수정 순서`, T1/T2, 복사 가능한 대본, source→target 표, 사실 귀속 문구, 아직 측정하지 않은 TTS timing을 표시한다.
+- 사용자가 문장이나 T1/T2만 수정하면 같은 `URAKKAI_BLUEPRINT.md`에 반영해 다시 전달하고, 승인 후에만 Stage 05 정본 산출물을 컴파일한다.
 
 새 원본 URL로 회차를 시작할 때는 승인 순서를 바꾸지 않는다.
 

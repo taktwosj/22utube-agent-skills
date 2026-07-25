@@ -1,5 +1,7 @@
+import hashlib
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,6 +21,51 @@ def load_validator():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def add_final_evidence(report: dict, root: Path) -> None:
+    source = root / "source.mp4"
+    vmake = root / "vmake-final.mp4"
+    for path, color in ((source, "red"), (vmake, "blue")):
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"color=c={color}:s=16x16:d=0.2", "-r", "10", "-pix_fmt", "yuv420p", str(path)],
+            check=True,
+        )
+    screen = root / "capcut-screen.png"
+    screen.write_bytes(b"screen-evidence")
+    draft = root / "draft_content.json"
+    draft.write_text('{"duration":200000}', encoding="utf-8")
+    def duration(path: Path) -> float:
+        return float(subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip())
+    source_duration = duration(source)
+    vmake_duration = duration(vmake)
+    report.update({
+        "source_file_evidence": {
+            "local_path": str(source), "sha256": sha256(source), "duration": source_duration,
+            "approved_source_time_ranges": [[0, round(source_duration * 1_000_000)]],
+        },
+        "vmake_final_download": {
+            "downloaded_file_path": str(vmake), "sha256": sha256(vmake),
+            "size_bytes": vmake.stat().st_size, "duration": vmake_duration,
+            "is_actual_vmake_final_download": True,
+        },
+        "capcut_visual_confirmation": {
+            "actual_project_name": report["capcut_project_name"],
+            "screen_confirmation_status": "PASS",
+            "screen_evidence_path": str(screen),
+            "screen_evidence_sha256": sha256(screen),
+            "draft_readback": {"local_path": str(draft), "sha256": sha256(draft)},
+            "final_project_hash": sha256(draft),
+        },
+        "completion_claim": "CAPCUT_PROJECT_COMPLETE",
+    })
 
 
 class ExecutableProtocolContractTest(unittest.TestCase):
@@ -99,6 +146,10 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 "T1",
                 "T2",
                 "validation_status",
+                "source_file_evidence",
+                "vmake_final_download",
+                "capcut_visual_confirmation",
+                "completion_claim",
                 "capcut_cloud_destination",
                 "capcut_cloud_row",
                 "upload_title",
@@ -151,6 +202,64 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIn("URAKKAI_STRUCTURE_UNCHANGED", errors)
         self.assertEqual(module.validate_production_plan(reordered, protocol), [])
 
+    def test_urakkai_rejects_fake_split_and_a10_range_mismatch(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        valid = json.loads((SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8"))
+
+        mismatched = json.loads(json.dumps(valid))
+        mismatched["timeline"][0]["placements"][1]["source_range_us"] = [0, 1_000_000]
+        self.assertIn(
+            "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH",
+            module.validate_production_plan(mismatched, protocol),
+        )
+
+        fake = json.loads(json.dumps(valid))
+        fake["order_signature"] = ["1A", "1B", "1C"]
+        for index, row in enumerate(fake["timeline"]):
+            row["segment_key"] = fake["order_signature"][index]
+            source_range = [index * 1_000_000, (index + 1) * 1_000_000]
+            row["placements"][0]["source_range_us"] = source_range
+            row["placements"][1]["source_range_us"] = source_range
+        self.assertIn("URAKKAI_FAKE_SPLIT", module.validate_production_plan(fake, protocol))
+
+    def test_protocol_declares_final_shorts_hard_gates(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        urakkai = protocol["production_modes"]["URAKKAI"]
+        clean_only = protocol["production_modes"]["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+        self.assertIs(urakkai.get("fake_split_forbidden"), True)
+        self.assertIs(urakkai.get("approved_final_order_required"), True)
+        self.assertIs(urakkai.get("a10_sync_required_for_all_used_ranges"), True)
+        self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
+        self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")
+        self.assertEqual(clean_only.get("original_audio_duration"), "FULL_LENGTH")
+        self.assertEqual(clean_only.get("source_order_change"), "FORBIDDEN")
+        for field in ("source_file_evidence", "vmake_final_download", "capcut_visual_confirmation"):
+            self.assertIn(field, protocol["completion_report"]["required_fields"])
+
+    def test_completion_report_rejects_missing_final_shorts_evidence(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        report = {
+            "episode_id": "SH_TEST",
+            "capcut_project_name": "SH_TEST_Hermes",
+            "production_mode": "URAKKAI",
+            "T1": "제목1",
+            "T2": "제목2",
+            "validation_status": "PASS",
+            "capcut_cloud_destination": "User3160027826975의 공간/MAC",
+            "capcut_cloud_row": {"name": "SH_TEST_Hermes", "size": "9MB", "duration": "00:09", "type": "프로젝트", "modified_time": "오늘"},
+            "upload_title": "업로드 제목",
+            "upload_description": "업로드 설명",
+            "sources": [{"channel": "원본", "url": "https://example.com"}],
+            "public_upload_status": "WAIT_APPROVAL",
+        }
+        errors = module.validate_completion_report(report, protocol)
+        self.assertIn("SOURCE_FILE_EVIDENCE_MISSING", errors)
+        self.assertIn("VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING", errors)
+        self.assertIn("CAPCUT_VISUAL_CONFIRMATION_MISSING", errors)
+
     def test_completion_report_rejects_missing_upload_metadata(self):
         module = load_validator()
         self.assertIsNotNone(module, "validate_executable_protocol.py must exist")
@@ -173,14 +282,12 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "public_upload_status": "WAIT_APPROVAL"
         }
         errors = module.validate_completion_report(report, protocol)
-        self.assertEqual(
-            errors,
-            [
-                "UPLOAD_METADATA_MISSING:upload_title",
-                "UPLOAD_METADATA_MISSING:upload_description",
-                "UPLOAD_METADATA_MISSING:sources",
-            ],
-        )
+        for expected in (
+            "UPLOAD_METADATA_MISSING:upload_title",
+            "UPLOAD_METADATA_MISSING:upload_description",
+            "UPLOAD_METADATA_MISSING:sources",
+        ):
+            self.assertIn(expected, errors)
 
     def test_completion_report_accepts_complete_metadata_and_blocks_unapproved_public_upload(self):
         module = load_validator()
@@ -206,19 +313,41 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "sources": [{"channel": "원본 채널", "url": "https://example.com/source"}],
             "public_upload_status": "WAIT_APPROVAL"
         }
-        self.assertEqual(module.validate_completion_report(report, protocol), [])
-        incomplete_cloud_row = json.loads(json.dumps(report, ensure_ascii=False))
-        del incomplete_cloud_row["capcut_cloud_row"]["size"]
-        self.assertIn(
-            "CAPCUT_CLOUD_ROW_MISSING:size",
-            module.validate_completion_report(incomplete_cloud_row, protocol),
-        )
-        report["public_upload_status"] = "UPLOADED"
-        report["public_upload_approval"] = False
-        self.assertIn(
-            "PUBLIC_UPLOAD_NOT_APPROVED",
-            module.validate_completion_report(report, protocol),
-        )
+        with tempfile.TemporaryDirectory() as td:
+            add_final_evidence(report, Path(td))
+            self.assertEqual(module.validate_completion_report(report, protocol), [])
+            substituted = json.loads(json.dumps(report, ensure_ascii=False))
+            source_meta = substituted["source_file_evidence"]
+            source_path = Path(source_meta["local_path"])
+            substituted["vmake_final_download"] = {
+                "downloaded_file_path": str(source_path),
+                "sha256": source_meta["sha256"],
+                "size_bytes": source_path.stat().st_size,
+                "duration": source_meta["duration"],
+                "is_actual_vmake_final_download": True,
+            }
+            self.assertIn(
+                "VMAKE_FINAL_DOWNLOAD_EVIDENCE_INVALID",
+                module.validate_completion_report(substituted, protocol),
+            )
+            render_claim = json.loads(json.dumps(report, ensure_ascii=False))
+            render_claim["completion_claim"] = "UPLOAD_READY"
+            self.assertIn(
+                "RENDER_EVIDENCE_MISSING",
+                module.validate_completion_report(render_claim, protocol),
+            )
+            incomplete_cloud_row = json.loads(json.dumps(report, ensure_ascii=False))
+            del incomplete_cloud_row["capcut_cloud_row"]["size"]
+            self.assertIn(
+                "CAPCUT_CLOUD_ROW_MISSING:size",
+                module.validate_completion_report(incomplete_cloud_row, protocol),
+            )
+            report["public_upload_status"] = "UPLOADED"
+            report["public_upload_approval"] = False
+            self.assertIn(
+                "PUBLIC_UPLOAD_NOT_APPROVED",
+                module.validate_completion_report(report, protocol),
+            )
 
 
 if __name__ == "__main__":
