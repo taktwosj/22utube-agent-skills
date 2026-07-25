@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-executable-protocol-v1.json",
+  "title": "001short Executable Protocol",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "owner_skill",
+    "lane",
+    "authority",
+    "schemas",
+    "production_modes",
+    "invariants",
+    "anchors",
+    "stages",
+    "completion_report",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "001short-executable-protocol-v1"
+    },
+    "owner_skill": {
+      "const": "001short-production-agent"
+    },
+    "lane": {
+      "const": "general_shorts_production"
+    },
+    "schemas": {
+      "type": "object",
+      "required": ["protocol", "production_plan", "completion_report"],
+      "properties": {
+        "protocol": {"const": "schemas/executable_protocol.schema.json"},
+        "production_plan": {"const": "schemas/executable_production_plan.schema.json"},
+        "completion_report": {"const": "schemas/completion_report.schema.json"}
+      },
+      "additionalProperties": false
+    },
+    "production_modes": {
+      "type": "object",
+      "required": [
+        "URAKKAI",
+        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"
+      ],
+      "additionalProperties": false
+    },
+    "invariants": {
+      "type": "object",
+      "required": [
+        "single_active_lane",
+        "state_advance_after_validator_pass_only",
+        "vmake_dom_first",
+        "capcut_root_immutable",
+        "capcut_project_media_internal",
+        "capcut_cloud_destination",
+        "capcut_cloud_row_readback_required",
+        "capcut_cloud_reopen_playback_required",
+        "public_upload_requires_explicit_approval",
+        "completion_report_requires_upload_metadata"
+      ]
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {"type": "object", "properties": {"id": {"const": "01"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "02"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "03"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "04"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "05"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "06"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "07"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "08"}}, "required": ["id", "name", "pass_state"]},
+        {"type": "object", "properties": {"id": {"const": "09"}}, "required": ["id", "name", "pass_state"]}
+      ],
+      "items": false
+    },
+    "completion_report": {
+      "type": "object",
+      "required": [
+        "required_fields",
+        "source_required_fields",
+        "cloud_row_required_fields",
+        "public_upload_done_values",
+        "public_upload_approval_field"
+      ],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "contains": {"const": "upload_title"}
+        },
+        "source_required_fields": {
+          "type": "array",
+          "minItems": 2
+        },
+        "cloud_row_required_fields": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "name"},
+            {"const": "size"},
+            {"const": "duration"},
+            {"const": "type"},
+            {"const": "modified_time"}
+          ],
+          "minItems": 5,
+          "maxItems": 5,
+          "items": false
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

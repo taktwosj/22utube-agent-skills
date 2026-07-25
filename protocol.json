@@ -1,0 +1,273 @@
+{
+  "$schema": "schemas/executable_protocol.schema.json",
+  "schema_version": "001short-executable-protocol-v1",
+  "owner_skill": "001short-production-agent",
+  "lane": "general_shorts_production",
+  "authority": {
+    "policy": "SKILL.md",
+    "machine_contract": "protocol.json",
+    "state_machine": "workflow.json",
+    "episode_plan": "20_script/production_plan.json",
+    "enforcement": "scripts/validate_executable_protocol.py",
+    "conflict_rule": "STOP_PROTOCOL_CONFLICT"
+  },
+  "schemas": {
+    "protocol": "schemas/executable_protocol.schema.json",
+    "production_plan": "schemas/executable_production_plan.schema.json",
+    "completion_report": "schemas/completion_report.schema.json"
+  },
+  "activation": {
+    "aliases": [
+      "01쇼츠",
+      "001쇼츠",
+      "001short",
+      "001short-production-agent",
+      "원본 우라까이",
+      "클린하고 캣컵",
+      "클린 작업하고 그대로"
+    ],
+    "forbidden_skill_mixing": [
+      "000short-production-agent",
+      "top5isu-shorts",
+      "00-tikitaka",
+      "111-politics-longform"
+    ]
+  },
+  "production_modes": {
+    "URAKKAI": {
+      "trigger": "operator requests urakkai, rearrangement, structural re-edit, or equivalent",
+      "source_order_unchanged": false,
+      "meaningful_reorder_required": true,
+      "minimum_video_segments": 2,
+      "video_audio_mapping_must_match": true,
+      "requires_original_blueprint": true,
+      "requires_human_approval": true,
+      "unchanged_error": "URAKKAI_STRUCTURE_UNCHANGED"
+    },
+    "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
+      "trigger": "operator explicitly requests clean-only, source-order unchanged, title-only, or equivalent",
+      "source_order_unchanged": true,
+      "speed_unchanged": true,
+      "video_segments": 1,
+      "original_audio_segments": 1,
+      "video_volume": 0,
+      "original_audio_volume": 1,
+      "required_title_tracks": [
+        "T1",
+        "T2"
+      ],
+      "must_clear_tracks": [
+        "STATE",
+        "A10_TEXT",
+        "A9_TEXT",
+        "A9",
+        "A11",
+        "A12"
+      ],
+      "skip_fake_urakkai_gate": true
+    }
+  },
+  "invariants": {
+    "single_active_lane": true,
+    "source_is_read_only": true,
+    "state_advance_after_validator_pass_only": true,
+    "gui_owner_count": 1,
+    "vmake_dom_first": true,
+    "vmake_full_download_required": true,
+    "clean_visual_ffprobe_required": true,
+    "clean_visual_contact_sheet_required": true,
+    "capcut_root_immutable": true,
+    "capcut_unique_staging_required": true,
+    "capcut_project_media_internal": true,
+    "capcut_promote_after_validation_only": true,
+    "capcut_local_reopen_required": true,
+    "capcut_post_open_normalization_required": true,
+    "capcut_id_mirror_pass_required": true,
+    "capcut_cloud_media_pass_required": true,
+    "capcut_zip_test_required": true,
+    "capcut_cloud_destination": "User3160027826975의 공간/MAC",
+    "capcut_cloud_ignore_space": "TAKKTWO",
+    "capcut_cloud_row_readback_required": true,
+    "capcut_cloud_reopen_playback_required": true,
+    "public_upload_requires_explicit_approval": true,
+    "completion_report_requires_upload_metadata": true
+  },
+  "anchors": {
+    "VIDEO": "clean visual; embedded audio muted when A10 is present",
+    "T1": "top title line 1",
+    "T2": "top title line 2",
+    "A9": "TTS or narration",
+    "A9_TEXT": "TTS-linked visible caption",
+    "A10": "original speaker and source audio",
+    "A10_TEXT": "original-speech caption",
+    "STATE": "situation or state caption",
+    "A11": "sound effects",
+    "A12": "background music",
+    "SCREEN": "screen visual effect"
+  },
+  "stages": [
+    {
+      "id": "01",
+      "name": "SOURCE_ANALYSIS",
+      "requires": [
+        "00_input/source.mp4",
+        "00_input/source_metadata.json"
+      ],
+      "produces": [
+        "10_analysis/source-analysis.md"
+      ],
+      "pass_state": "SOURCE_OCR_VERIFIED"
+    },
+    {
+      "id": "02",
+      "name": "ORIGINAL_BLUEPRINT",
+      "requires_state": "SOURCE_OCR_VERIFIED",
+      "produces": [
+        "20_script/original-blueprint.md"
+      ],
+      "pass_state": "ORIGINAL_BLUEPRINT_READY"
+    },
+    {
+      "id": "03",
+      "name": "FIRST_RECOMMENDATION",
+      "requires_state": "ORIGINAL_BLUEPRINT_READY",
+      "produces": [
+        "20_script/first-recommendation.md"
+      ],
+      "pass_state": "FIRST_RECOMMENDATION_READY"
+    },
+    {
+      "id": "04",
+      "name": "EXTERNAL_REVIEW",
+      "requires_state": "FIRST_RECOMMENDATION_READY",
+      "produces": [
+        "20_script/external-review.md"
+      ],
+      "pass_state": "EXTERNAL_REVIEW_RETURNED"
+    },
+    {
+      "id": "05",
+      "name": "FINAL_DESIGN",
+      "requires_state": "EXTERNAL_REVIEW_RETURNED",
+      "produces": [
+        "20_script/final-blueprint.md",
+        "20_script/production_plan.json"
+      ],
+      "validators": [
+        "scripts/validate_design_lock.py",
+        "python3 scripts/validate_executable_protocol.py --plan {episode_root}/20_script/production_plan.json"
+      ],
+      "pass_state": "FINAL_DESIGN_LOCKED"
+    },
+    {
+      "id": "06",
+      "name": "VMAKE_CLEAN",
+      "requires_state": "FINAL_DESIGN_LOCKED_OR_EXPLICIT_CLEAN_ONLY",
+      "produces": [
+        "40_assets_used/clean_source.mp4",
+        "40_assets_used/clean_visual_manifest.json"
+      ],
+      "validators": [
+        "scripts/validate_clean_visual.py"
+      ],
+      "pass_state": "CLEAN_VISUAL_READY"
+    },
+    {
+      "id": "07",
+      "name": "AUDIO_CAPTION_LOCK",
+      "requires_state": "CLEAN_VISUAL_READY",
+      "produces": [
+        "30_audio_srt/audio_caption_lock.json"
+      ],
+      "validators": [
+        "scripts/validate_audio_caption.py"
+      ],
+      "pass_state": "AUDIO_CAPTION_VALIDATED"
+    },
+    {
+      "id": "08",
+      "name": "CAPCUT_BUILD",
+      "requires_state": "AUDIO_CAPTION_VALIDATED_OR_EXPLICIT_CLEAN_ONLY_ASSET_LOCK",
+      "produces": [
+        "50_capcut_project/project.zip",
+        "50_capcut_project/build_receipt.json"
+      ],
+      "validators": [
+        "scripts/validate_build_inputs.py",
+        "scripts/validate_capcut_project.py",
+        "scripts/validate_capcut_cloud_media.py"
+      ],
+      "pass_state": "CAPCUT_STATIC_VALIDATED"
+    },
+    {
+      "id": "09",
+      "name": "REOPEN_RENDER_REVIEW",
+      "requires_state": "CAPCUT_STATIC_VALIDATED",
+      "produces": [
+        "60_exports/render_validation.json",
+        "60_upload/upload_info.json",
+        "90_reports/completion_report.json"
+      ],
+      "validators": [
+        "scripts/validate_postbuild.py",
+        "scripts/validate_render.py",
+        "python3 scripts/validate_executable_protocol.py --completion-report {episode_root}/90_reports/completion_report.json"
+      ],
+      "pass_state": "WAIT_UPLOAD_APPROVAL"
+    }
+  ],
+  "completion_report": {
+    "required_fields": [
+      "episode_id",
+      "capcut_project_name",
+      "production_mode",
+      "T1",
+      "T2",
+      "validation_status",
+      "capcut_cloud_destination",
+      "capcut_cloud_row",
+      "upload_title",
+      "upload_description",
+      "sources",
+      "public_upload_status"
+    ],
+    "source_required_fields": [
+      "channel",
+      "url"
+    ],
+    "cloud_row_required_fields": [
+      "name",
+      "size",
+      "duration",
+      "type",
+      "modified_time"
+    ],
+    "public_upload_wait_values": [
+      "WAIT_APPROVAL",
+      "NOT_REQUESTED"
+    ],
+    "public_upload_done_values": [
+      "UPLOADED",
+      "PUBLISHED",
+      "SCHEDULED"
+    ],
+    "public_upload_approval_field": "public_upload_approval",
+    "missing_error_prefix": "UPLOAD_METADATA_MISSING"
+  },
+  "errors": {
+    "STOP_PROTOCOL_CONFLICT": "SKILL.md, protocol.json, and workflow.json conflict; do not guess",
+    "PRODUCTION_MODE_INVALID": "production mode is not declared",
+    "URAKKAI_STRUCTURE_UNCHANGED": "urakkai final order equals original order",
+    "CLEAN_ONLY_SOURCE_ORDER_CHANGED": "clean-only source and final order differ",
+    "CLEAN_ONLY_VIDEO_COUNT": "clean-only requires exactly one VIDEO segment",
+    "CLEAN_ONLY_AUDIO_COUNT": "clean-only requires exactly one A10 segment",
+    "CLEAN_ONLY_VIDEO_RANGE": "clean-only VIDEO must cover the full source unchanged",
+    "CLEAN_ONLY_AUDIO_RANGE": "clean-only A10 must cover the full source unchanged",
+    "CLEAN_ONLY_VIDEO_VOLUME": "clean-only VIDEO volume must be zero",
+    "CLEAN_ONLY_AUDIO_VOLUME": "clean-only A10 volume must be one",
+    "CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY": "clean-only forbidden track contains segments",
+    "UPLOAD_METADATA_MISSING": "completion report lacks title, description, or sources",
+    "CAPCUT_CLOUD_ROW_MISSING": "completion report lacks a verified cloud-row field",
+    "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval"
+  }
+}

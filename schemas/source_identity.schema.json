@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short source identity",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "source_id", "source_fingerprint", "media_path", "media_sha256"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "source-identity-v1"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "source_fingerprint": {"type": "string", "minLength": 1},
+    "media_path": {"type": "string", "minLength": 1},
+    "media_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"}
+  },
+  "additionalProperties": true
+}

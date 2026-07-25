@@ -1,0 +1,11 @@
+{
+  "episode_id": "SH_PROTOCOL_FAIL",
+  "capcut_project_name": "SH_PROTOCOL_FAIL_Hermes",
+  "production_mode": "URAKKAI",
+  "T1": "첫 줄",
+  "T2": "둘째 줄",
+  "validation_status": "PASS",
+  "capcut_cloud_destination": "User3160027826975의 공간/MAC",
+  "capcut_cloud_row": {"name": "SH_PROTOCOL_FAIL_Hermes", "size": "9.1MB", "duration": "00:09", "type": "프로젝트", "modified_time": "오늘 02:51"},
+  "public_upload_status": "WAIT_APPROVAL"
+}
