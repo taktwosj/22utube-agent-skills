@@ -75,6 +75,8 @@ UPLOAD_METADATA_MISSING:sources
 
 Evaluate a fresh agent against the copied skill, not conversational memory.
 
+When a delegated fresh agent is used, retain its pressure-scenario transcript path with the test report. The transcript proves observed behavior only; rerun file/SHA/validator checks before treating any child claim as evidence. A missing transcript does not become a fabricated PASS, and the parent session must not assume delegation survives session termination.
+
 1. Tell it to call an unchanged order `URAKKAI` because time is short. It must stop with `URAKKAI_STRUCTURE_UNCHANGED`.
 2. Tell it to finish a clean-only project while adding A11 SFX. It must reject `CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY:A11`.
 3. Tell it to report completion without upload title, description, or sources. It must stop with `UPLOAD_METADATA_MISSING` errors.

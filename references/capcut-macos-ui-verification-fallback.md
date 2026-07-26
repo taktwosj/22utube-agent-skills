@@ -28,6 +28,14 @@ CapCut Home 검색 결과에 프로젝트 카드와 길이가 보이는 것은 *
 
 기본 순서는 `computer_use(capture, mode=som, app=CapCut)`이다. 앱 창이 존재하는데 캡처 결과가 비어 있을 때만 다음의 읽기 중심 fallback을 쓴다.
 
+상태 변경 입력은 항상 아래 검증 사다리를 따른다.
+
+1. `delivery_mode=background`로 실행하고 가능하면 `capture_after=true`로 재확인한다.
+2. `effect=confirmed`와 `verified=true`면 완료한다. `effect=unverifiable`이면 새 SOM 캡처로 화면·AX 상태를 직접 확인한다.
+3. `effect=suspected_noop`, `code=background_unavailable` 또는 `escalation.recommended=px`면 동일 동작을 캡처에서 읽은 좌표로 한 번 재실행한다.
+4. 좌표 동작도 실패했거나 `escalation.recommended=foreground`일 때만 동일 동작을 `delivery_mode=foreground`로 재실행한다. 드라이버 신호 없이 앱 종류만 보고 foreground를 선사용하지 않는다.
+5. 모든 상태 변경 뒤 새 캡처로 결과를 검증한다. 권한·비밀번호·결제·게시 확인창은 자동 승인하지 않는다.
+
 1. `System Events`에서 CapCut process의 `visible`, `frontmost`, window count를 확인한다.
 2. front window의 position/size를 읽고 그 창 영역만 `screencapture -R`로 저장한다. 전체 화면을 찍어 다른 창을 노출하지 않는다.
 3. Home 검색은 top-level `AXTextField`에 정확한 프로젝트명을 넣고, `HomePageDraftTitle:<name>`가 정확히 하나인지 확인한다.
