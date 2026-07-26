@@ -3,15 +3,14 @@
 `handoff_version 2.0 / CLAUDE_ORCHESTRATOR_HYPERFRAMES_LANE_CORRECTION` 채택본.
 
 ```text
-111-politics-longform   = CapCut lane. KEEP_UNCHANGED. 현재 파이프라인에서 NOT_USED.
+111-politics-longform   = 기존 lane. KEEP_UNCHANGED. 현재 파이프라인에서 NOT_USED.
 113-politics-longform-voice-srt = HyperFrames 중립 음성·자막 데이터 생성
 112-politics-longform-hyperframes = locked 템플릿 조립 및 렌더
 capcut_dependency = 0
 capcut_fallback   = FORBIDDEN
 ```
 
-111에서 가져오는 것은 **구현 중립적 의미 규칙뿐**이다. CapCut 화면 구현은
-하나도 가져오지 않는다.
+111에서 가져오는 것은 **구현 중립적 의미 규칙뿐**이다.
 
 ## 용어 계약
 
@@ -45,12 +44,7 @@ capcut_fallback   = FORBIDDEN
 - 오디오·영상 길이 허용오차 검증
 - 실제 파일 기반 검증
 
-**폐기 (CapCut 구현)**
-- CapCut 텍스트 역할, `editability=editable`, layer 구조
-- CapCut draft/material/mirror 계약, 전용 validator
-- `TTS font size: 8.0`, `max lines: 1`, `TTS non-space characters: max 20`
-- "두 개의 편집 가능한 텍스트 트랙" 배치, CapCut 비충돌 규칙
-- CapCut 최종 자막 생성 방식, 화면 텍스트 입력 규칙
+**폐기:** CapCut 구현은 하나도 상속하지 않는다.
 
 ## 화면 레이아웃 권위
 
@@ -73,7 +67,7 @@ cue 길이 상한은 113이 임의 숫자로 정하지 않는다.
 overflow가 나면 문구를 줄이지 말고 speech boundary에서 cue를 더 쪼갠다.
 ```
 
-`comment_label`은 우상단 450px 폭의 **라벨**이며 111 CapCut의 하단 2줄 평론
+`comment_label`은 우상단 450px 폭의 **라벨**이며 111의 하단 2줄 평론
 트랙과 동일한 역할로 취급하지 않는다. 112 템플릿이 실제로 요구할 때만 생성한다.
 
 ### 트랙 - visual_role 매핑
@@ -162,7 +156,7 @@ WAIT_ROOT_CAUSE
 ## 필수 테스트
 
 ```text
-CapCut 관련 문자열·import 0건 (금지 선언문 제외)
+111 구현 관련 문자열·import 0건 (금지 선언문 제외)
 111 실행 호출 0건
 PL_EPISODE_DIR / PL_REPO_EPISODE / PL_VIDEO_DIR / PL_SCRIPT_SHA256 누락 시 BLOCKED
 환경변수 경로가 허용 루트 밖이면 거부 (path traversal 차단)
@@ -185,5 +179,5 @@ FORBIDDEN       = ...\22factory_*\02_politics_longform\templates\politics-longfo
 
 OneDrive 사본은 `compositions/source-video.html` 해시가 lock과 불일치한다
 (`369bd8c5…` vs lock `1ba0c0df…`). 부분 패치하거나 제작 입력으로 쓰지 않는다.
-112 SKILL.md의 `template_default`가 이 drift 사본을 가리키므로 수정이 필요하다 —
-**112 변경이므로 사용자 승인 후 별도 커밋한다.**
+112 SKILL.md의 `template_default`는 repo 정본(`${PL_HYPERFRAMES_REPO}\template`)을
+가리키도록 **이미 교정됐다.** drift 사본으로 되돌리지 않는다.

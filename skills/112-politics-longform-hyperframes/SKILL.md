@@ -7,18 +7,21 @@ description: Use when the user explicitly requests 112정치롱폼, 하이퍼프
 
 ## Core Boundary
 
-HyperFrames 정치롱폼만 소유한다. 기존 CapCut 제작 스킬을 대체하지 않는다.
+HyperFrames 정치롱폼만 소유한다. 아래 선언이 단일 lane 경계다.
 
 ```text
+CapCut lane(111)=OUT_OF_SCOPE
 KEEP_UNCHANGED=C:\Users\arajun\agent-skills\skills\111-politics-longform
 KEEP_UNCHANGED=C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
+HYPERFRAMES_FAILURE_AUTO_RUN_111=FORBIDDEN
+MODIFY_111_OR_ITS_WORKTREE=FORBIDDEN
+MODIFY_000_OR_ITS_WORKTREE=FORBIDDEN
 NEW_SKILL=112-politics-longform-hyperframes
-CapCut fallback=FORBIDDEN
 ```
 
-`111-politics-longform`, `000-politics-longform`, `000-politics-new`와 그 CapCut
-worktree를 수정하지 않는다. HyperFrames 실패를 CapCut 자동 실행으로 우회하지
-않는다. 사용자가 일반 정치롱폼이나 CapCut을 요청하면 기존 lane으로 돌려보낸다.
+111 및 그 worktree를 수정하지 않는다. HyperFrames 실패 시 111을 자동 실행해
+우회하지 않는다. 000-politics-longform, 000-politics-new와 그 worktree도 수정하지
+않는다. 일반 정치롱폼 요청은 기존 lane으로 돌려보낸다.
 
 ## Required Reads
 
@@ -38,7 +41,7 @@ episode_project={episode}\60_hyperframes\project
 ```
 
 공용 템플릿은 episode 밖에 둔다. episode 프로젝트는 공용 템플릿을 복제하거나
-명시적으로 참조한다. 과거 episode와 CapCut draft를 템플릿으로 승격하지 않는다.
+명시적으로 참조한다. 과거 episode와 legacy draft를 템플릿으로 승격하지 않는다.
 
 ### 템플릿 정본 — OneDrive 사본 사용 금지
 

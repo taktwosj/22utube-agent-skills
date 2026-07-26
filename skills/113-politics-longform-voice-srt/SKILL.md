@@ -15,24 +15,25 @@ OUT = 나레이션 WAV + 오디오 시간축 정본 + 최종 SRT 초안 + 자막
 
 ## Lane 경계
 
-`111-politics-longform`의 제작 계약을 **상속**하되 CapCut 조립 계보는 잇지 않는다.
+`111-politics-longform`에서는 구현 중립적 의미 규칙만 상속한다. 아래 선언이
+유일한 lane 경계다.
 
 ```text
-KEEP_UNCHANGED = skills\111-politics-longform
-KEEP_UNCHANGED = skills\000-politics-longform 및 그 CapCut worktree
-NEXT_STAGE     = 112-politics-longform-hyperframes
-CapCut fallback = FORBIDDEN
+CapCut lane(111) = OUT_OF_SCOPE
+KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills\111-politics-longform
+KEEP_UNCHANGED = C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
+HYPERFRAMES_FAILURE_AUTO_RUN_111 = FORBIDDEN
+MODIFY_111_OR_ITS_WORKTREE = FORBIDDEN
+MODIFY_000_OR_ITS_WORKTREE = FORBIDDEN
+NEXT_STAGE = 112-politics-longform-hyperframes
 ```
-
-111을 인플레이스 전환하지 않는다. HyperFrames 실패를 CapCut 자동 실행으로
-우회하지 않는다. 사용자가 CapCut·일반 정치롱폼을 요청하면 111 lane으로 돌려보낸다.
 
 111에서는 **구현 중립적 의미 규칙만** 상속한다: 진행판 상태 어휘,
 `POLITICS_WRITER_MACHINE` 단일 writer 소유권, 확정 교정본의 상위 권위,
 source caption 정규화 연결 일치(승인 교정 반영), 가운데점·문장부호 보존,
 locked clip 0.25초 허용오차.
 
-CapCut 화면 구현은 하나도 상속하지 않는다. 상속·폐기 전체 목록은
+111의 화면 구현은 하나도 상속하지 않는다. 상속·폐기 전체 목록은
 [lane-contract.md](references/lane-contract.md)를 따른다.
 
 ## 권한 경계
