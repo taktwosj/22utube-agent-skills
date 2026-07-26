@@ -30,15 +30,31 @@ def _req(name):
 
 EPISODE = Path(_req("PL_EPISODE_DIR"))
 REPO_EPISODE = Path(_req("PL_REPO_EPISODE"))
+
+# 잠금 게이트. 이 줄 없이 스크립트를 직접 실행하면 게이트를 우회할 수 있다.
+# 지난 에피소드에서 감사 게이트가 산문이라 무시된 것과 같은 구조라 실행 시점에
+# 강제한다. 실패하면 여기서 종료되고 음성은 만들어지지 않는다.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lock_preflight import (require_gate, locked_tts_params,
+                            assert_runtime_matches, tts_params_fingerprint)
+
+SCRIPT_LOCK = require_gate(EPISODE, "tts")
 # ---------------------------------------------------------------------------
 
 SEGMENTS_JSON = REPO_EPISODE / "30_audio_srt" / "narration_segments.json"
 OUT = EPISODE / "30_audio_srt" / "narration"
 MANIFEST = EPISODE / "30_audio_srt" / "voice_manifest.json"
 
-VOICE_ID = "otFXhy6zBa2LQ8AYSWUeDB"
-MODEL = "sona_speech_2"
-VOICE_SETTINGS = {"pitch_shift": 0, "pitch_variance": 1, "speed": 1}
+# TTS 설정은 하드코딩하지 않는다. script_lock 에 잠긴 값만 쓴다.
+# speed 1.0 -> 1.2 면 같은 대본이라도 길이가 달라져 정렬·SRT·시간축이 전부 바뀐다.
+TTS_PARAMS = locked_tts_params(SCRIPT_LOCK)
+VOICE_ID = TTS_PARAMS["voice_id"]
+MODEL = TTS_PARAMS["model"]
+VOICE_SETTINGS = {k: TTS_PARAMS[k]
+                  for k in ("pitch_shift", "pitch_variance", "speed")}
+TTS_FINGERPRINT = tts_params_fingerprint(TTS_PARAMS)
+assert_runtime_matches(TTS_PARAMS, {"voice_id": VOICE_ID, "model": MODEL,
+                                    **VOICE_SETTINGS})
 MAX_RETRY = 3
 
 
@@ -125,11 +141,23 @@ def main():
         "status": "PASS" if failed == 0 else ("PARTIAL" if ok else "FAIL"),
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "authoritative_script_sha256": script_sha,
+        # 게이트를 통과했으므로 미판정 지적은 이미 0이다. 하드코딩된
+        # PENDING 대신 잠금이 기록한 실제 판정 집계를 옮겨 적는다.
         "script_content_audit": {
             "report": "90_reports/script_content_audit_v1.json",
-            "ruling": "PENDING_PROJECT_GPT",
+            "ruling_summary": SCRIPT_LOCK.get("ruling_summary"),
             "note": "대본 수정 확정 시 해당 세그먼트만 재생성. "
-                    "authoritative_script_sha256 변경으로 stale 탐지.",
+                    "script_lock.script_sha256 변경으로 stale 탐지.",
+        },
+        # 사후에 "어떤 잠금으로 만든 음성인가"를 대조할 수 있어야 한다.
+        # 지문이 현재 script_lock 과 다르면 이 WAV 는 stale 이다.
+        "script_lock": {
+            "episode_id": SCRIPT_LOCK.get("episode_id"),
+            "lock_version": SCRIPT_LOCK.get("lock_version"),
+            "locked_at": SCRIPT_LOCK.get("locked_at"),
+            "script_sha256": (SCRIPT_LOCK.get("locked_inputs", {})
+                              .get("script", {}).get("sha256")),
+            "tts_params_sha256": TTS_FINGERPRINT,
         },
         "voice_id": VOICE_ID,
         "model": MODEL,
