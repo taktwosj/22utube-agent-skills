@@ -38,6 +38,8 @@ Load `protocol.json` before mode routing, stage selection, production-plan compi
 
 속도 향상을 위해 병렬 작업자를 쓸 때는 `references/parallel-execution.md`를 읽는다. 작업자는 고유 root에 증거와 후보만 만들며, 조정자만 state·권위 산출물·정식 evidence·활성 CapCut draft를 쓴다. GUI 소유자는 항상 1명이고, 모든 barrier가 통과한 뒤 조정자가 상태를 한 단계씩 순서대로 갱신한다.
 
+Hermes가 작업자 `live_transcripts`를 제공하면 경로를 실행 관찰 증거로 보존하되 완료 권위로 사용하지 않는다. 조정자가 실제 산출물·SHA-256·validator를 다시 확인해야 하며, 부모 세션 종료 뒤 delegation 지속을 가정하지 않는다. VMake·CapCut의 `computer_use` 입력은 background 우선으로 실행하고 도구가 `px` 또는 `foreground` escalation을 권고할 때만 같은 동작을 다음 단계로 올린 뒤 재캡처한다.
+
 ## Source Acquisition
 
 YouTube Shorts URL이 원본 권위이면 `references/youtube-source-acquisition.md`를 읽는다. 메타데이터·영상·자동자막·분석 WAV 취득을 분리하여 선택 자막 요청 하나가 원본 영상 확보를 막지 않게 한다. 원본 영상의 baked-in 제목·자막 유무를 접촉 시트로 확인하고, 새 자막을 겹쳐 넣지 않는다.
