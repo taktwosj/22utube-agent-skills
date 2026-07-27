@@ -1,6 +1,6 @@
 ---
 name: 110-politics-longform-script
-description: Use when the user says 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 110대본, 정치롱폼 대본, 초벌 대본, or 대본 초안, or asks to turn collected political video sources and subtitles into a narration script. Entry point of the politics longform pipeline: 110 script, then 111 voice and SRT, then 112 HyperFrames.
+description: "Use when the user says 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 110대본, 정치롱폼 대본, 초벌 대본, or 대본 초안, or asks to turn collected political video sources and subtitles into a narration script. Entry point of the politics longform pipeline: 110 script, then 111 voice and SRT, then 112 HyperFrames."
 ---
 
 # 110 Politics Longform Script

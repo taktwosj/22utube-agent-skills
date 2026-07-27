@@ -195,6 +195,37 @@ class TestRetentionStoryEditorContract(unittest.TestCase):
         self.assertIn("target_maximum_items: 12", self.editor_text)
         self.assertIn("hard_maximum: false", self.editor_text)
 
+    def test_evidence_first_editorial_judgment_is_explicit(self):
+        required = (
+            "확인된 사실",
+            "공식 판단",
+            "당사자 주장",
+            "미확정 쟁점",
+            "제작진 평가",
+            "REBUTTABLE",
+            "PARTLY_VALID",
+            "COUNTERARGUMENT_STRONGER",
+            "UNRESOLVED",
+            "영상만으로 동기를 단정하지 마라",
+            "공식 수사·판결 전에는 범죄·불법을 확정하지 마라",
+            "AI 합성·재연·패러디는 화면과 설명란에 고지하라",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.editor_text)
+
+    def test_source_video_mix_uses_duration_not_block_counts(self):
+        required = (
+            "NARRATION_SHARE_TARGET = 30-50%",
+            "SOURCE_VIDEO_SHARE_TARGET = 50-70%",
+            "MIX_BASIS = MEASURED_DURATION",
+            "BLOCK_COUNT_AS_RATIO = FORBIDDEN",
+            "STAGE_110_RATIO_GATE = EDITORIAL_TARGET_ONLY",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.editor_text)
+
     def test_no_new_approval_state_or_cross_lane_dependency(self):
         combined = self.skill_text + "\n" + self.editor_text
         self.assertNotIn("USER_APPROVED_SCRIPT", combined)
