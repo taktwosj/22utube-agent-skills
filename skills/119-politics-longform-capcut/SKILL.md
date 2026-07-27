@@ -1,9 +1,25 @@
 ---
-name: 111-politics-longform
-description: Use when the user says 111정치롱폼, 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, or asks to design, review, assemble, validate, or package a Korean political longform video, lower two-line commentary, 1-3 derived political Shorts, 45-70 second source candidates, jungchilong CapCut project, upload copy, API upload, or thumbnail hooks.
+name: 119-politics-longform-capcut
+description: Use only when a political-longform request explicitly contains CapCut, 캡컷, 119, or 119정치롱폼.
 ---
 
-# 111 Politics Longform
+# 119 Politics Longform (CapCut, retired lane)
+
+## 호출 규칙
+
+이 스킬은 **사용자가 CapCut을 직접 말했을 때만** 쓴다.
+
+```text
+정치롱폼 · 유시민 롱폼 · 매불쇼 롱폼 같은 일반 요청   -> 110-politics-longform-script
+110/111/112 실패 시 자동 우회                        -> FORBIDDEN. WAIT 또는 FAIL 로 멈춘다
+탐색 중 후보로 잡힘                                  -> 해당 없음. description 이 명시 트리거만 문다
+```
+
+일반 어휘를 description에서 뺀 이유는 부정문으로 적어도 탐색 후보로 잡히기
+때문이다. 금지 규칙은 트리거 필드가 아니라 여기와 최상위 라우터에 둔다.
+
+현재 파이프라인은 HyperFrames 계열(110 → 111 → 112)이다. 이 lane은 동결
+상태이고 기록 보존과 명시적 CapCut 요청을 위해 남아 있다.
 
 ## Core Rule
 
@@ -473,7 +489,7 @@ references/chatgpt_project_router_instruction.md
 references/chatgpt_politics_shortform_review_contract.md
 ```
 
-`111-politics-longform`이 먼저 약 45~70초의 연속 원본 구간을 1~3개 선별한다.
+`119-politics-longform-capcut`이 먼저 약 45~70초의 연속 원본 구간을 1~3개 선별한다.
 후보는 하나의 `source_id`와 연속 `segment_id`만 사용한다. 원문 타임코드,
 첫 3초 원본 발화, 핵심 인용, 앞뒤 맥락, fact map 근거를 함께 기록한다.
 유효 후보가 적으면 3개를 강제로 채우지 않는다.

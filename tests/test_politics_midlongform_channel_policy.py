@@ -4,11 +4,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SKILL = ROOT / "skills" / "111-politics-longform" / "SKILL.md"
+SKILL = ROOT / "skills" / "119-politics-longform-capcut" / "SKILL.md"
 POLICY = (
     ROOT
     / "skills"
-    / "111-politics-longform"
+    / "119-politics-longform-capcut"
     / "references"
     / "midlongform-channel-policy.md"
 )

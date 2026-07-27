@@ -19,8 +19,23 @@ Active production skills:
 ```text
 00-tikitaka
 000short-production-agent
-111-politics-longform
+110-politics-longform-script
+111-politics-longform-voice-srt
+112-politics-longform-hyperframes
 ```
+
+정치롱폼 라우팅. 번호 순서가 곧 실행 순서다.
+
+```text
+일반 정치롱폼 요청              -> 110  소스·자막 -> 확정 대본
+확정 대본 있음, 음성·SRT 없음    -> 111  나레이션·오디오 시간축·SRT
+음성·SRT·시간축 있음            -> 112  화면·모션·렌더
+CapCut 을 명시적으로 요청       -> 119  동결된 레거시 lane
+HyperFrames 실패                -> WAIT 또는 FAIL. 119 자동 우회 금지
+```
+
+`119-politics-longform-capcut`은 사용자가 CapCut·캡컷·119를 직접 말했을
+때만 쓴다. 일반 `정치롱폼` 요청으로는 걸리지 않는다.
 
 Bundled knowledge and planning skills:
 

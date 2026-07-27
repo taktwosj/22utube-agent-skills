@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = (
     ROOT
     / "skills"
-    / "111-politics-longform"
+    / "119-politics-longform-capcut"
     / "scripts"
     / "validate_chatgpt_two_pass_review.py"
 )

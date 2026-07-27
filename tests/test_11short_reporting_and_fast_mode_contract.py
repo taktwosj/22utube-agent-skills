@@ -128,7 +128,7 @@ class ReportingAndFastModeContractTests(unittest.TestCase):
         for token in (
             "politics_longform_derived",
             "SHRTJUNGCHI",
-            "111-politics-longform",
+            "119-politics-longform-capcut",
             "edit_plan_approved.json",
             "design_lock_manifest.json",
             "WAIT_SHRTJUNGCHI_ROOT_REQUIRED",

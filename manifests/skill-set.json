@@ -8,37 +8,89 @@
     {
       "name": "00-tikitaka",
       "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
       "enabled": true
     },
     {
       "name": "000short-production-agent",
       "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
       "enabled": true
     },
     {
       "name": "001short-production-agent",
       "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
       "enabled": true
     },
     {
-      "name": "111-politics-longform",
+      "name": "110-politics-longform-script",
       "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "111-politics-longform-voice-srt",
+      "category": "22utube",
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
       "enabled": true
     },
     {
       "name": "111mara",
       "category": "22utube",
-      "targets": ["codex", "claude", "hermes"],
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "112-politics-longform-hyperframes",
+      "category": "22utube",
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "119-politics-longform-capcut",
+      "category": "22utube",
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
       "enabled": true
     },
     {
       "name": "naver-blog-posting",
       "category": "naver-blog",
-      "targets": ["codex"],
+      "targets": [
+        "codex"
+      ],
       "enabled": true
     }
   ]

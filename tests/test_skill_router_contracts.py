@@ -5,7 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 TIKITAKA = (ROOT / "skills" / "00-tikitaka" / "SKILL.md").read_text(encoding="utf-8")
 PRODUCTION = (ROOT / "skills" / "000short-production-agent" / "SKILL.md").read_text(encoding="utf-8")
-POLITICS = (ROOT / "skills" / "111-politics-longform" / "SKILL.md").read_text(encoding="utf-8")
+POLITICS = (ROOT / "skills" / "119-politics-longform-capcut" / "SKILL.md").read_text(encoding="utf-8")
 
 
 class SkillRouterContractTests(unittest.TestCase):
