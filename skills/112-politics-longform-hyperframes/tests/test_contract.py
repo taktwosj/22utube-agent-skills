@@ -27,16 +27,16 @@ RULE_PHRASES = (
 )
 
 EXPECTED_KEEP_UNCHANGED = (
-    r"C:\Users\arajun\agent-skills\skills\111-politics-longform",
+    r"C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut",
     r"C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform",
 )
 EXPECTED_TEMPLATE_DEFAULT = r"${PL_HYPERFRAMES_REPO}\template"
 
 REQUIRED_ANCHORS = {
     "SKILL.md": (
-        r"(?m)^CapCut lane\(111\)=OUT_OF_SCOPE\s*$",
-        r"(?m)^HYPERFRAMES_FAILURE_AUTO_RUN_111=FORBIDDEN\s*$",
-        r"(?m)^MODIFY_111_OR_ITS_WORKTREE=FORBIDDEN\s*$",
+        r"(?m)^CapCut lane\(119\)=OUT_OF_SCOPE\s*$",
+        r"(?m)^HYPERFRAMES_FAILURE_AUTO_RUN_119=FORBIDDEN\s*$",
+        r"(?m)^MODIFY_119_OR_ITS_WORKTREE=FORBIDDEN\s*$",
         r"(?m)^MODIFY_000_OR_ITS_WORKTREE=FORBIDDEN\s*$",
         rf"(?m)^KEEP_UNCHANGED={re.escape(EXPECTED_KEEP_UNCHANGED[0])}\s*$",
         rf"(?m)^KEEP_UNCHANGED={re.escape(EXPECTED_KEEP_UNCHANGED[1])}\s*$",
@@ -139,20 +139,20 @@ DOC_REGRESSIONS = (
     (
         "REG-1 CapCut lane 경계 삭제",
         "SKILL.md",
-        "CapCut lane(111)=OUT_OF_SCOPE",
-        "CapCut lane(111)=IN_SCOPE",
+        "CapCut lane(119)=OUT_OF_SCOPE",
+        "CapCut lane(119)=IN_SCOPE",
     ),
     (
-        "REG-2 111 자동 우회 금지코드 바꿔치기",
+        "REG-2 119 자동 우회 금지코드 바꿔치기",
         "SKILL.md",
-        "HYPERFRAMES_FAILURE_AUTO_RUN_111=FORBIDDEN",
-        "HYPERFRAMES_FAILURE_AUTO_RUN_111=ALLOWED",
+        "HYPERFRAMES_FAILURE_AUTO_RUN_119=FORBIDDEN",
+        "HYPERFRAMES_FAILURE_AUTO_RUN_119=ALLOWED",
     ),
     (
-        "REG-3 111 수정 금지코드 바꿔치기",
+        "REG-3 119 수정 금지코드 바꿔치기",
         "SKILL.md",
-        "MODIFY_111_OR_ITS_WORKTREE=FORBIDDEN",
-        "MODIFY_111_OR_ITS_WORKTREE=ALLOWED",
+        "MODIFY_119_OR_ITS_WORKTREE=FORBIDDEN",
+        "MODIFY_119_OR_ITS_WORKTREE=ALLOWED",
     ),
     (
         "REG-4 000 수정 금지코드 바꿔치기",
@@ -161,10 +161,10 @@ DOC_REGRESSIONS = (
         "MODIFY_000_OR_ITS_WORKTREE=ALLOWED",
     ),
     (
-        "REG-5 111 절대경로를 상대경로로 격하",
+        "REG-5 119 절대경로를 상대경로로 격하",
         "SKILL.md",
         "KEEP_UNCHANGED=" + EXPECTED_KEEP_UNCHANGED[0],
-        r"KEEP_UNCHANGED=skills\111-politics-longform",
+        r"KEEP_UNCHANGED=skills\119-politics-longform-capcut",
     ),
     (
         "REG-6 000 절대경로를 상대경로로 격하",

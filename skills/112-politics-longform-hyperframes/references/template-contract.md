@@ -8,7 +8,7 @@ EXISTING_LANES_MODIFICATION=FORBIDDEN
 REMOTE_URL_ALLOWED=false
 ```
 
-기존 111/000 lane과 프로젝트를 수정하지 않는다. 기존 오세훈 HyperFrames
+기존 119/000 lane과 프로젝트를 수정하지 않는다. 기존 오세훈 HyperFrames
 프로젝트는 읽기 전용 색상·비율 참고 자료이며 구조 원본이 아니다.
 
 ## 2. 필수 구조

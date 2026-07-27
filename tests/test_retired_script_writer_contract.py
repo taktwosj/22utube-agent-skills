@@ -11,7 +11,7 @@ class RetiredScriptWriterContractTests(unittest.TestCase):
             ROOT / "manifests" / "skill-set.json",
             ROOT / "skills" / "00-tikitaka" / "SKILL.md",
             ROOT / "skills" / "000short-production-agent" / "SKILL.md",
-            ROOT / "skills" / "111-politics-longform" / "SKILL.md",
+            ROOT / "skills" / "119-politics-longform-capcut" / "SKILL.md",
         ]
         retired_skills = [
             "00script-writer",

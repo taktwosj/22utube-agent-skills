@@ -1,9 +1,9 @@
 ---
-name: 113-politics-longform-voice-srt
-description: Use when the user requests 정치롱폼 나레이션 음성 생성, Supertone TTS, 오디오 시간축 정본, 강제정렬, 최종 SRT 초안, 자막 QC 패키지, or 대본 내용 감사 for a politics longform episode. Covers the P00~P04 stages between SCRIPT_LOCK and HyperFrames assembly.
+name: 111-politics-longform-voice-srt
+description: Use when the user requests 정치롱폼 나레이션 음성 생성, Supertone TTS, 오디오 시간축 정본, 강제정렬, 최종 SRT 초안, or 자막 QC 패키지 for a politics longform episode. Covers the P00~P04 stages between the 110 script lock and 112 HyperFrames assembly. Script content auditing belongs to 110, not here.
 ---
 
-# 113 Politics Longform Voice + SRT
+# 111 Politics Longform Voice + SRT
 
 HyperFrames lane의 음성·자막 구간을 소유한다. 권위 대본 확정 이후 ~ 조립 직전.
 조립은 `112-politics-longform-hyperframes`가 이어받는다.
@@ -15,25 +15,25 @@ OUT = 나레이션 WAV + 오디오 시간축 정본 + 최종 SRT 초안 + 자막
 
 ## Lane 경계
 
-`111-politics-longform`에서는 구현 중립적 의미 규칙만 상속한다. 아래 선언이
+`119-politics-longform-capcut`에서는 구현 중립적 의미 규칙만 상속한다. 아래 선언이
 유일한 lane 경계다.
 
 ```text
-CapCut lane(111) = OUT_OF_SCOPE
-KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills\111-politics-longform
+CapCut lane(119) = OUT_OF_SCOPE
+KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut
 KEEP_UNCHANGED = C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
-HYPERFRAMES_FAILURE_AUTO_RUN_111 = FORBIDDEN
-MODIFY_111_OR_ITS_WORKTREE = FORBIDDEN
+HYPERFRAMES_FAILURE_AUTO_RUN_119 = FORBIDDEN
+MODIFY_119_OR_ITS_WORKTREE = FORBIDDEN
 MODIFY_000_OR_ITS_WORKTREE = FORBIDDEN
 NEXT_STAGE = 112-politics-longform-hyperframes
 ```
 
-111에서는 **구현 중립적 의미 규칙만** 상속한다: 진행판 상태 어휘,
+119에서는 **구현 중립적 의미 규칙만** 상속한다: 진행판 상태 어휘,
 `POLITICS_WRITER_MACHINE` 단일 writer 소유권, 확정 교정본의 상위 권위,
 source caption 정규화 연결 일치(승인 교정 반영), 가운데점·문장부호 보존,
 locked clip 0.25초 허용오차.
 
-111의 화면 구현은 하나도 상속하지 않는다. 상속·폐기 전체 목록은
+119의 화면 구현은 하나도 상속하지 않는다. 상속·폐기 전체 목록은
 [lane-contract.md](references/lane-contract.md)를 따른다.
 
 ## 권한 경계
@@ -54,13 +54,13 @@ executor_editorial_authority  = NONE
 교정본이 없는 에피소드는 이 게이트를 `NOT_APPLICABLE`로 기록한다.
 
 권위 순서 전체와 lock 요건은 [lane-contract.md](references/lane-contract.md).
-`USER_CORRECTED_SRT_LOCK`은 111 레거시 명칭이며 alias로만 남는다.
+`USER_CORRECTED_SRT_LOCK`은 119 레거시 명칭이며 alias로만 남는다.
 
 에이전트(Claude·Codex 동일)는 대본 문장·논지·결론·챕터 순서·발언자 귀속을
 **절대 수정하지 않는다.** 오류를 발견하면 고치지 말고 보고서로 올린다.
 
 우선순위: 사용자 최신 확정 지시 > 실제 파일·실행 결과 > AGENTS.md/CLAUDE.md >
-WORK_ORDER > 프로젝트 GPT 권위 대본 > 111 SKILL.md > workflow/config/schema >
+WORK_ORDER > 프로젝트 GPT 권위 대본 > 111 SKILL.md(이 문서) > workflow/config/schema >
 GitHub PR > 과거 대화 > 추정.
 
 ## 상태 어휘 (강제)
@@ -119,22 +119,22 @@ PL_SCRIPT_SHA256=<권위 대본 SHA-256>
 | 우상단 평론 라벨 | `comment_label` | `comment-label` |
 
 `TTS`를 단독 역할명으로 쓰지 않는다. `Supertone TTS API`로만 한정한다.
-111의 `role: tts`는 합성음성이 아니라 원본 발화 자막을 뜻해 정면 충돌한다.
+119의 `role: tts`는 합성음성이 아니라 원본 발화 자막을 뜻해 정면 충돌한다.
 
 ## 자막 계약
 
-**113은 자막의 의미와 데이터만 만든다. 화면 배치는 112 템플릿이 정한다.**
+**111은 자막의 의미와 데이터만 만든다. 화면 배치는 112 템플릿이 정한다.**
 
 112 repo 정본 `style_tokens.json` 실측: 자막 밴드 1개, `maxLines: 2`,
 `fontSize: 60`, `width: 1540`.
 
 ```text
-cue 길이 상한을 113이 숫자로 정하지 않는다.
+cue 길이 상한을 111이 숫자로 정하지 않는다.
 초과 판정 = 112의 hyperframes check --strict --snapshots layout 검사.
 overflow가 나면 문구를 줄이지 말고 speech boundary에서 cue를 더 쪼갠다.
 ```
 
-`comment_label`은 우상단 450px 라벨이며 111의 하단 2줄 평론 트랙과 다른 것이다.
+`comment_label`은 우상단 450px 라벨이며 119의 하단 2줄 평론 트랙과 다른 것이다.
 
 ```text
 SOURCE_SPEECH_CAPTION_FIDELITY (v2):
@@ -176,24 +176,33 @@ SOURCE_SPEECH_CAPTION_FIDELITY (v2):
 }
 ```
 
-### P00b 대본 내용 감사 (음성 생성 차단 게이트)
+### P00b 대본 잠금 확인 (음성 생성 차단 게이트)
 
-SHA·cue 수 검증은 **무결성**일 뿐 내용 검사가 아니다. 수천 자를 합성한 뒤
-문구가 바뀌면 전량 재생성이므로 반드시 P02 앞에 둔다.
+**대본 내용 감사는 110의 일이다. 여기서 다시 하지 않는다.**
 
-전문을 읽고 검사할 항목: `references/script-audit-checklist.md`
+110이 기계 검증·Claude 검수·사용자 승인을 거쳐 `script_lock.json`을 만든다.
+111이 같은 대본을 다시 읽으면 토큰이 두 배로 들고, 더 나쁘게는 판정 권위가
+두 곳이 되어 서로 다른 결론이 나올 수 있다.
 
-산출 `90_reports/script_content_audit_v1.json` — finding별
-`id, severity, line, category, original_text, observation, advisory_fix,
-exposed_as_subtitle, ruling_required`.
+여기서 하는 일은 **잠금이 유효한지 확인**뿐이다.
 
 ```text
-P02_EXECUTION = BLOCKED_UNTIL_PROJECT_GPT_SCRIPT_RULING
-ruling_options = NO_CHANGE | REVISE_AND_RECOMMIT
+20_script/script_lock.json 존재
+script_sha256 == 실제 master_script_locked.md 해시
+evidence 3종 (검증 보고서 · Claude 검수 · 사용자 승인) 실재
+events.claude_review_event_id · user_approval_event_id 존재
+next_stage == 111-politics-longform-voice-srt
 ```
 
-`REVISE_AND_RECOMMIT`이면 새 commit SHA·blob SHA·SHA-256을 받아 P01부터 재검증하고
-영향 세그먼트만 재생성한다.
+하나라도 어긋나면 `WAIT_110_SCRIPT_LOCK`으로 멈추고 **110으로 돌려보낸다.**
+여기서 감사를 대신 수행하지 않는다. 대체 경로를 남기면 그게 우회로가 되고,
+110을 건너뛴 대본이 음성으로 넘어간다. 진입점은 하나여야 한다.
+
+```text
+lock 있음 · 일치       내용 재감사 금지. 증거만 확인하고 P01 로
+lock 없음 또는 불일치   WAIT_110_SCRIPT_LOCK. 110 으로 반환
+111 에서 내용 감사      FORBIDDEN
+```
 
 ### P01 원본 무결성
 
@@ -270,7 +279,7 @@ P06_AUDIO_RETIMING = FORBIDDEN
 production_design은 이 시간축 위에 **영상만** 배치한다. 세그먼트 순서·길이·간격
 변경 금지. 이래야 P03 SRT가 조립 단계에서 다시 틀어지지 않는다.
 
-클립 세그먼트 검증 (111 상속):
+클립 세그먼트 검증 (119 상속):
 ```text
 audio_duration_sec >= video_duration_sec - 0.25
 |추출 실측 길이 - 대본 타임코드 길이| <= 0.25

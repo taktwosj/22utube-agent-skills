@@ -1,0 +1,4 @@
+interface:
+  display_name: "119정치롱폼 (CapCut, retired)"
+  short_description: "같은 대화 2회 평론 검수와 자막 보존을 거친 정치 롱폼 조립"
+  default_prompt: "Use $119-politics-longform-capcut to run Round 1 independent review and Round 2 evidence plus full-flow continuity audit in the same ChatGPT conversation for a master commentary script, preserve the full source transcript while splitting TTS cues, finalize synchronized lower A/B commentary, then assemble the portable jungchilong CapCut project only after Stage 2 approval and lock gates pass."

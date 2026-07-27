@@ -246,7 +246,7 @@ This rule has higher priority than any episode-local builder script, old report,
 or previous CapCut output.
 
 For `production_type=politics_longform_derived`, do not apply the normal
-`shrt white` default. Defer to `111-politics-longform` and require:
+`shrt white` default. Defer to `119-politics-longform-capcut` and require:
 
 ```text
 reference_project_name=SHRTJUNGCHI

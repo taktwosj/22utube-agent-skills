@@ -63,7 +63,7 @@ truth_mode: fact_first
 
 ## 권한 경계
 
-`111-politics-longform`은 후보 1~3개와 정확한 원본 범위를 검증한다.
+`119-politics-longform-capcut`은 후보 1~3개와 정확한 원본 범위를 검증한다.
 Codex와 사용자가 후보를 선택한 뒤에만 `00-tikitaka`가 상단, timed 중단,
 조립 역할, TTS와 원본음성 정책을 설계한다. `00-tikitaka`가 원본 범위를
 바꿔야 한다면 `DESIGN_REOPEN_REQUIRED`로 반환한다.

@@ -10,16 +10,16 @@ description: Use when the user explicitly requests 112정치롱폼, 하이퍼프
 HyperFrames 정치롱폼만 소유한다. 아래 선언이 단일 lane 경계다.
 
 ```text
-CapCut lane(111)=OUT_OF_SCOPE
-KEEP_UNCHANGED=C:\Users\arajun\agent-skills\skills\111-politics-longform
+CapCut lane(119)=OUT_OF_SCOPE
+KEEP_UNCHANGED=C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut
 KEEP_UNCHANGED=C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
-HYPERFRAMES_FAILURE_AUTO_RUN_111=FORBIDDEN
-MODIFY_111_OR_ITS_WORKTREE=FORBIDDEN
+HYPERFRAMES_FAILURE_AUTO_RUN_119=FORBIDDEN
+MODIFY_119_OR_ITS_WORKTREE=FORBIDDEN
 MODIFY_000_OR_ITS_WORKTREE=FORBIDDEN
 NEW_SKILL=112-politics-longform-hyperframes
 ```
 
-111 및 그 worktree를 수정하지 않는다. HyperFrames 실패 시 111을 자동 실행해
+119 및 그 worktree를 수정하지 않는다. HyperFrames 실패 시 119를 자동 실행해
 우회하지 않는다. 000-politics-longform, 000-politics-new와 그 worktree도 수정하지
 않는다. 일반 정치롱폼 요청은 기존 lane으로 돌려보낸다.
 
@@ -112,7 +112,7 @@ lock은 공용 템플릿이 에피소드마다 조금씩 달라지는 drift를 �
 ### P1 Preflight
 
 1. factory root와 writer/lock을 확인한다.
-2. 기존 111/000 경로의 변경 전 해시와 Git scoped status를 기록한다.
+2. 기존 119/000 경로의 변경 전 해시와 Git scoped status를 기록한다.
 3. Node 22+, HyperFrames 버전, FFmpeg/FFprobe, 포트를 확인한다.
 4. 3017이 사용 중이면 프로세스를 종료하지 않고 3018 이상을 선택한다.
 
@@ -160,7 +160,7 @@ preview 승인 전 render를 하지 않는다.
 
 ## Common Mistakes
 
-- 기존 `111-politics-longform`을 HyperFrames로 인플레이스 전환하지 않는다.
+- 기존 `119-politics-longform-capcut`을 HyperFrames로 인플레이스 전환하지 않는다.
 - 오세훈 전용 이름·asset·절대경로를 공용 템플릿에 복사하지 않는다.
 - 하나의 거대한 `index.html`에 모든 콘텐츠·스타일·동작을 넣지 않는다.
 - 원격(remote) CDN·webfont·image·video·CSS·JS를 사용하지 않는다. 금지 대상은

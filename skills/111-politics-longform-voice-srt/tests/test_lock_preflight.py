@@ -10,7 +10,7 @@
     런타임 설정이 잠금과 다름                -> 종료
 
 실행:
-    py -3.14 -m unittest discover -s skills/113-politics-longform-voice-srt/tests
+    py -3.14 -m unittest discover -s skills/111-politics-longform-voice-srt/tests
 """
 import hashlib
 import json

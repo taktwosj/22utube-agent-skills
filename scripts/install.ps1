@@ -4,7 +4,10 @@ param(
   [string[]]$Only = @(),
   [switch]$Prune,
   [switch]$Strict,
-  [switch]$DryRun
+  [switch]$DryRun,
+  # 설치는 훅 설정과 별개다. 훅을 끈 상태로 두고 싶을 때 설치만 하려면
+  # 이 플래그를 준다. 없으면 종전대로 훅을 켠다.
+  [switch]$NoHooks
 )
 
 $ErrorActionPreference = "Stop"
@@ -267,6 +270,10 @@ foreach ($targetName in $selectedTargets) {
   }
 }
 
-Enable-GitHooks $repoRoot -DryRun:$DryRun
+if ($NoHooks) {
+  Write-Output "HOOKS skipped (-NoHooks)"
+} else {
+  Enable-GitHooks $repoRoot -DryRun:$DryRun
+}
 
 Write-Output "DONE install target=$Target dry_run=$($DryRun.IsPresent)"

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""113 스킬 계약 회귀 테스트.
+"""111 스킬 계약 회귀 테스트.
 
 표준 라이브러리만 사용한다. 실행:
-    py -3.14 -m unittest discover -s skills/113-politics-longform-voice-srt/tests
+    py -3.14 -m unittest discover -s skills/111-politics-longform-voice-srt/tests
 
 검사 단위는 줄이 아니라 **문단**이다. 한글 문서는 한 문장이 여러 줄로 접히기
 때문에 줄 단위로 보면 "CapCut ...을 / 쓰지 않는다"가 두 줄로 갈려 오탐이 난다.
@@ -140,7 +140,7 @@ def check_forbidden_target_is_specific(text):
     # 고유명사 · 스킬 식별자 · 드라이브 절대경로만 인정한다.
     specific_target = re.compile(
         r"CapCut|캡컷|Supertone|HyperFrames|"
-        r"\b(?:000|111|112|113)-[a-z-]+|"
+        r"\b(?:000|110|111|112|119)-[a-z-]+|"
         r"[A-Za-z]:[\\/]",
     )
     violations = []
@@ -165,9 +165,9 @@ def check_forbidden_target_is_specific(text):
 REQUIRED_ANCHORS = {
     "SKILL.md": [
         # 상대경로는 어느 루트 기준인지 말하지 않는다. 112 는 둘 다 절대경로다.
-        r"KEEP_UNCHANGED\s*=\s*[A-Za-z]:[\\/]\S*111-politics-longform",
+        r"KEEP_UNCHANGED\s*=\s*[A-Za-z]:[\\/]\S*119-politics-longform-capcut",
         r"KEEP_UNCHANGED\s*=\s*[A-Za-z]:[\\/]\S*000-politics-longform",
-        r"HYPERFRAMES_FAILURE_AUTO_RUN_111\s*=\s*FORBIDDEN",
+        r"HYPERFRAMES_FAILURE_AUTO_RUN_119\s*=\s*FORBIDDEN",
     ],
     "lane-contract.md": [
         r"(?m)^##\s+금지 산출물\s*$",
@@ -190,8 +190,8 @@ class TestBoundaryDeclarationStrength(unittest.TestCase):
 
     def test_keep_unchanged_accepts_paths(self):
         text = (
-            "KEEP_UNCHANGED=C:\\Users\\arajun\\agent-skills\\skills\\111-politics-longform\n"
-            "KEEP_UNCHANGED = skills\\111-politics-longform"
+            "KEEP_UNCHANGED=C:\\Users\\arajun\\agent-skills\\skills\\119-politics-longform-capcut\n"
+            "KEEP_UNCHANGED = skills\\119-politics-longform-capcut"
         )
         self.assertEqual(check_keep_unchanged_has_path(text), [])
 
@@ -277,12 +277,12 @@ class TestBoundaryDeclarationStrength(unittest.TestCase):
 DOC_REGRESSIONS = [
     ("REG-1a  KEEP_UNCHANGED 를 이름 선언으로 대체", "SKILL.md",
      r"KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills"
-     r"\111-politics-longform",
-     "MODIFY_111_OR_ITS_WORKTREE = FORBIDDEN"),
+     r"\119-politics-longform-capcut",
+     "MODIFY_119_OR_ITS_WORKTREE = FORBIDDEN"),
     ("REG-1c  절대경로를 상대경로로 격하", "SKILL.md",
      r"KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills"
-     r"\111-politics-longform",
-     r"KEEP_UNCHANGED = skills\111-politics-longform"),
+     r"\119-politics-longform-capcut",
+     r"KEEP_UNCHANGED = skills\119-politics-longform-capcut"),
     ("REG-2   capcut_dependency 개명", "lane-contract.md",
      "capcut_dependency = 0", "legacy_editor_dependency = 0"),
     ("REG-3   실패코드를 전방참조로 대체", "lane-contract.md",
@@ -343,15 +343,20 @@ class TestCapCutLeakage(unittest.TestCase):
                     bad.append(f"{p.name}:{i}: {lit} [{section}]")
         self.assertEqual(bad, [], "CapCut 구현 종속 문자열:\n" + "\n".join(bad))
 
-    def test_no_111_execution_instruction(self):
+    def test_no_capcut_lane_execution_instruction(self):
+        """119(CapCut) 실행 지시가 금지 선언 밖에 있으면 안 된다.
+
+        번호 개편 전에는 이 검사가 '111' 을 봤다. 지금 111 은 이 스킬
+        자신이라, 그대로 두면 자기 실행을 막고 정작 CapCut 우회는 못 잡는다.
+        """
         bad = []
         for p, i, block, section in iter_blocks(DOCS):
-            if "111" not in block:
+            if "119" not in block:
                 continue
-            if re.search(r"111[^\n]{0,40}(실행하|호출하)", block) \
+            if re.search(r"119[^\n]{0,40}(실행하|호출하)", block) \
                     and not in_rule_context(block, section):
                 bad.append(f"{p.name}:{i} [{section}]")
-        self.assertEqual(bad, [], "111 실행 지시:\n" + "\n".join(bad))
+        self.assertEqual(bad, [], "119 실행 지시:\n" + "\n".join(bad))
 
 
 class TestTerminology(unittest.TestCase):

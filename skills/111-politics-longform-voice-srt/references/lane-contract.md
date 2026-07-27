@@ -1,20 +1,20 @@
-# Lane 계약 — 113이 무엇을 111에서 가져오고 무엇을 버리는가
+# Lane 계약 — 111이 무엇을 119에서 가져오고 무엇을 버리는가
 
 `handoff_version 2.0 / CLAUDE_ORCHESTRATOR_HYPERFRAMES_LANE_CORRECTION` 채택본.
 
 ```text
-111-politics-longform   = 기존 lane. KEEP_UNCHANGED. 현재 파이프라인에서 NOT_USED.
-113-politics-longform-voice-srt = HyperFrames 중립 음성·자막 데이터 생성
+119-politics-longform-capcut   = 기존 lane. KEEP_UNCHANGED. 현재 파이프라인에서 NOT_USED.
+111-politics-longform-voice-srt = HyperFrames 중립 음성·자막 데이터 생성
 112-politics-longform-hyperframes = locked 템플릿 조립 및 렌더
 capcut_dependency = 0
 capcut_fallback   = FORBIDDEN
 ```
 
-111에서 가져오는 것은 **구현 중립적 의미 규칙뿐**이다.
+119에서 가져오는 것은 **구현 중립적 의미 규칙뿐**이다.
 
 ## 용어 계약
 
-| 개념 | 113 정식 명칭 |
+| 개념 | 111 정식 명칭 |
 |---|---|
 | Supertone 합성음성 | `narration_audio` |
 | 합성음성 자막 | `narration_caption` |
@@ -28,8 +28,8 @@ capcut_fallback   = FORBIDDEN
 한정한다.
 
 이유: 111의 `role: tts`는 합성음성이 아니라 **원본 발화 자막 lane**을 뜻한다
-(111 SKILL.md — "TTS는 합성음성이 아니라 편집 가능한 원본 발화 자막 lane이다").
-113의 Supertone 합성과 정면 충돌하므로 단독 사용을 금지한다.
+(119 SKILL.md — "TTS는 합성음성이 아니라 편집 가능한 원본 발화 자막 lane이다").
+111의 Supertone 합성과 정면 충돌하므로 단독 사용을 금지한다.
 
 ## 상속 / 폐기
 
@@ -48,7 +48,7 @@ capcut_fallback   = FORBIDDEN
 
 ## 화면 레이아웃 권위
 
-**113은 자막의 의미와 데이터만 만든다. 배치는 112 템플릿이 정한다.**
+**111은 자막의 의미와 데이터만 만든다. 배치는 112 템플릿이 정한다.**
 
 repo 정본 `politics-longform-hyperframes/template/style_tokens.json` 실측값:
 
@@ -61,18 +61,18 @@ comment     { "x": 1420, "y": 154, "width": 450, "size": 31 }
 
 ```text
 자막 밴드 = 1개. maxLines = 2.
-111의 "1줄 / 공백 제외 20자"는 이 템플릿에 적용되지 않는다.
-cue 길이 상한은 113이 임의 숫자로 정하지 않는다.
+119의 "1줄 / 공백 제외 20자"는 이 템플릿에 적용되지 않는다.
+cue 길이 상한은 111이 임의 숫자로 정하지 않는다.
 초과 여부는 112의 `hyperframes check --strict --snapshots` layout 검사가 판정한다.
 overflow가 나면 문구를 줄이지 말고 speech boundary에서 cue를 더 쪼갠다.
 ```
 
-`comment_label`은 우상단 450px 폭의 **라벨**이며 111의 하단 2줄 평론
+`comment_label`은 우상단 450px 폭의 **라벨**이며 119의 하단 2줄 평론
 트랙과 동일한 역할로 취급하지 않는다. 112 템플릿이 실제로 요구할 때만 생성한다.
 
 ### 트랙 - visual_role 매핑
 
-| 113 트랙 | 텍스트 권위 | 112 visual_role |
+| 111 트랙 | 텍스트 권위 | 112 visual_role |
 |---|---|---|
 | `narration_caption` | 프로젝트 GPT 권위 대본 | `caption-text` |
 | `source_speech_caption` | 선택 원본 SRT + 실제 음성 | `caption-text` |
@@ -85,7 +85,7 @@ overflow가 나면 문구를 줄이지 말고 speech boundary에서 cue를 더 �
 
 ## 컴포지션 매핑
 
-| 113 세그먼트 종류 | 112 composition |
+| 111 세그먼트 종류 | 112 composition |
 |---|---|
 | 나레이션 | `narration-explainer` |
 | 원본 클립 | `source-video` |
@@ -107,7 +107,7 @@ overflow가 나면 문구를 줄이지 말고 speech boundary에서 cue를 더 �
 7. ASR 초벌 결과
 ```
 
-`USER_CORRECTED_SRT_LOCK`은 111의 레거시 명칭이며 alias로만 남긴다.
+`USER_CORRECTED_SRT_LOCK`은 119의 레거시 명칭이며 alias로만 남긴다.
 사용자는 중개자이고 **최종 자막 오류 판정은 프로젝트 GPT가 한다.**
 
 lock 요건: 교정본 SHA-256 / cue 수 / 문구 diff / 시간축 검증 /
@@ -156,8 +156,8 @@ WAIT_ROOT_CAUSE
 ## 필수 테스트
 
 ```text
-111 구현 관련 문자열·import 0건 (금지 선언문 제외)
-111 실행 호출 0건
+119 구현 관련 문자열·import 0건 (금지 선언문 제외)
+119 실행 호출 0건
 PL_EPISODE_DIR / PL_REPO_EPISODE / PL_VIDEO_DIR / PL_SCRIPT_SHA256 누락 시 BLOCKED
 환경변수 경로가 허용 루트 밖이면 거부 (path traversal 차단)
 권위 대본 SHA 불일치 시 WAIT_SCRIPT_INTEGRITY
