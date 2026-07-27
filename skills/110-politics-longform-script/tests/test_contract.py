@@ -17,9 +17,12 @@ sys.path.insert(0, str(SKILL / "scripts"))
 
 import verify_draft as vd                                    # noqa: E402
 import build_source_packet as bsp                            # noqa: E402
+import gate_script_lock as gsl                               # noqa: E402
+import draft_md as dm                                        # noqa: E402
 
 DOCS = [SKILL / "SKILL.md"] + sorted((SKILL / "references").glob("*.md"))
 CAPCUT_RE = re.compile(r"CapCut|캡컷", re.I)
+RETENTION_EDITOR = SKILL / "references" / "retention-story-editor.md"
 
 REQUIRED_ANCHORS = {
     "SKILL.md": (
@@ -142,6 +145,95 @@ class TestBoundaryDeclarations(unittest.TestCase):
                         in_rule_context(block, section),
                         f"{path.name}:{line_no} [{section}] "
                         "금지 선언 밖 CapCut 언급")
+
+
+class TestRetentionStoryEditorContract(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        cls.editor_text = (
+            RETENTION_EDITOR.read_text(encoding="utf-8")
+            if RETENTION_EDITOR.is_file() else ""
+        )
+
+    def test_skill_links_editor_and_defines_internal_s2r_pass(self):
+        self.assertTrue(
+            RETENTION_EDITOR.is_file(),
+            "references/retention-story-editor.md 가 없다",
+        )
+        self.assertIn(
+            "[Retention Story Editor](references/retention-story-editor.md)",
+            self.skill_text,
+        )
+        self.assertIn("S2R Retention Story Rewrite", self.skill_text)
+        self.assertIn("PROJECT_GPT/Hermes 내부 작가 패스", self.skill_text)
+        self.assertIn("새 승인 단계가 아니다", self.skill_text)
+
+    def test_s4_is_mandatory_read_only_claude_review(self):
+        self.assertIn("S4 최초 Claude 전체 검수는 필수", self.skill_text)
+        self.assertIn("읽기 전용 검수자", self.skill_text)
+        self.assertIn("지적서만 작성", self.skill_text)
+        self.assertIn("대본을 수정하지 않는다", self.skill_text)
+
+    def test_s6_required_and_omission_conditions_are_explicit(self):
+        self.assertIn("S6 필수 조건", self.skill_text)
+        self.assertIn("S4 verdict가 `APPROVED`가 아닌 경우", self.skill_text)
+        self.assertIn("S4 이후 대본 파일 SHA가 변경된 경우", self.skill_text)
+        self.assertIn("Claude 중요 지적을 반영한 경우", self.skill_text)
+        self.assertIn("논지·챕터·직접인용·source 구간이 변경된 경우", self.skill_text)
+        self.assertIn("사용자가 재검수를 요청한 경우", self.skill_text)
+        self.assertIn("S6 생략 가능 조건", self.skill_text)
+        self.assertIn("S4 verdict가 `APPROVED`", self.skill_text)
+        self.assertIn("S4 이후 대본 바이트 변경이 0", self.skill_text)
+
+    def test_binding_asr_and_advisory_limits_are_documented(self):
+        combined = self.skill_text + "\n" + self.editor_text
+        self.assertIn("WAIT_SOURCE_BINDING", combined)
+        self.assertIn("WAIT_SOURCE_ASR_REVIEW", combined)
+        self.assertIn("[EST]", self.editor_text)
+        self.assertIn("validator의 PASS·FAIL 기준이 아니다", self.editor_text)
+        self.assertIn("target_maximum_items: 12", self.editor_text)
+        self.assertIn("hard_maximum: false", self.editor_text)
+
+    def test_no_new_approval_state_or_cross_lane_dependency(self):
+        combined = self.skill_text + "\n" + self.editor_text
+        self.assertNotIn("USER_APPROVED_SCRIPT", combined)
+        self.assertNotIn("119-politics-longform-capcut", self.editor_text)
+        self.assertNotIn("000-politics-longform", self.editor_text)
+        self.assertNotIn("CapCut", self.editor_text)
+        self.assertNotIn("캡컷", self.editor_text)
+
+    def test_existing_quote_fidelity_contract_is_preserved(self):
+        verify_checks = {name for name, _fn, _code in vd.CHECKS}
+        self.assertIn("quote_fidelity", verify_checks)
+        self.assertNotIn("packet_text_match", verify_checks)
+        self.assertIn("quote_fidelity", gsl.REQUIRED_CHECKS)
+        self.assertNotIn("packet_text_match", gsl.REQUIRED_CHECKS)
+        self.assertIn("quote_fidelity = SOURCE_PACKET_TEXT_ONLY",
+                      self.editor_text)
+
+    def test_s2r_keeps_machine_draft_separate_from_review_notes(self):
+        self.assertIn("`20_script/script_draft_v1.md`", self.editor_text)
+        self.assertIn("첫 바이트는 `---`", self.editor_text)
+        self.assertIn("A 제목을 파일에 쓰지 않는다", self.editor_text)
+        self.assertIn("B와 C는 대본 파일에 쓰지 않는다", self.editor_text)
+
+        machine_draft = """---
+episode_id: TEST
+source_packet_sha256: 0000000000000000000000000000000000000000000000000000000000000000
+narration_blocks: 1
+source_clips: 0
+---
+
+## CHAPTER 1 — TEST
+
+### [나레이션]
+테스트 문장입니다.
+"""
+        parsed = dm.parse_draft_md(machine_draft)
+        self.assertEqual(parsed["declared_counts"]["narration_blocks"], 1)
+        with self.assertRaises(dm.DraftFormatError):
+            dm.parse_draft_md("### A. 전체 수정 대본\n" + machine_draft)
 
 
 class TestBaselineDraftPasses(unittest.TestCase):

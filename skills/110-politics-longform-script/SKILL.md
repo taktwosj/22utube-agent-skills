@@ -64,35 +64,88 @@ Claude는 문장의 **의미를 바꾸지 않는다.** 완성 단계에서 하�
 cue는 선택이다. 타임코드만 있으면 SRT에서 역산한다.
 
 양식과 유의사항: [draft-schema.md](references/draft-schema.md)
+내부 2차 집필 프롬프트: [Retention Story Editor](references/retention-story-editor.md)
 
 ## 단계
 
 ```text
 S1  소스 패킷 생성      수집 자막 -> GPT 입력 묶음
 S2  GPT 초벌 대본       script_draft_v1.md
+S2R Retention Story Rewrite
+                         PROJECT_GPT/Hermes 내부 작가 패스. 전체 대본 재구성
 S3  기계 검증           verify_draft.py
-S4  Claude 검수         claude_review_v1.md.  지적서일 뿐 수정본이 아니다
+S4  Claude 최초 전체 검수
+                         claude_review_v1.md. 읽기 전용 지적서
 S5  GPT/CODEX 수정      script_revised_v2.md + 변경 내역
-S6  Claude 최종 확인    필요하면 S3~S5 반복. 재검수는 diff 만 읽는다
+S6  Claude diff 검수    필수 조건에 해당할 때 변경분과 지적 반영을 확인
 S7  사용자 승인         user_approval.json
 S8  잠금                gate_script_lock.py -> master_script_locked.md
 S9  111 인계            음성·시간축·SRT
 ```
 
+### S2R Retention Story Rewrite
+
+S2R은 PROJECT_GPT/Hermes 내부 작가 패스다. 새 운영 시스템이 아니며
+새 승인 단계가 아니다. 별도 상태 파일이나 receipt를 만들지 않는다. 초벌을 부분 교정하는
+단계가 아니라 후킹, 정보 공개 순서, 챕터별 보상, 원본·나레이션 배치와
+지속시청 구조를 기준으로 전체 대본을 재구성하는 2차 집필이다.
+
+다음 조건이 전부 참일 때만 실행한다.
+
+- 초벌 대본이 존재한다.
+- 현재 source packet이 존재한다.
+- 초벌 frontmatter의 `source_packet_sha256`과 실제 packet SHA가 일치한다.
+- 사용자 승인 전 대본이다.
+- 요청이 맞춤법·띄어쓰기·줄바꿈만 고치는 작업이 아니다.
+
+초벌 binding이 없거나 현재 packet SHA와 다르면 `WAIT_SOURCE_BINDING`으로
+멈춘다. 핵심 논지를 바꾸거나 source packet에 없는 새 사실이 필요하면 직접
+추가하지 말고 `WAIT_PROJECT_GPT_RULING`으로 복귀한다.
+
+S2R은 [Retention Story Editor](references/retention-story-editor.md)의 명령과
+현재 [draft-schema.md](references/draft-schema.md)를 그대로 사용한다. 새
+대본 schema를 만들지 않는다. S2R의 전체 수정 대본만
+`20_script/script_draft_v1.md`에 쓰고, 변경 내역과 blocker는 실행 보고에만
+둔다. 대본 파일은 `---`로 시작하며 보고 섹션을 포함하지 않는다. S2R 뒤에는
+이 파일을 대상으로 S3 기계 검증을 진행한다. S3가 실패하면 Claude 검수로
+진행하지 않는다.
+
 S3에서 걸리면 S4로 가지 않는다. 양식 위반이면 `FAIL_DRAFT_FORMAT`,
 내용 위반이면 `WAIT_DRAFT_VERIFICATION`.
 
+### S4 최초 전체 검수
+
+S4 최초 Claude 전체 검수는 필수다. Claude는 읽기 전용 검수자이며 대본
+전문과 인용된 cue 창을 읽는다. Claude는 지적서만 작성하고 대본을 수정하지 않는다.
+논지, 문장, 인용, 챕터 순서의 수정은 PROJECT_GPT/Hermes 작가
+권한으로 돌려보낸다.
+
 ### S6 재검수 비용 규칙
 
-v2를 처음부터 다시 읽으면 검수 비용이 두 배다.
+S6은 S4 이후의 diff 검수다. S4의 최초 전체 검수를 대신하지 않는다.
 
-```text
-v1   대본 전문 + 인용된 cue 창을 읽는다
-v2   변경 내역 + v1 지적 목록만 읽는다. 안 건드린 문단은 읽지 않는다
-```
+S6 필수 조건:
 
-그래서 수정본에는 **변경 내역이 필수다.** 없으면 무엇이 바뀌었는지 알 수
-없어 전문을 다시 읽어야 한다.
+- S4 verdict가 `APPROVED`가 아닌 경우
+- S4 이후 대본 파일 SHA가 변경된 경우
+- Claude 중요 지적을 반영한 경우
+- 논지·챕터·직접인용·source 구간이 변경된 경우
+- 사용자가 재검수를 요청한 경우
+
+S6 생략 가능 조건은 다음 두 조건을 모두 만족할 때뿐이다.
+
+- S4 verdict가 `APPROVED`
+- S4 이후 대본 바이트 변경이 0
+
+S6에서는 변경 내역과 S4 지적 목록을 우선 읽고, 바뀐 문맥을 이해하는 데
+필요한 범위까지 확인한다. 수정본에는 변경 내역이 필수다. 없으면 무엇이
+바뀌었는지 알 수 없어 전문을 다시 읽어야 한다.
+
+S4 승인 대본을 `master_script_final.md`로 승격할 때는 byte-identical copy를
+사용한다. 복사 중 BOM, 개행, 공백, frontmatter 직렬화 등으로 SHA가 달라지면
+의미 변경 의도가 없더라도 S3 기계 검증과 S6를 다시 실행한다. 승인 상태를
+새로 만들지 않고 기존 `master_script_final.md`, `user_approval.json`,
+`master_script_locked.md`, `script_lock.json` 계약을 유지한다.
 
 ### S8 잠금 3요건
 
@@ -107,6 +160,17 @@ master_script_final.md        승인 대상 대본
 
 네 SHA-256이 하나가 아니면 `FAIL_STALE_REVIEW_SHA`다. 검수는 v1을 봤는데
 잠금이 v2를 가리키면 아무도 읽지 않은 문장이 확정 대본이 된다.
+
+두 종류의 SHA를 혼동하지 않는다.
+
+- `user_approval.json`의 `claude_review_sha256`은 Claude 검수 문서 파일
+  자체의 SHA다.
+- Claude 검수 문서 내부 `script_sha256`은 Claude가 실제 검수한 대본의
+  SHA다.
+
+S6 검수 문서 내부 `script_sha256`은 최종 대본 SHA와 일치해야 한다.
+`user_approval.json`은 별도로 최종 Claude 검수 문서 파일의 경로와 SHA를
+고정한다.
 
 승인서가 경로를 직접 지목한다. 파일명으로 최신본을 고르지 않는다 — 자동
 선택이 있으면 승인받지 않은 `v99`를 나중에 떨어뜨려 잠금을 바꿔칠 수 있다.
@@ -156,6 +220,11 @@ py -3.14 scripts/verify_draft.py --episode <에피소드 경로>
 전부 0건이어야 통과다. 하나라도 걸리면 `verification_report_v1.json`에
 기록하고 종료 코드 1이다.
 
+`quote_fidelity`는 source packet에 기록된 텍스트만 비교한다. 실제 영상
+발화와 SRT의 일치, 음성 검증 완료, source truth 검증 완료를 뜻하지 않는다.
+ASR 손상이 의심되면 추정 교정하지 말고 Retention Story Editor의 ASR 경계를
+따른다.
+
 ## 의혹 표현
 
 정치 소재는 **주장과 사실의 구분이 곧 법적 위험**이다.
@@ -176,7 +245,7 @@ py -3.14 scripts/verify_draft.py --episode <에피소드 경로>
 
 ```text
 20_script/source_packet_v1.json          S1. GPT 입력
-20_script/script_draft_v1.md             S2. GPT 산출. 초벌 정본
+20_script/script_draft_v1.md             S2/S2R. GPT 산출. 보고 섹션 없는 초벌 정본
 90_reports/verification_report_v1.json   S3. 기계 검증 결과
 20_script/claude_review_v1.md            S4. 지적서. 수정본이 아니다
 20_script/script_revised_v2.md           S5. 수정본 + 변경 내역
@@ -196,6 +265,8 @@ FAIL_DRAFT_FORMAT
 WAIT_DRAFT_VERIFICATION
 WAIT_CLAUDE_REVIEW
 WAIT_PROJECT_GPT_RULING
+WAIT_SOURCE_BINDING
+WAIT_SOURCE_ASR_REVIEW
 WAIT_USER_SCRIPT_APPROVAL
 WAIT_SCRIPT_NOT_FINALIZED
 WAIT_MACHINE_VERIFICATION
