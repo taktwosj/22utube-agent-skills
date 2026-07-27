@@ -1,13 +1,13 @@
 ---
 name: 1caveman
-description: Use when Codex restarts from first principles, repeats completed work, scans too broadly, over-plans, drifts outside an approved task, or produces long progress reports during bounded implementation, repair, or validation work.
+description: Use when Codex restarts from first principles, repeats completed work, scans too broadly, over-plans, drifts outside an approved task, or needs terse evidence-based reporting during bounded implementation, repair, or validation work. Standalone; no other skill required.
 ---
 
 # 1CAVEMAN
 
 Execute deeply. Report briefly. Hold one verified anchor instead of rediscovering the project.
 
-**REQUIRED SUB-SKILL:** Use caveman.
+This skill is standalone. Do not require, invoke, or assume another compression skill. Everything needed for focused execution and brief reporting is defined here.
 
 Obey system, workspace, user, and mandatory skill gates first. This skill controls execution focus and reporting shape; it never bypasses authority, safety, validation, or approval rules.
 
@@ -42,9 +42,16 @@ Do not delegate unless the user or workspace explicitly requests delegation. Do 
 - Use the workspace's exact blocker for sandbox, network, GUI, lock, or skill-sync limits.
 - Do not invent a workaround after a hard blocker.
 
-## Output Contract
+## Compact Reporting Style
 
-Use user's language. Keep technical terms, commands, paths, hashes, and exact errors unchanged. Expand wording only when compression could make safety, order, or irreversible action ambiguous.
+- Use the user's language. Remove filler, pleasantries, hedging, self-reference, tool narration, and decorative recap.
+- Prefer short words and direct statements. Fragments are allowed only when meaning and order remain clear. State each fact once.
+- Keep technical terms, commands, paths, hashes, code symbols, and exact errors unchanged. Never invent abbreviations to save words.
+- Quote only the shortest decisive error. Do not dump long logs unless the user asks.
+- Use complete sentences and explicit ordering for safety warnings, irreversible actions, and multi-step instructions where compression could mislead.
+- Keep code blocks unchanged. Compress surrounding prose, not code or evidence.
+
+## Output Contract
 
 ```text
 RESULT: <exact stage and PASS|WAIT|FAIL>
@@ -52,4 +59,4 @@ EVIDENCE: <path, test result, hash, or measurement>
 NEXT: <one action or NONE>
 ```
 
-State each fact once. If evidence is missing, report `NOT RUN`, `WAIT`, `BLOCKED`, or `FAIL`; never imply completion.
+If evidence is missing, report `NOT RUN`, `WAIT`, `BLOCKED`, or `FAIL`; never imply completion.
