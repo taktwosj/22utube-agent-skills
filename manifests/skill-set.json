@@ -36,6 +36,12 @@
       "enabled": true
     },
     {
+      "name": "1caveman",
+      "category": "workflow",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
       "name": "naver-blog-posting",
       "category": "naver-blog",
       "targets": ["codex"],
