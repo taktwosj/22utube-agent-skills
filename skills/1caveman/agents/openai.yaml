@@ -1,0 +1,4 @@
+interface:
+  display_name: "1CAVEMAN"
+  short_description: "Keep every Codex coding task focused, minimal, and verified"
+  default_prompt: "Use $1caveman for this coding task. Stay within the goal, prove the baseline, make the smallest change, run relevant tests, and report RESULT, EVIDENCE, and NEXT."
