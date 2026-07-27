@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short clean visual manifest",
+  "type": "object",
+  "required": [
+    "schema_version", "episode_id", "source_identity_path", "source_identity_sha256",
+    "design_lock_evidence_path", "design_lock_evidence_sha256", "clean_source_path",
+    "clean_source_sha256", "expected_duration_us", "expected_width", "expected_height"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "001short-clean-visual-manifest-v1"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "source_identity_path": {"type": "string", "minLength": 1},
+    "source_identity_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "design_lock_evidence_path": {"type": "string", "minLength": 1},
+    "design_lock_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "clean_source_path": {"type": "string", "minLength": 1},
+    "clean_source_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "expected_duration_us": {"type": "integer", "minimum": 1},
+    "expected_width": {"type": "integer", "minimum": 1},
+    "expected_height": {"type": "integer", "minimum": 1}
+  },
+  "additionalProperties": false
+}

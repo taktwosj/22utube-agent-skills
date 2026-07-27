@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-completion-report-v1.json",
+  "title": "001short Completion Report",
+  "type": "object",
+  "required": [
+    "episode_id",
+    "capcut_project_name",
+    "production_mode",
+    "T1",
+    "T2",
+    "validation_status",
+    "capcut_cloud_destination",
+    "capcut_cloud_row",
+    "upload_title",
+    "upload_description",
+    "sources",
+    "public_upload_status"
+  ],
+  "properties": {
+    "episode_id": {"type": "string", "minLength": 1},
+    "capcut_project_name": {"type": "string", "minLength": 1},
+    "production_mode": {
+      "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+    },
+    "T1": {"type": "string", "minLength": 1},
+    "T2": {"type": "string", "minLength": 1},
+    "validation_status": {"const": "PASS"},
+    "capcut_cloud_destination": {"const": "User3160027826975의 공간/MAC"},
+    "capcut_cloud_row": {
+      "type": "object",
+      "required": ["name", "size", "duration", "type", "modified_time"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "size": {"type": "string", "minLength": 1},
+        "duration": {"type": "string", "minLength": 1},
+        "type": {"const": "프로젝트"},
+        "modified_time": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
+    },
+    "upload_title": {"type": "string", "minLength": 1},
+    "upload_description": {"type": "string", "minLength": 1},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["channel", "url"],
+        "properties": {
+          "channel": {"type": "string", "minLength": 1},
+          "url": {"type": "string", "minLength": 1},
+          "original_title": {"type": "string"},
+          "upload_date": {"type": "string"}
+        }
+      }
+    },
+    "public_upload_status": {
+      "enum": ["WAIT_APPROVAL", "NOT_REQUESTED", "UPLOADED", "PUBLISHED", "SCHEDULED"]
+    },
+    "public_upload_approval": {"type": "boolean"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "public_upload_status": {
+            "enum": ["UPLOADED", "PUBLISHED", "SCHEDULED"]
+          }
+        }
+      },
+      "then": {
+        "required": ["public_upload_approval"],
+        "properties": {
+          "public_upload_approval": {"const": true}
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

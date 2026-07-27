@@ -26,6 +26,16 @@
       "enabled": true
     },
     {
+      "name": "001short-production-agent",
+      "category": "22utube",
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
+      "enabled": true
+    },
+    {
       "name": "110-politics-longform-script",
       "category": "22utube",
       "targets": [
