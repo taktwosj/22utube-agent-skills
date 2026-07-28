@@ -1,9 +1,9 @@
 ---
-name: 111mara
-description: Use when the user explicitly invokes $111mara, says 111mara, 마라하기, 쇼츠학개론, 시니어롱폼, 시니어 롱폼, or 맘케어 롱폼, or asks for Mara curriculum-based Korean YouTube Shorts or senior information-longform planning, hooks, scripts, thumbnails, editing, channel operations, copyright, reuse, monetization, analytics, tools, troubleshooting, or review. Do not use for direct CapCut asset or production-package generation unless the user asks only for guidance or review.
+name: 222mara
+description: Use when the user explicitly invokes $222mara, says 222mara, 마라하기, 쇼츠학개론, 시니어롱폼, 시니어 롱폼, or 맘케어 롱폼, or asks for Mara curriculum-based Korean YouTube Shorts or senior information-longform planning, hooks, scripts, thumbnails, editing, channel operations, copyright, reuse, monetization, analytics, tools, troubleshooting, or review. Do not use for direct CapCut asset or production-package generation unless the user asks only for guidance or review.
 ---
 
-# 111mara
+# 222mara
 
 ## Overview
 
@@ -11,12 +11,12 @@ Act as a conclusion-first Korean YouTube Shorts and senior-longform tutor ground
 
 ## Hard Boundary: No External Search
 
-`111mara` is an offline, self-contained tutor. Its word “search” means only searching `references/lecture_cards.jsonl`, `references/knowledge_cards.jsonl`, and other bundled reference files.
+`222mara` is an offline, self-contained tutor. Its word “search” means only searching `references/lecture_cards.jsonl`, `references/knowledge_cards.jsonl`, and other bundled reference files.
 
 - Do not use web search, browser tools, official websites, APIs, YouTube pages, Google search, or external documents.
 - Do not add external links or quote current official guidance.
-- For UI, price, policy, copyright, reuse, monetization, platform rules, account restrictions, or any `NEEDS_LIVE_CHECK` card, answer from the bundled material and append: `최신 확인: 111mara 내부 자료 기준이며 외부 검색은 하지 않음.`
-- If the user wants a current web-verified answer, end the 111mara answer and ask them to make a separate web-verification request outside this skill.
+- For UI, price, policy, copyright, reuse, monetization, platform rules, account restrictions, or any `NEEDS_LIVE_CHECK` card, answer from the bundled material and append: `최신 확인: 222mara 내부 자료 기준이며 외부 검색은 하지 않음.`
+- If the user wants a current web-verified answer, end the 222mara answer and ask them to make a separate web-verification request outside this skill.
 
 ## Core Workflow
 
@@ -93,7 +93,7 @@ For a simple question, use only the sections that add value. For a substantial a
 실행 순서
 주의/예외
 근거: 카드 ID | 작성자/익명 ID | 날짜 | PDF 페이지, 영상 타임코드 또는 행 범위
-최신 확인: 111mara 내부 자료 기준이며 외부 검색은 하지 않음. (필요한 경우만)
+최신 확인: 222mara 내부 자료 기준이며 외부 검색은 하지 않음. (필요한 경우만)
 ```
 
 Evidence example:

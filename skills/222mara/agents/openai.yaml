@@ -1,0 +1,4 @@
+interface:
+  display_name: "222mara"
+  short_description: "마라 정본 기반 쇼츠·시니어롱폼 기획 및 검증 조교"
+  default_prompt: "Use $222mara to plan or review a Korean YouTube Shorts or senior longform script from the bundled Mara curriculum with evidence."

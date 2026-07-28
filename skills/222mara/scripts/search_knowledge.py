@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Search the bundled 111mara knowledge cards without external dependencies."""
+"""Search the bundled 222mara knowledge cards without external dependencies."""
 
 from __future__ import annotations
 
@@ -161,7 +161,7 @@ def search_card_files(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Search 111mara knowledge cards")
+    parser = argparse.ArgumentParser(description="Search 222mara knowledge cards")
     parser.add_argument("--query", required=True, help="Korean or English search question")
     parser.add_argument("--limit", type=int, default=5, help="Maximum results (default: 5)")
     parser.add_argument("--category", help="Optional topic-path filter")

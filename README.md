@@ -40,7 +40,7 @@ HyperFrames 실패                -> WAIT 또는 FAIL. 119 자동 우회 금지
 Bundled knowledge and planning skills:
 
 ```text
-111mara
+222mara
 ```
 
 Naver blog workflow skills:
@@ -54,7 +54,7 @@ naver-blog-posting
 Windows OneDrive account settings instead of hardcoding a username or machine
 path.
 
-`111mara` is the self-contained, offline Mara/쇼츠학개론 knowledge skill. Its
+`222mara` is the self-contained, offline Mara/쇼츠학개론 knowledge skill. Its
 bundled canonical cards include the visually audited 1-4강 curriculum evidence;
 it does not perform live web searches.
 

@@ -279,7 +279,7 @@ git diff --stat
 
 - [ ] **Step 2: Stage explicit paths only**
 
-Never use `git add -A`. Exclude dirty `111mara` and Shorts production-gate
+Never use `git add -A`. Exclude dirty `222mara` and Shorts production-gate
 files.
 
 - [ ] **Step 3: Commit**

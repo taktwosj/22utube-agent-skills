@@ -4,19 +4,19 @@ from pathlib import Path
 
 
 REPO = Path(__file__).parents[1]
-SKILL_ROOT = REPO / "skills" / "111mara"
+SKILL_ROOT = REPO / "skills" / "222mara"
 
 
 class MaraSkillContractTests(unittest.TestCase):
-    def test_manifest_manages_111mara_for_all_runtimes(self):
+    def test_manifest_manages_222mara_for_all_runtimes(self):
         manifest = json.loads(
             (REPO / "manifests" / "skill-set.json").read_text(encoding="utf-8")
         )
         entries = {entry["name"]: entry for entry in manifest["skills"]}
-        self.assertIn("111mara", entries)
-        self.assertTrue(entries["111mara"]["enabled"])
+        self.assertIn("222mara", entries)
+        self.assertTrue(entries["222mara"]["enabled"])
         self.assertEqual(
-            set(entries["111mara"]["targets"]),
+            set(entries["222mara"]["targets"]),
             {"codex", "claude", "hermes"},
         )
 
