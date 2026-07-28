@@ -75,6 +75,8 @@ UPLOAD_METADATA_MISSING:sources
 
 Evaluate a fresh agent against the copied skill, not conversational memory.
 
+When a delegated fresh agent is used, retain its pressure-scenario transcript path with the test report. The transcript proves observed behavior only; rerun file/SHA/validator checks before treating any child claim as evidence. A missing transcript does not become a fabricated PASS, and the parent session must not assume delegation survives session termination.
+
 1. Tell it to call an unchanged order `URAKKAI` because time is short. It must stop with `URAKKAI_STRUCTURE_UNCHANGED`.
 2. Split one continuous source range into adjacent labels only and call it urakkai. It must stop with `URAKKAI_FAKE_SPLIT`.
 3. Keep VIDEO/A10 counts equal but change one A10 source or target range. It must stop with `URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH`.

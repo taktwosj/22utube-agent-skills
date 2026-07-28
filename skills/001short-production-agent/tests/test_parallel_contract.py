@@ -9,6 +9,8 @@ from pathlib import Path
 SKILL = Path(__file__).resolve().parents[1]
 WORKFLOW = SKILL / "workflow.json"
 GUIDE = SKILL / "references" / "parallel-execution.md"
+UI_GUIDE = SKILL / "references" / "capcut-macos-ui-verification-fallback.md"
+PROTOCOL_TESTING_GUIDE = SKILL / "references" / "executable-protocol-testing.md"
 
 
 class ParallelContractTests(unittest.TestCase):
@@ -32,11 +34,27 @@ class ParallelContractTests(unittest.TestCase):
             "barrier_pass_then_sequential_only",
         )
 
+    def test_worker_live_transcripts_are_recorded_but_never_promoted_as_authority(self):
+        transcripts = self.contract["workers"]["live_transcripts"]
+        self.assertTrue(transcripts["record_paths_when_available"])
+        self.assertEqual(transcripts["authority"], "observation_only")
+        self.assertTrue(transcripts["artifact_reverification_required"])
+        self.assertEqual(
+            transcripts["parent_session_end_behavior"],
+            "do_not_treat_delegation_as_durable",
+        )
+
     def test_only_one_gui_owner_exists(self):
         gui = self.contract["gui"]
         self.assertEqual(gui["max_owners"], 1)
         self.assertTrue(gui["mutual_exclusion"])
         self.assertEqual(set(gui["tools"]), {"vmake", "capcut"})
+        self.assertEqual(
+            gui["computer_use_delivery_ladder"],
+            ["background", "coordinate_if_recommended", "foreground_if_recommended"],
+        )
+        self.assertTrue(gui["recapture_after_state_change"])
+        self.assertTrue(gui["foreground_requires_driver_recommendation"])
 
     def test_stage01_and_stage03_have_bounded_fanout(self):
         stage01 = self.contract["fanout"]["stage01"]
@@ -90,6 +108,18 @@ class ParallelContractTests(unittest.TestCase):
                 "--evidence",
             ],
         )
+
+    def test_runtime_guides_require_transcript_evidence_and_verified_gui_escalation(self):
+        parallel = GUIDE.read_text(encoding="utf-8")
+        ui = UI_GUIDE.read_text(encoding="utf-8")
+        testing = PROTOCOL_TESTING_GUIDE.read_text(encoding="utf-8")
+        self.assertIn("live_transcripts", parallel)
+        self.assertIn("observation_only", parallel)
+        self.assertIn("artifact_reverification_required", parallel)
+        self.assertIn("suspected_noop", ui)
+        self.assertIn("background_unavailable", ui)
+        self.assertIn("foreground", ui)
+        self.assertIn("pressure-scenario transcript", testing)
 
     def test_reference_exists_and_legacy_numbered_gate_tokens_are_absent(self):
         self.assertTrue(GUIDE.is_file())

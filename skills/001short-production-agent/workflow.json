@@ -109,6 +109,12 @@
       "unique_root_required": true,
       "root_template": "{episode_root}/90_workflow/parallel/{run_id}/{worker_id}/{task_id}",
       "candidate_artifacts": "worker_root_only_until_coordinator_promotion",
+      "live_transcripts": {
+        "record_paths_when_available": true,
+        "authority": "observation_only",
+        "artifact_reverification_required": true,
+        "parent_session_end_behavior": "do_not_treat_delegation_as_durable"
+      },
       "forbidden_writes": [
         "runtime.state_path",
         "runtime.work_outputs",
@@ -125,7 +131,14 @@
         "capcut"
       ],
       "mutual_exclusion": true,
-      "handoff_requires_closed_gui": true
+      "handoff_requires_closed_gui": true,
+      "computer_use_delivery_ladder": [
+        "background",
+        "coordinate_if_recommended",
+        "foreground_if_recommended"
+      ],
+      "recapture_after_state_change": true,
+      "foreground_requires_driver_recommendation": true
     },
     "barrier_policy": {
       "all_required_evidence_must_pass": true,

@@ -1,0 +1,4 @@
+interface:
+  display_name: "top5isu 독립 쇼츠공장"
+  short_description: "TOP5·군림보 설계부터 CapCut 프로젝트까지 단일 스킬"
+  default_prompt: "Use $top5isu-shorts as the single standalone factory for this TOP5 or 군림보 Shorts request. Keep every stage inside top5isu. Build a verified evidence packet, use the managed logged-in ChatGPT browser as the internal main writer in a fresh conversation, then deterministically validate facts, numbers, order, and visible text before TTS and CapCut. Keep clean-video rework, operator manual-edit tolerance, validation, and assembly reporting inside this skill. Never store browser identifiers or use clipboard recovery, and end the assembly report with the exact CapCut project name."

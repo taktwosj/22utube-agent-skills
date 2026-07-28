@@ -1,0 +1,301 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics-longform-script-lock.v1",
+  "title": "대본 잠금 (설계도 확정)",
+  "description": "이 스키마는 모양만 본다. 값의 정합성(SHA 대조, 세그먼트 순서, 라벨이 해당 세그먼트 범위 안에 있는지)은 gate_lock.py 가 본다. 스키마만 통과했다고 잠금이 유효한 것이 아니다.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "episode_id", "status", "lock_version", "locked_at",
+    "authority", "locked_inputs", "ruling_summary", "editorial_decisions",
+    "structure", "hooks", "labels", "tts_params", "render_target"
+  ],
+  "properties": {
+    "schema_version": {"const": "politics-longform-script-lock.v1"},
+    "episode_id": {"type": "string", "pattern": "^PL_[0-9]{8}_[a-z0-9_]+$"},
+    "status": {"const": "SCRIPT_LOCKED"},
+    "lock_version": {"type": "integer", "minimum": 1},
+    "locked_at": {"type": "string", "format": "date-time"},
+
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script_authority", "audit_authority",
+                   "executor_editorial_authority", "review_override"],
+      "properties": {
+        "script_authority": {"const": "PROJECT_GPT"},
+        "audit_authority": {"enum": ["CLAUDE", "CODEX_SUBAGENT"]},
+        "executor_editorial_authority": {"const": "NONE"},
+        "review_override": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/reviewOverride"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"audit_authority": {"const": "CODEX_SUBAGENT"}},
+            "required": ["audit_authority"]
+          },
+          "then": {
+            "properties": {
+              "review_override": {"$ref": "#/$defs/reviewOverride"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"audit_authority": {"const": "CLAUDE"}},
+            "required": ["audit_authority"]
+          },
+          "then": {
+            "properties": {"review_override": {"type": "null"}}
+          }
+        }
+      ]
+    },
+
+    "locked_inputs": {
+      "description": "7개 전부 필수. 대본 SHA만 맞고 clip_manifest 가 빠지면 맞는 대본에 틀린 클립으로 제작된다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script", "source_map", "clip_manifest", "intake_manifest",
+                   "episode_lexicon", "machine_audit", "project_gpt_ruling"],
+      "patternProperties": {
+        "^[a-z_]+$": {"$ref": "#/$defs/lockedInput"}
+      }
+    },
+
+    "ruling_summary": {
+      "type": "object",
+      "required": ["total_findings", "approved_fix", "rejected_no_change",
+                   "deferred", "unresolved", "unresolved_high",
+                   "unresolved_quote_mismatch", "deferred_items"],
+      "properties": {
+        "total_findings": {"type": "integer", "minimum": 0},
+        "approved_fix": {"type": "integer", "minimum": 0},
+        "rejected_no_change": {
+          "description": "REJECTED_NO_CHANGE 는 해결된 것이다. 미해결로 세면 잠금이 영구히 막힌다.",
+          "type": "integer", "minimum": 0},
+        "deferred": {"type": "integer", "minimum": 0},
+        "unresolved": {"const": 0},
+        "unresolved_high": {"const": 0},
+        "unresolved_quote_mismatch": {"const": 0},
+        "deferred_items": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/deferredItem"}
+        }
+      }
+    },
+
+    "editorial_decisions": {
+      "description": "키 누락·오타·false 전부 차단. source_media_verifed 같은 오타가 있으면 그 항목은 검사되지 않은 채 통과한다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chapter_order_approved", "source_media_verified",
+                   "clip_timecodes_verified", "hook_selection_approved",
+                   "lexicon_review_approved", "quote_accuracy_approved",
+                   "lexicon_conflicts"],
+      "properties": {
+        "chapter_order_approved": {"const": true},
+        "source_media_verified": {"const": true},
+        "clip_timecodes_verified": {"const": true},
+        "hook_selection_approved": {"const": true},
+        "lexicon_review_approved": {"const": true},
+        "quote_accuracy_approved": {"const": true},
+        "lexicon_conflicts": {"const": 0}
+      }
+    },
+
+    "structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chapter_count", "narration_block_count",
+                   "source_clip_count", "logical_segment_count",
+                   "chapters", "segments"],
+      "properties": {
+        "chapter_count": {"type": "integer", "minimum": 1},
+        "narration_block_count": {"type": "integer", "minimum": 1},
+        "source_clip_count": {"type": "integer", "minimum": 0},
+        "logical_segment_count": {"type": "integer", "minimum": 1},
+        "chapters": {
+          "type": "array", "minItems": 1,
+          "items": {"$ref": "#/$defs/chapter"}
+        },
+        "segments": {
+          "description": "순서가 계약이다. 개수만 맞고 순서가 틀리면 해설 전에 반론 영상이 먼저 나온다.",
+          "type": "array", "minItems": 1,
+          "items": {"$ref": "#/$defs/segment"}
+        }
+      }
+    },
+
+    "hooks": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[0-9]+$"},
+      "additionalProperties": {"$ref": "#/$defs/hook"}
+    },
+
+    "labels": {
+      "type": "object",
+      "propertyNames": {"pattern": "^(_rule|[0-9]+)$"},
+      "additionalProperties": {
+        "oneOf": [
+          {"type": "string"},
+          {"type": "array", "items": {"type": "string", "minLength": 1}}
+        ]
+      }
+    },
+
+    "tts_params": {
+      "description": "gen_narration 은 이 값만 쓴다. 환경변수 override 금지. speed 1.0 -> 1.2 면 길이가 달라져 정렬·SRT·시간축이 전부 바뀐다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "voice_id", "model",
+                   "speed", "pitch_shift", "pitch_variance"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "voice_id": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "speed": {"type": "number", "exclusiveMinimum": 0},
+        "pitch_shift": {"type": "number"},
+        "pitch_variance": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+
+    "render_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canvas", "fps"],
+      "properties": {
+        "canvas": {"type": "string", "pattern": "^[0-9]+x[0-9]+$"},
+        "fps": {"type": "number", "exclusiveMinimum": 0}
+      }
+    }
+  },
+
+  "$defs": {
+    "relPath": {
+      "description": "episode 상대경로만. 절대경로와 .. 는 금지 — ep/'../../다른에피소드/x.md' 는 실제로 C:\\다른에피소드\\x.md 로 탈출한다.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!\\\\)(?!.*(^|[/\\\\])\\.\\.([/\\\\]|$)).+$"
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "lockedInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/relPath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reviewOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "claude_status", "reviewer", "executor",
+                   "review_event_id", "user_event_id", "user_instruction",
+                   "independent_review"],
+      "properties": {
+        "reason": {"const": "USER_EXPLICITLY_PROHIBITED_CLAUDE"},
+        "claude_status": {
+          "enum": ["NOT_RUN_USER_PROHIBITED",
+                   "NOT_RUN_QUOTA_EXHAUSTED_AND_USER_PROHIBITED"]
+        },
+        "reviewer": {"const": "CODEX_SUBAGENT"},
+        "executor": {"const": "CODEX_ORCHESTRATOR"},
+        "review_event_id": {"type": "string", "minLength": 1},
+        "user_event_id": {"type": "string", "minLength": 1},
+        "user_instruction": {"$ref": "#/$defs/lockedInput"},
+        "independent_review": {"$ref": "#/$defs/lockedInput"}
+      }
+    },
+    "lineRange": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "deferredItem": {
+      "description": "blocks 필드가 없으면 차단한다. 미기입으로 우회하는 것을 막는다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reason", "blocks", "approved_by", "resolution_plan"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "blocks": {
+          "type": "array",
+          "items": {"enum": ["TTS", "ASSEMBLY"]},
+          "uniqueItems": true
+        },
+        "approved_by": {"const": "PROJECT_GPT"},
+        "resolution_plan": {"type": "string", "minLength": 1}
+      }
+    },
+    "chapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["no", "title", "script_line_range", "segment_indices"],
+      "properties": {
+        "no": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1},
+        "script_line_range": {"$ref": "#/$defs/lineRange"},
+        "segment_indices": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "segment_id", "kind", "chapter_no",
+                   "script_line_range", "source_id", "source_timecode"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 1},
+        "segment_id": {"type": "string", "pattern": "^SEG[0-9]{3,}$"},
+        "kind": {"enum": ["NARRATION", "SOURCE_VIDEO"]},
+        "chapter_no": {"type": "integer", "minimum": 1},
+        "script_line_range": {"$ref": "#/$defs/lineRange"},
+        "source_id": {"type": ["string", "null"]},
+        "source_timecode": {"type": ["string", "null"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "SOURCE_VIDEO"}}},
+          "then": {
+            "properties": {
+              "source_id": {"type": "string", "pattern": "^S[0-9]{2}$"},
+              "source_timecode": {
+                "type": "string",
+                "pattern": "^[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{1,3}~[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{1,3}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "NARRATION"}}},
+          "then": {
+            "properties": {
+              "source_id": {"const": null},
+              "source_timecode": {"const": null}
+            }
+          }
+        }
+      ]
+    },
+    "hook": {
+      "description": "text 는 대본 원문 그대로. underline 은 text 안에 실재해야 한다.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "underline", "script_line"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1},
+        "underline": {"type": "string", "minLength": 1},
+        "script_line": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

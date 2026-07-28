@@ -10,6 +10,14 @@
 - 동일 worker root 재사용, 권위 경로 직접 쓰기, 작업자 간 공유 임시 파일, worker의 state 갱신은 허용하지 않는다.
 - VMake와 CapCut을 포함한 GUI 소유자는 전체 실행에서 1명이다. GUI 두 개를 동시에 조작하지 않고, 소유권 이전은 앱을 닫은 뒤에만 한다.
 
+## Hermes 작업자 transcript 계약
+
+- `delegate_task`가 반환한 `live_transcripts` 경로는 worker root의 실행 관찰 증거로 기록한다.
+- transcript의 권위는 `observation_only`다. transcript 안의 완료 주장이나 파일 경로를 canonical evidence로 승격하지 않는다.
+- 조정자는 worker 산출물의 실제 경로·파일 존재·episode_id·SHA-256·validator 결과를 다시 읽는다. 즉 `artifact_reverification_required=true`다.
+- 부모 세션이 끝나도 delegation이 계속된다고 가정하지 않는다. 장시간·지속 작업은 추적 가능한 background process 또는 cron으로 분리한다.
+- transcript에 토큰·쿠키·인증정보가 보이면 보고서에 복사하지 않고 해당 worker 결과를 민감정보 검토 대상으로 표시한다.
+
 ## Barrier 규칙
 
 각 fanout은 다음 순서로 닫는다.

@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 
-SKILL = Path(__file__).parents[1] / "skills" / "111-politics-longform" / "SKILL.md"
+SKILL = Path(__file__).parents[1] / "skills" / "119-politics-longform-capcut" / "SKILL.md"
 SKILL_DIR = SKILL.parent
 
 
