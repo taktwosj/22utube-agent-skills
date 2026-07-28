@@ -33,7 +33,10 @@
     "checked_at_kst": "2026-07-28T23:29:38+0900",
     "git": {
       "branch": "main",
-      "commit": "029b8cc5b78b7c27e35132ebb7a4ba6d326ec68c",
+      "baseline_commit_before_reference_publish": "029b8cc5b78b7c27e35132ebb7a4ba6d326ec68c",
+      "initial_reference_publish_pr": 8,
+      "initial_reference_publish_merge_commit": "478ea8dd45b35c362e9aaa2bb38f6a95292f9be1",
+      "live_main_policy": "main은 이후 전진할 수 있으므로 실행 직전에 fetch하고 owner skill tree와 runtime parity를 다시 비교한다",
       "visibility": "PRIVATE",
       "history_rewrite_performed": false
     },
