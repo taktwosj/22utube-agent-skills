@@ -65,6 +65,7 @@ cue는 선택이다. 타임코드만 있으면 SRT에서 역산한다.
 
 양식과 유의사항: [draft-schema.md](references/draft-schema.md)
 내부 2차 집필 프롬프트: [Retention Story Editor](references/retention-story-editor.md)
+시사·정치 초벌 구조와 문체: [Political News Writing Framework](references/political-news-writing-framework.md)
 
 ## 단계
 
@@ -109,6 +110,11 @@ S2R은 [Retention Story Editor](references/retention-story-editor.md)의 명령�
 둔다. 대본 파일은 `---`로 시작하며 보고 섹션을 포함하지 않는다. S2R 뒤에는
 이 파일을 대상으로 S3 기계 검증을 진행한다. S3가 실패하면 Claude 검수로
 진행하지 않는다.
+
+10~20분 시사·뉴스형 정치롱폼이나 정치인 인물 서사는 S2R 전에 반드시
+[Political News Writing Framework](references/political-news-writing-framework.md)를
+읽고 구조와 문체를 적용한다. 구조 이름과 제작·검수 언어는 완성 대본에
+노출하지 않는다.
 
 S3에서 걸리면 S4로 가지 않는다. 양식 위반이면 `FAIL_DRAFT_FORMAT`,
 내용 위반이면 `WAIT_DRAFT_VERIFICATION`.

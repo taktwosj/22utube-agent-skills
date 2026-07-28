@@ -23,6 +23,9 @@ import draft_md as dm                                        # noqa: E402
 DOCS = [SKILL / "SKILL.md"] + sorted((SKILL / "references").glob("*.md"))
 CAPCUT_RE = re.compile(r"CapCut|캡컷", re.I)
 RETENTION_EDITOR = SKILL / "references" / "retention-story-editor.md"
+POLITICAL_NEWS_FRAMEWORK = (
+    SKILL / "references" / "political-news-writing-framework.md"
+)
 
 REQUIRED_ANCHORS = {
     "SKILL.md": (
@@ -168,6 +171,37 @@ class TestRetentionStoryEditorContract(unittest.TestCase):
         self.assertIn("S2R Retention Story Rewrite", self.skill_text)
         self.assertIn("PROJECT_GPT/Hermes 내부 작가 패스", self.skill_text)
         self.assertIn("새 승인 단계가 아니다", self.skill_text)
+
+    def test_political_news_framework_is_required_for_news_longform(self):
+        self.assertTrue(
+            POLITICAL_NEWS_FRAMEWORK.is_file(),
+            "references/political-news-writing-framework.md 가 없다",
+        )
+        framework = POLITICAL_NEWS_FRAMEWORK.read_text(encoding="utf-8")
+        self.assertIn(
+            "[Political News Writing Framework]"
+            "(references/political-news-writing-framework.md)",
+            self.skill_text,
+        )
+        self.assertIn(
+            "[Political News Writing Framework]"
+            "(political-news-writing-framework.md)",
+            self.editor_text,
+        )
+        required = (
+            "PP-RR-EE-PP",
+            "댄 하먼",
+            "짧은 기승전결",
+            "정치평론 문체",
+            "정청래가 차기 대선을 내려놓고",
+            "이 영상의 범위",
+            "소스팩",
+            "증거로 제시했습니다",
+            "대선 불출마를 가리킬 때는 `차기 대선`으로 통일하라",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, framework)
 
     def test_s4_is_mandatory_read_only_claude_review(self):
         self.assertIn("S4 최초 Claude 전체 검수는 필수", self.skill_text)
