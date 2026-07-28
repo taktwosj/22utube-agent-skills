@@ -40,6 +40,7 @@ REQUIRED_EDITORIAL = ("chapter_order_approved", "source_media_verified",
 
 STAGE_BLOCKER = {"tts": "TTS", "assembly": "ASSEMBLY"}
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+AUDIT_AUTHORITIES = ("CLAUDE", "CODEX_SUBAGENT")
 
 
 def sha256_of(path):
@@ -90,6 +91,7 @@ class Gate:
         self.check(lock.get("status") == "SCRIPT_LOCKED",
                    "STATUS_NOT_LOCKED", repr(lock.get("status")))
 
+        self._check_authority(lock)
         self._check_inputs(lock)
         self._check_ruling(lock)
         self._check_deferred(lock)
@@ -97,6 +99,84 @@ class Gate:
         self._check_segments(lock)
         self._load_script(lock)
         self._check_blueprint_scoped(lock)
+
+    def _check_authority(self, lock):
+        """기본 Claude 검수와 사용자 명시 Codex 대체 검수를 구분한다.
+
+        Codex 대체는 Claude 사용 금지 지시와 독립 검수 파일을 SHA로 함께
+        고정한 경우에만 허용한다. 단순히 audit_authority 문자열만 바꾸면
+        통과하지 않는다.
+        """
+        auth = lock.get("authority") or {}
+        self.check(auth.get("script_authority") == "PROJECT_GPT",
+                   "SCRIPT_AUTHORITY_INVALID",
+                   repr(auth.get("script_authority")))
+        self.check(auth.get("executor_editorial_authority") == "NONE",
+                   "EXECUTOR_EDITORIAL_AUTHORITY_INVALID",
+                   repr(auth.get("executor_editorial_authority")))
+
+        audit = auth.get("audit_authority")
+        self.check(audit in AUDIT_AUTHORITIES, "AUDIT_AUTHORITY_INVALID",
+                   f"{audit!r} not in {AUDIT_AUTHORITIES}")
+        override = auth.get("review_override")
+
+        if audit == "CLAUDE":
+            self.check(override in (None, {}), "REVIEW_OVERRIDE_UNEXPECTED",
+                       "CLAUDE 검수인데 review_override 가 있다")
+            return
+
+        if audit != "CODEX_SUBAGENT":
+            return
+        if not isinstance(override, dict):
+            self.fail("REVIEW_OVERRIDE_REQUIRED",
+                      "CODEX_SUBAGENT 검수에는 review_override 가 필요하다")
+            return
+
+        self.check(override.get("reason") == "USER_EXPLICITLY_PROHIBITED_CLAUDE",
+                   "REVIEW_OVERRIDE_REASON_INVALID",
+                   repr(override.get("reason")))
+        self.check(override.get("claude_status") in (
+                       "NOT_RUN_USER_PROHIBITED",
+                       "NOT_RUN_QUOTA_EXHAUSTED_AND_USER_PROHIBITED"),
+                   "REVIEW_OVERRIDE_CLAUDE_STATUS_INVALID",
+                   repr(override.get("claude_status")))
+        self.check(override.get("reviewer") == "CODEX_SUBAGENT",
+                   "REVIEW_OVERRIDE_REVIEWER_INVALID",
+                   repr(override.get("reviewer")))
+        self.check(override.get("executor") == "CODEX_ORCHESTRATOR",
+                   "REVIEW_OVERRIDE_EXECUTOR_INVALID",
+                   repr(override.get("executor")))
+
+        review_event = override.get("review_event_id")
+        user_event = override.get("user_event_id")
+        self.check(bool(review_event) and bool(user_event),
+                   "REVIEW_OVERRIDE_EVENT_MISSING",
+                   f"review={review_event!r} user={user_event!r}")
+        self.check(not review_event or not user_event or review_event != user_event,
+                   "REVIEW_OVERRIDE_EVENT_COLLISION",
+                   f"review_event_id == user_event_id == {review_event!r}")
+
+        for name in ("user_instruction", "independent_review"):
+            entry = override.get(name) or {}
+            rel, want = entry.get("path"), entry.get("sha256")
+            if not rel or not want:
+                self.fail("REVIEW_OVERRIDE_EVIDENCE_INCOMPLETE",
+                          f"{name}: path/sha256 누락")
+                continue
+            if not SHA_RE.match(str(want)):
+                self.fail("REVIEW_OVERRIDE_EVIDENCE_SHA_MALFORMED",
+                          f"{name}: {want!r}")
+                continue
+            path = self._safe_path(name, rel)
+            if path is None:
+                continue
+            if not path.is_file():
+                self.fail("REVIEW_OVERRIDE_EVIDENCE_MISSING",
+                          f"{name}: {path}")
+                continue
+            got = sha256_of(path)
+            self.check(got == want, "REVIEW_OVERRIDE_EVIDENCE_SHA_MISMATCH",
+                       f"{name}: {rel}\n        기대 {want}\n        실제 {got}")
 
     # ------------------------------------------------------------------
     def _safe_path(self, name, rel):

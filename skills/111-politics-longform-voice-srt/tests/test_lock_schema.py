@@ -39,6 +39,13 @@ class SchemaCase(unittest.TestCase):
         self.assertEqual(self.props("schema_version")["const"],
                          gate_lock.SCHEMA_VERSION)
 
+    def test_audit_authorities_match_gate(self):
+        authority = self.props("authority")
+        self.assertEqual(
+            set(authority["properties"]["audit_authority"]["enum"]),
+            set(gate_lock.AUDIT_AUTHORITIES))
+        self.assertIn("review_override", authority["required"])
+
     def test_locked_inputs_match_gate(self):
         self.assertEqual(set(self.props("locked_inputs")["required"]),
                          set(gate_lock.REQUIRED_INPUTS))

@@ -78,7 +78,9 @@ class GateCase(unittest.TestCase):
             "lock_version": 1,
             "locked_at": "2026-01-01T00:00:00Z",
             "authority": {"script_authority": "PROJECT_GPT",
-                          "executor_editorial_authority": "NONE"},
+                          "audit_authority": "CLAUDE",
+                          "executor_editorial_authority": "NONE",
+                          "review_override": None},
             "locked_inputs": {n: {"path": r, "sha256": self.shas[n]}
                               for n, r in INPUT_FILES.items()},
             "ruling_summary": {
@@ -164,6 +166,66 @@ class GateCase(unittest.TestCase):
         self.write_lock()
         rc, out = self.run_gate("tts")
         self.assertEqual(rc, 0, out)
+
+    def test_user_prohibited_claude_allows_pinned_codex_subagent(self):
+        review = self.ep / "90_workflow" / "codex_review.md"
+        approval = self.ep / "20_script" / "user_approval.json"
+        review.parent.mkdir(parents=True, exist_ok=True)
+        review.write_text("verdict: APPROVED\n", encoding="utf-8")
+        approval.write_text('{"approved": true}\n', encoding="utf-8")
+        self.lock["authority"] = {
+            "script_authority": "PROJECT_GPT",
+            "audit_authority": "CODEX_SUBAGENT",
+            "executor_editorial_authority": "NONE",
+            "review_override": {
+                "reason": "USER_EXPLICITLY_PROHIBITED_CLAUDE",
+                "claude_status": "NOT_RUN_USER_PROHIBITED",
+                "reviewer": "CODEX_SUBAGENT",
+                "executor": "CODEX_ORCHESTRATOR",
+                "review_event_id": "review-1",
+                "user_event_id": "user-1",
+                "user_instruction": {
+                    "path": "20_script/user_approval.json",
+                    "sha256": hashlib.sha256(approval.read_bytes()).hexdigest()},
+                "independent_review": {
+                    "path": "90_workflow/codex_review.md",
+                    "sha256": hashlib.sha256(review.read_bytes()).hexdigest()},
+            },
+        }
+        self.write_lock()
+        rc, out = self.run_gate("tts")
+        self.assertEqual(rc, 0, out)
+
+    def test_codex_subagent_without_user_override_blocks(self):
+        self.lock["authority"]["audit_authority"] = "CODEX_SUBAGENT"
+        self.assertBlocked("REVIEW_OVERRIDE_REQUIRED")
+
+    def test_codex_override_evidence_sha_mismatch_blocks(self):
+        review = self.ep / "90_workflow" / "codex_review.md"
+        approval = self.ep / "20_script" / "user_approval.json"
+        review.parent.mkdir(parents=True, exist_ok=True)
+        review.write_text("verdict: APPROVED\n", encoding="utf-8")
+        approval.write_text('{"approved": true}\n', encoding="utf-8")
+        self.lock["authority"] = {
+            "script_authority": "PROJECT_GPT",
+            "audit_authority": "CODEX_SUBAGENT",
+            "executor_editorial_authority": "NONE",
+            "review_override": {
+                "reason": "USER_EXPLICITLY_PROHIBITED_CLAUDE",
+                "claude_status": "NOT_RUN_USER_PROHIBITED",
+                "reviewer": "CODEX_SUBAGENT",
+                "executor": "CODEX_ORCHESTRATOR",
+                "review_event_id": "review-1",
+                "user_event_id": "user-1",
+                "user_instruction": {
+                    "path": "20_script/user_approval.json",
+                    "sha256": "0" * 64},
+                "independent_review": {
+                    "path": "90_workflow/codex_review.md",
+                    "sha256": hashlib.sha256(review.read_bytes()).hexdigest()},
+            },
+        }
+        self.assertBlocked("REVIEW_OVERRIDE_EVIDENCE_SHA_MISMATCH")
 
     def test_deferred_blocking_assembly_only_allows_tts(self):
         self.lock["ruling_summary"].update(

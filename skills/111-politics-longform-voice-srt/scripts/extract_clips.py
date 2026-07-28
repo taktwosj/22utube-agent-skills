@@ -28,20 +28,37 @@ def _req(name):
 
 EPISODE = Path(_req("PL_EPISODE_DIR"))
 REPO_EPISODE = Path(_req("PL_REPO_EPISODE"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lock_preflight import require_gate
+
+SCRIPT_LOCK = require_gate(EPISODE, "tts")
 # ---------------------------------------------------------------------------
 
 SCRIPT = REPO_EPISODE / "20_script" / os.environ.get(
-    "PL_SCRIPT_NAME", "master_script_project_gpt_final_candidate_v1.md")
+    "PL_SCRIPT_NAME", "master_script_locked.md")
 VIDEO_DIR = Path(_req("PL_VIDEO_DIR"))
 SRT_DIR = EPISODE / "10_analysis" / "transcripts"
 OUT = EPISODE / "30_audio_srt" / "source_clips"
 REPORT = EPISODE / "30_audio_srt" / "source_clip_manifest.json"
 
-CLIP_RE = re.compile(
+LEGACY_CLIP_RE = re.compile(
     r"^▌\s*\*\*(S\d{2})\s+"
     r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})~(\d{2}):(\d{2}):(\d{2})\.(\d{3})\*\*",
     re.M,
 )
+
+CURRENT_CLIP_RE = re.compile(
+    r"^###\s+\[원본\]\s+(S\d{2})\s+\|\s+"
+    r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})~"
+    r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+\|",
+    re.M,
+)
+
+
+def iter_clip_matches(text):
+    hits = [(m.start(), m) for pattern in (LEGACY_CLIP_RE, CURRENT_CLIP_RE)
+            for m in pattern.finditer(text)]
+    return [m for _, m in sorted(hits, key=lambda item: item[0])]
 
 
 def to_sec(h, m, s, ms):
@@ -61,7 +78,7 @@ def main():
     text = SCRIPT.read_text(encoding="utf-8-sig")
     lines = text.splitlines()
     clips = []
-    for m in CLIP_RE.finditer(text):
+    for m in iter_clip_matches(text):
         src = m.group(1)
         start = to_sec(*m.group(2, 3, 4, 5))
         end = to_sec(*m.group(6, 7, 8, 9))
@@ -83,9 +100,11 @@ def main():
             "purpose": purpose,
         })
 
+    expected = int((SCRIPT_LOCK.get("structure") or {}).get(
+        "source_clip_count", 0))
     print(f"parsed clips: {len(clips)}", flush=True)
-    if len(clips) != 13:
-        print(f"FAIL expected 13 clips, got {len(clips)}", flush=True)
+    if len(clips) != expected:
+        print(f"FAIL expected {expected} clips, got {len(clips)}", flush=True)
         return 1
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -99,7 +118,8 @@ def main():
         if not mp4.is_file():
             c["status"] = "FAIL_SOURCE_MISSING"
             failed += 1
-            print(f"[{c['clip_index']:2d}/13] FAIL missing {mp4.name}", flush=True)
+            print(f"[{c['clip_index']:2d}/{expected}] FAIL missing "
+                  f"{mp4.name}", flush=True)
             continue
 
         dest = OUT / f"clip_{c['clip_index']:02d}_{c['source']}.wav"
@@ -122,12 +142,13 @@ def main():
                 "extracted_duration_sec": round(actual, 6),
                 "duration_delta_sec": round(actual - c["duration_sec"], 6),
             })
-            print(f"[{c['clip_index']:2d}/13] OK  {c['source']} "
+            print(f"[{c['clip_index']:2d}/{expected}] OK  {c['source']} "
                   f"{c['duration_sec']:6.2f}s -> {actual:6.2f}s", flush=True)
         except subprocess.CalledProcessError as e:
             c.update({"status": "FAIL_FFMPEG", "error": (e.stderr or "")[:300]})
             failed += 1
-            print(f"[{c['clip_index']:2d}/13] FAIL ffmpeg {c['source']}", flush=True)
+            print(f"[{c['clip_index']:2d}/{expected}] FAIL ffmpeg "
+                  f"{c['source']}", flush=True)
 
     ok = [c for c in clips if c.get("status") == "OK"]
     manifest = {
@@ -138,7 +159,7 @@ def main():
         "clip_count": len(clips),
         "clip_ok": len(ok),
         "clip_failed": failed,
-        "source_scope": "S01~S08 only (S09~S14 out of script evidence range)",
+        "source_scope": sorted({c["source"] for c in clips}),
         "total_clip_duration_sec": round(sum(c["duration_sec"] for c in clips), 3),
         "extraction": "ffmpeg -vn pcm_s16le 44100Hz stereo, source mp4 unmodified",
         "media_root": str(OUT),

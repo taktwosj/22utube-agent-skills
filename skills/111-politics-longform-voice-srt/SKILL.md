@@ -63,6 +63,13 @@ executor_editorial_authority  = NONE
 WORK_ORDER > 프로젝트 GPT 권위 대본 > 111 SKILL.md(이 문서) > workflow/config/schema >
 GitHub PR > 과거 대화 > 추정.
 
+기본 외부 검수자는 Claude다. 다만 사용자가 최신 메시지에서 Claude 사용을
+명시적으로 금지한 경우에만 독립 `CODEX_SUBAGENT` 검수로 대체할 수 있다.
+이때 `script_lock.authority.review_override`에 사용자 지시와 독립 검수 파일의
+상대경로·SHA-256, 서로 다른 사건 ID를 고정한다. Claude를 실행하지 않았으면
+`audit_authority: CLAUDE`로 기록하지 않는다. 증거 없는 대체는
+`REVIEW_OVERRIDE_REQUIRED`로 차단한다.
+
 ## 상태 어휘 (강제)
 
 증거 없이 쓰면 안 되는 말: `PASS` `FINAL` `SCRIPT_LOCK` `upload_ready`
@@ -180,7 +187,9 @@ SOURCE_SPEECH_CAPTION_FIDELITY (v2):
 
 **대본 내용 감사는 110의 일이다. 여기서 다시 하지 않는다.**
 
-110이 기계 검증·Claude 검수·사용자 승인을 거쳐 `script_lock.json`을 만든다.
+110이 기계 검증·독립 검수·사용자 승인을 거쳐 `script_lock.json`을 만든다.
+기본 검수자는 Claude이며, 사용자 명시 금지 때만 위의 SHA 고정 Codex 대체
+계약을 허용한다.
 111이 같은 대본을 다시 읽으면 토큰이 두 배로 들고, 더 나쁘게는 판정 권위가
 두 곳이 되어 서로 다른 결론이 나올 수 있다.
 
@@ -189,9 +198,9 @@ SOURCE_SPEECH_CAPTION_FIDELITY (v2):
 ```text
 20_script/script_lock.json 존재
 script_sha256 == 실제 master_script_locked.md 해시
-evidence 3종 (검증 보고서 · Claude 검수 · 사용자 승인) 실재
-events.claude_review_event_id · user_approval_event_id 존재
-next_stage == 111-politics-longform-voice-srt
+locked_inputs 7종의 상대경로 · SHA-256 일치
+audit_authority 가 CLAUDE 이거나, CODEX_SUBAGENT + review_override 증거가 유효
+structure · editorial_decisions · tts_params 가 gate_lock.py 를 통과
 ```
 
 하나라도 어긋나면 `WAIT_110_SCRIPT_LOCK`으로 멈추고 **110으로 돌려보낸다.**

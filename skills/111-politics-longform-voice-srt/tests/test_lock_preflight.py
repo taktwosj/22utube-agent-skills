@@ -59,7 +59,10 @@ class PreflightCase(unittest.TestCase):
             "schema_version": "politics-longform-script-lock.v1",
             "episode_id": "PL_20260101_test", "status": "SCRIPT_LOCKED",
             "lock_version": 1, "locked_at": "2026-01-01T00:00:00Z",
-            "authority": {"script_authority": "PROJECT_GPT"},
+            "authority": {"script_authority": "PROJECT_GPT",
+                          "audit_authority": "CLAUDE",
+                          "executor_editorial_authority": "NONE",
+                          "review_override": None},
             "locked_inputs": {n: {"path": r, "sha256": shas[n]}
                               for n, r in INPUT_FILES.items()},
             "ruling_summary": {

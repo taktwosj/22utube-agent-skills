@@ -59,6 +59,9 @@ MAX_RETRY = 3
 
 
 def user_env(name):
+    value = os.environ.get(name)
+    if value:
+        return value
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
         return winreg.QueryValueEx(key, name)[0]
 
@@ -121,7 +124,8 @@ def main():
                     "ffprobe": probe(dest),
                 })
                 cursor += dur
-                print(f"[{i:2d}/26] OK  {sid} {dur:6.2f}s  {len(audio):>9,}B", flush=True)
+                print(f"[{i:2d}/{len(segments)}] OK  {sid} {dur:6.2f}s  "
+                      f"{len(audio):>9,}B", flush=True)
                 break
             except Exception as e:
                 if attempt == MAX_RETRY:
@@ -129,7 +133,8 @@ def main():
                                   "error_type": type(e).__name__,
                                   "error": str(e)[:300]})
                     failed += 1
-                    print(f"[{i:2d}/26] FAIL {sid} {type(e).__name__}: "
+                    print(f"[{i:2d}/{len(segments)}] FAIL {sid} "
+                          f"{type(e).__name__}: "
                           f"{str(e)[:150]}", flush=True)
                 else:
                     time.sleep(2 * attempt)

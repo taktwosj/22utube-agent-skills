@@ -48,7 +48,8 @@ gate_assembly.py               production_ready_lock 검사
   "authority": {
     "script_authority": "PROJECT_GPT",
     "audit_authority": "CLAUDE",
-    "executor_editorial_authority": "NONE"
+    "executor_editorial_authority": "NONE",
+    "review_override": null
   },
 
   "locked_inputs": {
@@ -121,6 +122,13 @@ gate_assembly.py               production_ready_lock 검사
   "render_target": {"canvas": "1920x1080", "fps": 30}
 }
 ```
+
+기본값은 `audit_authority: CLAUDE`, `review_override: null`이다. 사용자가 최신
+메시지에서 Claude 사용을 명시적으로 금지한 경우에만
+`audit_authority: CODEX_SUBAGENT`를 쓴다. 이때 `review_override`에는
+`reason=USER_EXPLICITLY_PROHIBITED_CLAUDE`, Claude 미실행 상태, 사용자 지시와
+독립 검수 파일의 상대경로·SHA-256, 서로 다른 사건 ID를 전부 기록한다.
+문자열만 CODEX로 바꾸거나 Claude를 실행한 것처럼 기록하면 잠금 실패다.
 
 `gates_passed`는 없다. script_lock 이 존재하고 유효하면 그 자체가 나레이션 합성
 허가다. 별도 플래그를 두지 않는다.

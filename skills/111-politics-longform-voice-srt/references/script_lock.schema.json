@@ -19,13 +19,42 @@
 
     "authority": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["script_authority", "audit_authority",
-                   "executor_editorial_authority"],
+                   "executor_editorial_authority", "review_override"],
       "properties": {
         "script_authority": {"const": "PROJECT_GPT"},
-        "audit_authority": {"const": "CLAUDE"},
-        "executor_editorial_authority": {"const": "NONE"}
-      }
+        "audit_authority": {"enum": ["CLAUDE", "CODEX_SUBAGENT"]},
+        "executor_editorial_authority": {"const": "NONE"},
+        "review_override": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/reviewOverride"}
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"audit_authority": {"const": "CODEX_SUBAGENT"}},
+            "required": ["audit_authority"]
+          },
+          "then": {
+            "properties": {
+              "review_override": {"$ref": "#/$defs/reviewOverride"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {"audit_authority": {"const": "CLAUDE"}},
+            "required": ["audit_authority"]
+          },
+          "then": {
+            "properties": {"review_override": {"type": "null"}}
+          }
+        }
+      ]
     },
 
     "locked_inputs": {
@@ -162,6 +191,26 @@
       "properties": {
         "path": {"$ref": "#/$defs/relPath"},
         "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reviewOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "claude_status", "reviewer", "executor",
+                   "review_event_id", "user_event_id", "user_instruction",
+                   "independent_review"],
+      "properties": {
+        "reason": {"const": "USER_EXPLICITLY_PROHIBITED_CLAUDE"},
+        "claude_status": {
+          "enum": ["NOT_RUN_USER_PROHIBITED",
+                   "NOT_RUN_QUOTA_EXHAUSTED_AND_USER_PROHIBITED"]
+        },
+        "reviewer": {"const": "CODEX_SUBAGENT"},
+        "executor": {"const": "CODEX_ORCHESTRATOR"},
+        "review_event_id": {"type": "string", "minLength": 1},
+        "user_event_id": {"type": "string", "minLength": 1},
+        "user_instruction": {"$ref": "#/$defs/lockedInput"},
+        "independent_review": {"$ref": "#/$defs/lockedInput"}
       }
     },
     "lineRange": {
