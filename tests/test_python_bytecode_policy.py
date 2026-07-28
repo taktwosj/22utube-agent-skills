@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 PROTOCOL_VALIDATOR = (
     ROOT
     / "skills"
-    / "top5isu-shorts"
+    / "001short-production-agent"
     / "scripts"
-    / "validate_top5isu_contract.py"
+    / "validate_executable_protocol.py"
 )
 SKILL_SCRIPT_CACHE = PROTOCOL_VALIDATOR.parent / "__pycache__"
 

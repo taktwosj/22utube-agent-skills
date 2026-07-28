@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short clean visual receipt",
+  "type": "object",
+  "required": [
+    "schema_version", "status", "episode_id", "manifest_path", "manifest_sha256",
+    "source_identity_path", "source_identity_sha256", "design_lock_evidence_path",
+    "design_lock_evidence_sha256", "clean_source_path", "clean_source_sha256",
+    "source_fingerprint", "measured_duration_us", "width", "height",
+    "video_stream_verified", "ffprobe_verified"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "001short-clean-visual-receipt-v1"},
+    "status": {"type": "string", "const": "PASS"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "manifest_path": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "source_identity_path": {"type": "string", "minLength": 1},
+    "source_identity_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "design_lock_evidence_path": {"type": "string", "minLength": 1},
+    "design_lock_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "clean_source_path": {"type": "string", "minLength": 1},
+    "clean_source_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "source_fingerprint": {"type": "string", "minLength": 1},
+    "measured_duration_us": {"type": "integer", "minimum": 1},
+    "width": {"type": "integer", "minimum": 1},
+    "height": {"type": "integer", "minimum": 1},
+    "video_stream_verified": {"type": "boolean", "const": true},
+    "ffprobe_verified": {"type": "boolean", "const": true}
+  },
+  "additionalProperties": false
+}

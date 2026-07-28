@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short DESIGN_LOCK evidence",
+  "type": "object",
+  "required": [
+    "schema_version", "status", "episode_id", "handoff_path", "handoff_sha256",
+    "source_identity_path", "source_identity_sha256", "source_media_path", "source_media_sha256",
+    "timeline_path", "timeline_sha256", "source_fingerprint"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "001short-design-lock-evidence-v1"},
+    "status": {"type": "string", "const": "PASS"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "handoff_path": {"type": "string", "minLength": 1},
+    "handoff_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "source_identity_path": {"type": "string", "minLength": 1},
+    "source_identity_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "source_media_path": {"type": "string", "minLength": 1},
+    "source_media_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "timeline_path": {"type": "string", "minLength": 1},
+    "timeline_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "source_fingerprint": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

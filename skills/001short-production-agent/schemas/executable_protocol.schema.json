@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-executable-protocol-v1.json",
+  "title": "001short Executable Protocol",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "owner_skill",
+    "lane",
+    "authority",
+    "schemas",
+    "production_modes",
+    "urakkai_review_loop",
+    "invariants",
+    "anchors",
+    "stages",
+    "completion_report",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "001short-executable-protocol-v1"
+    },
+    "owner_skill": {
+      "const": "001short-production-agent"
+    },
+    "lane": {
+      "const": "general_shorts_production"
+    },
+    "schemas": {
+      "type": "object",
+      "required": [
+        "protocol",
+        "production_plan",
+        "completion_report"
+      ],
+      "properties": {
+        "protocol": {
+          "const": "schemas/executable_protocol.schema.json"
+        },
+        "production_plan": {
+          "const": "schemas/executable_production_plan.schema.json"
+        },
+        "completion_report": {
+          "const": "schemas/completion_report.schema.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "production_modes": {
+      "type": "object",
+      "required": [
+        "URAKKAI",
+        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "URAKKAI": {
+          "type": "object",
+          "required": [
+            "meaningful_reorder_required",
+            "minimum_video_segments",
+            "fake_split_forbidden",
+            "approved_final_order_required",
+            "a10_sync_required_for_all_used_ranges"
+          ],
+          "properties": {
+            "meaningful_reorder_required": {
+              "const": true
+            },
+            "minimum_video_segments": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "fake_split_forbidden": {
+              "const": true
+            },
+            "approved_final_order_required": {
+              "const": true
+            },
+            "a10_sync_required_for_all_used_ranges": {
+              "const": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
+          "type": "object",
+          "required": [
+            "explicit_exception_to_multi_cut_gate",
+            "video_segments",
+            "original_audio_segments",
+            "video_duration",
+            "original_audio_duration",
+            "source_order_change"
+          ],
+          "properties": {
+            "explicit_exception_to_multi_cut_gate": {
+              "const": true
+            },
+            "video_segments": {
+              "const": 1
+            },
+            "original_audio_segments": {
+              "const": 1
+            },
+            "video_duration": {
+              "const": "FULL_LENGTH"
+            },
+            "original_audio_duration": {
+              "const": "FULL_LENGTH"
+            },
+            "source_order_change": {
+              "const": "FORBIDDEN"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    },
+    "urakkai_review_loop": {
+      "type": "object",
+      "required": [
+        "enabled_for",
+        "preferred_provider",
+        "preferred_model",
+        "effort",
+        "review_loop_count",
+        "reviews_per_loop",
+        "hermes_improvement_after_each_loop",
+        "hermes_final_best_selection_required",
+        "authority",
+        "fallback_provider",
+        "fallback_on_claude_failure",
+        "evidence_path"
+      ],
+      "properties": {
+        "enabled_for": {
+          "const": ["URAKKAI"]
+        },
+        "preferred_provider": {
+          "const": "first_party_claude_oauth"
+        },
+        "preferred_model": {
+          "const": "Claude Opus"
+        },
+        "effort": {
+          "const": "low"
+        },
+        "review_loop_count": {
+          "const": 2
+        },
+        "reviews_per_loop": {
+          "const": 1
+        },
+        "hermes_improvement_after_each_loop": {
+          "const": true
+        },
+        "hermes_final_best_selection_required": {
+          "const": true
+        },
+        "authority": {
+          "const": "hermes_segment_id_and_approved_ranges"
+        },
+        "fallback_provider": {
+          "const": "Hermes subagent"
+        },
+        "fallback_on_claude_failure": {
+          "const": true
+        },
+        "evidence_path": {
+          "const": "20_script/external-review.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "invariants": {
+      "type": "object",
+      "required": [
+        "single_active_lane",
+        "state_advance_after_validator_pass_only",
+        "vmake_dom_first",
+        "vmake_full_download_required",
+        "vmake_direct_insert_required",
+        "vmake_direct_insert_asset",
+        "vmake_direct_insert_asset_key",
+        "urakkai_final_duration_independent_from_source",
+        "clean_visual_duration_matches_source_before_edit",
+        "clean_only_full_source_duration_required",
+        "capcut_root_immutable",
+        "capcut_project_media_internal",
+        "capcut_cloud_destination",
+        "capcut_cloud_row_readback_required",
+        "capcut_cloud_reopen_playback_required",
+        "public_upload_requires_explicit_approval",
+        "completion_report_requires_upload_metadata",
+        "source_file_evidence_required",
+        "vmake_final_download_evidence_required",
+        "vmake_substitute_file_forbidden",
+        "capcut_visual_confirmation_required_before_completion"
+      ],
+      "properties": {
+        "vmake_full_download_required": {
+          "const": true
+        },
+        "vmake_direct_insert_required": {
+          "const": true
+        },
+        "vmake_direct_insert_asset": {
+          "const": "40_assets_used/clean_source.mp4"
+        },
+        "vmake_direct_insert_asset_key": {
+          "const": "clean_video"
+        },
+        "urakkai_final_duration_independent_from_source": {
+          "const": true
+        },
+        "clean_visual_duration_matches_source_before_edit": {
+          "const": true
+        },
+        "clean_only_full_source_duration_required": {
+          "const": true
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "01"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "02"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "03"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "04"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "05"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "06"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "07"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "08"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "const": "09"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "pass_state"
+          ]
+        }
+      ],
+      "items": false
+    },
+    "completion_report": {
+      "type": "object",
+      "required": [
+        "required_fields",
+        "source_required_fields",
+        "cloud_row_required_fields",
+        "public_upload_done_values",
+        "public_upload_approval_field"
+      ],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "contains": {
+            "const": "upload_title"
+          }
+        },
+        "source_required_fields": {
+          "type": "array",
+          "minItems": 2
+        },
+        "cloud_row_required_fields": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "name"
+            },
+            {
+              "const": "size"
+            },
+            {
+              "const": "duration"
+            },
+            {
+              "const": "type"
+            },
+            {
+              "const": "modified_time"
+            }
+          ],
+          "minItems": 5,
+          "maxItems": 5,
+          "items": false
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
