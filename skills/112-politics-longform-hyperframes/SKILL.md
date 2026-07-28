@@ -28,7 +28,10 @@ NEW_SKILL=112-politics-longform-hyperframes
 작업 전에 현재 factory의 `AGENTS.md`, `docs/YOUTUBE_PRODUCTION_WORK_ORDER.md`,
 그리고 [template-contract.md](references/template-contract.md)를 읽는다. 에피소드 화면이나
 썸네일 전달안을 만들 때는 [political-documentary-design-preset.md](references/political-documentary-design-preset.md)와
-`assets/political-documentary-defaults.json`도 읽는다. 설치된
+[narration-visual-grammar.md](references/narration-visual-grammar.md),
+[visual-reference-frames.md](references/visual-reference-frames.md),
+`assets/political-documentary-defaults.json`,
+`assets/political-documentary-reference-frames.json`도 읽는다. 설치된
 `hyperframes`, `hyperframes-cli`, `hyperframes-registry` 스킬이 있으면 정확한
 syntax와 CLI 계약을 위해 읽는다. 없으면 설치를 추정하지 말고 실제
 `npx.cmd hyperframes --help`와 프로젝트 선언 버전을 확인한다.
@@ -103,7 +106,7 @@ lock은 공용 템플릿이 에피소드마다 조금씩 달라지는 drift를 �
 ### 기본 디자인 프리셋 — 고정
 
 ```text
-DEFAULT_VISUAL_PROFILE=politics_documentary_broadcast_v1
+DEFAULT_VISUAL_PROFILE=politics_documentary_broadcast_v3
 PROFILE_AUTHORITY=assets/political-documentary-defaults.json
 PROFILE_SCOPE=EPISODE_VISUAL_LAYER_ONLY
 PROFILE_OVERRIDE=LATEST_EXPLICIT_USER_INSTRUCTION_ONLY
@@ -114,6 +117,12 @@ PROFILE_OVERRIDE=LATEST_EXPLICIT_USER_INSTRUCTION_ONLY
 정렬·여백·타이포그래피 중심의 화면을 사용한다. 고정 색상, 레이아웃, 출처 표기,
 댓글·구독 문구, 모션과 썸네일 전달 형식은
 [political-documentary-design-preset.md](references/political-documentary-design-preset.md)를 따른다.
+나레이션 장면은 대본의 의미에 따라 `FLOW_NODES`, `TIMELINE_PATH`, `CORE_ORBIT`,
+`COMPARE_SPLIT`, `STEP_PROGRESS`, `QUOTE_SPOTLIGHT` 중 하나를 선택하고
+[narration-visual-grammar.md](references/narration-visual-grammar.md)의 반복 방지와
+발화 동기화 규칙을 따른다. 사각형 카드와 직선 화살표만 반복하지 않는다.
+레이아웃과 화면 밀도는 사용자가 승인한 네 장의 시안을 담은
+[visual-reference-frames.md](references/visual-reference-frames.md)를 최우선 시각 기준으로 삼는다.
 
 공용 템플릿 lock을 고치지 않는다. 프리셋은 episode CSS·SVG·`design.md`에만
 주입하고, 적용한 profile ID와 JSON SHA-256을 episode `design.md` 또는 build manifest에
@@ -170,10 +179,12 @@ preview URL이 실제로 응답하고 세 composition 첫 프레임을 확인할
 
 사용자가 승인·LOCK한 템플릿으로 별도 episode 작업을 시작한다. 승인 대본,
 source range, WAV, SRT와 chapter 순서를 바꾸지 않고 HTML composition으로 구현한다.
-사용자 별도 디자인 지시가 없으면 `politics_documentary_broadcast_v1`을 episode
+사용자 별도 디자인 지시가 없으면 `politics_documentary_broadcast_v3`를 episode
 시각 레이어에 적용한다. 출처에는 `S12` 같은 내부 ID가 아니라 실제 유튜브 채널명과
 업로드 날짜를 표시한다. 썸네일 전달안은 프리셋의 고정 5항목 순서로 작성한다.
-preview 승인 전 render를 하지 않는다.
+원본 영상 장면은 영상과 표정이 우선이며 흐름도나 장식 도형을 덮지 않는다.
+나레이션 장면은 승인 대본 밖의 문구를 추가하지 않고 실제 SRT 발화 구간에 맞춰
+시각 요소를 등장시킨다. preview 승인 전 render를 하지 않는다.
 
 ## Hard Stops
 
@@ -199,6 +210,10 @@ preview 승인 전 render를 하지 않는다.
 - 출처 자리에 `원본 S12` 같은 내부 source ID를 노출하지 않는다.
 - 댓글·구독 문구를 임의로 줄이거나 다른 문구로 바꾸지 않는다.
 - 붓글씨, 두꺼운 외곽선, 반복 점멸, 대각선 네온 장식을 기본값으로 사용하지 않는다.
+- 나레이션 장면을 사각형 카드와 직선 화살표만으로 연속 구성하지 않는다.
+- 의미를 무시하고 장식 다양성만을 위해 도형을 늘리지 않는다.
+- 외부 이미지 생성을 기본 공정에 넣지 않는다. 인물 누끼는 승인 시안과 같은
+  히어로 장면에 한해 기존 소스나 사용자 제공 자산으로 허용한다.
 - 가짜 Studio token UI나 지원되지 않는 control을 만들지 않는다.
 
 ## Validation Tool

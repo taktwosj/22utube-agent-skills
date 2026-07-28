@@ -119,6 +119,15 @@ class TestHappyPath(LockCase):
         self.write_all()
         self.assertEqual(self.run_gate(), [])
 
+    def test_codex_cli_fallback_review_passes(self):
+        self.write_all(
+            origin="codex_cli_external",
+            recorded_by="CODEX_CLI_REVIEWER",
+            executor="CODEX_DESKTOP",
+            review_name="claude_review_v1_codex_fallback.md",
+        )
+        self.assertEqual(self.run_gate(), [])
+
 
 class TestMissingEvidence(LockCase):
     def test_nothing_present(self):

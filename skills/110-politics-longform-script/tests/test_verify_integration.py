@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import copy
 import sys
 import unittest
 from pathlib import Path
@@ -77,6 +78,13 @@ class TestCleanDraftPasses(unittest.TestCase):
         """간투사 cue 414 를 신고하고 뺐다. 대조에서도 빠져야 한다."""
         self.assertNotIn("quote_fidelity", check(GOOD))
 
+    def test_asr_speaker_markers_are_not_spoken_content(self):
+        packet = copy.deepcopy(PACKET)
+        packet["sources"][0]["cues"][0]["text"] = \
+            ">> " + packet["sources"][0]["cues"][0]["text"]
+        packet["sources"][0]["cues"][1]["text"] += " <<"
+        self.assertNotIn("quote_fidelity", check(GOOD, packet))
+
 
 class TestEachCheckFiresEndToEnd(unittest.TestCase):
     """배선 시험. 개별 검사가 실제 파이프라인에서 발화하는가."""
@@ -84,6 +92,12 @@ class TestEachCheckFiresEndToEnd(unittest.TestCase):
     def test_quote_fidelity(self):
         md = GOOD.replace("실패로 끝날 거라고 봐요", "실패로 끝날 것")
         self.assertIn("quote_fidelity", check(md))
+
+    def test_forbidden_display_marks(self):
+        for mark in (">>", "<<", "·"):
+            with self.subTest(mark=mark):
+                md = GOOD.replace("그래서 반대했습니다", f"그래서 {mark} 반대했습니다")
+                self.assertIn("forbidden_display_marks", check(md))
 
     def test_undeclared_skip_breaks_quote_match(self):
         """생략을 신고하지 않고 빼면 대조에서 걸린다."""

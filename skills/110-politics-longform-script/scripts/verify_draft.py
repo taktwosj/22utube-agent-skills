@@ -27,6 +27,8 @@ def sha256_of(path):
     return h.hexdigest()
 
 QUOTE_RE = re.compile(r"[\"'“”‘’]")
+ASR_SPEAKER_MARK_RE = re.compile(r"(?:^|\s)(?:>>|<<)(?=\s|$)")
+FORBIDDEN_DISPLAY_MARKS = (">>", "<<", "·")
 
 # 근거 없이 쓰면 의혹을 사실로 바꾸는 표현. 어간으로 둔다 --
 # '드러났다' 로 고정하면 '드러났습니다' 가 빠져나간다.
@@ -63,8 +65,21 @@ def cue_index(packet):
 
 
 def normalize(text):
-    """공백만 정규화한다. 어미·조사는 건드리지 않는다 -- 그게 검사 대상이다."""
-    return re.sub(r"\s+", " ", (text or "")).strip()
+    """비발화 화자 표식과 공백만 정규화한다."""
+    text = ASR_SPEAKER_MARK_RE.sub(" ", text or "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def check_forbidden_display_marks(draft, packet=None):
+    """화면용 대본에 ASR 화자표식과 가운데점을 남기지 않는다."""
+    violations = []
+    for _, seg in iter_segments(draft):
+        text = seg.get("text") or ""
+        hits = [mark for mark in FORBIDDEN_DISPLAY_MARKS if mark in text]
+        if hits:
+            violations.append(
+                f"{seg.get('segment_id')}: 금지 표시 {' '.join(hits)}")
+    return violations
 
 
 def check_source_references(draft, packet):
@@ -206,6 +221,8 @@ CHECKS = (
     ("source_reference", check_source_references, "FAIL_SOURCE_REFERENCE_INVALID"),
     ("quote_fidelity", check_quote_fidelity, "FAIL_QUOTE_FIDELITY"),
     ("quote_mode_marks", check_quote_mode_marks, "FAIL_QUOTE_FIDELITY"),
+    ("forbidden_display_marks", check_forbidden_display_marks,
+     "FAIL_FORBIDDEN_SCRIPT_MARK"),
     ("allegation_framing", check_allegation_framing,
      "FAIL_ALLEGATION_STATED_AS_FACT"),
     ("declared_counts", check_declared_counts, "WAIT_DRAFT_VERIFICATION"),
