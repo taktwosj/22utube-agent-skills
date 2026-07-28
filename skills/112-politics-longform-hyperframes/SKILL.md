@@ -26,7 +26,9 @@ NEW_SKILL=112-politics-longform-hyperframes
 ## Required Reads
 
 작업 전에 현재 factory의 `AGENTS.md`, `docs/YOUTUBE_PRODUCTION_WORK_ORDER.md`,
-그리고 [template-contract.md](references/template-contract.md)를 읽는다. 설치된
+그리고 [template-contract.md](references/template-contract.md)를 읽는다. 에피소드 화면이나
+썸네일 전달안을 만들 때는 [political-documentary-design-preset.md](references/political-documentary-design-preset.md)와
+`assets/political-documentary-defaults.json`도 읽는다. 설치된
 `hyperframes`, `hyperframes-cli`, `hyperframes-registry` 스킬이 있으면 정확한
 syntax와 CLI 계약을 위해 읽는다. 없으면 설치를 추정하지 말고 실제
 `npx.cmd hyperframes --help`와 프로젝트 선언 버전을 확인한다.
@@ -38,6 +40,7 @@ skill_git_authority=C:\Users\arajun\agent-skills\skills\112-politics-longform-hy
 PL_HYPERFRAMES_REPO=C:\Users\arajun\repos\politics-longform-hyperframes
 template_default=${PL_HYPERFRAMES_REPO}\template
 episode_project={episode}\60_hyperframes\project
+default_visual_profile=assets/political-documentary-defaults.json
 ```
 
 공용 템플릿은 episode 밖에 둔다. episode 프로젝트는 공용 템플릿을 복제하거나
@@ -97,6 +100,26 @@ lock은 공용 템플릿이 에피소드마다 조금씩 달라지는 drift를 �
 빌더가 주입하는 레이어에서 한다. 템플릿 사본의 파일을 편집해 디자인을 바꾸면
 `FAIL_TEMPLATE_LOCK_DRIFT`다.
 
+### 기본 디자인 프리셋 — 고정
+
+```text
+DEFAULT_VISUAL_PROFILE=politics_documentary_broadcast_v1
+PROFILE_AUTHORITY=assets/political-documentary-defaults.json
+PROFILE_SCOPE=EPISODE_VISUAL_LAYER_ONLY
+PROFILE_OVERRIDE=LATEST_EXPLICIT_USER_INSTRUCTION_ONLY
+```
+
+사용자가 다른 디자인을 명시하지 않으면 이 프리셋을 그대로 적용한다. 게임 HUD,
+사이버펑크, 네온 UI를 만들지 않는다. 딥 네이비 기반 방송사 정치 다큐 톤,
+정렬·여백·타이포그래피 중심의 화면을 사용한다. 고정 색상, 레이아웃, 출처 표기,
+댓글·구독 문구, 모션과 썸네일 전달 형식은
+[political-documentary-design-preset.md](references/political-documentary-design-preset.md)를 따른다.
+
+공용 템플릿 lock을 고치지 않는다. 프리셋은 episode CSS·SVG·`design.md`에만
+주입하고, 적용한 profile ID와 JSON SHA-256을 episode `design.md` 또는 build manifest에
+기록한다. 명시적 사용자 변경 없이 색상·서체·CTA 문구·출처 위치를 임의 변경하면
+`FAIL_DEFAULT_VISUAL_PROFILE_DRIFT`다.
+
 ### 시각 부호 체계 요건
 
 정치 롱폼은 확인된 사실과 화자의 해석을 화면에서 구분해야 한다.
@@ -147,6 +170,9 @@ preview URL이 실제로 응답하고 세 composition 첫 프레임을 확인할
 
 사용자가 승인·LOCK한 템플릿으로 별도 episode 작업을 시작한다. 승인 대본,
 source range, WAV, SRT와 chapter 순서를 바꾸지 않고 HTML composition으로 구현한다.
+사용자 별도 디자인 지시가 없으면 `politics_documentary_broadcast_v1`을 episode
+시각 레이어에 적용한다. 출처에는 `S12` 같은 내부 ID가 아니라 실제 유튜브 채널명과
+업로드 날짜를 표시한다. 썸네일 전달안은 프리셋의 고정 5항목 순서로 작성한다.
 preview 승인 전 render를 하지 않는다.
 
 ## Hard Stops
@@ -170,6 +196,9 @@ preview 승인 전 render를 하지 않는다.
   "렌더 중 네트워크 요청 0건"이다.
 - 첫 프레임을 빈 화면으로 만드는 등장 애니메이션을 사용하지 않는다.
 - 자막 두 종류를 같은 시점에 겹치지 않는다.
+- 출처 자리에 `원본 S12` 같은 내부 source ID를 노출하지 않는다.
+- 댓글·구독 문구를 임의로 줄이거나 다른 문구로 바꾸지 않는다.
+- 붓글씨, 두꺼운 외곽선, 반복 점멸, 대각선 네온 장식을 기본값으로 사용하지 않는다.
 - 가짜 Studio token UI나 지원되지 않는 control을 만들지 않는다.
 
 ## Validation Tool

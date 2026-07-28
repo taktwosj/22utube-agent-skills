@@ -155,7 +155,6 @@ class PreflightCase(unittest.TestCase):
             "PATH": "", "SystemRoot": "C:\\Windows",
             "PYTHONIOENCODING": "utf-8",
             "PL_EPISODE_DIR": str(self.ep),
-            "PL_REPO_EPISODE": str(self.ep),
         }
         return subprocess.run([sys.executable, str(TTS_SCRIPT)],
                               capture_output=True, text=True,

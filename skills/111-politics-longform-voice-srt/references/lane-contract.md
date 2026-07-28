@@ -158,7 +158,7 @@ WAIT_ROOT_CAUSE
 ```text
 119 구현 관련 문자열·import 0건 (금지 선언문 제외)
 119 실행 호출 0건
-PL_EPISODE_DIR / PL_REPO_EPISODE / PL_VIDEO_DIR / PL_SCRIPT_SHA256 누락 시 BLOCKED
+PL_EPISODE_DIR / PL_VIDEO_DIR / PL_SCRIPT_SHA256 누락 시 BLOCKED
 환경변수 경로가 허용 루트 밖이면 거부 (path traversal 차단)
 권위 대본 SHA 불일치 시 WAIT_SCRIPT_INTEGRITY
 원본 MP4 무수정

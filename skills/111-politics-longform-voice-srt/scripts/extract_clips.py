@@ -12,8 +12,7 @@ import time
 from pathlib import Path
 
 # --- 에피소드 파라미터 (환경변수 필수) ---------------------------------------
-# PL_EPISODE_DIR   : 로컬 미디어 정본 (OneDrive 에피소드 폴더, Git 미추적)
-# PL_REPO_EPISODE  : Git 추적 산출물 (clean checkout 내 docs/.../episodes/<ID>)
+# PL_EPISODE_DIR   : 로컬 정본 (OneDrive 에피소드 폴더)
 # PL_VIDEO_DIR     : 원본 mp4 폴더 (S01.mp4~)
 # PL_SCRIPT_SHA256 : 권위 대본 SHA-256 (staleness 탐지용)
 import os
@@ -27,14 +26,13 @@ def _req(name):
 
 
 EPISODE = Path(_req("PL_EPISODE_DIR"))
-REPO_EPISODE = Path(_req("PL_REPO_EPISODE"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lock_preflight import require_gate
 
 SCRIPT_LOCK = require_gate(EPISODE, "tts")
 # ---------------------------------------------------------------------------
 
-SCRIPT = REPO_EPISODE / "20_script" / os.environ.get(
+SCRIPT = EPISODE / "20_script" / os.environ.get(
     "PL_SCRIPT_NAME", "master_script_locked.md")
 VIDEO_DIR = Path(_req("PL_VIDEO_DIR"))
 SRT_DIR = EPISODE / "10_analysis" / "transcripts"

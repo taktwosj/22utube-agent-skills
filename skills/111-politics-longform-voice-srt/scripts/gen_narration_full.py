@@ -14,8 +14,7 @@ import winreg
 from pathlib import Path
 
 # --- 에피소드 파라미터 (환경변수 필수) ---------------------------------------
-# PL_EPISODE_DIR   : 로컬 미디어 정본 (OneDrive 에피소드 폴더, Git 미추적)
-# PL_REPO_EPISODE  : Git 추적 산출물 (clean checkout 내 docs/.../episodes/<ID>)
+# PL_EPISODE_DIR   : 로컬 정본 (OneDrive 에피소드 폴더)
 # PL_VIDEO_DIR     : 원본 mp4 폴더 (S01.mp4~)
 # PL_SCRIPT_SHA256 : 권위 대본 SHA-256 (staleness 탐지용)
 import os
@@ -29,7 +28,6 @@ def _req(name):
 
 
 EPISODE = Path(_req("PL_EPISODE_DIR"))
-REPO_EPISODE = Path(_req("PL_REPO_EPISODE"))
 
 # 잠금 게이트. 이 줄 없이 스크립트를 직접 실행하면 게이트를 우회할 수 있다.
 # 지난 에피소드에서 감사 게이트가 산문이라 무시된 것과 같은 구조라 실행 시점에
@@ -41,7 +39,7 @@ from lock_preflight import (require_gate, locked_tts_params,
 SCRIPT_LOCK = require_gate(EPISODE, "tts")
 # ---------------------------------------------------------------------------
 
-SEGMENTS_JSON = REPO_EPISODE / "30_audio_srt" / "narration_segments.json"
+SEGMENTS_JSON = EPISODE / "30_audio_srt" / "narration_segments.json"
 OUT = EPISODE / "30_audio_srt" / "narration"
 MANIFEST = EPISODE / "30_audio_srt" / "voice_manifest.json"
 

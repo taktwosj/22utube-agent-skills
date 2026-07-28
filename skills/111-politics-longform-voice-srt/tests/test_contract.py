@@ -393,11 +393,10 @@ class TestTerminology(unittest.TestCase):
 
 
 class TestScriptGuards(unittest.TestCase):
-    REQUIRED_ENV = ("PL_EPISODE_DIR", "PL_REPO_EPISODE")
+    REQUIRED_ENV = ("PL_EPISODE_DIR",)
 
     def _env_without_contract_vars(self):
-        drop = {"PL_EPISODE_DIR", "PL_REPO_EPISODE",
-                "PL_VIDEO_DIR", "PL_SCRIPT_SHA256"}
+        drop = {"PL_EPISODE_DIR", "PL_VIDEO_DIR", "PL_SCRIPT_SHA256"}
         env = {k: v for k, v in os.environ.items() if k not in drop}
         # 한글 오류 메시지가 cp949로 디코드되면 출력이 통째로 사라진다
         env["PYTHONIOENCODING"] = "utf-8"
@@ -426,6 +425,24 @@ class TestScriptGuards(unittest.TestCase):
                     [sys.executable, "-m", "py_compile", str(script)],
                     capture_output=True, text=True, timeout=120)
                 self.assertEqual(r.returncode, 0, r.stderr)
+
+
+class TestNoAutomaticGit(unittest.TestCase):
+    def test_skill_forbids_automatic_git_actions(self):
+        text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "Git clone/worktree/commit/push/PR 생성은 111 기본 흐름이 아니며 자동 실행하지 않는다.",
+            text,
+        )
+        self.assertIn("Git commit/push/PR은 실행하지 않는다.", text)
+        self.assertNotIn("일반 push", text)
+
+    def test_scripts_have_no_repo_checkout_dependency(self):
+        for script in SCRIPTS:
+            with self.subTest(script=script.name):
+                text = script.read_text(encoding="utf-8")
+                self.assertNotIn("PL_REPO_EPISODE", text)
+                self.assertNotIn("REPO_EPISODE", text)
 
 
 class TestAlignmentContract(unittest.TestCase):

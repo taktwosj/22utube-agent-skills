@@ -14,8 +14,7 @@ import time
 from pathlib import Path
 
 # --- 에피소드 파라미터 (환경변수 필수) ---------------------------------------
-# PL_EPISODE_DIR   : 로컬 미디어 정본 (OneDrive 에피소드 폴더, Git 미추적)
-# PL_REPO_EPISODE  : Git 추적 산출물 (clean checkout 내 docs/.../episodes/<ID>)
+# PL_EPISODE_DIR   : 로컬 정본 (OneDrive 에피소드 폴더)
 # PL_VIDEO_DIR     : 원본 mp4 폴더 (S01.mp4~)
 # PL_SCRIPT_SHA256 : 권위 대본 SHA-256 (staleness 탐지용)
 import os
@@ -29,7 +28,6 @@ def _req(name):
 
 
 EPISODE = Path(_req("PL_EPISODE_DIR"))
-REPO_EPISODE = Path(_req("PL_REPO_EPISODE"))
 # ---------------------------------------------------------------------------
 
 NAR = EPISODE / "30_audio_srt" / "narration"
@@ -106,7 +104,7 @@ def main():
     # 발음 검사: 권위 대본에 해당 어휘가 있는 세그먼트에서 ASR이 같은 어휘를 냈는지
     src = {s["segment_id"]: s for s in vm["segments"]}
     seg_json = json.loads(
-        (REPO_EPISODE / "30_audio_srt" / "narration_segments.json")
+        (EPISODE / "30_audio_srt" / "narration_segments.json")
         .read_text(encoding="utf-8-sig"))
     text_by_id = {x["segment_id"]: x["text"] for x in seg_json["segments"]}
 

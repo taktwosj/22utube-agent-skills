@@ -83,21 +83,18 @@ GitHub PR > 과거 대화 > 추정.
 `review_audio_timeline_v1.json`. 요약은 손실이라 SHA·오프셋 같은 정확값이 날아간다.
 요약 안의 값을 근거로 PASS를 주장하지 않는다.
 
-## 경로 분리 (필수)
+## 산출물 경로 (필수)
 
 ```text
-로컬 미디어 정본 (WAV/MP3/MP4, Git 미추적):
+로컬 정본 (WAV/MP3/MP4/SRT/JSON/보고서):
   {onedrive}\22factory_*\02_politics_longform\episodes\{EPISODE_ID}\
-
-Git 추적 산출물 (SRT/JSON/보고서):
-  {clean_checkout}\docs\politics-longform\episodes\{EPISODE_ID}\
 ```
 
-Git에 올릴 때 `LOCAL_SHA256 == REPO_SHA256` 확인. WAV/MP3/MP4는 커밋하지 않고
-manifest에 로컬 경로·크기·SHA-256·길이·생성도구만 기록한다.
-
-**비정본 worktree 재사용 금지.** 권위 커밋 SHA로 clean clone을 새로 만든다.
-`reset` / `rebase` / `push --force` / PR 병합 / 업로드 없음.
+111의 책임은 로컬 음성·SRT·QC·112 인계 파일 생성까지다.
+Git clone/worktree/commit/push/PR 생성은 111 기본 흐름이 아니며 자동 실행하지 않는다.
+사용자가 최신 메시지에서 Git 작업을 별도로 명시한 경우에만 해당 요청 범위로
+실행한다. `production_input_v1.json`에는 로컬 경로·크기·SHA-256·길이·생성도구를
+기록한다.
 
 ## 환경변수
 
@@ -105,7 +102,6 @@ manifest에 로컬 경로·크기·SHA-256·길이·생성도구만 기록한다
 
 ```bash
 PL_EPISODE_DIR=<OneDrive 에피소드 폴더>
-PL_REPO_EPISODE=<clean checkout 내 docs/.../episodes/{EPISODE_ID}>
 PL_VIDEO_DIR=<원본 S01.mp4~ 폴더>
 PL_SCRIPT_SHA256=<권위 대본 SHA-256>
 ```
@@ -341,10 +337,9 @@ audio_duration_sec >= video_duration_sec - 0.25
 
 ### P04 인계
 
-텍스트 산출물만 커밋(`politics-longform: add voice manifest and SRT draft` 형식),
-일반 push. PR 병합·업로드 없음.
-최종 상태 `WAIT_PROJECT_GPT_SUBTITLE_QC`.
-QC 결과 `subtitle_corrections_v1.json`을 받아 반영한 뒤 112로 넘긴다.
+로컬 episode에 `production_input_v1.json`과 검증 보고서를 확정한다.
+Git commit/push/PR은 실행하지 않는다. QC 결과 `subtitle_corrections_v1.json`을
+반영한 뒤 `PASS_111_READY_FOR_112`로 112에 넘긴다.
 
 112 인계 계약:
 ```text
@@ -363,11 +358,11 @@ preview 승인 전 render 없음.
 | 실패·진단·재시도 루프 (조립·렌더) | Codex | 반복 디버깅에서 값어치 |
 | 대본 내용 판단 | 아무도 안 함 | 프로젝트 GPT 전속 |
 
-Codex에 넘길 때 스크립트를 **clean checkout 안**에 복사하고 절대경로로 지시한다.
+Codex에 넘길 때 episode 절대경로와 입력 파일 SHA-256을 함께 지시한다.
 스킬이 Codex 런타임에 보이려면 `.codex/skills`에도 동기화돼 있어야 한다.
 
 ## 완료 보고 항목
 
 생성 파일 절대경로 + SHA-256 / 나레이션 총·세그먼트별 실측 길이 /
 시간축 정본 총 길이와 세그먼트 매핑 수 / SRT cue 수(나레이션·원본 구분) +
-검증 10항목 / 발음 검사 결과 / commit SHA + remote head SHA / 현재 상태.
+검증 10항목 / 발음 검사 결과 / 현재 상태.
