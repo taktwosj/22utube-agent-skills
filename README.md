@@ -19,6 +19,7 @@ Active production skills:
 ```text
 00-tikitaka
 000short-production-agent
+top5isu-shorts
 110-politics-longform-script
 111-politics-longform-voice-srt
 112-politics-longform-hyperframes

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "top5isu clean video rework intake",
+  "type": "object",
+  "required": [
+    "intake_mode",
+    "clean_video_path",
+    "source_short_ref",
+    "derived_from_existing_short",
+    "captions_removed",
+    "text_overlays_removed",
+    "clean_visual_review_status",
+    "ocr_overlay_check_status"
+  ],
+  "properties": {
+    "intake_mode": {"const": "clean_video_rework"},
+    "clean_video_path": {"type": "string", "minLength": 1},
+    "source_short_ref": {"type": "string", "minLength": 1},
+    "derived_from_existing_short": {"const": true},
+    "captions_removed": {"const": true},
+    "text_overlays_removed": {"const": true},
+    "clean_visual_review_status": {"const": "PASS"},
+    "ocr_overlay_check_status": {"const": "PASS"}
+  },
+  "additionalProperties": true
+}

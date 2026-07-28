@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "top5isu ChatGPT browser writer packet",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "style_profile",
+    "writer_backend",
+    "fixed_greeting",
+    "target_duration_sec",
+    "narration_order",
+    "topic",
+    "topic_intro_requirements",
+    "evidence",
+    "forbidden_phrases",
+    "output_contract"
+  ],
+  "properties": {
+    "schema_version": {"const": "top5isu_writer_packet_v1"},
+    "style_profile": {"enum": ["top5", "gunlimbo"]},
+    "writer_backend": {"const": "chatgpt_browser"},
+    "fixed_greeting": {"type": "string"},
+    "target_duration_sec": {"type": "number", "minimum": 20, "maximum": 90},
+    "narration_order": {"type": "array", "minItems": 4},
+    "topic": {"type": "string", "minLength": 1},
+    "opening_hook": {"type": "string", "minLength": 1},
+    "topic_intro_requirements": {
+      "type": "object",
+      "required": ["min_sentences", "max_sentences"]
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["fact_id", "verified_text", "source_label", "allowed_numeric_tokens"],
+        "properties": {
+          "fact_id": {"type": "string", "minLength": 1},
+          "verified_text": {"type": "string", "minLength": 1},
+          "source_label": {"type": "string", "minLength": 1, "maxLength": 200},
+          "allowed_numeric_tokens": {"type": "array", "uniqueItems": true}
+        }
+      }
+    },
+    "forbidden_phrases": {"type": "array", "minItems": 1, "uniqueItems": true},
+    "output_contract": {
+      "type": "object",
+      "required": ["begin_sentinel", "end_sentinel", "format"]
+    }
+  },
+  "additionalProperties": true
+}
