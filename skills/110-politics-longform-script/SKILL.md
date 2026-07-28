@@ -90,6 +90,20 @@ ALLOWLIST_IS_NOT_RIGHTS_PASS = true
 - Trend Hunter가 자동 업데이트한 `midform` 저장 결과를 읽기 전용으로 사용하고,
   `allowed_channels` 24개로 제한한다. 110이나 Paperclip이 `기간 영상 수집 실행`을
   누르거나 YouTube API 수집을 중복 실행하지 않는다.
+- 코드 조회는 아래 전용 클라이언트만 사용한다. 이 요청은 HMAC 인증된 `GET`만
+  보내며 수집·저장 action을 전송하지 않는다. 자격 파일은 기본적으로
+  `~/.trend_hunter/midform_read_api.json`에서 읽고 출력물에는 비밀값을 기록하지 않는다.
+
+```bash
+python scripts/trend_hunter_read.py \
+  --query "김민석" \
+  --require-sync-date YYYY-MM-DD \
+  --output <episode>/10_analysis/trend_hunter_snapshot.json
+```
+
+  자격 파일이 없으면 자동 생성하거나 임의 토큰을 사용하지 말고
+  `WAIT_TREND_HUNTER_READ_CONFIG`로 멈춘다. 서버와 작업자에 동일한 자격 파일을
+  설치하는 1회 부트스트랩은 사용자의 명시적 승인 범위에서만 수행한다.
 - 가장 최근 `미드롱폼` 동기화가 완료 상태이고 `24/24`, 실패 `0`인지 확인한다.
   아직 오늘 동기화가 끝나지 않았거나 이전 보고 이후 새 완료 기록이 없으면 오래된
   자료로 보고하지 말고 `WAIT_TREND_HUNTER_SYNC_STALE`로 둔다.

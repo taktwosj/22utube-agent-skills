@@ -4,6 +4,7 @@
   "authority": {
     "name": "Trend Hunter midform",
     "url": "http://100.102.6.112:8088/?tab=midform#midform",
+    "read_api_url": "http://100.102.6.112:8088/midform_snapshot_api.php",
     "verified_date_kst": "2026-07-29",
     "collection_mode": "external_auto_update",
     "consumer_mode": "read_only",

@@ -43,6 +43,10 @@ class TestApprovedChannelAllowlist(unittest.TestCase):
             "http://100.102.6.112:8088/?tab=midform#midform",
         )
         self.assertEqual(
+            self.policy["authority"]["read_api_url"],
+            "http://100.102.6.112:8088/midform_snapshot_api.php",
+        )
+        self.assertEqual(
             self.policy["authority"]["collection_mode"],
             "external_auto_update",
         )
