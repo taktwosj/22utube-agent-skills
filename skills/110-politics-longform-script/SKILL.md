@@ -1,6 +1,6 @@
 ---
 name: 110-politics-longform-script
-description: "Use when the user says 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 110대본, 정치롱폼 대본, 초벌 대본, or 대본 초안, or asks to turn collected political video sources and subtitles into a narration script. Entry point of the politics longform pipeline: 110 script, then 111 voice and SRT, then 112 HyperFrames."
+description: "Use when the user says 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 110대본, 정치롱폼 대본, 초벌 대본, 대본 초안, 최근 정치이슈 검색, 승인 채널 검색, or asks to discover approved political sources or turn collected political videos and subtitles into a narration script. Entry point of the politics longform pipeline: 110 source discovery and script, then 111 voice and SRT, then 112 HyperFrames."
 ---
 
 # 110 Politics Longform Script
@@ -67,9 +67,47 @@ cue는 선택이다. 타임코드만 있으면 SRT에서 역산한다.
 내부 2차 집필 프롬프트: [Retention Story Editor](references/retention-story-editor.md)
 시사·정치 초벌 구조와 문체: [Political News Writing Framework](references/political-news-writing-framework.md)
 
+## 승인 채널 소스 탐색
+
+자동 정치이슈·영상 탐색을 시작하기 전에 반드시
+[Approved Channel Allowlist](references/approved-channel-allowlist.json)를 읽고
+그 목록만 사용한다. 운영 원본은 JSON의 `authority.url`에 기록된 Trend Hunter
+`midform` 화면이며, JSON은 재현 가능한 실행을 위한 검증 스냅샷이다.
+
+```text
+CHANNEL_MATCH_PRIORITY = channel_id > handle > url > canonical_name
+BLOCK_PRECEDES_ALLOW = true
+AUTHORITY_UNAVAILABLE = WAIT_CHANNEL_AUTHORITY_UNAVAILABLE
+AUTHORITY_SNAPSHOT_MISMATCH = WAIT_CHANNEL_ALLOWLIST_DRIFT
+TREND_HUNTER_COLLECTION = EXTERNAL_AUTO_UPDATE
+TRIGGER_SITE_COLLECTION = FORBIDDEN
+STALE_SITE_SYNC = WAIT_TREND_HUNTER_SYNC_STALE
+OUTSIDE_ALLOWLIST = WAIT_CHANNEL_NOT_ALLOWLISTED
+MISSING_TRANSCRIPT = WAIT_SOURCE_ASR
+ALLOWLIST_IS_NOT_RIGHTS_PASS = true
+```
+
+- Trend Hunter가 자동 업데이트한 `midform` 저장 결과를 읽기 전용으로 사용하고,
+  `allowed_channels` 24개로 제한한다. 110이나 Paperclip이 `기간 영상 수집 실행`을
+  누르거나 YouTube API 수집을 중복 실행하지 않는다.
+- 가장 최근 `미드롱폼` 동기화가 완료 상태이고 `24/24`, 실패 `0`인지 확인한다.
+  아직 오늘 동기화가 끝나지 않았거나 이전 보고 이후 새 완료 기록이 없으면 오래된
+  자료로 보고하지 말고 `WAIT_TREND_HUNTER_SYNC_STALE`로 둔다.
+- 실행 전 운영 화면의 채널 목록과 JSON 스냅샷을 대조한다. 운영 화면에 접근할 수
+  없으면 `WAIT_CHANNEL_AUTHORITY_UNAVAILABLE`, 수량·ID·핸들·URL이 달라졌으면
+  자동 갱신하지 말고 `WAIT_CHANNEL_ALLOWLIST_DRIFT`로 멈춘다.
+- `blocked_channels`와 일치하면 다른 허용 조건보다 먼저 제외한다.
+- 승인 목록 밖 결과는 자료에 섞지 말고 `WAIT_CHANNEL_NOT_ALLOWLISTED`로 보고한다.
+- 사용자가 특정 URL을 직접 지정한 경우에만 명시적 예외 검토를 진행한다.
+- 채널 승인과 영상별 사실성·저작권·공정이용 판단을 분리한다.
+- 자막이 없으면 문장을 추정하지 말고 `WAIT_SOURCE_ASR`로 보고한다.
+- 자동 수집은 후보 보고서까지만 수행한다. 사용자 주제·영상 승인 전에는 S2 대본,
+  음성, HyperFrames, 업로드로 진행하지 않는다.
+
 ## 단계
 
 ```text
+S0  승인 채널 소스 탐색  최근 이슈·영상주소·자막 후보 보고
 S1  소스 패킷 생성      수집 자막 -> GPT 입력 묶음
 S2  GPT 초벌 대본       script_draft_v1.md
 S2R Retention Story Rewrite
@@ -264,6 +302,11 @@ ASR 손상이 의심되면 추정 교정하지 말고 Retention Story Editor의 
 ## 실패 상태
 
 ```text
+WAIT_TREND_HUNTER_SYNC_STALE
+WAIT_CHANNEL_AUTHORITY_UNAVAILABLE
+WAIT_CHANNEL_ALLOWLIST_DRIFT
+WAIT_CHANNEL_NOT_ALLOWLISTED
+WAIT_SOURCE_ASR
 BLOCKED_TRANSCRIPT_MISSING
 BLOCKED_TRANSCRIPT_MISMATCH
 BLOCKED_SOURCE_PACKET_NOT_BUILT
