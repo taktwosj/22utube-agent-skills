@@ -1,0 +1,245 @@
+{
+  "schema_version": "1.0",
+  "handoff_type": "shorts_skill_new_topic_operational_handoff",
+  "generated_at_kst": "2026-07-28T23:19:35+09:00",
+  "language": "ko",
+  "operator": "정상준",
+  "purpose": "새 Telegram 토픽에서 일반 001쇼츠와 군림보/TOP5 쇼츠를 충돌 없이 운영하고, 이전 토픽에서 확인·수정·삭제한 상태와 작업 노하우를 그대로 이어받기 위한 인계 파일",
+  "new_topic_usage": {
+    "instruction": "새 토픽 첫 메시지에 이 JSON을 첨부하고 starter_prompt를 함께 보낸다.",
+    "starter_prompt": "첨부한 JSON을 이번 토픽의 운영 인계 정본으로 읽어. 먼저 runtime_git_parity의 001 불일치를 해결하고 검증해. 이후 내가 일반 쇼츠라고 하면 001short-production-agent만, TOP5·랭킹·군림보라고 하면 top5isu-shorts만 로드해. 두 제작 lane을 섞지 말고 실제 파일·테스트·readback 증거가 있을 때만 완료라고 보고해.",
+    "session_note": "삭제된 스킬의 지침은 기존 장기 세션 문맥에 남을 수 있다. 새 Telegram 토픽 또는 /new 이후 이 JSON으로 시작하는 것이 가장 안전하다."
+  },
+  "routing_contract": {
+    "general_shorts": {
+      "owner_skill": "22utube/001short-production-agent",
+      "triggers": [
+        "001쇼츠",
+        "일반 쇼츠",
+        "원본 우라까이",
+        "VMake clean 후 CapCut 조립"
+      ]
+    },
+    "top5_gunlimbo_shorts": {
+      "owner_skill": "22utube/top5isu-shorts",
+      "triggers": [
+        "TOP5",
+        "탑5",
+        "랭킹 쇼츠",
+        "군림보 쇼츠",
+        "역사춘 군림보 프로필"
+      ]
+    },
+    "coding_support": {
+      "skill": "22utube/1caveman",
+      "role": "스킬 코드 수정·디버깅·테스트·Git 검증 때만 사용",
+      "not_a_production_lane": true
+    },
+    "mutual_exclusion": {
+      "required": true,
+      "rule": "한 제작 요청에서 001short-production-agent와 top5isu-shorts의 단계·템플릿·상태명·validator를 합치지 않는다. 비교·마이그레이션 검토는 가능하지만 최종 owner는 하나만 정한다."
+    }
+  },
+  "macmini_runtime_inventory": {
+    "root": "/Users/jeongsangjun/.hermes/skills",
+    "verified_active_22utube_skills": [
+      "001short-production-agent",
+      "1caveman",
+      "top5isu-shorts"
+    ],
+    "verified_content_production_category_count": 0,
+    "deleted_active_skills": [
+      "22utube/00-tikitaka",
+      "22utube/000short-production-agent",
+      "22utube/top5-shorts-production",
+      "22utube/top5-shorts-production-harness",
+      "content-production/shorts-production-governance",
+      "content-production/audience-reader-review",
+      "22utube/111mara"
+    ],
+    "deleted_backup": "22utube/.backups/top5isu-shorts_20260719_205248_pre_TOP55",
+    "retained_production_skills": [
+      "22utube/001short-production-agent",
+      "22utube/top5isu-shorts"
+    ],
+    "verification": {
+      "filesystem": "LOCAL_SKILL_CLEANUP:PASS",
+      "native_discovery": "skills_list(category=22utube) returned only 001short-production-agent, 1caveman, top5isu-shorts",
+      "content_production_discovery": "empty"
+    }
+  },
+  "git_source_of_truth": {
+    "repository": "https://github.com/taktwosj/22utube-agent-skills",
+    "local_worktree": "/Users/jeongsangjun/.openclaw/third_party/22utube-agent-skills",
+    "branch": "main",
+    "verified_commit": "f3141f1b2321016f589b122c375f89e70e7d6acf",
+    "head_equals_origin_main": true,
+    "remote_retirement": {
+      "absent": [
+        "skills/00-tikitaka",
+        "skills/000short-production-agent"
+      ],
+      "present": [
+        "skills/001short-production-agent",
+        "skills/top5isu-shorts"
+      ],
+      "manifest_retired_entries_absent": true,
+      "history_rewrite_performed": false,
+      "note": "현재 main 트리에서는 과거 스킬이 보이지 않지만 과거 Git 커밋 이력에는 남아 있다. force push나 history rewrite는 사용하지 않았다."
+    }
+  },
+  "runtime_git_parity": {
+    "checked_at_kst": "2026-07-28T23:19:35+09:00",
+    "001short-production-agent": {
+      "exact_match": false,
+      "status": "SYNC_REQUIRED_BEFORE_NEW_PRODUCTION",
+      "git_file_count": 91,
+      "runtime_file_count_excluding_cache": 86,
+      "git_only_files": [
+        "references/bgm-a12-capcut-cloud.md",
+        "tests/fixtures/media-fixture/capcut-screen.png",
+        "tests/fixtures/media-fixture/draft_content.json",
+        "tests/fixtures/media-fixture/source.fixture",
+        "tests/fixtures/media-fixture/vmake-final.fixture",
+        "tests/test_bgm_a12_builder.py"
+      ],
+      "runtime_only_expected_marker": ".22utube-managed-hermes.json",
+      "changed_files": [
+        "SKILL.md",
+        "protocol.json",
+        "references/capcut-export-telegram-handoff.md",
+        "references/capcut-macos-ui-verification-fallback.md",
+        "references/executable-protocol-testing.md",
+        "references/interim-capcut-project-sync.md",
+        "references/parallel-execution.md",
+        "references/vmake-dom-clean-video-automation.md",
+        "references/youtube-source-acquisition.md",
+        "schemas/completion_report.schema.json",
+        "schemas/executable_protocol.schema.json",
+        "scripts/build_episode_capcut.py",
+        "scripts/validate_executable_protocol.py",
+        "scripts/validate_prebuild.py",
+        "steps/04-external-review.md",
+        "tests/fixtures/completion_report.pass.json",
+        "tests/fixtures/completion_report_missing_upload.fail.json",
+        "tests/test_executable_protocol.py",
+        "workflow.json"
+      ],
+      "required_first_action": "Git origin/main의 정확한 커밋을 다시 확인한 뒤 repo installer의 선택 설치 방식으로 001short-production-agent만 Hermes에 동기화한다. --prune은 별도 승인 없이 사용하지 않는다. 동기화 후 파일 해시·단위 테스트·protocol self-check·schema·native discovery를 재검증한다."
+    },
+    "top5isu-shorts": {
+      "content_exact_match_excluding_managed_marker": true,
+      "git_file_count": 51,
+      "runtime_file_count_including_marker": 52,
+      "runtime_only_expected_marker": ".22utube-managed-hermes.json",
+      "status": "READY"
+    }
+  },
+  "001short_production_contract": {
+    "canonical_vmake_asset": "40_assets_used/clean_source.mp4",
+    "canonical_video_asset_key": "clean_video",
+    "vmake_rule": "실제 VMake 결과 MP4를 회수·검증해 canonical clean asset으로 사용한다. 대체 파일이나 로컬 proxy를 성공 결과로 인정하지 않는다.",
+    "urakkai_review": {
+      "review_loop_count": 2,
+      "review_model_preference": "Claude Opus effort low when available",
+      "hermes_improves_after_each_loop": true,
+      "final_authority": "Hermes",
+      "selection_pool": [
+        "baseline",
+        "loop_1",
+        "loop_2"
+      ],
+      "rule": "외부 모델 결과는 검토 자료이며 segment_id와 승인 source range의 최종 권한은 Hermes가 가진다."
+    },
+    "duration_rules": {
+      "global_source_equals_final_required": false,
+      "urakkai_final_duration_may_differ_from_source": true,
+      "reason": "이미지·나레이션·TTS·장면 삭제/추가에 따라 최종 total_duration_us가 원본보다 짧거나 길 수 있다.",
+      "final_render_reference": "approved total_duration_us",
+      "clean_source_duration_rule": "VMake clean_source가 원본 길이와 맞아야 하는 것은 편집 전 누락·잘림 방지용 자산 검증일 뿐 최종 영상 길이 동일 gate가 아니다.",
+      "clean_only_exception": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY는 원본 전체 길이를 유지한다.",
+      "clip_rule": "속도 변경을 금지한 원본 VIDEO clip은 선택 source range와 target range의 길이를 맞춘다. 이것은 최종 영상 전체 길이 동일 조건이 아니다."
+    },
+    "hook_asset_caveat": {
+      "status": "IMPLEMENTATION_MUST_BE_REVERIFIED",
+      "note": "계약상 target-only 이미지·나레이션으로 최종 길이가 바뀔 수 있음을 명시했지만, 후킹용 혼합 이미지 생성·실제 삽입 모듈이 end-to-end로 완성됐다고 이 토픽에서 증명하지 않았다. 실제 PNG 생성·삽입·CapCut readback 증거 전에는 완료라고 보고하지 않는다."
+    },
+    "capcut_completion": {
+      "editable_project_required": true,
+      "cloud_sync_target": "TAKKTWO/macmini",
+      "row_readback_fields": [
+        "name",
+        "size",
+        "duration",
+        "type",
+        "modified_time"
+      ],
+      "public_upload_requires_explicit_approval": true,
+      "visual_qa_owner_default": "operator",
+      "agent_visual_playback_only_when_explicitly_requested": true
+    }
+  },
+  "top5isu_boundaries": {
+    "role": "TOP5·랭킹·군림보 전용 독립 end-to-end 정본",
+    "do_not_merge_with_001": true,
+    "gunlimbo_profile_note": "역사춘 TOP5는 별도 역사춘 스킬을 복구하지 않고 top5isu-shorts의 gunlimbo 프로필을 사용한다.",
+    "default_narration_order": [
+      "고정 인사",
+      "주제 안내 1~2문장",
+      "5위",
+      "4위",
+      "3위",
+      "2위",
+      "1위",
+      "마무리"
+    ],
+    "fixed_greeting": "안녕하세요. 오늘의 탑파이브 주제인데요.",
+    "public_or_scheduled_upload_requires_approval": true
+  },
+  "work_methods_and_lessons": [
+    "Git 변경 전 fetch·status·HEAD/origin 비교와 백업 ref를 먼저 만든다.",
+    "과거 스킬 제거는 폴더만 지우지 않고 manifest·README·설치 문서·active router·전용 테스트를 함께 정리한다.",
+    "retirement contract를 먼저 RED로 만든 뒤 삭제 후 GREEN으로 검증한다.",
+    "일반 회귀 테스트는 삭제하지 말고 유지 스킬 001로 retarget하고, 제거된 기능만 담당한 전용 테스트는 함께 제거한다.",
+    "force push·history rewrite를 사용하지 않고 정상 commit·push 후 fetch·git ls-tree·manifest readback으로 원격 상태를 판정한다.",
+    "완료는 push 메시지만으로 판단하지 않고 HEAD==origin/main, clean worktree, 원격 트리 ABSENT/PRESENT를 모두 확인한다.",
+    "맥미니 설치 스킬은 Git 트리와 별도 상태다. Git에서 삭제해도 ~/.hermes/skills에는 남을 수 있으므로 filesystem과 native discovery를 모두 확인한다.",
+    "백업 폴더와 .22utube-managed-hermes.json 같은 관리 marker는 활성 제작 스킬이나 콘텐츠 불일치로 오인하지 않는다.",
+    "사용자 수정 사항은 SKILL.md 문장만 추가하지 말고 protocol invariant·schema·validator·회귀 테스트까지 연결한다.",
+    "현재 세션에 이미 로드된 스킬 지침은 파일 삭제 후에도 문맥에 남을 수 있으므로 새 토픽 또는 /new로 초기화한다."
+  ],
+  "verified_tests_and_evidence": {
+    "git_retirement_contract": "3/3 PASS",
+    "001_unit_tests": "23/23 PASS",
+    "001_protocol_self_check": "PASS",
+    "001_json_schema": "PASS",
+    "repo_unittest": "83 PASS, 2 skipped because PowerShell is not installed on the Mac host",
+    "remote_tree_readback": "PASS",
+    "local_skill_cleanup": "PASS",
+    "known_repo_strict_verify_baseline": {
+      "status": "FAIL_OUTSIDE_CURRENT_SCOPE",
+      "errors": 6,
+      "cause": "기존 정치 롱폼 스킬 파일의 C:\\Users\\ 절대 경로 정책 위반",
+      "rule": "이번 쇼츠 스킬 정리와 섞어 고치지 말고 별도 작업으로 다룬다."
+    }
+  },
+  "new_topic_execution_checklist": [
+    "1. 이 JSON을 읽고 scope를 skill operations로 고정한다.",
+    "2. Git origin/main과 f3141f1b2321016f589b122c375f89e70e7d6acf 또는 더 최신 정상 main을 확인한다.",
+    "3. 001 runtime_git_parity 불일치를 해결하기 전 새 일반 쇼츠 제작을 시작하지 않는다.",
+    "4. 001만 선택 동기화하고 --prune은 사용하지 않는다.",
+    "5. 001 단위 테스트·protocol self-check·JSON schema·native discovery·파일 parity를 재검증한다.",
+    "6. TOP5 요청은 top5isu-shorts만 로드하고 001 계약을 섞지 않는다.",
+    "7. 실제 제작 완료는 산출물 파일·validator·CapCut/클라우드 readback 증거로만 보고한다."
+  ],
+  "do_not_do": [
+    "삭제된 00-tikitaka·000short-production-agent·top5-shorts-production·top5-shorts-production-harness를 복구하거나 라우팅하지 않는다.",
+    "001과 top5isu의 템플릿·단계·validator를 한 프로젝트에 혼합하지 않는다.",
+    "Git과 runtime이 다르면서 동일하다고 단정하지 않는다.",
+    "VMake 실제 MP4 대신 proxy·placeholder·재인코딩 대체물을 canonical 결과로 인정하지 않는다.",
+    "후킹 이미지 기능을 실제 PNG·삽입·readback 증거 없이 구현 완료라고 말하지 않는다.",
+    "사용자 승인 없이 공개·예약 업로드하지 않는다.",
+    "토큰·쿠키·API 키·비밀번호·세션 ID를 출력하거나 handoff 파일에 저장하지 않는다."
+  ],
+  "scope_exclusion": "이 파일은 쇼츠 스킬 운영·정리·동기화 인계용이다. 특정 미완성 에피소드나 CapCut 프로젝트를 새 토픽에서 자동 재개하지 말고, 운영자가 해당 episode_id와 작업 요청을 명시했을 때만 시작한다."
+}
