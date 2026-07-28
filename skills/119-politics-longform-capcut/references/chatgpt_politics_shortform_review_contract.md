@@ -64,9 +64,9 @@ truth_mode: fact_first
 ## 권한 경계
 
 `119-politics-longform-capcut`은 후보 1~3개와 정확한 원본 범위를 검증한다.
-Codex와 사용자가 후보를 선택한 뒤에만 `001short-production-agent`가 상단, timed 중단,
-조립 역할, TTS와 원본음성 정책을 설계한다. `001short-production-agent`가 원본 범위를
-바꿔야 한다면 `DESIGN_REOPEN_REQUIRED`로 반환한다.
+Codex와 사용자가 후보를 선택한 뒤에도 후속 쇼츠 설계는 별도 요청이다.
+현재 일반 Shorts production lane은 retired 상태이며 자동으로 다른 제작 스킬에
+넘기지 않는다.
 
 ChatGPT는 후보 추천과 위험 표시만 수행한다. `FINAL`, `PASS`, `ADOPTED`,
 후보 잠금을 선언하지 않는다.

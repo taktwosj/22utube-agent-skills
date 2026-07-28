@@ -46,7 +46,7 @@ def result_payload(stdout: str) -> dict:
 
 class RuntimeSkillSaveSyncTests(unittest.TestCase):
     def test_changed_skill_path_selects_only_that_skill_even_when_repo_is_dirty(self):
-        changed = ROOT / "skills" / "001short-production-agent" / "SKILL.md"
+        changed = ROOT / "skills" / "top5isu-shorts" / "SKILL.md"
         result = run_powershell(
             SYNC_SCRIPT,
             "-ChangedPath",
@@ -57,7 +57,7 @@ class RuntimeSkillSaveSyncTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         payload = result_payload(result.stdout)
         self.assertEqual(payload["status"], "DRYRUN")
-        self.assertEqual(payload["skills"], ["001short-production-agent"])
+        self.assertEqual(payload["skills"], ["top5isu-shorts"])
         self.assertEqual(payload["targets"], ["codex", "claude", "hermes"])
         self.assertNotIn("dirty worktree", result.stdout.lower())
 

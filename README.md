@@ -17,7 +17,6 @@ Runtime folders are install targets, not edit targets. Edit skills in this repo,
 Active production skills:
 
 ```text
-001short-production-agent
 top5isu-shorts
 110-politics-longform-script
 111-politics-longform-voice-srt
@@ -66,8 +65,7 @@ verification requirements. Raw local CapCut draft folders stay in the active
 machine's CapCut project storage; OneDrive keeps only manifests, snapshots, and
 restore notes unless an explicit handoff package is requested.
 
-Current general Shorts production authority is
-`skills/001short-production-agent/SKILL.md`.
+No general Shorts production skill is currently managed.
 
 ## First Install
 

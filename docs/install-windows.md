@@ -20,4 +20,4 @@ powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1"
 powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
 ```
 
-The manifest installs the current managed set, including `001short-production-agent` as the sole general Shorts production skill.
+The manifest currently has no managed general Shorts production skill.

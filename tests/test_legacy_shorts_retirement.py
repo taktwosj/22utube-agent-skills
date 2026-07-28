@@ -4,20 +4,18 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RETIRED = ("00-tikitaka", "000short-production-agent")
-CURRENT = "001short-production-agent"
+RETIRED = ("00-tikitaka", "000short-production-agent", "001short-production-agent")
 
 
 class LegacyShortsRetirementContractTest(unittest.TestCase):
-    def test_only_current_shorts_skill_directory_remains(self):
+    def test_retired_shorts_skill_directories_are_absent(self):
         for name in RETIRED:
             self.assertFalse(
                 (ROOT / "skills" / name).exists(),
                 f"retired skill directory is still visible: {name}",
             )
-        self.assertTrue((ROOT / "skills" / CURRENT / "SKILL.md").is_file())
 
-    def test_manifest_exposes_current_skill_not_retired_skills(self):
+    def test_manifest_exposes_no_general_shorts_authority(self):
         manifest = json.loads(
             (ROOT / "manifests" / "skill-set.json").read_text(encoding="utf-8")
         )
@@ -26,11 +24,7 @@ class LegacyShortsRetirementContractTest(unittest.TestCase):
         }
         for name in RETIRED:
             self.assertNotIn(name, enabled)
-        self.assertIn(CURRENT, enabled)
-        self.assertEqual(
-            manifest["active_shorts_script_authority"],
-            "skills/001short-production-agent/SKILL.md",
-        )
+        self.assertIsNone(manifest["active_shorts_script_authority"])
 
     def test_readme_does_not_advertise_retired_skill_folders(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
