@@ -184,6 +184,9 @@
         "vmake_direct_insert_required",
         "vmake_direct_insert_asset",
         "vmake_direct_insert_asset_key",
+        "urakkai_final_duration_independent_from_source",
+        "clean_visual_duration_matches_source_before_edit",
+        "clean_only_full_source_duration_required",
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_destination",
@@ -208,6 +211,15 @@
         },
         "vmake_direct_insert_asset_key": {
           "const": "clean_video"
+        },
+        "urakkai_final_duration_independent_from_source": {
+          "const": true
+        },
+        "clean_visual_duration_matches_source_before_edit": {
+          "const": true
+        },
+        "clean_only_full_source_duration_required": {
+          "const": true
         }
       }
     },

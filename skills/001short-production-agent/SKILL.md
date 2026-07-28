@@ -142,6 +142,9 @@ clear_anchors=A9,A9_TEXT
 - 결과 장면을 훅으로 앞당길 때 동일 구간을 무의미하게 반복하지 않는다. 한 원본 상황 안에서도 기능이 실제로 달라지는 경우에만 `5A/5B`처럼 source range를 분할한다. `5A/5B`는 이번 회차의 선택일 뿐 일반 규칙이나 핵심 요건이 아니다.
 - TTS는 구조 전환을 잇는 브리지이며 원본 장면 재배치를 대신하지 않는다.
 - builder는 승인된 source range 순서를 그대로 집행하고 자체적으로 원본 순서로 복원하거나 다시 창작하지 않는다.
+- `URAKKAI`에서는 원본 전체 길이와 최종 프로젝트 전체 길이를 같게 강제하지 않는다. 이미지·나레이션·TTS·장면 삭제/추가에 따라 최종 `total_duration_us`는 원본보다 짧거나 길 수 있으며, 최종 렌더는 원본 길이가 아니라 승인된 `total_duration_us`와 일치해야 한다.
+- VMake `clean_source.mp4`가 원본 길이와 맞아야 하는 것은 편집 전 clean 결과의 누락·잘림을 막는 자산 검증이다. 이것을 최종 영상 길이 동일 gate로 확대하지 않는다.
+- 속도 변경을 금지한 원본 VIDEO clip은 선택한 source/target range 길이를 맞추되, target-only 이미지·나레이션 구간이 전체 최종 길이를 바꾸는 것은 허용한다. `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY`만 명시적 예외로 원본 전체 길이를 유지한다.
 
 ## Evidence-Calibrated Original Blueprint
 

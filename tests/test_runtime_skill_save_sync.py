@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 
@@ -9,12 +10,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SYNC_SCRIPT = ROOT / "scripts" / "sync_changed_runtime_skills.ps1"
 WATCH_SCRIPT = ROOT / "scripts" / "watch_runtime_skills.ps1"
 INSTALL_WATCHER_SCRIPT = ROOT / "scripts" / "install_runtime_skill_watcher.ps1"
+POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
 
 
 def run_powershell(script: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    if POWERSHELL is None:
+        raise unittest.SkipTest("PowerShell is not installed on this host")
     return subprocess.run(
         [
-            "powershell",
+            POWERSHELL,
             "-NoProfile",
             "-ExecutionPolicy",
             "Bypass",
@@ -42,7 +46,7 @@ def result_payload(stdout: str) -> dict:
 
 class RuntimeSkillSaveSyncTests(unittest.TestCase):
     def test_changed_skill_path_selects_only_that_skill_even_when_repo_is_dirty(self):
-        changed = ROOT / "skills" / "00-tikitaka" / "SKILL.md"
+        changed = ROOT / "skills" / "001short-production-agent" / "SKILL.md"
         result = run_powershell(
             SYNC_SCRIPT,
             "-ChangedPath",
@@ -53,7 +57,7 @@ class RuntimeSkillSaveSyncTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
         payload = result_payload(result.stdout)
         self.assertEqual(payload["status"], "DRYRUN")
-        self.assertEqual(payload["skills"], ["00-tikitaka"])
+        self.assertEqual(payload["skills"], ["001short-production-agent"])
         self.assertEqual(payload["targets"], ["codex", "claude", "hermes"])
         self.assertNotIn("dirty worktree", result.stdout.lower())
 

@@ -9,14 +9,14 @@ from _support import load_source_module_no_bytecode
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TIMELINE_GATE = (
+PROTOCOL_VALIDATOR = (
     ROOT
     / "skills"
-    / "000short-production-agent"
+    / "001short-production-agent"
     / "scripts"
-    / "validate_capcut_timeline_order.py"
+    / "validate_executable_protocol.py"
 )
-SKILL_SCRIPT_CACHE = TIMELINE_GATE.parent / "__pycache__"
+SKILL_SCRIPT_CACHE = PROTOCOL_VALIDATOR.parent / "__pycache__"
 
 
 class PythonBytecodePolicyTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class PythonBytecodePolicyTests(unittest.TestCase):
         shutil.rmtree(SKILL_SCRIPT_CACHE, ignore_errors=True)
         self.addCleanup(lambda: shutil.rmtree(SKILL_SCRIPT_CACHE, ignore_errors=True))
 
-        load_source_module_no_bytecode("timeline_gate_bytecode_policy", TIMELINE_GATE)
+        load_source_module_no_bytecode("protocol_validator_bytecode_policy", PROTOCOL_VALIDATOR)
 
         self.assertTrue(sys.dont_write_bytecode)
         self.assertFalse(

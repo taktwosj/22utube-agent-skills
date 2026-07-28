@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import importlib.util
 import json
@@ -291,6 +292,27 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIn(
             "VMAKE_DIRECT_INSERT_ASSET_INVALID:source_video",
             module.validate_production_plan(invalid_plan, protocol),
+        )
+
+    def test_urakkai_final_duration_is_not_forced_to_source_duration(self):
+        module = load_validator()
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        invariants = protocol["invariants"]
+        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIs(invariants.get("urakkai_final_duration_independent_from_source"), True)
+        self.assertIs(invariants.get("clean_visual_duration_matches_source_before_edit"), True)
+        self.assertIs(invariants.get("clean_only_full_source_duration_required"), True)
+        self.assertIn(
+            "원본 전체 길이와 최종 프로젝트 전체 길이를 같게 강제하지 않는다",
+            skill_text,
+        )
+
+        broken = copy.deepcopy(protocol)
+        broken["invariants"]["urakkai_final_duration_independent_from_source"] = False
+        self.assertIn(
+            "PROTOCOL_INVARIANT_FALSE:urakkai_final_duration_independent_from_source",
+            module.validate_protocol_document(broken),
         )
 
     def test_completion_report_rejects_missing_final_shorts_evidence(self):

@@ -502,7 +502,7 @@ references/chatgpt_politics_shortform_review_contract.md
 
 후보 선별 단계에서는 상단, timed 중단, TTS 문안, 우라까이, 원본 순서 변경,
 여러 구간 재조립을 만들지 않는다. Codex와 사용자가 후보 범위를 선택한 뒤에만
-`00-tikitaka`가 쇼츠 설계를 시작한다. Tikitaka가 원본 범위를 바꿔야 하면
+`001short-production-agent`가 쇼츠 설계를 시작한다. 001이 원본 범위를 바꿔야 하면
 `DESIGN_REOPEN_REQUIRED`로 이 단계에 반환한다.
 
 기존 `20_script/shorts/SH01~SH03`이 있어도 최신 승인 원고보다 오래됐거나

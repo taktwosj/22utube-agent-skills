@@ -9,8 +9,7 @@ class RetiredScriptWriterContractTests(unittest.TestCase):
     def test_retired_skills_are_not_managed_or_routable(self):
         active_files = [
             ROOT / "manifests" / "skill-set.json",
-            ROOT / "skills" / "00-tikitaka" / "SKILL.md",
-            ROOT / "skills" / "000short-production-agent" / "SKILL.md",
+            ROOT / "skills" / "001short-production-agent" / "SKILL.md",
             ROOT / "skills" / "119-politics-longform-capcut" / "SKILL.md",
         ]
         retired_skills = [
@@ -31,7 +30,7 @@ class RetiredScriptWriterContractTests(unittest.TestCase):
 
     def test_shorts_pipeline_has_no_persona_or_writer_agent_final_gate(self):
         active_files = []
-        for skill_name in ("00-tikitaka", "000short-production-agent"):
+        for skill_name in ("001short-production-agent",):
             skill_root = ROOT / "skills" / skill_name
             active_files.extend(
                 path
