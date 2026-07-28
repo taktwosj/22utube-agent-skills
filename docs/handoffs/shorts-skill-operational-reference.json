@@ -1,0 +1,656 @@
+{
+  "schema": "shorts_skill_operational_reference_v1",
+  "generated_at_kst": "2026-07-28T23:29:38+0900",
+  "repository": "https://github.com/taktwosj/22utube-agent-skills",
+  "purpose": "일반 001쇼츠와 TOP5·군림보 쇼츠를 새 토픽·다른 컴퓨터·다른 에이전트 런타임에서 충돌 없이 운영하기 위한 Git 참고 정본",
+  "authority_order": [
+    "현재 사용자의 명시적 지시",
+    "현재 Git main 및 live runtime readback",
+    "각 owner skill의 최신 SKILL.md·protocol·validator",
+    "이 통합 운영 참고본",
+    "source-snapshots의 과거 시점 기록"
+  ],
+  "path_variables": {
+    "$HOME": "실행 중인 사용자 홈 디렉터리",
+    "$LOCAL_WORK": "Mac mini의 로컬 제작 작업 루트",
+    "$ONEDRIVE_ROOT": "선택된 OneDrive 동기화 루트"
+  },
+  "source_snapshots": [
+    {
+      "path": "docs/handoffs/source-snapshots/shorts_skill_new_topic_handoff_20260728_231935.json",
+      "sha256": "A69F26A07E56DF0E184DDD78840BFBD81C3FB6BCAD0D8F2A07F8654FBA5FEDCF",
+      "role": "001 lane, skill cleanup, runtime parity와 Git 운영 스냅샷",
+      "status": "HISTORICAL_SNAPSHOT_NOT_CURRENT_AUTHORITY"
+    },
+    {
+      "path": "docs/handoffs/source-snapshots/top5isu_chat_workflow_knowhow_handoff_20260728_232350.json",
+      "sha256": "55C13914C6DD9B2F2BDC1744E3B3ED94CA9FB41454D9DE5DFA33A4254535304A",
+      "role": "TOP5·군림보 Flow 이미지 생성, CapCut 이미지 삽입과 실패 복구 스냅샷",
+      "status": "HISTORICAL_SNAPSHOT_NOT_CURRENT_AUTHORITY"
+    }
+  ],
+  "current_verified_state": {
+    "checked_at_kst": "2026-07-28T23:29:38+0900",
+    "git": {
+      "branch": "main",
+      "commit": "029b8cc5b78b7c27e35132ebb7a4ba6d326ec68c",
+      "visibility": "PRIVATE",
+      "history_rewrite_performed": false
+    },
+    "runtime_inventory": {
+      "active_22utube_count": 6,
+      "active_22utube_skills": [
+        "001short-production-agent",
+        "110-politics-longform-script",
+        "111-politics-longform-voice-srt",
+        "112-politics-longform-hyperframes",
+        "1caveman",
+        "top5isu-shorts"
+      ],
+      "shorts_operations_skills": [
+        "001short-production-agent",
+        "1caveman",
+        "top5isu-shorts"
+      ],
+      "retired_or_absent_shorts_skills": [
+        "00-tikitaka",
+        "000short-production-agent",
+        "top5-shorts-production",
+        "top5-shorts-production-harness",
+        "shorts-production-governance",
+        "audience-reader-review",
+        "111mara"
+      ],
+      "native_discovery_verified": true
+    },
+    "runtime_git_parity": {
+      "001short-production-agent": {
+        "exact_match_excluding_managed_marker": true,
+        "git_file_count": 91,
+        "runtime_file_count": 91,
+        "marker_source_commit": "029b8cc",
+        "source_sha256": "E978C0C535BFA9CA6E01A912A6CFD0BAB76A981F78FDD0AF4BA327802A46FAB4",
+        "status": "READY"
+      },
+      "top5isu-shorts": {
+        "exact_match_excluding_managed_marker": true,
+        "git_file_count": 51,
+        "runtime_file_count": 51,
+        "marker_source_commit": "f3141f1",
+        "git_tree_unchanged_through": "029b8cc5b78b7c27e35132ebb7a4ba6d326ec68c",
+        "source_sha256": "48EB456F5042D9DEB830F19CBC7C49989096E9A24C2C1DD9DF01CA3B0BE12837",
+        "status": "READY"
+      }
+    }
+  },
+  "conflict_resolutions": [
+    {
+      "field": "001 runtime_git_parity",
+      "older_snapshot": "SYNC_REQUIRED_BEFORE_NEW_PRODUCTION",
+      "current_verified": "READY, 91/91 exact match",
+      "decision": "새 토픽 starter에서 001 재동기화를 선행 조건으로 요구하지 않고, 작업 시작 시 parity만 빠르게 재확인"
+    },
+    {
+      "field": "legacy TOP5 skills",
+      "older_chat_cache": "내용 조회 가능",
+      "current_filesystem_and_discovery": "ABSENT",
+      "decision": "복구·라우팅 금지. 현재 owner는 top5isu-shorts 하나"
+    },
+    {
+      "field": "22utube active count",
+      "older_snapshot": "쇼츠 운영 관련 3개만 열거",
+      "current_verified": "전체 6개, 쇼츠 운영 관련 3개",
+      "decision": "전체 inventory와 쇼츠 subset을 분리 표시"
+    },
+    {
+      "field": "cloud destination",
+      "current_stopped_episode": "운영자 직접 업로드 이후 추가 조작 금지",
+      "future_projects": "최신 owner skill과 운영자 지시를 실행 직전에 재확인",
+      "decision": "과거 스냅샷의 destination 문자열로 현재 프로젝트를 재업로드하지 않음"
+    }
+  ],
+  "routing_contract": {
+    "general_shorts": {
+      "owner_skill": "22utube/001short-production-agent",
+      "triggers": [
+        "001쇼츠",
+        "일반 쇼츠",
+        "원본 우라까이",
+        "VMake clean 후 CapCut 조립"
+      ]
+    },
+    "top5_gunlimbo_shorts": {
+      "owner_skill": "22utube/top5isu-shorts",
+      "triggers": [
+        "TOP5",
+        "탑5",
+        "랭킹 쇼츠",
+        "군림보 쇼츠",
+        "역사춘 군림보 프로필"
+      ]
+    },
+    "coding_support": {
+      "skill": "22utube/1caveman",
+      "role": "스킬 코드 수정·디버깅·테스트·Git 검증 때만 사용",
+      "not_a_production_lane": true
+    },
+    "mutual_exclusion": {
+      "required": true,
+      "rule": "한 제작 요청에서 001short-production-agent와 top5isu-shorts의 단계·템플릿·상태명·validator를 합치지 않는다. 비교·마이그레이션 검토는 가능하지만 최종 owner는 하나만 정한다."
+    }
+  },
+  "general_001_lane": {
+    "owner_skill": "22utube/001short-production-agent",
+    "production_contract": {
+      "canonical_vmake_asset": "40_assets_used/clean_source.mp4",
+      "canonical_video_asset_key": "clean_video",
+      "vmake_rule": "실제 VMake 결과 MP4를 회수·검증해 canonical clean asset으로 사용한다. 대체 파일이나 로컬 proxy를 성공 결과로 인정하지 않는다.",
+      "urakkai_review": {
+        "review_loop_count": 2,
+        "review_model_preference": "Claude Opus effort low when available",
+        "hermes_improves_after_each_loop": true,
+        "final_authority": "Hermes",
+        "selection_pool": [
+          "baseline",
+          "loop_1",
+          "loop_2"
+        ],
+        "rule": "외부 모델 결과는 검토 자료이며 segment_id와 승인 source range의 최종 권한은 Hermes가 가진다."
+      },
+      "duration_rules": {
+        "global_source_equals_final_required": false,
+        "urakkai_final_duration_may_differ_from_source": true,
+        "reason": "이미지·나레이션·TTS·장면 삭제/추가에 따라 최종 total_duration_us가 원본보다 짧거나 길 수 있다.",
+        "final_render_reference": "approved total_duration_us",
+        "clean_source_duration_rule": "VMake clean_source가 원본 길이와 맞아야 하는 것은 편집 전 누락·잘림 방지용 자산 검증일 뿐 최종 영상 길이 동일 gate가 아니다.",
+        "clean_only_exception": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY는 원본 전체 길이를 유지한다.",
+        "clip_rule": "속도 변경을 금지한 원본 VIDEO clip은 선택 source range와 target range의 길이를 맞춘다. 이것은 최종 영상 전체 길이 동일 조건이 아니다."
+      },
+      "hook_asset_caveat": {
+        "status": "IMPLEMENTATION_MUST_BE_REVERIFIED",
+        "note": "계약상 target-only 이미지·나레이션으로 최종 길이가 바뀔 수 있음을 명시했지만, 후킹용 혼합 이미지 생성·실제 삽입 모듈이 end-to-end로 완성됐다고 이 토픽에서 증명하지 않았다. 실제 PNG 생성·삽입·CapCut readback 증거 전에는 완료라고 보고하지 않는다."
+      },
+      "capcut_completion": {
+        "editable_project_required": true,
+        "cloud_sync_target": "TAKKTWO/macmini",
+        "row_readback_fields": [
+          "name",
+          "size",
+          "duration",
+          "type",
+          "modified_time"
+        ],
+        "public_upload_requires_explicit_approval": true,
+        "visual_qa_owner_default": "operator",
+        "agent_visual_playback_only_when_explicitly_requested": true
+      }
+    },
+    "work_methods_and_lessons": [
+      "Git 변경 전 fetch·status·HEAD/origin 비교와 백업 ref를 먼저 만든다.",
+      "과거 스킬 제거는 폴더만 지우지 않고 manifest·README·설치 문서·active router·전용 테스트를 함께 정리한다.",
+      "retirement contract를 먼저 RED로 만든 뒤 삭제 후 GREEN으로 검증한다.",
+      "일반 회귀 테스트는 삭제하지 말고 유지 스킬 001로 retarget하고, 제거된 기능만 담당한 전용 테스트는 함께 제거한다.",
+      "force push·history rewrite를 사용하지 않고 정상 commit·push 후 fetch·git ls-tree·manifest readback으로 원격 상태를 판정한다.",
+      "완료는 push 메시지만으로 판단하지 않고 HEAD==origin/main, clean worktree, 원격 트리 ABSENT/PRESENT를 모두 확인한다.",
+      "맥미니 설치 스킬은 Git 트리와 별도 상태다. Git에서 삭제해도 ~/.hermes/skills에는 남을 수 있으므로 filesystem과 native discovery를 모두 확인한다.",
+      "백업 폴더와 .22utube-managed-hermes.json 같은 관리 marker는 활성 제작 스킬이나 콘텐츠 불일치로 오인하지 않는다.",
+      "사용자 수정 사항은 SKILL.md 문장만 추가하지 말고 protocol invariant·schema·validator·회귀 테스트까지 연결한다.",
+      "현재 세션에 이미 로드된 스킬 지침은 파일 삭제 후에도 문맥에 남을 수 있으므로 새 토픽 또는 /new로 초기화한다."
+    ],
+    "snapshot_test_evidence": {
+      "git_retirement_contract": "3/3 PASS",
+      "001_unit_tests": "23/23 PASS",
+      "001_protocol_self_check": "PASS",
+      "001_json_schema": "PASS",
+      "repo_unittest": "83 PASS, 2 skipped because PowerShell is not installed on the Mac host",
+      "remote_tree_readback": "PASS",
+      "local_skill_cleanup": "PASS",
+      "known_repo_strict_verify_baseline": {
+        "status": "FAIL_OUTSIDE_CURRENT_SCOPE",
+        "errors": 6,
+        "cause": "기존 정치 롱폼 스킬 파일의 C:\\Users\\ 절대 경로 정책 위반",
+        "rule": "이번 쇼츠 스킬 정리와 섞어 고치지 말고 별도 작업으로 다룬다."
+      }
+    },
+    "current_status": "READY",
+    "critical_caveat": "후킹용 혼합 이미지 기능은 실제 PNG 생성·삽입·CapCut readback 증거가 있는 회차에서만 완료로 판정"
+  },
+  "top5isu_lane": {
+    "owner_skill": "22utube/top5isu-shorts",
+    "boundaries": {
+      "role": "TOP5·랭킹·군림보 전용 독립 end-to-end 정본",
+      "do_not_merge_with_001": true,
+      "gunlimbo_profile_note": "역사춘 TOP5는 별도 역사춘 스킬을 복구하지 않고 top5isu-shorts의 gunlimbo 프로필을 사용한다.",
+      "default_narration_order": [
+        "고정 인사",
+        "주제 안내 1~2문장",
+        "5위",
+        "4위",
+        "3위",
+        "2위",
+        "1위",
+        "마무리"
+      ],
+      "fixed_greeting": "안녕하세요. 오늘의 탑파이브 주제인데요.",
+      "public_or_scheduled_upload_requires_approval": true
+    },
+    "factory_contract": {
+      "profile_for_current_example": "gunlimbo",
+      "template_profile": "top5isu_v2_top55",
+      "reference_project_name": "top5isu",
+      "canonical_template_root": "$LOCAL_WORK/top5isu-template-build/TOP55_20260719/candidate",
+      "canvas": "1080x1920",
+      "clone_required": true,
+      "immutable_root_mutation": false,
+      "fresh_project_id_required": true,
+      "fresh_timeline_id_required": true,
+      "allowed_completion_without_gui": "편집 가능한 로컬 CapCut 프로젝트, current draft readback/hash, validators, assembly report",
+      "capcut_app_open_playback": "운영자가 명시적으로 요청할 때만"
+    },
+    "working_method": {
+      "stage_order": [
+        "INTAKE",
+        "EVIDENCE_PACKET",
+        "CHATGPT_WRITER",
+        "SCRIPT_QA",
+        "AUDIO_ASSETS",
+        "IMAGE_GENERATION_AND_QA",
+        "CAPCUT_PROJECT",
+        "STATIC_VALIDATION",
+        "FINAL_REPORT"
+      ],
+      "decision_authority": {
+        "hermes": [
+          "원본 범위",
+          "스토리 순서",
+          "문장 순서",
+          "실측 TTS 타이밍",
+          "자막 boundary",
+          "이미지 boundary",
+          "CapCut 조립과 deterministic validation"
+        ],
+        "claude": [
+          "독자 관점의 이해도와 이탈 위험 검수만"
+        ],
+        "forbidden_for_claude": [
+          "원본 구성 변경",
+          "스토리 순서 변경",
+          "장면 수 변경",
+          "초 단위 타이밍 발명",
+          "운영자 승인 범위 덮어쓰기"
+        ]
+      }
+    },
+    "image_generation_method": {
+      "backend_priority": [
+        "google_flow_dom_cdp",
+        "gpt_image2_fallback"
+      ],
+      "flow_dom_steps": [
+        "Flow 페이지에서 DOM snapshot 또는 CDP Runtime.evaluate로 visible contenteditable=true 편집기를 찾는다",
+        "display:none 또는 숨은 접근성 노드를 입력 대상으로 선택하지 않는다",
+        "프롬프트 끝에 반드시 1장만을 붙인다",
+        "입력값이 실제 DOM에 들어갔는지 readback한다",
+        "생성 버튼의 disabled=false를 확인한 뒤 제출한다",
+        "결과는 img[alt=\"생성된 이미지\"]로 찾는다",
+        "인증된 브라우저/CDP 컨텍스트에서 생성된 실제 원본을 추출한다",
+        "다운로드한 원본의 크기와 SHA-256을 기록한다",
+        "장면 역할, 텍스트·로고·인물 위험을 시각 QA한다"
+      ],
+      "hidden_node_rule": {
+        "pattern": "DndDescribedBy-*",
+        "meaning": "스크린리더용 숨은 접근성 설명 노드",
+        "action": "입력, 클릭, 업로드 대상으로 사용 금지"
+      },
+      "generation_timeout_recovery": {
+        "observed_failure": "FLOW_GENERATION_TIMEOUT with generating=false and empty src/dimensions",
+        "recovery": [
+          "현재 prompt DOM 값이 유지되는지 확인",
+          "submit enabled 상태를 다시 확인",
+          "생성 버튼을 한 번 다시 실행",
+          "placeholder나 이전 이미지를 성공으로 취급하지 않음"
+        ]
+      },
+      "accepted_output": "authenticated_browser_cdp_original_file",
+      "forbidden_outputs": [
+        "browser_screenshot",
+        "white_fallback",
+        "placeholder",
+        "local_proxy_image",
+        "template_legacy_sample"
+      ],
+      "visual_prompt_rules": [
+        "세로 9:16",
+        "사실적인 국제 뉴스 다큐멘터리 사진",
+        "익명의 성인 인물",
+        "읽을 수 있는 문자, 숫자, 전화번호, 계좌번호, 개인정보 금지",
+        "실제 회사·제품 로고, 정치 상징, 워터마크 금지",
+        "유혈, 시신, 고문, 처형 장면 금지",
+        "식별 가능한 실제 인물 얼굴 금지"
+      ],
+      "qa_rejection_examples": [
+        "장면 8 첫 결과는 읽을 수 있는 문자와 국가명 때문에 폐기",
+        "장면 8 두 번째 결과는 회사·제품 로고 때문에 폐기",
+        "세 번째 비문자형 사이버범죄 조사·감시 장면만 승인"
+      ]
+    },
+    "image_insertion_method": {
+      "mode": "UNIQUE_MEDIA_IDENTITY_PER_ASSET",
+      "core_lesson": "파일 경로만 바꾸거나 템플릿 슬롯 파일을 단순 덮어써서는 안 된다. 파일명, UUID, Material ID, segment ID와 cache identity 전체를 장면별로 새로 만들어야 한다",
+      "observed_failure": {
+        "symptom": "서로 다른 장면이 CapCut에서 동일한 노란 꽃 이미지로 반복 표시",
+        "actual_cause": "inherited Material ID와 stock/sample metadata 및 stale timeline/subdraft cache가 서로 다른 파일을 동일 media identity로 해석",
+        "wrong_attempts": [
+          "파일 경로만 교체",
+          "같은 Material ID를 유지한 채 파일 바꾸기",
+          "placeholder 또는 흰색 fallback 사용",
+          "검증기 PASS만 믿고 실제 cache identity를 조사하지 않기"
+        ],
+        "correct_fix": [
+          "각 이미지에 고유 filename 부여",
+          "각 이미지에 고유 UUID 부여",
+          "각 이미지에 고유 Material ID 부여",
+          "각 이미지에 고유 segment ID 부여",
+          "원본 SHA-256 중복 금지",
+          "inherited stock/sample metadata 제거",
+          "stale Timeline와 subdraft full-content mirror 정리",
+          "stale media cache identity 제거",
+          "key_value.json 비우기",
+          "모든 full-content mirror를 최신 root draft와 의미상 동일하게 동기화"
+        ]
+      },
+      "identity_gate": {
+        "unique_filename_per_asset": true,
+        "unique_uuid_per_asset": true,
+        "unique_material_id_per_asset": true,
+        "unique_segment_id_per_asset": true,
+        "unique_sha256_per_final_asset": true,
+        "different_images_may_share_material_identity": false
+      },
+      "legacy_sample_denylist": {
+        "material_id": "7339228024233086209",
+        "strings_case_insensitive": [
+          "coltsfoot",
+          "coltsfoot flowers in spring",
+          "flowers in spring",
+          "top55_sample_image.jpeg"
+        ]
+      },
+      "builder_input_rules": {
+        "accepted_names": [
+          "asset_*.png",
+          "asset_*.jpg",
+          "scene_*.png",
+          "scene_*.jpg"
+        ],
+        "order": "숫자 인덱스 오름차순",
+        "boundary_count": "N images require N+1 boundaries",
+        "first_boundary": 0,
+        "last_boundary": "measured audio duration_us",
+        "source_files": "실제 원본만"
+      },
+      "mirror_files_to_check": [
+        "root/draft_content.json",
+        "root/draft_info.json",
+        "active Timeline/draft_content.json",
+        "active Timeline/draft_info.json",
+        "root/template-2.tmp",
+        "Timeline/template-2.tmp",
+        "subdraft/*/draft_content.json"
+      ],
+      "track_mapping_requirements": {
+        "template_profile": "top5isu_v2_top55",
+        "reference_project_name": "top5isu",
+        "image_order_matches_blueprint": true,
+        "boundaries_follow_measured_tts": true,
+        "all_paths_exist": true,
+        "zero_staging_prefix_after_promotion": true,
+        "white_fallback": false
+      },
+      "important_builder_path": "$HOME/.hermes/skills/22utube/top5isu-shorts/scripts/build_top5isu_capcut.py"
+    },
+    "builder_improvements": {
+      "subtitle_time_aliases": {
+        "accepted": [
+          "start/end",
+          "start_sec/end_sec"
+        ],
+        "normalization": "start/end 형태로 정규화 후 microseconds 변환"
+      },
+      "last_subtitle_tolerance": {
+        "tolerance_ms": 1,
+        "within_tolerance": "마지막 cue end를 정확한 audio duration_us로 clamp",
+        "over_tolerance": "FAIL subtitle cue range is invalid",
+        "reason": "1ms 반올림 오차만 흡수하고 실제 cue 설계 오류는 숨기지 않기 위해서"
+      },
+      "clone_cloud_identity_reset": {
+        "cloud_draft_cover": "",
+        "cloud_draft_sync": false,
+        "tm_draft_cloud_completed": "0",
+        "tm_draft_cloud_entry_id": 0,
+        "tm_draft_cloud_modified": 0,
+        "tm_draft_cloud_parent_entry_id": -1,
+        "tm_draft_cloud_space_id": 0,
+        "tm_draft_cloud_user_id": 0
+      },
+      "media_size_recalculation": "템플릿의 오래된 size를 상속하지 않고 현재 Resources/media의 활성 파일 크기 합계를 사용",
+      "cloud_preflight_failure": "FAIL_INHERITED_CLOUD_IDENTITY",
+      "regression_test": {
+        "path": "skills/top5isu-shorts/tests/test_build_top5isu_capcut.py",
+        "focused_tests_after_distribution": "6/6 PASS",
+        "python_compile": "PASS"
+      }
+    },
+    "audio_and_subtitle_method": {
+      "voice_provider": "Supertone",
+      "voice_id": "otFXhy6zBa2LQ8AYSWUeDB",
+      "model": "sona_speech_2t",
+      "pitch_shift": 0,
+      "pitch_variance": 1,
+      "speed": 1,
+      "fallback_voice_allowed": false,
+      "generation_unit": "문법적 문장 한 개당 API clip 한 개",
+      "display_and_spoken_split": {
+        "display": "연도, 순위, 금액과 영문 약어를 숫자·정상 표기로 유지",
+        "spoken": "발음을 위해 연도, 순위, 금액과 영문 토큰을 한글 낭독형으로 변환",
+        "timing": "동일 cue index와 시간 유지"
+      },
+      "normalization": "ffmpeg loudnorm around -14 LUFS",
+      "current_example": {
+        "sentence_count": 9,
+        "duration_sec": 58.062854,
+        "integrated_lufs": -14.84,
+        "true_peak_dbtp": -0.97,
+        "subtitle_cue_count": 21,
+        "last_subtitle_end_sec": 58.062854
+      },
+      "subtitle_visual_lock": {
+        "font_size_px": 92,
+        "safe_width_px": 756,
+        "max_lines": 2,
+        "overflow_policy": "축소·요약하지 않고 페이지 분할"
+      }
+    },
+    "reviewer_lessons": {
+      "glm": {
+        "failure": "HTTP 429 Insufficient balance or no resource package",
+        "status": "NOT_A_VALID_REVIEW_RESULT",
+        "rule": "실패 응답을 독자 검수 완료로 기록하지 않는다"
+      },
+      "claude": {
+        "initial_failure": "OAuth access token revoked",
+        "recovery": "운영자가 재로그인한 뒤 정상 결과만 채택",
+        "later_failure": "session limit response",
+        "later_status": "NOT_A_VALID_REVIEW_RESULT",
+        "authority": "advisory_only"
+      },
+      "deterministic_gate": "Hermes가 실측 TTS, subtitle timing, image timing과 story order를 최종 통제한다"
+    },
+    "failure_recovery_table": [
+      {
+        "failure": "FAIL_TOP5ISU_BLUEPRINT missing headings: ## 이미지 계획",
+        "cause": "설계도 heading이 ## 이미지 타임라인으로 되어 있어 validator 계약과 불일치",
+        "fix": "heading을 정확히 ## 이미지 계획으로 변경"
+      },
+      {
+        "failure": "FAIL_SHRT_WHITE_FALLBACK_FORBIDDEN",
+        "cause": "track mapping의 template profile 또는 reference_project_name이 승인 TOP55 계약과 불일치",
+        "fix": "template_profile=top5isu_v2_top55, reference_project_name=top5isu로 고정"
+      },
+      {
+        "failure": "FAIL_SPEAKER_SEGMENT_MUTED",
+        "cause": "gunlimbo tts_manifest에 speaker_segments가 없음",
+        "fix": "실제 9문장 speaker_segments를 manifest에 추가"
+      },
+      {
+        "failure": "FLOW_GENERATION_TIMEOUT",
+        "cause": "생성 시작 신호 또는 결과 src/dimensions가 비어 있음",
+        "fix": "prompt와 submit DOM 상태를 재확인하고 생성 버튼을 다시 실행"
+      },
+      {
+        "failure": "CapCut에서 반복 꽃 sample",
+        "cause": "서로 다른 파일이 inherited media identity와 stale cache를 공유",
+        "fix": "파일명·UUID·Material ID·segment ID 전체 재생성 및 sample/cache 제거"
+      },
+      {
+        "failure": "clone cloud row size 또는 identity 이상",
+        "cause": "템플릿 cloud entry/space/user ID와 오래된 size 상속",
+        "fix": "cloud identity 초기화와 active Resources/media size 재계산"
+      }
+    ],
+    "validators_and_order": [
+      "validate_top5isu_blueprint.py",
+      "validate_top5isu_contract.py",
+      "validate_top5isu_package.py",
+      "validate_top5isu_track_mapping.py",
+      "validate_top5isu_capcut_draft.py",
+      "validate_top5isu_assembly_report.py"
+    ],
+    "validator_rules": [
+      "하나의 PASS만으로 전체 완료를 선언하지 않는다",
+      "legacy sample, duplicate Material ID, non-empty key_value와 stock metadata를 package gate에서 검사한다",
+      "track mapping gate에서 template profile, reference project, image order와 white fallback 차단을 검사한다",
+      "local draft gate에서 active media path, audio, speaker segments와 meaningful duration을 검사한다",
+      "actual editor 전체 재생 증거가 없으면 정적 PASS와 visual playback PASS를 구분한다"
+    ],
+    "operator_override_rules": {
+      "내가 올렸어": {
+        "stop_automatic_upload": true,
+        "stop_reupload": true,
+        "stop_duplicate_replacement": true,
+        "stop_cloud_identity_repair": true,
+        "stop_gui_clicks": true,
+        "cloud_readback_requires_new_explicit_request": true
+      },
+      "그만해": {
+        "stop_capcut_gui": true,
+        "stop_project_file_modification": true,
+        "stop_sync_verification": true,
+        "preserve_current_state": true
+      },
+      "priority": "운영자 직접 작업과 중단 지시가 자동화보다 항상 우선"
+    },
+    "current_episode_example": {
+      "topic": "미얀마 범죄 조직 밍 가문 사건",
+      "episode_root": "$LOCAL_WORK/top5isu-production/episodes/SH_20260728_myanmar_scam_gang_11_execution_gunlimbo",
+      "local_capcut_project": "$HOME/Movies/CapCut/User Data/Projects/com.lveditor.draft/gunlimbo_myanmar_ming_family_execution_11_Hermes",
+      "asset_mapping": [
+        {
+          "scene": 1,
+          "role": "법정·호송",
+          "source": "operator_supplied_original"
+        },
+        {
+          "scene": 2,
+          "role": "산악 국경 범죄단지",
+          "source": "operator_supplied_original"
+        },
+        {
+          "scene": 3,
+          "role": "전화사기 콜센터",
+          "source": "operator_supplied_original"
+        },
+        {
+          "scene": 4,
+          "role": "범죄자금 증거물",
+          "source": "operator_supplied_original"
+        },
+        {
+          "scene": 5,
+          "role": "불법 도박장·조직적 경비",
+          "source": "google_flow_dom_cdp_original"
+        },
+        {
+          "scene": 6,
+          "role": "불법감금·감시 복도",
+          "source": "google_flow_dom_cdp_original"
+        },
+        {
+          "scene": 7,
+          "role": "구조된 익명 성인 생존자 이동",
+          "source": "google_flow_dom_cdp_original"
+        },
+        {
+          "scene": 8,
+          "role": "사이버범죄 조사·감시 지휘센터",
+          "source": "google_flow_dom_cdp_original"
+        }
+      ],
+      "asset_gate": {
+        "final_image_count": 8,
+        "unique_sha256_count": 8,
+        "status": "PASS_IMAGE_ASSET_GATE"
+      },
+      "static_capcut_build": "PASS",
+      "local_draft_registration": "PASS",
+      "static_validators": "PASS",
+      "full_editor_playback_proven": false,
+      "cloud_upload_performed_by": "operator",
+      "agent_cloud_readback_after_operator_upload": "NOT_REQUESTED",
+      "current_control_state": "STOPPED_BY_OPERATOR",
+      "do_not_touch_without_new_explicit_request": true
+    },
+    "cloud_safety": {
+      "current_episode": "운영자가 직접 업로드했으므로 추가 조작 금지",
+      "future_project_destination": "이 JSON에서 추정하지 않는다. 새 프로젝트의 최신 운영자 지시와 현재 스킬 계약을 다시 확인한다",
+      "do_not_infer_from_stale_chat_or_memory": true,
+      "reason": "이전 문서와 채팅에 서로 다른 계정 공간·폴더 표기가 존재할 수 있으므로 실제 최신 지시가 우선"
+    },
+    "approval_locks": {
+      "mp4_export": "EXPLICIT_OPERATOR_APPROVAL_REQUIRED",
+      "youtube_upload": "EXPLICIT_OPERATOR_APPROVAL_REQUIRED",
+      "youtube_publish": "EXPLICIT_OPERATOR_APPROVAL_REQUIRED",
+      "youtube_schedule": "EXPLICIT_OPERATOR_APPROVAL_REQUIRED",
+      "final_state_transition": "EXPLICIT_OPERATOR_APPROVAL_REQUIRED"
+    }
+  },
+  "new_topic_starter_prompt": "이 Git 참고본과 최신 owner skill을 읽어. 일반 쇼츠는 001short-production-agent만, TOP5·랭킹·군림보는 top5isu-shorts만 owner로 선택해. 두 lane의 템플릿·상태·validator를 섞지 마. 먼저 Git main과 runtime parity를 확인하고, 실제 파일·테스트·CapCut readback 증거가 있을 때만 완료라고 보고해. 특정 과거 episode는 내가 episode_id와 재개 요청을 명시할 때만 건드려.",
+  "new_topic_execution_checklist": [
+    "최신 origin/main과 runtime marker를 확인한다",
+    "요청을 general 001 또는 top5isu 중 하나로 라우팅한다",
+    "owner skill 하나만 로드하고 다른 lane 계약을 섞지 않는다",
+    "Git/runtime 불일치가 있으면 --only 선택 설치, dry-run, no-prune로 해결한다",
+    "실제 source, generated asset, SHA-256, validator와 editable CapCut readback을 확인한다",
+    "운영자 직접 업로드·중단 상태인 과거 프로젝트를 자동 재개하지 않는다",
+    "MP4 export, YouTube 공개·예약은 명시 승인 후에만 수행한다"
+  ],
+  "do_not_do": [
+    "삭제된 00-tikitaka·000short-production-agent·top5-shorts-production·top5-shorts-production-harness를 복구하거나 라우팅하지 않는다.",
+    "001과 top5isu의 템플릿·단계·validator를 한 프로젝트에 혼합하지 않는다.",
+    "Git과 runtime이 다르면서 동일하다고 단정하지 않는다.",
+    "VMake 실제 MP4 대신 proxy·placeholder·재인코딩 대체물을 canonical 결과로 인정하지 않는다.",
+    "후킹 이미지 기능을 실제 PNG·삽입·readback 증거 없이 구현 완료라고 말하지 않는다.",
+    "사용자 승인 없이 공개·예약 업로드하지 않는다.",
+    "토큰·쿠키·API 키·비밀번호·세션 ID를 출력하거나 handoff 파일에 저장하지 않는다.",
+    "top5-shorts-production과 top5-shorts-production-harness를 복구하거나 현재 TOP5 owner로 라우팅하지 않는다.",
+    "Flow 생성 결과를 browser screenshot, placeholder, white fallback 또는 local proxy로 대체하지 않는다.",
+    "서로 다른 TOP55 이미지에 같은 Material ID나 inherited stock identity를 재사용하지 않는다.",
+    "운영자가 내가 올렸어 또는 그만해라고 한 프로젝트를 새 명시 요청 없이 열거나 검증하지 않는다."
+  ],
+  "credentials_and_privacy": {
+    "actual_credentials_included": false,
+    "forbidden": "API keys, tokens, cookies, passwords, OAuth values, session IDs와 credential files",
+    "repository_visibility": "PRIVATE",
+    "path_sanitization": "사용자 절대경로를 $HOME, $LOCAL_WORK, $ONEDRIVE_ROOT로 치환"
+  }
+}
