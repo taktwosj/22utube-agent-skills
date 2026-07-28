@@ -61,6 +61,29 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             if clean_only.get(key) != value:
                 errors.append(f"PROTOCOL_CLEAN_ONLY_GATE:{key}")
 
+    review = protocol.get("urakkai_review_loop")
+    if not isinstance(review, dict):
+        errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP")
+    else:
+        expected_review = {
+            "enabled_for": ["URAKKAI"],
+            "preferred_provider": "first_party_claude_oauth",
+            "preferred_model": "Claude Opus",
+            "effort": "low",
+            "reviews_per_loop": 1,
+            "hermes_improvement_after_each_loop": True,
+            "hermes_final_best_selection_required": True,
+            "authority": "hermes_segment_id_and_approved_ranges",
+            "fallback_provider": "Hermes subagent",
+            "fallback_on_claude_failure": True,
+            "evidence_path": "20_script/external-review.json",
+        }
+        if review.get("review_loop_count") != 2:
+            errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
+        for key, value in expected_review.items():
+            if review.get(key) != value:
+                errors.append(f"PROTOCOL_URAKKAI_REVIEW_GATE:{key}")
+
     stages = protocol.get("stages")
     expected_stages = [f"{number:02d}" for number in range(1, 10)]
     observed_stages = [stage.get("id") for stage in stages] if isinstance(stages, list) else []
@@ -96,6 +119,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     required_invariants = (
         "state_advance_after_validator_pass_only",
         "vmake_dom_first",
+        "vmake_full_download_required",
+        "vmake_direct_insert_required",
         "source_file_evidence_required",
         "vmake_final_download_evidence_required",
         "vmake_substitute_file_forbidden",
@@ -113,6 +138,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         for key in required_invariants:
             if invariants.get(key) is not True:
                 errors.append(f"PROTOCOL_INVARIANT_FALSE:{key}")
+        if invariants.get("vmake_direct_insert_asset") != "40_assets_used/clean_source.mp4":
+            errors.append("PROTOCOL_VMAKE_DIRECT_INSERT_ASSET")
+        if invariants.get("vmake_direct_insert_asset_key") != "clean_video":
+            errors.append("PROTOCOL_VMAKE_DIRECT_INSERT_ASSET_KEY")
     return errors
 
 
@@ -345,6 +374,14 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
+
+    invariants = protocol.get("invariants", {})
+    if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
+        expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
+        for segment in video:
+            if segment.get("asset_key") != expected_asset_key:
+                errors.append(f"VMAKE_DIRECT_INSERT_ASSET_INVALID:{segment.get('asset_key')}")
+                break
 
     if mode == "URAKKAI":
         config = modes[mode]

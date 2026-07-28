@@ -74,6 +74,22 @@
       "source_order_change": "FORBIDDEN"
     }
   },
+  "urakkai_review_loop": {
+    "enabled_for": [
+      "URAKKAI"
+    ],
+    "preferred_provider": "first_party_claude_oauth",
+    "preferred_model": "Claude Opus",
+    "effort": "low",
+    "review_loop_count": 2,
+    "reviews_per_loop": 1,
+    "hermes_improvement_after_each_loop": true,
+    "hermes_final_best_selection_required": true,
+    "authority": "hermes_segment_id_and_approved_ranges",
+    "fallback_provider": "Hermes subagent",
+    "fallback_on_claude_failure": true,
+    "evidence_path": "20_script/external-review.json"
+  },
   "invariants": {
     "single_active_lane": true,
     "source_is_read_only": true,
@@ -81,6 +97,9 @@
     "gui_owner_count": 1,
     "vmake_dom_first": true,
     "vmake_full_download_required": true,
+    "vmake_direct_insert_required": true,
+    "vmake_direct_insert_asset": "40_assets_used/clean_source.mp4",
+    "vmake_direct_insert_asset_key": "clean_video",
     "clean_visual_ffprobe_required": true,
     "clean_visual_contact_sheet_required": true,
     "capcut_root_immutable": true,
@@ -154,12 +173,12 @@
       "produces": [
         "20_script/external-review.md"
       ],
-      "pass_state": "EXTERNAL_REVIEW_RETURNED"
+      "pass_state": "URAKKAI_REVIEW_LOOP_2_COMPLETE"
     },
     {
       "id": "05",
       "name": "FINAL_DESIGN",
-      "requires_state": "EXTERNAL_REVIEW_RETURNED",
+      "requires_state": "URAKKAI_REVIEW_LOOP_2_COMPLETE",
       "produces": [
         "20_script/final-blueprint.md",
         "20_script/production_plan.json"
@@ -319,6 +338,8 @@
     "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval",
     "URAKKAI_FAKE_SPLIT": "urakkai uses contiguous fake splits without an effective structural reorder",
     "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH": "used A10 source/target ranges do not exactly match VIDEO",
+    "VMAKE_DIRECT_INSERT_ASSET_INVALID": "VIDEO must use the canonical VMake clean_video asset",
+    "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT": "urakkai review must complete exactly two improvement loops",
     "SOURCE_FILE_EVIDENCE_MISSING": "completion report lacks verified source file evidence",
     "SOURCE_FILE_EVIDENCE_INVALID": "source file evidence does not match the actual file",
     "VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING": "completion report lacks actual VMake final download evidence",

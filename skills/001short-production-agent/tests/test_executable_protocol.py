@@ -238,6 +238,61 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         for field in ("source_file_evidence", "vmake_final_download", "capcut_visual_confirmation"):
             self.assertIn(field, protocol["completion_report"]["required_fields"])
 
+    def test_vmake_direct_insert_and_two_loop_urakkai_review_contract(self):
+        module = load_validator()
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
+
+        invariants = protocol["invariants"]
+        self.assertIs(invariants.get("vmake_full_download_required"), True)
+        self.assertIs(invariants.get("vmake_direct_insert_required"), True)
+        self.assertEqual(
+            invariants.get("vmake_direct_insert_asset"),
+            "40_assets_used/clean_source.mp4",
+        )
+        self.assertEqual(invariants.get("vmake_direct_insert_asset_key"), "clean_video")
+
+        review = protocol["urakkai_review_loop"]
+        self.assertEqual(review["enabled_for"], ["URAKKAI"])
+        self.assertEqual(review["preferred_provider"], "first_party_claude_oauth")
+        self.assertEqual(review["preferred_model"], "Claude Opus")
+        self.assertEqual(review["effort"], "low")
+        self.assertEqual(review["review_loop_count"], 2)
+        self.assertEqual(review["reviews_per_loop"], 1)
+        self.assertIs(review["hermes_improvement_after_each_loop"], True)
+        self.assertIs(review["hermes_final_best_selection_required"], True)
+        self.assertEqual(review["authority"], "hermes_segment_id_and_approved_ranges")
+
+        stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
+        self.assertEqual(stage04["pass"], "URAKKAI_REVIEW_LOOP_2_COMPLETE")
+        self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 2)
+        self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_TWO_LOOPS")
+        self.assertIn("VMake Direct-Insert Contract", skill_text)
+        self.assertIn("검토 개선 loop는 정확히 2회", skill_text)
+
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["invariants"]["vmake_direct_insert_required"] = False
+        self.assertIn(
+            "PROTOCOL_INVARIANT_FALSE:vmake_direct_insert_required",
+            module.validate_protocol_document(broken),
+        )
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["urakkai_review_loop"]["review_loop_count"] = 1
+        self.assertIn(
+            "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT",
+            module.validate_protocol_document(broken),
+        )
+
+        invalid_plan = json.loads(
+            (SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8")
+        )
+        invalid_plan["timeline"][0]["placements"][0]["asset_key"] = "source_video"
+        self.assertIn(
+            "VMAKE_DIRECT_INSERT_ASSET_INVALID:source_video",
+            module.validate_production_plan(invalid_plan, protocol),
+        )
+
     def test_completion_report_rejects_missing_final_shorts_evidence(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)

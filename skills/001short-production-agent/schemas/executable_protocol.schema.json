@@ -10,6 +10,7 @@
     "authority",
     "schemas",
     "production_modes",
+    "urakkai_review_loop",
     "invariants",
     "anchors",
     "stages",
@@ -117,12 +118,72 @@
         }
       }
     },
+    "urakkai_review_loop": {
+      "type": "object",
+      "required": [
+        "enabled_for",
+        "preferred_provider",
+        "preferred_model",
+        "effort",
+        "review_loop_count",
+        "reviews_per_loop",
+        "hermes_improvement_after_each_loop",
+        "hermes_final_best_selection_required",
+        "authority",
+        "fallback_provider",
+        "fallback_on_claude_failure",
+        "evidence_path"
+      ],
+      "properties": {
+        "enabled_for": {
+          "const": ["URAKKAI"]
+        },
+        "preferred_provider": {
+          "const": "first_party_claude_oauth"
+        },
+        "preferred_model": {
+          "const": "Claude Opus"
+        },
+        "effort": {
+          "const": "low"
+        },
+        "review_loop_count": {
+          "const": 2
+        },
+        "reviews_per_loop": {
+          "const": 1
+        },
+        "hermes_improvement_after_each_loop": {
+          "const": true
+        },
+        "hermes_final_best_selection_required": {
+          "const": true
+        },
+        "authority": {
+          "const": "hermes_segment_id_and_approved_ranges"
+        },
+        "fallback_provider": {
+          "const": "Hermes subagent"
+        },
+        "fallback_on_claude_failure": {
+          "const": true
+        },
+        "evidence_path": {
+          "const": "20_script/external-review.json"
+        }
+      },
+      "additionalProperties": false
+    },
     "invariants": {
       "type": "object",
       "required": [
         "single_active_lane",
         "state_advance_after_validator_pass_only",
         "vmake_dom_first",
+        "vmake_full_download_required",
+        "vmake_direct_insert_required",
+        "vmake_direct_insert_asset",
+        "vmake_direct_insert_asset_key",
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_destination",
@@ -134,7 +195,21 @@
         "vmake_final_download_evidence_required",
         "vmake_substitute_file_forbidden",
         "capcut_visual_confirmation_required_before_completion"
-      ]
+      ],
+      "properties": {
+        "vmake_full_download_required": {
+          "const": true
+        },
+        "vmake_direct_insert_required": {
+          "const": true
+        },
+        "vmake_direct_insert_asset": {
+          "const": "40_assets_used/clean_source.mp4"
+        },
+        "vmake_direct_insert_asset_key": {
+          "const": "clean_video"
+        }
+      }
     },
     "stages": {
       "type": "array",

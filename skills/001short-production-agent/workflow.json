@@ -309,7 +309,11 @@
     {
       "id": "04",
       "file": "steps/04-external-review.md",
-      "pass": "EXTERNAL_REVIEW_RETURNED"
+      "pass": "URAKKAI_REVIEW_LOOP_2_COMPLETE",
+      "required_evidence": [
+        "20_script/external-review.md",
+        "20_script/external-review.json"
+      ]
     },
     {
       "id": "05",
@@ -395,7 +399,20 @@
       "repeat": true,
       "coexist": true
     },
-    "external_review": "user_manual_only",
+    "external_review": {
+      "enabled_for": [
+        "URAKKAI"
+      ],
+      "provider": "first_party_claude_oauth",
+      "model": "Claude Opus",
+      "effort": "low",
+      "loop_count": 2,
+      "reviews_per_loop": 1,
+      "hermes_improves_after_each_loop": true,
+      "hermes_selects_best_final_candidate": true,
+      "fallback": "Hermes subagent for the failed loop only",
+      "evidence": "20_script/external-review.json"
+    },
     "vmake": {
       "trigger": "FINAL_DESIGN_LOCKED",
       "url": "https://vmake.ai/video-watermark-remover/upload",
@@ -622,7 +639,7 @@
     }
   },
   "external_actions": {
-    "llm_calls": false,
+    "llm_calls": "URAKKAI_STAGE_04_TWO_LOOPS",
     "paid_tts": false,
     "vmake": "after_final_design_approval",
     "capcut_gui": "after_final_design_approval",
@@ -632,6 +649,10 @@
     "WAIT": {
       "executes_external_action": false,
       "meaning": "required evidence for the active stage is not yet present"
+    },
+    "WAIT_EXTERNAL_REVIEW": {
+      "executes_external_action": false,
+      "meaning": "one or both required urakkai review loops lack verified evidence"
     },
     "FAIL": {
       "executes_external_action": false,

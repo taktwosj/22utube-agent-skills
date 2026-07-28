@@ -52,6 +52,10 @@ VMake 업로드·처리 polling·다운로드·clean asset 등록을 수행하�
 
 VMake가 완료됐지만 짧게 남는 댓글·워터마크·제목 또는 인페인팅 손상이 의심되면 `references/vmake-residual-cleanup-qa.md`를 추가로 읽는다. 전체 1fps 접촉시트와 첫 1.5초 4fps 접촉시트를 모두 통과하기 전에는 canonical `clean_source.mp4`로 승격하지 않는다. 로컬 보정을 쓴 결과는 순수 VMake 결과로 부르지 않고 hybrid 범위와 원본 오디오 PCM 검증을 manifest에 기록한다.
 
+### VMake Direct-Insert Contract
+
+`CLEAN_VISUAL_READY`가 되면 검증된 VMake canonical 결과 `40_assets_used/clean_source.mp4`를 `clean_video` asset으로 등록하고 001 CapCut 프로젝트의 모든 `VIDEO` placement에 직접 사용한다. 원본 `source.mp4`, VMake preview, 별도 재편집 영상 또는 검증되지 않은 프록시를 VIDEO 자산으로 대체하지 않는다. builder는 이 파일을 프로젝트 `Resources/media/clean_video.mp4`로 복사하며 A10 원본 오디오는 별도 자산으로 유지한다. production-plan validator가 다른 VIDEO asset key를 발견하면 `VMAKE_DIRECT_INSERT_ASSET_INVALID`로 중단한다.
+
 Stage 06에서는 전용 API 업로더가 있다고 주장하지 말고 로그인된 Chrome을 CDP/브라우저 릴레이로 조작한다. **화면 좌표 클릭을 기본으로 사용하지 않는다.** 페이지 DOM에서 요소를 찾아 기계적으로 실행한다.
 
 ### DOM-first selector contract
@@ -182,6 +186,20 @@ Stage 03~05에서는 JSON 이름이나 선택지만 먼저 말하지 않는다. 
 - `production_plan.json`은 사람이 승인한 설계의 컴파일 결과다. JSON을 사람용 추천안 대신 보여주지 않는다.
 - 승인 질문은 설계도 전체를 보여준 **뒤에만** 한다. 선택지에만 `추천안 그대로 진행`이라고 쓰고 추천안 내용을 생략하지 않는다.
 - 운영자가 빠르게 진행하라고 했더라도 화면 과밀, clean 처리, 원본 음성/TTS 선택처럼 결과가 달라지는 항목은 설계도에서 눈에 보이게 표시한다.
+
+## Urakkai Claude Review Loop Contract
+
+001 `URAKKAI` Stage 04의 검토 개선 loop는 정확히 2회 실행한다. 이는 독립 검토 대화 두 개를 한 번에 모으는 방식이 아니라, **검토 → Hermes 개선**을 순서대로 두 번 반복하는 계약이다.
+
+1. Loop 1은 현재 승인 후보를 first-party Claude OAuth의 Claude Opus `--effort low`로 검토하고 Hermes가 개선한다.
+2. Loop 2는 Loop 1 개선본을 같은 항목으로 다시 검토하고 Hermes가 재개선한다.
+3. Hermes는 baseline·Loop 1·Loop 2 후보를 비교해 source range·segment ID·승인 범위를 지키는 최상안을 직접 확정한다. Claude가 제안한 절대 초나 구조를 그대로 권위로 승격하지 않는다.
+
+- 검토 범위는 훅 명확성, 장면 이해도, 이탈 지점, 대사 중복, 감정 연결이다.
+- 실패한 Claude loop만 동일 입력의 Hermes 서브에이전트 검토 1회로 대체한다. 두 loop 증거가 채워지지 않으면 `WAIT_EXTERNAL_REVIEW`에서 중단한다.
+- `20_script/external-review.md`와 `.json`에 loop별 입력·출력 hash, Hermes 개선, 채택·반려와 최종 선택 사유를 기록한다.
+- 토큰, 쿠키, OAuth 값, URL, tab/conversation/session ID는 저장하지 않는다.
+- `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY`에는 이 loop를 강제하지 않는다.
 
 ## CapCut Build Readiness
 
