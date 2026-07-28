@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-completion-report-v1.json",
+  "title": "001short Completion Report",
+  "type": "object",
+  "required": [
+    "episode_id",
+    "capcut_project_name",
+    "production_mode",
+    "T1",
+    "T2",
+    "validation_status",
+    "source_file_evidence",
+    "vmake_final_download",
+    "capcut_visual_confirmation",
+    "completion_claim",
+    "capcut_cloud_destination",
+    "capcut_cloud_row",
+    "upload_title",
+    "upload_description",
+    "sources",
+    "public_upload_status"
+  ],
+  "properties": {
+    "episode_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capcut_project_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "production_mode": {
+      "enum": [
+        "URAKKAI",
+        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"
+      ]
+    },
+    "T1": {
+      "type": "string",
+      "minLength": 1
+    },
+    "T2": {
+      "type": "string",
+      "minLength": 1
+    },
+    "validation_status": {
+      "const": "PASS"
+    },
+    "capcut_cloud_destination": {
+      "const": "User3160027826975의 공간/MAC"
+    },
+    "capcut_cloud_row": {
+      "type": "object",
+      "required": [
+        "name",
+        "size",
+        "duration",
+        "type",
+        "modified_time"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        },
+        "duration": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "const": "프로젝트"
+        },
+        "modified_time": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "upload_title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "upload_description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "channel",
+          "url"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "original_title": {
+            "type": "string"
+          },
+          "upload_date": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "public_upload_status": {
+      "enum": [
+        "WAIT_APPROVAL",
+        "NOT_REQUESTED",
+        "UPLOADED",
+        "PUBLISHED",
+        "SCHEDULED"
+      ]
+    },
+    "public_upload_approval": {
+      "type": "boolean"
+    },
+    "source_file_evidence": {
+      "type": "object",
+      "required": [
+        "local_path",
+        "sha256",
+        "duration",
+        "approved_source_time_ranges"
+      ],
+      "properties": {
+        "local_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "approved_source_time_ranges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "integer",
+                "minimum": 1
+              }
+            ],
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "vmake_final_download": {
+      "type": "object",
+      "required": [
+        "downloaded_file_path",
+        "sha256",
+        "size_bytes",
+        "duration",
+        "is_actual_vmake_final_download"
+      ],
+      "properties": {
+        "downloaded_file_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "is_actual_vmake_final_download": {
+          "const": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "capcut_visual_confirmation": {
+      "type": "object",
+      "required": [
+        "actual_project_name",
+        "screen_confirmation_status",
+        "screen_evidence_path",
+        "screen_evidence_sha256",
+        "draft_readback",
+        "final_project_hash"
+      ],
+      "properties": {
+        "actual_project_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "screen_confirmation_status": {
+          "const": "PASS"
+        },
+        "screen_evidence_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "screen_evidence_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "draft_readback": {
+          "type": "object",
+          "required": [
+            "local_path",
+            "sha256"
+          ],
+          "properties": {
+            "local_path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{64}$"
+            }
+          },
+          "additionalProperties": true
+        },
+        "final_project_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      },
+      "additionalProperties": true
+    },
+    "completion_claim": {
+      "enum": [
+        "CAPCUT_PROJECT_COMPLETE",
+        "RENDER_COMPLETE",
+        "UPLOAD_READY",
+        "PUBLIC_UPLOAD_COMPLETE"
+      ]
+    },
+    "render_evidence": {
+      "type": "object",
+      "required": [
+        "mp4_path",
+        "mp4_sha256",
+        "size_bytes",
+        "duration"
+      ],
+      "properties": {
+        "mp4_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mp4_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "public_upload_status": {
+            "enum": [
+              "UPLOADED",
+              "PUBLISHED",
+              "SCHEDULED"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "public_upload_approval"
+        ],
+        "properties": {
+          "public_upload_approval": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "completion_claim": {
+            "enum": [
+              "RENDER_COMPLETE",
+              "UPLOAD_READY",
+              "PUBLIC_UPLOAD_COMPLETE"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "render_evidence"
+        ]
+      }
+    }
+  ],
+  "additionalProperties": true
+}

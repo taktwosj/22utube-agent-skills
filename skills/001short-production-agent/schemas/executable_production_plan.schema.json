@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-executable-production-plan-v1.json",
+  "title": "001short Executable Production Plan",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "episode_id",
+    "root_profile",
+    "project_name",
+    "production_mode",
+    "total_duration_us",
+    "order_signature",
+    "timeline"
+  ],
+  "properties": {
+    "schema_version": {"const": "001short-production-plan-v1"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "root_profile": {"type": "string", "minLength": 1},
+    "project_name": {"type": "string", "minLength": 1},
+    "production_mode": {
+      "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+    },
+    "total_duration_us": {"type": "integer", "minimum": 1},
+    "original_order": {"type": "array", "minItems": 1},
+    "order_signature": {"type": "array", "minItems": 1},
+    "timeline": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["segment_key", "target_range_us", "placements"],
+        "properties": {
+          "segment_key": {"type": "string", "minLength": 1},
+          "target_range_us": {"$ref": "#/$defs/range"},
+          "placements": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"$ref": "#/$defs/placement"}
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "cleared_anchors": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "locks": {"type": "object"}
+  },
+  "$defs": {
+    "range": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "integer", "minimum": 0},
+        {"type": "integer", "minimum": 1}
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "placement": {
+      "type": "object",
+      "required": ["anchor", "operation", "target_range_us"],
+      "properties": {
+        "anchor": {
+          "enum": ["VIDEO", "T1", "T2", "A9", "A9_TEXT", "A10", "A10_TEXT", "STATE", "A11", "A12", "SCREEN"]
+        },
+        "operation": {
+          "enum": ["clone_template_segment", "replace_template_text", "replace_text_preserve_style", "replace_media_and_range", "omit", "clear"]
+        },
+        "asset_key": {"type": "string", "minLength": 1},
+        "text": {"type": "string"},
+        "source_range_us": {"$ref": "#/$defs/range"},
+        "target_range_us": {"$ref": "#/$defs/range"},
+        "volume": {"type": "number", "minimum": 0}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"anchor": {"enum": ["VIDEO", "A10"]}}},
+          "then": {"required": ["asset_key", "source_range_us", "volume"]}
+        },
+        {
+          "if": {"properties": {"anchor": {"enum": ["T1", "T2", "A9_TEXT", "A10_TEXT", "STATE"]}}},
+          "then": {"required": ["text"]}
+        }
+      ],
+      "additionalProperties": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"production_mode": {"const": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}}
+      },
+      "then": {
+        "required": ["cleared_anchors", "locks"],
+        "properties": {
+          "timeline": {"minItems": 1, "maxItems": 1},
+          "locks": {
+            "required": ["source_order_unchanged", "speed_unchanged", "original_audio_required"],
+            "properties": {
+              "source_order_unchanged": {"const": true},
+              "speed_unchanged": {"const": true},
+              "original_audio_required": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"production_mode": {"const": "URAKKAI"}}
+      },
+      "then": {
+        "required": ["original_order"],
+        "properties": {
+          "timeline": {"minItems": 2}
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

@@ -1,10 +1,21 @@
 {
   "repo_name": "22utube-agent-skills",
-  "version": "2026.07.28",
+  "version": "2026.07.14",
   "source_of_truth": "git",
-  "active_shorts_script_authority": null,
+  "active_shorts_script_authority": "skills/001short-production-agent/SKILL.md",
   "onedrive_role": "production-data-only",
   "skills": [
+
+    {
+      "name": "001short-production-agent",
+      "category": "22utube",
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
+      "enabled": true
+    },
     {
       "name": "top5isu-shorts",
       "category": "22utube",

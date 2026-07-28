@@ -1,0 +1,355 @@
+{
+  "$schema": "schemas/executable_protocol.schema.json",
+  "schema_version": "001short-executable-protocol-v1",
+  "owner_skill": "001short-production-agent",
+  "lane": "general_shorts_production",
+  "authority": {
+    "policy": "SKILL.md",
+    "machine_contract": "protocol.json",
+    "state_machine": "workflow.json",
+    "episode_plan": "20_script/production_plan.json",
+    "enforcement": "scripts/validate_executable_protocol.py",
+    "conflict_rule": "STOP_PROTOCOL_CONFLICT"
+  },
+  "schemas": {
+    "protocol": "schemas/executable_protocol.schema.json",
+    "production_plan": "schemas/executable_production_plan.schema.json",
+    "completion_report": "schemas/completion_report.schema.json"
+  },
+  "activation": {
+    "aliases": [
+      "01쇼츠",
+      "001쇼츠",
+      "001short",
+      "001short-production-agent",
+      "원본 우라까이",
+      "클린하고 캣컵",
+      "클린 작업하고 그대로"
+    ],
+    "forbidden_skill_mixing": [
+      "000short-production-agent",
+      "top5isu-shorts",
+      "00-tikitaka",
+      "111-politics-longform"
+    ]
+  },
+  "production_modes": {
+    "URAKKAI": {
+      "trigger": "operator requests urakkai, rearrangement, structural re-edit, or equivalent",
+      "source_order_unchanged": false,
+      "meaningful_reorder_required": true,
+      "minimum_video_segments": 2,
+      "video_audio_mapping_must_match": true,
+      "requires_original_blueprint": true,
+      "requires_human_approval": true,
+      "unchanged_error": "URAKKAI_STRUCTURE_UNCHANGED",
+      "fake_split_forbidden": true,
+      "approved_final_order_required": true,
+      "a10_sync_required_for_all_used_ranges": true
+    },
+    "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
+      "trigger": "operator explicitly requests clean-only, source-order unchanged, title-only, or equivalent",
+      "source_order_unchanged": true,
+      "speed_unchanged": true,
+      "video_segments": 1,
+      "original_audio_segments": 1,
+      "video_volume": 0,
+      "original_audio_volume": 1,
+      "required_title_tracks": [
+        "T1",
+        "T2"
+      ],
+      "must_clear_tracks": [
+        "STATE",
+        "A10_TEXT",
+        "A9_TEXT",
+        "A9",
+        "A11",
+        "A12"
+      ],
+      "skip_fake_urakkai_gate": true,
+      "explicit_exception_to_multi_cut_gate": true,
+      "video_duration": "FULL_LENGTH",
+      "original_audio_duration": "FULL_LENGTH",
+      "source_order_change": "FORBIDDEN"
+    }
+  },
+  "urakkai_review_loop": {
+    "enabled_for": [
+      "URAKKAI"
+    ],
+    "preferred_provider": "first_party_claude_oauth",
+    "preferred_model": "Claude Opus",
+    "effort": "low",
+    "review_loop_count": 2,
+    "reviews_per_loop": 1,
+    "hermes_improvement_after_each_loop": true,
+    "hermes_final_best_selection_required": true,
+    "authority": "hermes_segment_id_and_approved_ranges",
+    "fallback_provider": "Hermes subagent",
+    "fallback_on_claude_failure": true,
+    "evidence_path": "20_script/external-review.json"
+  },
+  "invariants": {
+    "single_active_lane": true,
+    "source_is_read_only": true,
+    "state_advance_after_validator_pass_only": true,
+    "gui_owner_count": 1,
+    "vmake_dom_first": true,
+    "vmake_full_download_required": true,
+    "vmake_direct_insert_required": true,
+    "vmake_direct_insert_asset": "40_assets_used/clean_source.mp4",
+    "vmake_direct_insert_asset_key": "clean_video",
+    "urakkai_final_duration_independent_from_source": true,
+    "clean_visual_duration_matches_source_before_edit": true,
+    "clean_only_full_source_duration_required": true,
+    "clean_visual_ffprobe_required": true,
+    "clean_visual_contact_sheet_required": true,
+    "capcut_root_immutable": true,
+    "capcut_unique_staging_required": true,
+    "capcut_project_media_internal": true,
+    "capcut_promote_after_validation_only": true,
+    "capcut_local_reopen_required": true,
+    "capcut_post_open_normalization_required": true,
+    "capcut_id_mirror_pass_required": true,
+    "capcut_cloud_media_pass_required": true,
+    "capcut_zip_test_required": true,
+    "capcut_cloud_destination": "User3160027826975의 공간/MAC",
+    "capcut_cloud_ignore_space": "TAKKTWO",
+    "capcut_cloud_row_readback_required": true,
+    "capcut_cloud_reopen_playback_required": true,
+    "public_upload_requires_explicit_approval": true,
+    "completion_report_requires_upload_metadata": true,
+    "source_file_evidence_required": true,
+    "vmake_final_download_evidence_required": true,
+    "vmake_substitute_file_forbidden": true,
+    "capcut_visual_confirmation_required_before_completion": true
+  },
+  "anchors": {
+    "VIDEO": "clean visual; embedded audio muted when A10 is present",
+    "T1": "top title line 1",
+    "T2": "top title line 2",
+    "A9": "TTS or narration",
+    "A9_TEXT": "TTS-linked visible caption",
+    "A10": "original speaker and source audio",
+    "A10_TEXT": "original-speech caption",
+    "STATE": "situation or state caption",
+    "A11": "sound effects",
+    "A12": "background music",
+    "SCREEN": "screen visual effect"
+  },
+  "stages": [
+    {
+      "id": "01",
+      "name": "SOURCE_ANALYSIS",
+      "requires": [
+        "00_input/source.mp4",
+        "00_input/source_metadata.json"
+      ],
+      "produces": [
+        "10_analysis/source-analysis.md"
+      ],
+      "pass_state": "SOURCE_OCR_VERIFIED"
+    },
+    {
+      "id": "02",
+      "name": "ORIGINAL_BLUEPRINT",
+      "requires_state": "SOURCE_OCR_VERIFIED",
+      "produces": [
+        "20_script/original-blueprint.md"
+      ],
+      "pass_state": "ORIGINAL_BLUEPRINT_READY"
+    },
+    {
+      "id": "03",
+      "name": "FIRST_RECOMMENDATION",
+      "requires_state": "ORIGINAL_BLUEPRINT_READY",
+      "produces": [
+        "20_script/first-recommendation.md"
+      ],
+      "pass_state": "FIRST_RECOMMENDATION_READY"
+    },
+    {
+      "id": "04",
+      "name": "EXTERNAL_REVIEW",
+      "requires_state": "FIRST_RECOMMENDATION_READY",
+      "produces": [
+        "20_script/external-review.md"
+      ],
+      "pass_state": "URAKKAI_REVIEW_LOOP_2_COMPLETE"
+    },
+    {
+      "id": "05",
+      "name": "FINAL_DESIGN",
+      "requires_state": "URAKKAI_REVIEW_LOOP_2_COMPLETE",
+      "produces": [
+        "20_script/final-blueprint.md",
+        "20_script/production_plan.json"
+      ],
+      "validators": [
+        "scripts/validate_design_lock.py",
+        "python3 scripts/validate_executable_protocol.py --plan {episode_root}/20_script/production_plan.json"
+      ],
+      "pass_state": "FINAL_DESIGN_LOCKED"
+    },
+    {
+      "id": "06",
+      "name": "VMAKE_CLEAN",
+      "requires_state": "FINAL_DESIGN_LOCKED_OR_EXPLICIT_CLEAN_ONLY",
+      "produces": [
+        "40_assets_used/clean_source.mp4",
+        "40_assets_used/clean_visual_manifest.json",
+        "40_assets_used/vmake_final_download_evidence.json"
+      ],
+      "validators": [
+        "scripts/validate_clean_visual.py"
+      ],
+      "pass_state": "CLEAN_VISUAL_READY"
+    },
+    {
+      "id": "07",
+      "name": "AUDIO_CAPTION_LOCK",
+      "requires_state": "CLEAN_VISUAL_READY",
+      "produces": [
+        "30_audio_srt/audio_caption_lock.json"
+      ],
+      "validators": [
+        "scripts/validate_audio_caption.py"
+      ],
+      "pass_state": "AUDIO_CAPTION_VALIDATED"
+    },
+    {
+      "id": "08",
+      "name": "CAPCUT_BUILD",
+      "requires_state": "AUDIO_CAPTION_VALIDATED_OR_EXPLICIT_CLEAN_ONLY_ASSET_LOCK",
+      "produces": [
+        "50_capcut_project/project.zip",
+        "50_capcut_project/build_receipt.json"
+      ],
+      "validators": [
+        "scripts/validate_build_inputs.py",
+        "scripts/validate_capcut_project.py",
+        "scripts/validate_capcut_cloud_media.py"
+      ],
+      "pass_state": "CAPCUT_STATIC_VALIDATED"
+    },
+    {
+      "id": "09",
+      "name": "REOPEN_RENDER_REVIEW",
+      "requires_state": "CAPCUT_STATIC_VALIDATED",
+      "produces": [
+        "60_exports/render_validation.json",
+        "60_upload/upload_info.json",
+        "90_reports/completion_report.json"
+      ],
+      "validators": [
+        "scripts/validate_postbuild.py",
+        "scripts/validate_render.py",
+        "python3 scripts/validate_executable_protocol.py --completion-report {episode_root}/90_reports/completion_report.json"
+      ],
+      "pass_state": "WAIT_UPLOAD_APPROVAL"
+    }
+  ],
+  "completion_report": {
+    "required_fields": [
+      "episode_id",
+      "capcut_project_name",
+      "production_mode",
+      "T1",
+      "T2",
+      "validation_status",
+      "source_file_evidence",
+      "vmake_final_download",
+      "capcut_visual_confirmation",
+      "completion_claim",
+      "capcut_cloud_destination",
+      "capcut_cloud_row",
+      "upload_title",
+      "upload_description",
+      "sources",
+      "public_upload_status"
+    ],
+    "source_required_fields": [
+      "channel",
+      "url"
+    ],
+    "cloud_row_required_fields": [
+      "name",
+      "size",
+      "duration",
+      "type",
+      "modified_time"
+    ],
+    "public_upload_wait_values": [
+      "WAIT_APPROVAL",
+      "NOT_REQUESTED"
+    ],
+    "public_upload_done_values": [
+      "UPLOADED",
+      "PUBLISHED",
+      "SCHEDULED"
+    ],
+    "public_upload_approval_field": "public_upload_approval",
+    "missing_error_prefix": "UPLOAD_METADATA_MISSING",
+    "source_file_evidence_required_fields": [
+      "local_path",
+      "sha256",
+      "duration",
+      "approved_source_time_ranges"
+    ],
+    "vmake_final_download_required_fields": [
+      "downloaded_file_path",
+      "sha256",
+      "size_bytes",
+      "duration",
+      "is_actual_vmake_final_download"
+    ],
+    "capcut_visual_confirmation_required_fields": [
+      "actual_project_name",
+      "screen_confirmation_status",
+      "screen_evidence_path",
+      "screen_evidence_sha256",
+      "draft_readback",
+      "final_project_hash"
+    ],
+    "render_claim_values": [
+      "RENDER_COMPLETE",
+      "UPLOAD_READY",
+      "PUBLIC_UPLOAD_COMPLETE"
+    ],
+    "render_evidence_required_fields": [
+      "mp4_path",
+      "mp4_sha256",
+      "size_bytes",
+      "duration"
+    ]
+  },
+  "errors": {
+    "STOP_PROTOCOL_CONFLICT": "SKILL.md, protocol.json, and workflow.json conflict; do not guess",
+    "PRODUCTION_MODE_INVALID": "production mode is not declared",
+    "URAKKAI_STRUCTURE_UNCHANGED": "urakkai final order equals original order",
+    "CLEAN_ONLY_SOURCE_ORDER_CHANGED": "clean-only source and final order differ",
+    "CLEAN_ONLY_VIDEO_COUNT": "clean-only requires exactly one VIDEO segment",
+    "CLEAN_ONLY_AUDIO_COUNT": "clean-only requires exactly one A10 segment",
+    "CLEAN_ONLY_VIDEO_RANGE": "clean-only VIDEO must cover the full source unchanged",
+    "CLEAN_ONLY_AUDIO_RANGE": "clean-only A10 must cover the full source unchanged",
+    "CLEAN_ONLY_VIDEO_VOLUME": "clean-only VIDEO volume must be zero",
+    "CLEAN_ONLY_AUDIO_VOLUME": "clean-only A10 volume must be one",
+    "CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY": "clean-only forbidden track contains segments",
+    "UPLOAD_METADATA_MISSING": "completion report lacks title, description, or sources",
+    "CAPCUT_CLOUD_ROW_MISSING": "completion report lacks a verified cloud-row field",
+    "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval",
+    "URAKKAI_FAKE_SPLIT": "urakkai uses contiguous fake splits without an effective structural reorder",
+    "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH": "used A10 source/target ranges do not exactly match VIDEO",
+    "VMAKE_DIRECT_INSERT_ASSET_INVALID": "VIDEO must use the canonical VMake clean_video asset",
+    "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT": "urakkai review must complete exactly two improvement loops",
+    "SOURCE_FILE_EVIDENCE_MISSING": "completion report lacks verified source file evidence",
+    "SOURCE_FILE_EVIDENCE_INVALID": "source file evidence does not match the actual file",
+    "VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING": "completion report lacks actual VMake final download evidence",
+    "VMAKE_FINAL_DOWNLOAD_EVIDENCE_INVALID": "VMake download evidence does not match the actual downloaded file",
+    "CAPCUT_VISUAL_CONFIRMATION_MISSING": "completion report lacks actual CapCut screen confirmation",
+    "CAPCUT_VISUAL_CONFIRMATION_INVALID": "CapCut screen or draft readback evidence is invalid",
+    "RENDER_EVIDENCE_MISSING": "render/upload claim lacks MP4 evidence",
+    "RENDER_EVIDENCE_INVALID": "render MP4 evidence does not match the actual file"
+  }
+}
