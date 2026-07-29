@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>정치 롱폼 HyperFrames V4 검증</title>
+    <link rel="stylesheet" href="src/styles.css" />
+    <script src="assets/vendor/gsap.min.js"></script>
+  </head>
+  <body>
+    <main
+      id="root"
+      data-composition-id="politics-longform-v4-validation"
+      data-start="0"
+      data-duration="21.5"
+      data-width="1920"
+      data-height="1080"
+      data-fps="30"
+      data-profile-id="politics_documentary_broadcast_v4"
+    >
+      <section id="background-clip" class="clip" data-start="0" data-duration="21.5" data-track-index="0" data-layout-allow-overflow>
+        <img id="city-background-media" src="assets/civic-city.svg" alt="도시와 공공기관을 형상화한 배경" />
+        <div class="background-vignette"></div>
+        <div class="background-grid"></div>
+      </section>
+
+      <video
+        id="source-video"
+        src="assets/source/source-video.mp4"
+        data-start="8.6"
+        data-duration="2.9"
+        data-track-index="2"
+        muted
+        playsinline
+        preload="auto"
+      ></video>
+
+      <section id="scenes-clip" class="clip" data-start="0" data-duration="21.5" data-track-index="1">
+      <section id="chapter-01" class="chapter-scene">
+        <div id="chapter-01-inner" class="scene-inner chapter-transition-inner">
+          <div class="eyebrow">POLITICAL DOCUMENTARY · CHAPTER MAP</div>
+          <h1 id="chapter-01-title" class="hero-title">검찰 개혁, <span>쟁점의 지도</span></h1>
+          <p class="hero-summary">확인된 기록에서 출발해 주장과 대안을 순서대로 연결합니다.</p>
+          <div class="chapter-map" data-current-chapter="01">
+            <article class="chapter-box is-current" data-chapter-id="01" data-active-state="current">
+              <b>01</b><span>개혁의 출발점</span><em>NOW</em>
+            </article>
+            <i class="chapter-connector"></i>
+            <article class="chapter-box is-waiting" data-chapter-id="02" data-active-state="waiting">
+              <b>02</b><span>증언과 기록</span><em>WAIT</em>
+            </article>
+            <i class="chapter-connector"></i>
+            <article class="chapter-box is-waiting" data-chapter-id="03" data-active-state="waiting">
+              <b>03</b><span>충돌하는 주장</span><em>WAIT</em>
+            </article>
+            <i class="chapter-connector"></i>
+            <article class="chapter-box is-waiting" data-chapter-id="04" data-active-state="waiting">
+              <b>04</b><span>결론과 대안</span><em>WAIT</em>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="body-scene" class="body-scene">
+        <div id="body-scene-inner" class="scene-inner body-inner">
+          <aside class="chapter-rail" data-current-chapter="01">
+            <div class="rail-label">CHAPTER</div>
+            <article class="rail-item is-current" data-chapter-id="01" data-active-state="current">
+              <b>01</b><span>개혁의 출발점</span>
+            </article>
+            <article class="rail-item is-waiting" data-chapter-id="02" data-active-state="waiting">
+              <b>02</b><span>증언과 기록</span>
+            </article>
+            <article class="rail-item is-waiting" data-chapter-id="03" data-active-state="waiting">
+              <b>03</b><span>충돌하는 주장</span>
+            </article>
+            <article class="rail-item is-waiting" data-chapter-id="04" data-active-state="waiting">
+              <b>04</b><span>결론과 대안</span>
+            </article>
+          </aside>
+
+          <div class="semantic-stage">
+            <div class="semantic-stage-heading">
+              <span>01 · 개혁의 출발점</span>
+              <h2>말의 순서대로 <strong>증거 상태</strong>가 반응합니다</h2>
+            </div>
+
+            <article
+              id="semantic-fact"
+              class="semantic-object fact-object"
+              data-start-ms="2800"
+              data-end-ms="4500"
+              data-semantic-role="verified_fact"
+              data-active-state="active_when_spoken"
+            >
+              <div class="glow-ring"></div>
+              <div class="semantic-icon fact-icon" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <div class="semantic-copy">
+                <small>확인된 사실</small>
+                <h3>공식 기록이 시간축을 확정</h3>
+                <p>공개 문서와 발언 시점을 먼저 맞춥니다.</p>
+              </div>
+            </article>
+
+            <div class="semantic-arrow arrow-one" aria-hidden="true"><i></i></div>
+
+            <article
+              id="semantic-claim"
+              class="semantic-object claim-object"
+              data-start-ms="4700"
+              data-end-ms="6400"
+              data-semantic-role="allegation_unverified"
+              data-active-state="active_when_spoken"
+            >
+              <div class="glow-ring"></div>
+              <div class="semantic-icon claim-icon" aria-hidden="true">?</div>
+              <div class="semantic-copy">
+                <small><mark>미확인</mark> 주장</small>
+                <h3>주장은 교차 검증 단계</h3>
+                <p>확인 전에는 사실과 같은 색으로 표시하지 않습니다.</p>
+              </div>
+            </article>
+
+            <div class="semantic-arrow arrow-two" aria-hidden="true"><i></i></div>
+
+            <article
+              id="semantic-conclusion"
+              class="semantic-object conclusion-object"
+              data-start-ms="6700"
+              data-end-ms="8200"
+              data-semantic-role="conclusion_alternative"
+              data-active-state="active_when_spoken"
+            >
+              <div class="glow-ring"></div>
+              <div class="semantic-icon conclusion-icon" aria-hidden="true">✓</div>
+              <div class="semantic-copy">
+                <small>결론 · 대안</small>
+                <h3>독립 검증 절차로 수렴</h3>
+                <p>쟁점을 남기지 않고 다음 행동으로 연결합니다.</p>
+              </div>
+              <div class="conclusion-path" aria-hidden="true"><i></i><b></b></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="source-scene" class="source-scene">
+        <div id="source-scene-inner" class="scene-inner source-inner">
+          <aside class="chapter-rail source-rail" data-current-chapter="01">
+            <div class="rail-label">CHAPTER</div>
+            <article class="rail-item is-current" data-chapter-id="01" data-active-state="current"><b>01</b><span>개혁의 출발점</span></article>
+            <article class="rail-item is-waiting" data-chapter-id="02" data-active-state="waiting"><b>02</b><span>증언과 기록</span></article>
+            <article class="rail-item is-waiting" data-chapter-id="03" data-active-state="waiting"><b>03</b><span>충돌하는 주장</span></article>
+            <article class="rail-item is-waiting" data-chapter-id="04" data-active-state="waiting"><b>04</b><span>결론과 대안</span></article>
+          </aside>
+          <div class="source-frame">
+            <div class="source-kicker">SOURCE VIDEO · KEY MOMENT</div>
+            <div class="source-frame-border"></div>
+            <div class="speaker-silhouette" aria-hidden="true">
+              <i class="speaker-head"></i><i class="speaker-body"></i><i class="speaker-podium"></i>
+            </div>
+            <svg
+              id="source-focus-lines"
+              data-start-ms="9250"
+              data-end-ms="10200"
+              data-semantic-role="source_video_focus"
+              data-active-state="active_on_key_moment"
+              class="focus-lines"
+              viewBox="0 0 1190 670"
+              aria-label="핵심 인물을 향하는 투명 집중선"
+            >
+              <g class="focus-ray-group" fill="none" stroke="#f4f8fb" stroke-linecap="round">
+                <path d="M74 94L304 224"/><path d="M220 24L370 190"/><path d="M430 16L478 164"/>
+                <path d="M1114 82L874 220"/><path d="M970 20L820 184"/><path d="M760 14L712 162"/>
+                <path d="M46 554L304 430"/><path d="M210 642L374 470"/><path d="M1116 568L876 438"/>
+                <path d="M974 646L816 474"/><path d="M600 18L600 136"/><path d="M600 652L600 536"/>
+              </g>
+            </svg>
+            <div class="source-lower-third">
+              <small>확인 지점</small><strong>발언 시점과 공식 기록을 대조</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="chapter-02" class="chapter-scene">
+        <div id="chapter-02-inner" class="scene-inner chapter-transition-inner">
+          <div class="eyebrow">CHAPTER 02 · EVIDENCE</div>
+          <h1 class="hero-title">증언과 <span>기록</span></h1>
+          <p class="hero-summary">발언과 문서가 같은 시간축에서 만나는 구간입니다.</p>
+          <div class="chapter-map" data-current-chapter="02">
+            <article class="chapter-box is-complete" data-chapter-id="01" data-active-state="complete"><b>01</b><span>개혁의 출발점</span><em>DONE</em></article>
+            <i class="chapter-connector is-complete"></i>
+            <article class="chapter-box is-current" data-chapter-id="02" data-active-state="current"><b>02</b><span>증언과 기록</span><em>NOW</em></article>
+            <i class="chapter-connector"></i>
+            <article class="chapter-box is-waiting" data-chapter-id="03" data-active-state="waiting"><b>03</b><span>충돌하는 주장</span><em>WAIT</em></article>
+            <i class="chapter-connector"></i>
+            <article class="chapter-box is-waiting" data-chapter-id="04" data-active-state="waiting"><b>04</b><span>결론과 대안</span><em>WAIT</em></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="chapter-03" class="chapter-scene">
+        <div id="chapter-03-inner" class="scene-inner chapter-transition-inner">
+          <div class="eyebrow">CHAPTER 03 · CONFLICT</div>
+          <h1 class="hero-title">충돌하는 <span class="risk-word">주장</span></h1>
+          <p class="hero-summary">반박과 위험 신호를 사실 영역과 분리해 보여줍니다.</p>
+          <div class="chapter-map" data-current-chapter="03">
+            <article class="chapter-box is-complete" data-chapter-id="01" data-active-state="complete"><b>01</b><span>개혁의 출발점</span><em>DONE</em></article>
+            <i class="chapter-connector is-complete"></i>
+            <article class="chapter-box is-complete" data-chapter-id="02" data-active-state="complete"><b>02</b><span>증언과 기록</span><em>DONE</em></article>
+            <i class="chapter-connector is-complete"></i>
+            <article class="chapter-box is-current" data-chapter-id="03" data-active-state="current"><b>03</b><span>충돌하는 주장</span><em>NOW</em></article>
+            <i class="chapter-connector"></i>
+            <article class="chapter-box is-waiting" data-chapter-id="04" data-active-state="waiting"><b>04</b><span>결론과 대안</span><em>WAIT</em></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="chapter-04" class="chapter-scene">
+        <div id="chapter-04-inner" class="scene-inner chapter-transition-inner">
+          <div class="eyebrow">CHAPTER 04 · RESOLUTION</div>
+          <h1 class="hero-title">결론과 <span class="solution-word">대안</span></h1>
+          <p class="hero-summary">확인 가능한 결론을 다음 행동으로 연결합니다.</p>
+          <div class="chapter-map" data-current-chapter="04">
+            <article class="chapter-box is-complete" data-chapter-id="01" data-active-state="complete"><b>01</b><span>개혁의 출발점</span><em>DONE</em></article>
+            <i class="chapter-connector is-complete"></i>
+            <article class="chapter-box is-complete" data-chapter-id="02" data-active-state="complete"><b>02</b><span>증언과 기록</span><em>DONE</em></article>
+            <i class="chapter-connector is-complete"></i>
+            <article class="chapter-box is-complete" data-chapter-id="03" data-active-state="complete"><b>03</b><span>충돌하는 주장</span><em>DONE</em></article>
+            <i class="chapter-connector is-complete"></i>
+            <article class="chapter-box is-current" data-chapter-id="04" data-active-state="current"><b>04</b><span>결론과 대안</span><em>NOW</em></article>
+          </div>
+        </div>
+      </section>
+
+      <section id="hud-clip">
+        <div class="source-label">정치 롱폼 V4 검증 시안 · 2026.07.29</div>
+        <div class="status-pill"><i></i> SEMANTIC SYNC</div>
+        <div class="caption-band" data-role="lower-caption-band">
+          <span id="caption-chapter-01" class="caption-line is-visible">검찰 개혁의 쟁점을 순서대로 살펴봅니다.</span>
+          <span id="caption-fact" class="caption-line">공식 기록이 첫 번째 시간축을 확정합니다.</span>
+          <span id="caption-claim" class="caption-line">이 주장은 아직 확인되지 않았습니다.</span>
+          <span id="caption-conclusion" class="caption-line">독립 검증 절차가 대안입니다.</span>
+          <span id="caption-source" class="caption-line">핵심 발언을 원본 영상과 대조합니다.</span>
+          <span id="caption-chapter-02" class="caption-line">두 번째 챕터, 증언과 기록입니다.</span>
+          <span id="caption-chapter-03" class="caption-line">세 번째 챕터, 충돌하는 주장입니다.</span>
+          <span id="caption-chapter-04" class="caption-line">네 번째 챕터, 결론과 대안입니다.</span>
+        </div>
+        <div class="cta-line">댓글로 의견을 들려주세요 <b>·</b> 구독은 큰 힘이 됩니다</div>
+      </section>
+      </section>
+
+      <audio
+        id="final-master-audio"
+        src="assets/audio/final_master.wav"
+        data-start="0"
+        data-duration="21.5"
+        data-track-index="40"
+        data-volume="1"
+        preload="auto"
+      ></audio>
+    </main>
+    <script>
+      /*__INLINE_V4_TIMELINE__*/
+    </script>
+  </body>
+</html>
