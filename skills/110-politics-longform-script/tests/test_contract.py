@@ -149,6 +149,13 @@ class TestBoundaryDeclarations(unittest.TestCase):
                         f"{path.name}:{line_no} [{section}] "
                         "금지 선언 밖 CapCut 언급")
 
+    def test_script_lock_episode_id_pattern_is_closed(self):
+        self.assertIsNotNone(
+            gsl.EPISODE_ID_RE.fullmatch("PL_20260729_test_episode"))
+        for bad in ("ep_test", "PL_test", "PL_20260729_Test", "../PL_20260729_x"):
+            with self.subTest(bad=bad):
+                self.assertIsNone(gsl.EPISODE_ID_RE.fullmatch(bad))
+
 
 class TestRetentionStoryEditorContract(unittest.TestCase):
     @classmethod

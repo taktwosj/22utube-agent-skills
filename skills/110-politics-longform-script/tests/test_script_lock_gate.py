@@ -38,7 +38,7 @@ def digest(path):
 
 class LockCase(unittest.TestCase):
     def setUp(self):
-        self.ep = Path(tempfile.mkdtemp(prefix="ep_"))
+        self.ep = Path(tempfile.mkdtemp(prefix="PL_20260729_test_"))
         (self.ep / "20_script").mkdir(parents=True)
         (self.ep / "90_reports").mkdir(parents=True)
         self.addCleanup(shutil.rmtree, self.ep, ignore_errors=True)
@@ -61,6 +61,10 @@ class LockCase(unittest.TestCase):
         review_sha = review_sha or self.script_sha
         approval_sha = approval_sha or self.script_sha
 
+        packet = self.ep / "20_script" / "source_packet_v1.json"
+        packet.write_text(json.dumps({"sources": []}, ensure_ascii=False),
+                          encoding="utf-8")
+
         report = self.ep / "90_reports" / "verification_report_v1.json"
         checks = {name: {"violations": [], "count": 0}
                   for name in g.REQUIRED_CHECKS}
@@ -71,6 +75,7 @@ class LockCase(unittest.TestCase):
         payload = {"schema": g.VERIFICATION_SCHEMA,
                    "total_violations": violations,
                    "script_sha256": report_sha,
+                   "source_packet_sha256_actual": digest(packet),
                    "checks": checks}
         payload.update(report_override or {})
         report.write_text(json.dumps(payload, ensure_ascii=False),
@@ -142,6 +147,11 @@ class TestMissingEvidence(LockCase):
         self.write_all()
         (self.ep / "90_reports" / "verification_report_v1.json").unlink()
         self.assertCode("FAIL_APPROVAL_PATH_MISSING")
+
+    def test_missing_source_packet(self):
+        self.write_all()
+        (self.ep / "20_script" / "source_packet_v1.json").unlink()
+        self.assertCode("BLOCKED_SOURCE_PACKET_NOT_BUILT")
 
 
 class TestPathScope(LockCase):

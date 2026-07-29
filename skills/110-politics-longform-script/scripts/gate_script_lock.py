@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -30,6 +31,7 @@ import sys
 from pathlib import Path
 
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
+EPISODE_ID_RE = re.compile(r"^PL_[0-9]{8}_[a-z0-9_]+$")
 ACCEPTED_VERDICT = "APPROVED"
 REVIEW_ORIGIN_TO_AUTHORITY = {
     "claude_external": "CLAUDE",
@@ -47,6 +49,7 @@ REQUIRED_CHECKS = ("source_reference", "quote_fidelity", "quote_mode_marks",
 # 승인 대상은 final. locked 는 이 게이트만 만든다.
 APPROVAL_TARGET = "master_script_final.md"
 LOCKED_OUTPUT = "master_script_locked.md"
+SOURCE_PACKET_RELPATH = Path("20_script") / "source_packet_v1.json"
 
 FIELD = {
     "script": ("approved_script_path", "approved_script_sha256"),
@@ -83,13 +86,18 @@ def collect(ep: Path):
     범위를 벗어난 경로는 조용히 넘기지 않는다. 넘기고 다른 파일을 고르면
     그게 곧 fallback 이고, fallback 이 있으면 경로 지목이 무의미해진다.
     """
-    files = {"script": None, "report": None, "review": None, "approval": None}
+    files = {"script": None, "report": None, "review": None,
+             "approval": None, "source_packet": None}
     errors = []
 
     approval_path = ep / "20_script" / "user_approval.json"
     if not approval_path.is_file():
         return files, errors
     files["approval"] = approval_path
+
+    source_packet = ep / SOURCE_PACKET_RELPATH
+    if source_packet.is_file():
+        files["source_packet"] = source_packet
 
     try:
         ap = json.loads(approval_path.read_text(encoding="utf-8"))
@@ -223,6 +231,13 @@ def evaluate(files, path_errors=(), script_sha=None):
                     v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: 합계 불일치 "
                              f"({counted} != {n})")
         shas["report"] = rep.get("script_sha256")
+        if files["source_packet"] is None:
+            v.append("BLOCKED_SOURCE_PACKET_NOT_BUILT: source_packet_v1.json 없음")
+        else:
+            packet_sha = sha256_of(files["source_packet"])
+            if rep.get("source_packet_sha256_actual") != packet_sha:
+                v.append("FAIL_STALE_REVIEW_SHA: verification_report 의 "
+                         "source_packet_sha256_actual 이 실제 패킷과 다르다")
 
     if files["review"] is None:
         v.append("WAIT_CLAUDE_REVIEW: claude_review 없음")
@@ -270,6 +285,9 @@ def main():
         return 2
 
     ep = Path(args.episode)
+    if not EPISODE_ID_RE.fullmatch(ep.name):
+        print(f"BLOCKED: episode_id 형식 오류 {ep.name!r}", file=sys.stderr)
+        return 2
     files, path_errors = collect(ep)
     violations, shas = evaluate(files, path_errors)
 
@@ -286,13 +304,27 @@ def main():
     review_origin = ORIGIN_RE.search(review_body)
     reviewer_authority = REVIEW_ORIGIN_TO_AUTHORITY.get(
         review_origin.group(1) if review_origin else "", "UNKNOWN")
+    def evidence(path):
+        return {"path": path.relative_to(ep).as_posix(),
+                "sha256": sha256_of(path)}
+
     lock = {
         "schema": "politics-longform-script-lock.v1",
+        "episode_id": ep.name,
+        "status": "SCRIPT_LOCKED",
+        "lock_version": 1,
+        "locked_at": datetime.datetime.now(
+            datetime.timezone.utc).isoformat(),
         "produced_by": "110-politics-longform-script",
         "script_sha256": shas["script"],
         "locked_script": f"20_script/{LOCKED_OUTPUT}",
-        "evidence": {k: str(v.relative_to(ep))
-                     for k, v in files.items() if v},
+        "evidence": {
+            "approved_script": evidence(files["script"]),
+            "source_packet": evidence(files["source_packet"]),
+            "verification_report": evidence(files["report"]),
+            "independent_review": evidence(files["review"]),
+            "user_approval": evidence(files["approval"]),
+        },
         "events": {
             "review_event_id": approval.get("claude_review_event_id"),
             "claude_review_event_id": approval.get("claude_review_event_id"),

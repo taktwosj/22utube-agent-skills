@@ -361,7 +361,9 @@ class TestCapCutLeakage(unittest.TestCase):
 
 class TestTerminology(unittest.TestCase):
     def test_no_bare_tts_role_name(self):
-        allowed = ("Supertone TTS API", "SUPERTONE_TTS_GUIDE", "Supertone TTS")
+        allowed = ("Supertone TTS API", "SUPERTONE_TTS_GUIDE", "Supertone TTS",
+                   "TTS_PARAMS_LOCKED", "WAIT_TTS_PARAMS_LOCK",
+                   "TTS_PARAMS_INTEGRITY_FAIL")
         bad = []
         for p, i, block, section in iter_blocks(DOCS):
             if "TTS" not in block:

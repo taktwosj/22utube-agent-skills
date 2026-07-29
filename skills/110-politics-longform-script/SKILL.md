@@ -243,6 +243,9 @@ S4 승인 대본을 `master_script_final.md`로 승격할 때는 byte-identical 
 ### S8 잠금 3요건
 
 세 증거가 전부 있고, 넷이 같은 대본을 가리킬 때만 잠금이 나온다.
+잠금 JSON의 기계 계약은
+[script_lock.schema.json](references/script_lock.schema.json) 하나를 사용하며,
+111의 동명 스키마 파일과 byte-identical이어야 한다.
 
 ```text
 verification_report_v*.json   기계 검증 0건
@@ -355,6 +358,10 @@ SRT 화자 전환용 비발화 표식이므로 `[원본]` 문장에서 제거한
 20_script/master_script_locked.md        S8. 게이트가 만든다
 20_script/script_lock.json               S8. 게이트가 만든다. 111 인계
 ```
+
+`script_lock.json`은 승인 대본·source packet·기계 검증 보고서·독립 검수서·
+사용자 승인서의 상대경로와 SHA-256을 고정한다. TTS 음색과 렌더 결정은 111·112의
+후속 잠금이며 110 대본 잠금에 넣지 않는다.
 
 ## 실패 상태
 
