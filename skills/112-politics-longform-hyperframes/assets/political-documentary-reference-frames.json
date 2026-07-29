@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "profile_id": "politics_documentary_broadcast_v3",
+  "authority": "USER_APPROVED_REFERENCE_FRAMES",
+  "frames": [
+    {
+      "type": "SOURCE_QUOTE_HERO",
+      "path": "assets/reference-frames/source-quote-hero.png",
+      "sha256": "31306d12319dcb4541bd6ecc66c43fe2af077e3abbcb2f17a5344caa4c46f94a"
+    },
+    {
+      "type": "NARRATION_SUMMARY_SPLIT",
+      "path": "assets/reference-frames/narration-summary-split.png",
+      "sha256": "855a1e470a8697b00a4eb86844fd48232979110aa91e28702fcdf5fe9ec35938"
+    },
+    {
+      "type": "NARRATION_PROCESS_CIRCLES",
+      "path": "assets/reference-frames/narration-step-circles.png",
+      "sha256": "56f4849ecf21a0b035f4821504a176eaddbc9c35c7950aa0e5c73c2391124d0e"
+    },
+    {
+      "type": "CTA_END_CARD",
+      "path": "assets/reference-frames/cta-end-card.png",
+      "sha256": "c4e46528605020756623b443ae3ec5fce9333d73316eb02ea2395adcbbe6ddb0"
+    }
+  ]
+}

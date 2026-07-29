@@ -1,6 +1,6 @@
 ---
 name: 110-politics-longform-script
-description: "Use when the user says 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 110대본, 정치롱폼 대본, 초벌 대본, or 대본 초안, or asks to turn collected political video sources and subtitles into a narration script. Entry point of the politics longform pipeline: 110 script, then 111 voice and SRT, then 112 HyperFrames."
+description: "Use when the user says 정치롱폼, 정치미드폼, 민주진영 유튜브, 매불쇼 롱폼, 유시민 롱폼, 110대본, 정치롱폼 대본, 초벌 대본, 대본 초안, 최근 정치이슈 검색, 승인 채널 검색, or asks to discover approved political sources or turn collected political videos and subtitles into a narration script. Entry point of the politics longform pipeline: 110 source discovery and script, then 111 voice and SRT, then 112 HyperFrames."
 ---
 
 # 110 Politics Longform Script
@@ -67,18 +67,71 @@ cue는 선택이다. 타임코드만 있으면 SRT에서 역산한다.
 내부 2차 집필 프롬프트: [Retention Story Editor](references/retention-story-editor.md)
 시사·정치 초벌 구조와 문체: [Political News Writing Framework](references/political-news-writing-framework.md)
 
+## 승인 채널 소스 탐색
+
+자동 정치이슈·영상 탐색을 시작하기 전에 반드시
+[Approved Channel Allowlist](references/approved-channel-allowlist.json)를 읽고
+그 목록만 사용한다. 운영 원본은 JSON의 `authority.url`에 기록된 Trend Hunter
+`midform` 화면이며, JSON은 재현 가능한 실행을 위한 검증 스냅샷이다.
+
+```text
+CHANNEL_MATCH_PRIORITY = channel_id > handle > url > canonical_name
+BLOCK_PRECEDES_ALLOW = true
+AUTHORITY_UNAVAILABLE = WAIT_CHANNEL_AUTHORITY_UNAVAILABLE
+AUTHORITY_SNAPSHOT_MISMATCH = WAIT_CHANNEL_ALLOWLIST_DRIFT
+TREND_HUNTER_COLLECTION = EXTERNAL_AUTO_UPDATE
+TRIGGER_SITE_COLLECTION = FORBIDDEN
+STALE_SITE_SYNC = WAIT_TREND_HUNTER_SYNC_STALE
+OUTSIDE_ALLOWLIST = WAIT_CHANNEL_NOT_ALLOWLISTED
+MISSING_TRANSCRIPT = WAIT_SOURCE_ASR
+ALLOWLIST_IS_NOT_RIGHTS_PASS = true
+```
+
+- Trend Hunter가 자동 업데이트한 `midform` 저장 결과를 읽기 전용으로 사용하고,
+  `allowed_channels` 24개로 제한한다. 110이나 Paperclip이 `기간 영상 수집 실행`을
+  누르거나 YouTube API 수집을 중복 실행하지 않는다.
+- 코드 조회는 아래 전용 클라이언트만 사용한다. 이 요청은 HMAC 인증된 `GET`만
+  보내며 수집·저장 action을 전송하지 않는다. 자격 파일은 기본적으로
+  `~/.trend_hunter/midform_read_api.json`에서 읽고 출력물에는 비밀값을 기록하지 않는다.
+
+```bash
+python scripts/trend_hunter_read.py \
+  --query "김민석" \
+  --require-sync-date YYYY-MM-DD \
+  --output <episode>/10_analysis/trend_hunter_snapshot.json
+```
+
+  자격 파일이 없으면 자동 생성하거나 임의 토큰을 사용하지 말고
+  `WAIT_TREND_HUNTER_READ_CONFIG`로 멈춘다. 서버와 작업자에 동일한 자격 파일을
+  설치하는 1회 부트스트랩은 사용자의 명시적 승인 범위에서만 수행한다.
+- 가장 최근 `미드롱폼` 동기화가 완료 상태이고 `24/24`, 실패 `0`인지 확인한다.
+  아직 오늘 동기화가 끝나지 않았거나 이전 보고 이후 새 완료 기록이 없으면 오래된
+  자료로 보고하지 말고 `WAIT_TREND_HUNTER_SYNC_STALE`로 둔다.
+- 실행 전 운영 화면의 채널 목록과 JSON 스냅샷을 대조한다. 운영 화면에 접근할 수
+  없으면 `WAIT_CHANNEL_AUTHORITY_UNAVAILABLE`, 수량·ID·핸들·URL이 달라졌으면
+  자동 갱신하지 말고 `WAIT_CHANNEL_ALLOWLIST_DRIFT`로 멈춘다.
+- `blocked_channels`와 일치하면 다른 허용 조건보다 먼저 제외한다.
+- 승인 목록 밖 결과는 자료에 섞지 말고 `WAIT_CHANNEL_NOT_ALLOWLISTED`로 보고한다.
+- 사용자가 특정 URL을 직접 지정한 경우에만 명시적 예외 검토를 진행한다.
+- 채널 승인과 영상별 사실성·저작권·공정이용 판단을 분리한다.
+- 자막이 없으면 문장을 추정하지 말고 `WAIT_SOURCE_ASR`로 보고한다.
+- 자동 수집은 후보 보고서까지만 수행한다. 사용자 주제·영상 승인 전에는 S2 대본,
+  음성, HyperFrames, 업로드로 진행하지 않는다.
+
 ## 단계
 
 ```text
+S0  승인 채널 소스 탐색  최근 이슈·영상주소·자막 후보 보고
 S1  소스 패킷 생성      수집 자막 -> GPT 입력 묶음
 S2  GPT 초벌 대본       script_draft_v1.md
 S2R Retention Story Rewrite
                          PROJECT_GPT/Hermes 내부 작가 패스. 전체 대본 재구성
 S3  기계 검증           verify_draft.py
 S4  Claude 최초 전체 검수
-                         claude_review_v1.md. 읽기 전용 지적서
+                         호출 실패 때만 Codex CLI 읽기 전용 대체 검수
 S5  GPT/CODEX 수정      script_revised_v2.md + 변경 내역
-S6  Claude diff 검수    필수 조건에 해당할 때 변경분과 지적 반영을 확인
+S6  같은 검수자 diff 검수
+                         S4 실제 검수자가 변경분과 지적 반영을 확인
 S7  사용자 승인         user_approval.json
 S8  잠금                gate_script_lock.py -> master_script_locked.md
 S9  111 인계            음성·시간축·SRT
@@ -126,9 +179,43 @@ S4 최초 Claude 전체 검수는 필수다. Claude는 읽기 전용 검수자�
 논지, 문장, 인용, 챕터 순서의 수정은 PROJECT_GPT/Hermes 작가
 권한으로 돌려보낸다.
 
+#### S4 검수자 2단계 대체 경로
+
+검수자는 다음 순서로만 선택한다.
+
+1. Claude CLI에서 `opus`, `effort low`, 읽기 전용으로 한 번 시도한다.
+2. Claude 호출 자체가 실패했을 때만 Codex CLI를 별도 읽기 전용 검수자로 호출한다.
+
+Claude의 `REWORK_REQUIRED`는 정상 검수 결과다. 이를 호출 실패로 간주해 Codex
+CLI로 우회하지 않는다. 다음 항목만 호출 실패다.
+
+- 실행 파일 없음, 인증·구독·한도 오류
+- 네트워크 거절, 타임아웃, 비정상 종료 코드
+- 빈 응답, 필수 verdict·script SHA 누락
+- UTF-8 전송 손상으로 대본을 읽을 수 없는 응답
+
+호출 실패는 `90_reports/claude_call_failure_vN.json`에 실행 시각, 종료 코드,
+오류 분류, 대상 대본 SHA를 기록한다. 대본 전문, 토큰, 인증 정보는 기록하지 않는다.
+같은 실패를 자동 반복하지 않는다. 사용자가 재시도를 지시하지 않으면 곧바로 Codex
+CLI 대체 검수로 전환한다.
+
+Codex CLI 대체 검수는 Claude와 같은 입력·출력·읽기 전용 규칙을 적용한다.
+검수 문서는 `20_script/claude_review_vN_codex_fallback.md`로 저장하고 다음 출처를
+반드시 기록한다.
+
+```text
+review_origin: codex_cli_external
+recorded_by: CODEX_CLI_REVIEWER
+```
+
+`claude_review_*` 필드명은 기존 잠금 스키마와의 호환을 위한 이름일 뿐이다. 최종
+보고와 Paperclip에는 실제 검수자를 `CLAUDE` 또는 `CODEX_CLI`로 표시한다. Codex
+CLI까지 호출 실패하면 `WAIT_REVIEW_UNAVAILABLE`에서 멈추고 잠그지 않는다.
+
 ### S6 재검수 비용 규칙
 
-S6은 S4 이후의 diff 검수다. S4의 최초 전체 검수를 대신하지 않는다.
+S6은 S4 이후의 diff 검수다. S4의 최초 전체 검수를 대신하지 않는다. S4가 Claude면
+Claude가, Claude 호출 실패로 Codex CLI가 대체 검수했으면 Codex CLI가 S6를 맡는다.
 
 S6 필수 조건:
 
@@ -159,7 +246,7 @@ S4 승인 대본을 `master_script_final.md`로 승격할 때는 byte-identical 
 
 ```text
 verification_report_v*.json   기계 검증 0건
-claude_review_v*.md           verdict: APPROVED
+claude_review_v*.md           Claude 또는 Codex CLI verdict: APPROVED
 user_approval.json            approved: true
 master_script_final.md        승인 대상 대본
 ```
@@ -169,14 +256,15 @@ master_script_final.md        승인 대상 대본
 
 두 종류의 SHA를 혼동하지 않는다.
 
-- `user_approval.json`의 `claude_review_sha256`은 Claude 검수 문서 파일
+- `user_approval.json`의 `claude_review_sha256`은 최종 검수 문서 파일
   자체의 SHA다.
-- Claude 검수 문서 내부 `script_sha256`은 Claude가 실제 검수한 대본의
+- 최종 검수 문서 내부 `script_sha256`은 실제 검수한 대본의
   SHA다.
 
 S6 검수 문서 내부 `script_sha256`은 최종 대본 SHA와 일치해야 한다.
-`user_approval.json`은 별도로 최종 Claude 검수 문서 파일의 경로와 SHA를
-고정한다.
+`user_approval.json`은 별도로 최종 검수 문서 파일의 경로와 SHA를 고정한다.
+`claude_review_path`, `claude_review_sha256`, `claude_review_event_id`는 기존
+잠금 스키마 호환 필드이며 Codex CLI 대체 검수에서도 그대로 사용한다.
 
 승인서가 경로를 직접 지목한다. 파일명으로 최신본을 고르지 않는다 — 자동
 선택이 있으면 승인받지 않은 `v99`를 나중에 떨어뜨려 잠금을 바꿔칠 수 있다.
@@ -231,6 +319,12 @@ py -3.14 scripts/verify_draft.py --episode <에피소드 경로>
 ASR 손상이 의심되면 추정 교정하지 말고 Retention Story Editor의 ASR 경계를
 따른다.
 
+화면용 대본에는 `>>`, `<<`, 가운데점 `·`을 쓰지 않는다. `>>`와 `<<`는
+SRT 화자 전환용 비발화 표식이므로 `[원본]` 문장에서 제거한다. 화자 표식을
+지워도 실제 발화 단어는 바꾸지 않는다. `verify_draft.py`는 source packet과
+대본을 대조할 때 화자 표식만 정규화하고, 화면용 대본에 세 표시가 남아 있으면
+`FAIL_FORBIDDEN_SCRIPT_MARK`로 차단한다.
+
 ## 의혹 표현
 
 정치 소재는 **주장과 사실의 구분이 곧 법적 위험**이다.
@@ -253,7 +347,8 @@ ASR 손상이 의심되면 추정 교정하지 말고 Retention Story Editor의 
 20_script/source_packet_v1.json          S1. GPT 입력
 20_script/script_draft_v1.md             S2/S2R. GPT 산출. 보고 섹션 없는 초벌 정본
 90_reports/verification_report_v1.json   S3. 기계 검증 결과
-20_script/claude_review_v1.md            S4. 지적서. 수정본이 아니다
+20_script/claude_review_v1.md            S4. Claude 지적서
+20_script/claude_review_vN_codex_fallback.md  S4. Claude 호출 실패 시 Codex CLI 대체 지적서
 20_script/script_revised_v2.md           S5. 수정본 + 변경 내역
 20_script/master_script_final.md         S7. 사용자 승인 대상
 20_script/user_approval.json             S7. 승인. 경로와 SHA 를 직접 지목
@@ -264,12 +359,18 @@ ASR 손상이 의심되면 추정 교정하지 말고 Retention Story Editor의 
 ## 실패 상태
 
 ```text
+WAIT_TREND_HUNTER_SYNC_STALE
+WAIT_CHANNEL_AUTHORITY_UNAVAILABLE
+WAIT_CHANNEL_ALLOWLIST_DRIFT
+WAIT_CHANNEL_NOT_ALLOWLISTED
+WAIT_SOURCE_ASR
 BLOCKED_TRANSCRIPT_MISSING
 BLOCKED_TRANSCRIPT_MISMATCH
 BLOCKED_SOURCE_PACKET_NOT_BUILT
 FAIL_DRAFT_FORMAT
 WAIT_DRAFT_VERIFICATION
 WAIT_CLAUDE_REVIEW
+WAIT_REVIEW_UNAVAILABLE
 WAIT_PROJECT_GPT_RULING
 WAIT_SOURCE_BINDING
 WAIT_SOURCE_ASR_REVIEW
@@ -279,6 +380,7 @@ WAIT_MACHINE_VERIFICATION
 FAIL_QUOTE_FIDELITY
 FAIL_SOURCE_REFERENCE_INVALID
 FAIL_ALLEGATION_STATED_AS_FACT
+FAIL_FORBIDDEN_SCRIPT_MARK
 FAIL_SKIP_NOT_CLASSIFIED
 FAIL_STALE_REVIEW_SHA
 FAIL_SELF_APPROVAL

@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "profile_id": "politics_documentary_broadcast_v1",
+  "schema_version": 2,
+  "profile_id": "politics_documentary_broadcast_v3",
   "locked_by_default": true,
   "override": "LATEST_EXPLICIT_USER_INSTRUCTION_ONLY",
   "scope": "EPISODE_VISUAL_LAYER_ONLY",
@@ -14,10 +14,18 @@
   },
   "layout": {
     "canvas": "16:9",
-    "chapter_navigation_percent": 22,
-    "content_percent": 72,
+    "chapter_navigation_percent": [25, 27],
+    "content_percent": [73, 75],
     "grid_columns": 12,
-    "chapter_number_background_opacity_percent": [5, 8]
+    "chapter_number_background_opacity_percent": [5, 8],
+    "header": {
+      "left": "CHAPTER_NUMBER",
+      "center": "CHAPTER_TITLE",
+      "right": "COMMENT_CTA"
+    },
+    "chapter_label_scale": 1.7,
+    "chapter_title_scale": [1.35, 1.5],
+    "chapter_list_bullets": false
   },
   "source": {
     "position": "LEFT_TOP",
@@ -25,11 +33,41 @@
     "date": "UPLOAD_DATE",
     "internal_source_id_visible": false
   },
+  "visual_reference_manifest": "assets/political-documentary-reference-frames.json",
   "comment_cta": {
-    "position": "RIGHT_BOTTOM",
+    "header_position": "RIGHT_TOP",
     "line_1": "댓글로 의견 부탁드립니다.",
-    "line_2": "구독과 좋아요 부탁드립니다."
+    "line_2": "구독과 좋아요 부탁드립니다.",
+    "show_on_chapter_frames": true,
+    "bottom_right_visible": false,
+    "final_end_card": true
   },
+  "narration_visual_system": {
+    "reference": "references/narration-visual-grammar.md",
+    "templates": [
+      "FLOW_NODES",
+      "TIMELINE_PATH",
+      "CORE_ORBIT",
+      "COMPARE_SPLIT",
+      "STEP_PROGRESS",
+      "QUOTE_SPOTLIGHT"
+    ],
+    "fallback_template": null,
+    "minimum_unique_templates_for_six_chapters": 4,
+    "maximum_templates_per_chapter": 2,
+    "maximum_major_shapes_per_screen": 5,
+    "maximum_consecutive_same_template": 1,
+    "sync_authority": "FINAL_SRT",
+    "source_video_overlay_diagrams": false,
+    "external_image_generation_default": false,
+    "person_cutout_policy": "USER_APPROVED_REFERENCE_OR_EXISTING_ASSET"
+  },
+  "approved_screen_types": [
+    "SOURCE_QUOTE_HERO",
+    "NARRATION_SUMMARY_SPLIT",
+    "NARRATION_PROCESS_CIRCLES",
+    "CTA_END_CARD"
+  ],
   "motion": {
     "background_fade_seconds": 0.3,
     "title_rise_pixels": [12, 20],

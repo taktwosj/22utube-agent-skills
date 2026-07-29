@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "policy_id": "politics-longform-approved-channels",
+  "authority": {
+    "name": "Trend Hunter midform",
+    "url": "http://100.102.6.112:8088/?tab=midform#midform",
+    "read_api_url": "http://100.102.6.112:8088/midform_snapshot_api.php",
+    "verified_date_kst": "2026-07-29",
+    "collection_mode": "external_auto_update",
+    "consumer_mode": "read_only",
+    "declared_allowed_channels": 24,
+    "declared_blocked_channels": 1
+  },
+  "matching_priority": [
+    "channel_id",
+    "handle",
+    "url",
+    "canonical_name"
+  ],
+  "rules": {
+    "block_precedes_allow": true,
+    "manual_collection_trigger_forbidden": true,
+    "stale_sync_status": "WAIT_TREND_HUNTER_SYNC_STALE",
+    "authority_unavailable_status": "WAIT_CHANNEL_AUTHORITY_UNAVAILABLE",
+    "allowlist_drift_status": "WAIT_CHANNEL_ALLOWLIST_DRIFT",
+    "outside_allowlist_status": "WAIT_CHANNEL_NOT_ALLOWLISTED",
+    "missing_transcript_status": "WAIT_SOURCE_ASR",
+    "direct_user_url_requires_explicit_review": true,
+    "allowlist_does_not_grant_rights_or_fair_use": true,
+    "automatic_discovery_uses_allowed_channels_only": true
+  },
+  "blocked_channels": [
+    {
+      "canonical_name": "MBC 라디오 시사",
+      "group": "블랙리스트",
+      "channel_id": null,
+      "handle": "@mbcradio_sisa",
+      "url": "https://www.youtube.com/@mbcradio_sisa"
+    }
+  ],
+  "allowed_channels": [
+    {
+      "canonical_name": "KTV 국민방송",
+      "group": "화이트리스트",
+      "channel_id": "UCIMOytYIzaUpoAM2bpT4JZQ",
+      "handle": "@KTV_korea",
+      "url": "https://www.youtube.com/@KTV_korea"
+    },
+    {
+      "canonical_name": "KTV 이매진",
+      "group": "화이트리스트",
+      "channel_id": "UCj8Snyrs1y-wnBQiUmGrTjw",
+      "handle": null,
+      "url": "https://www.youtube.com/channel/UCj8Snyrs1y-wnBQiUmGrTjw"
+    },
+    {
+      "canonical_name": "NATV 국회방송",
+      "group": "화이트리스트",
+      "channel_id": "UCL-WOj1FxKR8Hlzg5tvnWKg",
+      "handle": "@NATV_korea",
+      "url": "https://www.youtube.com/@NATV_korea"
+    },
+    {
+      "canonical_name": "이재명",
+      "group": "화이트리스트",
+      "channel_id": "UCNJM6dqu70Qr6VaseiW1Org",
+      "handle": "@이재명tv",
+      "url": "https://www.youtube.com/@이재명tv"
+    },
+    {
+      "canonical_name": "김어준의 겸손은힘들다 뉴스공장",
+      "source_label": "김어준의 겸불뉴스공장",
+      "group": "시사믹스",
+      "channel_id": "UCAAvO0ehWox1bbym3rXKBZw",
+      "handle": "@gyeomsonisnothing",
+      "url": "https://www.youtube.com/@gyeomsonisnothing"
+    },
+    {
+      "canonical_name": "딴지방송국/다스뵈이다",
+      "group": "시사믹스",
+      "channel_id": "UCxvU6bRtYhNLvZleAIGa-FQ",
+      "handle": "@BUNKER1MEMBERSHIP",
+      "url": "https://www.youtube.com/@BUNKER1MEMBERSHIP"
+    },
+    {
+      "canonical_name": "최욱의 매불쇼",
+      "source_label": "최욱의 매불쇼 (팟빵)",
+      "group": "시사믹스",
+      "channel_id": "UCMYhq9OyGI5UEz_NTAoHY7A",
+      "handle": "@maebulshow",
+      "url": "https://www.youtube.com/@maebulshow"
+    },
+    {
+      "canonical_name": "스픽스",
+      "group": "시사믹스",
+      "channel_id": "UCgeOlLcX6PReHdWImEnUVTg",
+      "handle": null,
+      "url": "https://www.youtube.com/channel/UCgeOlLcX6PReHdWImEnUVTg"
+    },
+    {
+      "canonical_name": "오마이TV/박정호 핫스팟",
+      "group": "시사믹스",
+      "channel_id": "UClAfLVQYZSLrMAQQ_SXPVZw",
+      "handle": "@OhmynewsTV",
+      "url": "https://www.youtube.com/@OhmynewsTV"
+    },
+    {
+      "canonical_name": "이동형TV",
+      "group": "코멘터리",
+      "channel_id": "UCd4BxCKyMHG2J0X1SerTPaQ",
+      "handle": "@DHLeeTV",
+      "url": "https://www.youtube.com/@DHLeeTV"
+    },
+    {
+      "canonical_name": "박시영TV",
+      "group": "코멘터리",
+      "channel_id": "UCIMv9bOOGWGIfg6wPcRLItQ",
+      "handle": "@parksiyoungTV",
+      "url": "https://www.youtube.com/@parksiyoungTV"
+    },
+    {
+      "canonical_name": "새날",
+      "source_label": "새날 (공식)",
+      "group": "코멘터리",
+      "channel_id": "UCu1FzjrHosuKGvgIx8oBi8w",
+      "handle": "@saenal",
+      "url": "https://www.youtube.com/@saenal"
+    },
+    {
+      "canonical_name": "뉴스타파 Newstapa",
+      "group": "코멘터리",
+      "channel_id": "UCeFUGS2VCOb6DO3BiUgvwNA",
+      "handle": "@news_tapa",
+      "url": "https://www.youtube.com/@news_tapa"
+    },
+    {
+      "canonical_name": "델리민주 [더민주당]",
+      "group": "공식/공적",
+      "channel_id": "UCoQD2xsqwzJA93PTIYERokg",
+      "handle": "@dailyminjoo",
+      "url": "https://www.youtube.com/@dailyminjoo"
+    },
+    {
+      "canonical_name": "사람사는세상 노무현재단",
+      "group": "공식/공적",
+      "channel_id": "UCJS9VvReVkplPwCIbxnbsjQ",
+      "handle": "@443RohmoohyunFoundation",
+      "url": "https://www.youtube.com/@443RohmoohyunFoundation"
+    },
+    {
+      "canonical_name": "국회 유튜브",
+      "group": "공식/공적",
+      "channel_id": "UCsWa6xl7KxOolVhROUJ4Ghw",
+      "handle": null,
+      "url": "https://www.youtube.com/channel/UCsWa6xl7KxOolVhROUJ4Ghw"
+    },
+    {
+      "canonical_name": "MBCNEWS",
+      "group": "메인스트림",
+      "channel_id": "UCF4Wxdo3inmxP-Y59wXDsFw",
+      "handle": "@MBCNEWS11",
+      "url": "https://www.youtube.com/@MBCNEWS11"
+    },
+    {
+      "canonical_name": "JTBC News",
+      "group": "메인스트림",
+      "channel_id": "UCsU-I-vHLiaMfV_ceaYz5rQ",
+      "handle": "@jtbc_news",
+      "url": "https://www.youtube.com/@jtbc_news"
+    },
+    {
+      "canonical_name": "KBS News",
+      "group": "메인스트림",
+      "channel_id": "UCcQTRi69dsVYHN3exePtZ1A",
+      "handle": null,
+      "url": "https://www.youtube.com/channel/UCcQTRi69dsVYHN3exePtZ1A"
+    },
+    {
+      "canonical_name": "SBS 뉴스",
+      "group": "메인스트림",
+      "channel_id": "UCkinYTS9IHqOEwR1Sze2JTw",
+      "handle": "@sbsnews8",
+      "url": "https://www.youtube.com/@sbsnews8"
+    },
+    {
+      "canonical_name": "YTN",
+      "group": "메인스트림",
+      "channel_id": "UChlgI3UHCOnwUGzWzbJ3H5w",
+      "handle": "@ytnnews24",
+      "url": "https://www.youtube.com/@ytnnews24"
+    },
+    {
+      "canonical_name": "연합뉴스TV",
+      "group": "메인스트림",
+      "channel_id": "UCTHCOPwqNfZ0uiKOvFyhGwg",
+      "handle": "@yonhapnewstv23",
+      "url": "https://www.youtube.com/@yonhapnewstv23"
+    },
+    {
+      "canonical_name": "CBS노컷뉴스",
+      "group": "메인스트림",
+      "channel_id": "UCa97kDUvLn9OSn9xTX0uM_g",
+      "handle": "@cbs_nocut",
+      "url": "https://www.youtube.com/@cbs_nocut"
+    },
+    {
+      "canonical_name": "Channel A News",
+      "group": "메인스트림",
+      "channel_id": "UCfq4V1DAuaojnr2ryvWNysw",
+      "handle": "@channelA-news",
+      "url": "https://www.youtube.com/@channelA-news"
+    }
+  ]
+}

@@ -5,7 +5,7 @@
 잠금을 쓴다.
 
     기계 검증 0건        verification_report_v*.json
-    Claude 최종 확인      claude_review_v*.md 의 verdict
+    독립 최종 확인        Claude 우선, 호출 실패 시 Codex CLI 대체
     사용자 승인          user_approval.json
 
 세 가지 원칙.
@@ -31,13 +31,18 @@ from pathlib import Path
 
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 ACCEPTED_VERDICT = "APPROVED"
+REVIEW_ORIGIN_TO_AUTHORITY = {
+    "claude_external": "CLAUDE",
+    "codex_cli_external": "CODEX_CLI",
+}
 
 VERIFICATION_SCHEMA = "politics-longform-draft-verification.v1"
 # verify_draft.CHECKS 와 같아야 한다. 하나라도 빠진 보고서는 전량 검증이
 # 돌지 않았다는 뜻이다.
 REQUIRED_CHECKS = ("source_reference", "quote_fidelity", "quote_mode_marks",
-                   "allegation_framing", "declared_counts", "packet_binding",
-                   "narration_quotes", "skip_classification")
+                   "forbidden_display_marks", "allegation_framing",
+                   "declared_counts", "packet_binding", "narration_quotes",
+                   "skip_classification")
 
 # 승인 대상은 final. locked 는 이 게이트만 만든다.
 APPROVAL_TARGET = "master_script_final.md"
@@ -152,9 +157,10 @@ def check_provenance(approval, files):
     origin = ORIGIN_RE.search(body)
     recorder = RECORDER_RE.search(body)
     event = REVIEW_EVENT_RE.search(body)
-    if not origin or origin.group(1) != "claude_external":
+    if (not origin
+            or origin.group(1) not in REVIEW_ORIGIN_TO_AUTHORITY):
         v.append("FAIL_SELF_APPROVAL: 검수본 review_origin 이 "
-                 "claude_external 이 아니다")
+                 "허용된 외부 검수자가 아니다")
     if not recorder:
         v.append("FAIL_SELF_APPROVAL: 검수본에 recorded_by 없음")
     elif recorder.group(1) == approval.get("executor"):
@@ -276,6 +282,10 @@ def main():
         return 1
 
     approval = json.loads(files["approval"].read_text(encoding="utf-8"))
+    review_body = files["review"].read_text(encoding="utf-8")
+    review_origin = ORIGIN_RE.search(review_body)
+    reviewer_authority = REVIEW_ORIGIN_TO_AUTHORITY.get(
+        review_origin.group(1) if review_origin else "", "UNKNOWN")
     lock = {
         "schema": "politics-longform-script-lock.v1",
         "produced_by": "110-politics-longform-script",
@@ -284,10 +294,11 @@ def main():
         "evidence": {k: str(v.relative_to(ep))
                      for k, v in files.items() if v},
         "events": {
+            "review_event_id": approval.get("claude_review_event_id"),
             "claude_review_event_id": approval.get("claude_review_event_id"),
             "user_approval_event_id": approval.get("user_approval_event_id"),
         },
-        "authority": {"drafter": "PROJECT_GPT", "reviewer": "CLAUDE",
+        "authority": {"drafter": "PROJECT_GPT", "reviewer": reviewer_authority,
                       "final_lock": "USER"},
         "next_stage": "111-politics-longform-voice-srt",
     }
