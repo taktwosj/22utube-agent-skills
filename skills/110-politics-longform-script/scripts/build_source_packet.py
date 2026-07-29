@@ -15,7 +15,7 @@ import json
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 TC = re.compile(
     r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*"
@@ -25,10 +25,74 @@ TC = re.compile(
 # 걸린다. 회차마다 다르므로 매니페스트에서 덮어쓸 수 있다.
 DEFAULT_ALLEGATION_TERMS = ["신천지", "의혹", "개입", "가입"]
 
-LEXICON = [
-    "보완수사권", "공소청", "중수청", "형사소송법", "직접수사권",
-    "국가수사본부", "고위공직자범죄수사처", "합동수사본부",
-]
+SOURCE_REVIEW_RELPATH = (
+    Path("90_reports") / "source_srt_quality_report_v1.json")
+TERM_PACK_RELPATH = Path("10_analysis") / "episode_term_pack_v1.json"
+EPISODE_CANDIDATES_RELPATH = (
+    Path("10_analysis") / "source_term_candidates_v1.json")
+DEFAULT_REGISTRY = (
+    Path(__file__).resolve().parent.parent
+    / "references" / "politics_terms_v1.jsonl")
+SOURCE_REVIEW_SCHEMA = "source_srt_quality_report_v1"
+
+
+def load_source_review(ep, manifest, registry_path=DEFAULT_REGISTRY):
+    """Fail closed unless the exact SRTs passed user audio comparison."""
+    report_path = ep / SOURCE_REVIEW_RELPATH
+    term_pack_path = ep / TERM_PACK_RELPATH
+    candidates_path = ep / EPISODE_CANDIDATES_RELPATH
+    if not report_path.is_file():
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: source SRT quality report missing")
+    if not term_pack_path.is_file():
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: episode term pack missing")
+    if not candidates_path.is_file():
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: first-seen term scan missing")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    term_pack = json.loads(term_pack_path.read_text(encoding="utf-8"))
+    if report.get("schema_version") != SOURCE_REVIEW_SCHEMA:
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: review schema invalid")
+    if report.get("status") != "PASS_110_SOURCE_SRT_REVIEWED":
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: review is not PASS")
+    if report.get("episode_id") != manifest.get("episode_id"):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: episode_id mismatch")
+    if term_pack.get("schema_version") != "politics_episode_term_pack_v1":
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: term pack schema invalid")
+    if report.get("term_pack_sha256") != sha256(term_pack_path):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: term pack changed after review")
+    registry_sha = sha256(registry_path)
+    if (report.get("registry_sha256") != registry_sha
+            or term_pack.get("registry_sha256") != registry_sha):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: registry SHA mismatch")
+    transcripts = report.get("transcripts")
+    if not isinstance(transcripts, dict):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: transcript bindings missing")
+    expected_sources = {
+        source.get("source_id") for source in manifest.get("sources", [])}
+    if set(transcripts) != expected_sources:
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: transcript binding count mismatch")
+    receipt = report.get("review_receipt") or {}
+    if receipt.get("errors") != []:
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: receipt errors remain")
+    rel = receipt.get("path")
+    if not isinstance(rel, str) or not rel:
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: receipt path missing")
+    normalized = rel.replace("\\", "/")
+    pure = PurePosixPath(normalized)
+    if (pure.is_absolute() or ".." in pure.parts
+            or re.match(r"^[A-Za-z]:", normalized)):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: receipt path outside episode")
+    receipt_path = (ep / Path(*pure.parts)).resolve()
+    root = ep.resolve()
+    if root != receipt_path and root not in receipt_path.parents:
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: receipt path outside episode")
+    if (not receipt_path.is_file()
+            or sha256(receipt_path) != receipt.get("sha256")):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: receipt SHA mismatch")
+    candidates_sha = sha256(candidates_path)
+    if (report.get("episode_candidates_sha256") != candidates_sha
+            or receipt.get("episode_candidates_sha256") != candidates_sha):
+        raise ValueError("WAIT_SOURCE_ASR_REVIEW: first-seen term scan SHA mismatch")
+    return report_path, report, transcripts, term_pack
 
 
 def to_sec(h, m, s, ms):
@@ -93,6 +157,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--episode", default=os.environ.get("PL_EPISODE_DIR"),
                     help="에피소드 디렉터리 (환경변수 PL_EPISODE_DIR 도 가능)")
+    ap.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY,
+                    help="검수에 사용한 정치용어 JSONL 정본")
     args = ap.parse_args()
 
     if not args.episode:
@@ -109,6 +175,13 @@ def main():
 
     manifest = json.loads(mpath.read_text(encoding="utf-8"))
     tdir = ep / "10_analysis" / "transcripts"
+
+    try:
+        review_path, review, review_transcripts, term_pack = load_source_review(
+            ep, manifest, args.registry)
+    except Exception as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
 
     sources = []
     missing = []
@@ -131,6 +204,9 @@ def main():
             continue
         if len(cues) != want:
             mismatch.append(f"{sid}: 실제 {len(cues)} != 매니페스트 {want}")
+            continue
+        if review_transcripts.get(sid) != sha256(spath):
+            mismatch.append(f"{sid}: source SRT changed after semantic review")
             continue
         sources.append({
             "source_id": sid,
@@ -162,6 +238,18 @@ def main():
         "schema": "politics-longform-source-packet.v1",
         "episode_id": manifest["episode_id"],
         "source_manifest_sha256": sha256(mpath),
+        "source_srt_review": {
+            "path": review_path.relative_to(ep).as_posix(),
+            "sha256": sha256(review_path),
+            "status": review["status"],
+            "registry_sha256": review.get("registry_sha256"),
+            "term_pack_sha256": review.get("term_pack_sha256"),
+            "review_receipt_sha256": (
+                review.get("review_receipt") or {}).get("sha256"),
+            "episode_candidates_sha256": review.get(
+                "episode_candidates_sha256"),
+            "transcripts": review_transcripts,
+        },
         "counts": {
             "sources": len(sources),
             "total_cues": sum(s["cue_count"] for s in sources),
@@ -169,10 +257,17 @@ def main():
         "editorial_constraints": constraints,
         "allegation_terms": manifest.get("allegation_terms",
                                          DEFAULT_ALLEGATION_TERMS),
-        "lexicon": LEXICON,
+        "lexicon": [item["canonical"]
+                    for item in term_pack.get("terms", [])],
+        "lexicon_policy": {
+            "source": TERM_PACK_RELPATH.as_posix(),
+            "observed_terms_are_not_correction_authority": True,
+            "silent_autocorrection": False,
+        },
         "instructions_for_gpt":
             "references/draft-schema.md 의 양식과 유의사항을 따른다. "
-            "DIRECT 인용은 아래 cues[].text 와 문자 단위로 같아야 한다.",
+            "DIRECT 인용은 아래 cues[].text 와 문자 단위로 같아야 한다. "
+            "lexicon은 검수 힌트이며 원문 자동 교정 권한이 아니다.",
         "sources": sources,
     }
 

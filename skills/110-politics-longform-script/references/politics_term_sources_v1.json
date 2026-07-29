@@ -1,0 +1,67 @@
+{
+  "schema_version": "politics_term_sources_v1",
+  "generated_at": "2026-07-29T00:00:00+09:00",
+  "registry_file": "politics_terms_v1.jsonl",
+  "registry_sha256": "1793c249a34796dc2064035f079d98e7e725a57e1840a7e36dfc5805558b82da",
+  "record_count": 5000,
+  "status_counts": {
+    "observed": 5000,
+    "approved": 0,
+    "deprecated": 0,
+    "blocked": 0
+  },
+  "sources": [
+    {
+      "source_id": "kopolitic-benchmark-2023",
+      "name": "KoPolitic Benchmark Dataset",
+      "repository_url": "https://github.com/Kdavid2355/KoPolitic-Benchmark-Dataset",
+      "rows_analyzed_total": 13869,
+      "unique_documents_not_asserted": true,
+      "registry_records": 4993,
+      "extraction": {
+        "candidate_units": [
+          "word",
+          "adjacent two-word phrase"
+        ],
+        "morphology_filter": "kuromoji-ko 1.0.8 with mecab-ko-dic",
+        "deduplication_key": "NFC case-folded alphanumeric text without spaces"
+      },
+      "files": [
+        {
+          "name": "complete_train.csv",
+          "drive_file_id": "1ROgTVKkveEicxa-1uUGPANeKCgQsboES",
+          "rows_analyzed": 4500
+        },
+        {
+          "name": "complete_test.csv",
+          "drive_file_id": "1qgotKYZHRlcP_FUgdvdfTZK17A6kZ15x",
+          "rows_analyzed": 500
+        },
+        {
+          "name": "final_unlabeled.csv",
+          "drive_file_id": "166vJxabBrba7dToey-Td_t5EltbcN6DF",
+          "rows_analyzed": 8869
+        }
+      ],
+      "retained_data": "aggregate term and document frequencies only",
+      "article_text_retained": false,
+      "license_status": "not_verified",
+      "rights_note": "원문 기사는 저장하지 않았다. 재배포 전 데이터셋 및 원문 제공자의 이용 조건을 별도로 확인한다."
+    },
+    {
+      "source_id": "legacy-110-lexicon",
+      "name": "110 pre-existing curated lexicon",
+      "registry_records": 7,
+      "retained_data": "terms already present in build_source_packet.py before this change",
+      "article_text_retained": false,
+      "license_status": "repository_internal",
+      "rights_note": "기존 110의 하드코딩 용어를 회귀 손실 없이 master registry로 이동했다."
+    }
+  ],
+  "authority_policy": {
+    "observed": "회차 후보 선별과 검수 경고에만 사용한다. 자동 교정 권한이 없다.",
+    "approved": "사람이 표기와 근거를 확인한 뒤에만 설정한다.",
+    "asr_confusions": "실제 오인식 증거와 승인자·승인시각이 모두 있어야 등록한다.",
+    "silent_autocorrection": false
+  }
+}

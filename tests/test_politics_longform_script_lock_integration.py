@@ -35,8 +35,33 @@ class ScriptLockIntegrationCase(unittest.TestCase):
 
         script = self.ep / "20_script" / "master_script_final.md"
         script.write_text("# 확정 대본\n\n검증된 본문입니다.\n", encoding="utf-8")
+        receipt = self.ep / "90_reports" / "source_srt_review_receipt_v1.json"
+        receipt.write_text(json.dumps({
+            "schema_version": "source_srt_review_receipt_v1",
+            "status": "PASS",
+        }), encoding="utf-8")
+        source_review = (
+            self.ep / "90_reports" / "source_srt_quality_report_v1.json")
+        source_review.write_text(json.dumps({
+            "schema_version": "source_srt_quality_report_v1",
+            "episode_id": self.ep.name,
+            "status": "PASS_110_SOURCE_SRT_REVIEWED",
+            "transcripts": {"S01": "a" * 64},
+            "review_receipt": {
+                "path": "90_reports/source_srt_review_receipt_v1.json",
+                "sha256": digest(receipt),
+                "errors": [],
+            },
+        }), encoding="utf-8")
         packet = self.ep / "20_script" / "source_packet_v1.json"
-        packet.write_text('{"sources": []}\n', encoding="utf-8")
+        packet.write_text(json.dumps({
+            "sources": [],
+            "source_srt_review": {
+                "sha256": digest(source_review),
+                "status": "PASS_110_SOURCE_SRT_REVIEWED",
+                "review_receipt_sha256": digest(receipt),
+            },
+        }), encoding="utf-8")
 
         checks = {name: {"violations": [], "count": 0}
                   for name in gate110.REQUIRED_CHECKS}
@@ -55,7 +80,12 @@ class ScriptLockIntegrationCase(unittest.TestCase):
             f"script_sha256: {digest(script)}\n"
             "review_origin: claude_external\n"
             "recorded_by: CLAUDE\n"
-            "claude_review_event_id: REV-INTEGRATION-001\n",
+            "claude_review_event_id: REV-INTEGRATION-001\n"
+            "unresolved: 0\n"
+            "unresolved_high: 0\n"
+            "unresolved_quote_mismatch: 0\n"
+            "deferred_tts: 0\n"
+            "deferred_assembly: 0\n",
             encoding="utf-8")
 
         approval = self.ep / "20_script" / "user_approval.json"
@@ -93,10 +123,44 @@ class ScriptLockIntegrationCase(unittest.TestCase):
         gate.run()
         self.assertEqual(gate.fails, [])
 
+    def test_110_codex_cli_fallback_lock_passes_111_without_translation(self):
+        script = self.ep / "20_script" / "master_script_final.md"
+        failure = self.ep / "90_reports" / "claude_call_failure_v1.json"
+        failure.write_text(json.dumps({
+            "schema": "politics-longform-review-fallback.v1",
+            "status": "CLAUDE_CALL_FAILED",
+            "script_sha256": digest(script),
+            "error_class": "TEST_FAILURE",
+        }), encoding="utf-8")
+        review = self.ep / "20_script" / "claude_review_v1.md"
+        body = review.read_text(encoding="utf-8")
+        body = body.replace("review_origin: claude_external",
+                            "review_origin: codex_cli_external")
+        body = body.replace("recorded_by: CLAUDE",
+                            "recorded_by: CODEX_CLI_REVIEWER")
+        body += ("fallback_reason: CLAUDE_CALL_FAILURE\n"
+                 "claude_failure_report_path: "
+                 "90_reports/claude_call_failure_v1.json\n"
+                 f"claude_failure_report_sha256: {digest(failure)}\n")
+        review.write_text(body, encoding="utf-8")
+        approval = self.ep / "20_script" / "user_approval.json"
+        payload = json.loads(approval.read_text(encoding="utf-8"))
+        payload["claude_review_sha256"] = digest(review)
+        approval.write_text(json.dumps(payload, ensure_ascii=False),
+                            encoding="utf-8")
+        self.assertEqual(self.produce_lock(), 0)
+        gate = gate111.Gate(self.ep, "tts")
+        gate.run()
+        self.assertEqual(gate.fails, [])
+
     def test_shared_schema_files_are_byte_identical(self):
         schema110 = S110 / "references" / "script_lock.schema.json"
         schema111 = S111 / "references" / "script_lock.schema.json"
         self.assertEqual(schema110.read_bytes(), schema111.read_bytes())
+
+    def test_verification_check_sets_are_identical(self):
+        self.assertEqual(tuple(gate110.REQUIRED_CHECKS),
+                         tuple(gate111.REQUIRED_VERIFICATION_CHECKS))
 
     def test_post_lock_evidence_edit_is_rejected_by_111(self):
         self.assertEqual(self.produce_lock(), 0)

@@ -45,7 +45,10 @@ user_role                     = INTERMEDIARY_AND_VISUAL_QC
 executor_editorial_authority  = NONE
 ```
 
-최종 자막 오류 판정은 **프로젝트 GPT가 한다.** 사용자는 중개자다.
+수집한 원본 영상 SRT의 의미·용어 최종 검수는 **110**에서 끝난다. 111은
+`PASS_110_SOURCE_SRT_REVIEWED`와 오디오 대조 receipt·SRT SHA를 검증할 뿐 원본 문구를 다시 판단하거나
+고치지 않는다. 111이 생성하는 나레이션/제작용 SRT의 대본 충실도·정렬·기계 QC
+판정은 **프로젝트 GPT가 한다.** 사용자는 중개자다.
 확정 교정본이 나오면 `PROJECT_GPT_CORRECTED_SRT_LOCK`이 최상위 권위이며
 자동자막·생성 자막·초벌 SRT·정렬 결과보다 우선한다.
 `PROJECT_GPT_CORRECTED_SRT_LOCK=PASS` 전에는 최종 자막을 만들지 않는다.

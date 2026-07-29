@@ -122,7 +122,9 @@ python scripts/trend_hunter_read.py \
 
 ```text
 S0  승인 채널 소스 탐색  최근 이슈·영상주소·자막 후보 보고
-S1  소스 패킷 생성      수집 자막 -> GPT 입력 묶음
+S0T 회차 정치용어 선별  기사·제목 문맥 -> 최대 150개 용어팩
+S0R 원본 SRT 의미 검수  용어 경고 -> 사용자 ±3초 음성 확인 -> receipt
+S1  소스 패킷 생성      PASS_110_SOURCE_SRT_REVIEWED 자막 -> GPT 입력 묶음
 S2  GPT 초벌 대본       script_draft_v1.md
 S2R Retention Story Rewrite
                          PROJECT_GPT/Hermes 내부 작가 패스. 전체 대본 재구성
@@ -212,6 +214,17 @@ recorded_by: CODEX_CLI_REVIEWER
 보고와 Paperclip에는 실제 검수자를 `CLAUDE` 또는 `CODEX_CLI`로 표시한다. Codex
 CLI까지 호출 실패하면 `WAIT_REVIEW_UNAVAILABLE`에서 멈추고 잠그지 않는다.
 
+모든 S4/S6 검수 문서는 다음 5개 정수 필드를 포함하고 전부 `0`이어야 한다.
+누락되거나 하나라도 0이 아니면 잠그지 않는다.
+
+```text
+unresolved: 0
+unresolved_high: 0
+unresolved_quote_mismatch: 0
+deferred_tts: 0
+deferred_assembly: 0
+```
+
 ### S6 재검수 비용 규칙
 
 S6은 S4 이후의 diff 검수다. S4의 최초 전체 검수를 대신하지 않는다. S4가 Claude면
@@ -284,14 +297,61 @@ S6 검수 문서 내부 `script_sha256`은 최종 대본 SHA와 일치해야 한
 쪽은 필드도 쓸 수 있다. 하는 일은 비용을 올리고 누가 썼는지 귀속시키는
 것이고, 진짜 보증은 사용자가 실제 승인 메시지를 남기는 데서 온다.
 
+### S0R 원본 SRT 의미 검수
+
+원본 SRT의 최종 의미 검수는 110 책임이다. 수집 SRT를 바로 source packet에
+넣지 않는다. `references/politics_terms_v1.jsonl`은 검토 가능한 JSONL 정본이고,
+SQLite는 회차 폴더에 다시 만드는 실행용 인덱스다. 기사·제목·승인 조사 문서만
+회차 문맥으로 사용하며 잘못된 원본 SRT만으로 용어를 선별하지 않는다.
+
+```bash
+py -3.14 scripts/build_politics_term_index.py --episode <에피소드 경로>
+py -3.14 scripts/select_episode_terms.py \
+  --episode <에피소드 경로> \
+  --context <승인 기사 또는 조사 문서>
+py -3.14 scripts/gate_source_srt_quality.py --episode <에피소드 경로>
+```
+
+회차팩은 최대 150개다. 제목·인명·법률·기관과 승인된 ASR 오인식 이력을
+우선하되, registry의 `observed` 항목은 검수 힌트일 뿐 교정 권위가 아니다.
+새 기사에서 뽑은 후보도 자동 승인하지 않는다. 새 오인식 쌍은 검수자·시각·근거가
+있는 review를 별도 출력으로 적용한 뒤에만 registry에 들어간다.
+
+회차에서 처음 보거나 확신이 낮은 표현은
+`10_analysis/source_term_candidates_v1.json`에 올린다. 이 큐는 자동 교정 지시가
+아니라 사용자에게 음성 확인을 요청하는 경고 입력이다. PROJECT_GPT는 모든 원본
+SRT를 훑고 후보가 0건이어도 현재 SRT SHA를 묶은 빈 큐를 작성한다. 이 스캔 파일이
+없거나 SRT SHA가 다르면 품질 게이트는 PASS하지 않는다.
+
+오인식·처음 본 단어가 발견되면 다음을 사용자에게 알린다.
+
+```text
+source_id / cue / 원본 timecode
+raw_asr / 교정 후보 / 발견 이유와 confidence
+audio_review_start_sec / audio_review_end_sec  (발화 전후 3초)
+```
+
+자동 교정은 금지한다. 사용자가 실제 음성을 듣고
+`USER_AUDIO_REVIEW`로 확인하고 PROJECT_GPT가 기록한
+`90_reports/source_srt_review_receipt_v1.json`이 registry·회차팩·최종 SRT의
+SHA 및 first-seen term scan SHA와 모두 일치해야
+`PASS_110_SOURCE_SRT_REVIEWED`다. 경고가 0건이어도 오디오
+대조 receipt가 없으면 `WAIT_SOURCE_ASR_REVIEW`다. 자세한 스키마와 DB 갱신 절차는
+[source-srt-term-review.md](references/source-srt-term-review.md)를 따른다.
+
 ### S1 소스 패킷
 
 ```bash
 py -3.14 scripts/build_source_packet.py --episode <에피소드 경로>
 ```
 
-`00_source/source_manifest.json`과 `10_analysis/transcripts/S*.srt`를 읽어
+`00_source/source_manifest.json`, `10_analysis/transcripts/S*.srt`,
+`10_analysis/episode_term_pack_v1.json`,
+`90_reports/source_srt_quality_report_v1.json`을 읽어
 `20_script/source_packet_v1.json`을 만든다. GPT는 이것만 보고 쓴다.
+
+SRT 검수 보고서가 없거나 PASS가 아니거나, 검수 후 registry·회차팩·원본 SRT·
+오디오 대조 receipt의 SHA가 달라졌으면 source packet을 만들지 않는다.
 
 자막이 없으면 `BLOCKED_TRANSCRIPT_MISSING`. 매니페스트의 cue 수와 실제 SRT
 cue 수가 다르면 `BLOCKED_TRANSCRIPT_MISMATCH` — 다른 회차 자막이 섞였다는
@@ -317,15 +377,14 @@ py -3.14 scripts/verify_draft.py --episode <에피소드 경로>
 전부 0건이어야 통과다. 하나라도 걸리면 `verification_report_v1.json`에
 기록하고 종료 코드 1이다.
 
-`quote_fidelity`는 source packet에 기록된 텍스트만 비교한다. 실제 영상
-발화와 SRT의 일치, 음성 검증 완료, source truth 검증 완료를 뜻하지 않는다.
-ASR 손상이 의심되면 추정 교정하지 말고 Retention Story Editor의 ASR 경계를
-따른다.
+`quote_fidelity`는 S0R을 통과해 source packet에 기록된 확정 텍스트를 비교한다.
+S0R의 사용자 음성 확인 없이 실제 발화와 일치한다고 간주하지 않는다.
 
-화면용 대본에는 `>>`, `<<`, 가운데점 `·`을 쓰지 않는다. `>>`와 `<<`는
+화면용 대본에는 `>>`, `<<`를 쓰지 않는다. `>>`와 `<<`는
 SRT 화자 전환용 비발화 표식이므로 `[원본]` 문장에서 제거한다. 화자 표식을
-지워도 실제 발화 단어는 바꾸지 않는다. `verify_draft.py`는 source packet과
-대본을 대조할 때 화자 표식만 정규화하고, 화면용 대본에 세 표시가 남아 있으면
+지워도 실제 발화 단어는 바꾸지 않는다. 가운데점 `·`은 `수사·기소`처럼 의미를
+가진 정식 문장부호이므로 반드시 보존한다. `verify_draft.py`는 source packet과
+대본을 대조할 때 화자 표식만 정규화하고, 화면용 대본에 두 표시가 남아 있으면
 `FAIL_FORBIDDEN_SCRIPT_MARK`로 차단한다.
 
 ## 의혹 표현
@@ -348,6 +407,11 @@ SRT 화자 전환용 비발화 표식이므로 `[원본]` 문장에서 제거한
 
 ```text
 20_script/source_packet_v1.json          S1. GPT 입력
+10_analysis/politics_terms_v1.sqlite      S0T. JSONL에서 재생성하는 회차 검색 인덱스
+10_analysis/episode_term_pack_v1.json     S0T. 기사 문맥 기반 최대 150개 회차 용어
+10_analysis/source_term_candidates_v1.json S0R. 처음 본/저신뢰 표현 사용자 알림 큐
+90_reports/source_srt_quality_report_v1.json S0R. 경고·±3초 음성 구간·SHA 결합 상태
+90_reports/source_srt_review_receipt_v1.json S0R. 사용자 오디오 대조 및 PROJECT_GPT 기록
 20_script/script_draft_v1.md             S2/S2R. GPT 산출. 보고 섹션 없는 초벌 정본
 90_reports/verification_report_v1.json   S3. 기계 검증 결과
 20_script/claude_review_v1.md            S4. Claude 지적서
@@ -381,6 +445,10 @@ WAIT_REVIEW_UNAVAILABLE
 WAIT_PROJECT_GPT_RULING
 WAIT_SOURCE_BINDING
 WAIT_SOURCE_ASR_REVIEW
+WAIT_USER_SOURCE_TERM_CONFIRMATION
+WAIT_EPISODE_TERM_CONTEXT
+WAIT_EPISODE_TERMS_EMPTY
+FAIL_POLITICS_TERM_REGISTRY
 WAIT_USER_SCRIPT_APPROVAL
 WAIT_SCRIPT_NOT_FINALIZED
 WAIT_MACHINE_VERIFICATION

@@ -298,7 +298,8 @@ class TestRetentionStoryEditorContract(unittest.TestCase):
 
     def test_forbidden_display_marks_are_enforced(self):
         self.assertIn("forbidden_display_marks", gsl.REQUIRED_CHECKS)
-        self.assertIn("가운데점 `·`을 쓰지 않는다", self.skill_text)
+        self.assertIn("가운데점 `·`은 `수사·기소`처럼 의미를", self.skill_text)
+        self.assertNotIn("·", vd.FORBIDDEN_DISPLAY_MARKS)
         self.assertEqual(vd.normalize(">> 실제 발화 << 다음 화자"),
                          "실제 발화 다음 화자")
 

@@ -26,12 +26,13 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "approved_script", "source_packet", "verification_report",
+        "approved_script", "source_packet", "source_srt_review", "verification_report",
         "independent_review", "user_approval"
       ],
       "properties": {
         "approved_script": {"$ref": "#/$defs/lockedInput"},
         "source_packet": {"$ref": "#/$defs/lockedInput"},
+        "source_srt_review": {"$ref": "#/$defs/lockedInput"},
         "verification_report": {"$ref": "#/$defs/lockedInput"},
         "independent_review": {"$ref": "#/$defs/lockedInput"},
         "user_approval": {"$ref": "#/$defs/lockedInput"}

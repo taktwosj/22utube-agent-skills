@@ -94,10 +94,14 @@ class TestEachCheckFiresEndToEnd(unittest.TestCase):
         self.assertIn("quote_fidelity", check(md))
 
     def test_forbidden_display_marks(self):
-        for mark in (">>", "<<", "·"):
+        for mark in (">>", "<<"):
             with self.subTest(mark=mark):
                 md = GOOD.replace("그래서 반대했습니다", f"그래서 {mark} 반대했습니다")
                 self.assertIn("forbidden_display_marks", check(md))
+
+    def test_middle_dot_is_preserved_not_forbidden(self):
+        md = GOOD.replace("그래서 반대했습니다", "그래서 수사·기소에 반대했습니다")
+        self.assertNotIn("forbidden_display_marks", check(md))
 
     def test_undeclared_skip_breaks_quote_match(self):
         """생략을 신고하지 않고 빼면 대조에서 걸린다."""

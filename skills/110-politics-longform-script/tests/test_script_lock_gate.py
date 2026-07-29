@@ -61,9 +61,33 @@ class LockCase(unittest.TestCase):
         review_sha = review_sha or self.script_sha
         approval_sha = approval_sha or self.script_sha
 
+        receipt = self.ep / "90_reports" / "source_srt_review_receipt_v1.json"
+        receipt.write_text(json.dumps({
+            "schema_version": "source_srt_review_receipt_v1",
+            "status": "PASS",
+        }), encoding="utf-8")
+        source_review = (
+            self.ep / "90_reports" / "source_srt_quality_report_v1.json")
+        source_review.write_text(json.dumps({
+            "schema_version": "source_srt_quality_report_v1",
+            "episode_id": self.ep.name,
+            "status": "PASS_110_SOURCE_SRT_REVIEWED",
+            "transcripts": {"S01": SHA_A},
+            "review_receipt": {
+                "path": "90_reports/source_srt_review_receipt_v1.json",
+                "sha256": digest(receipt),
+                "errors": [],
+            },
+        }), encoding="utf-8")
         packet = self.ep / "20_script" / "source_packet_v1.json"
-        packet.write_text(json.dumps({"sources": []}, ensure_ascii=False),
-                          encoding="utf-8")
+        packet.write_text(json.dumps({
+            "sources": [],
+            "source_srt_review": {
+                "sha256": digest(source_review),
+                "status": "PASS_110_SOURCE_SRT_REVIEWED",
+                "review_receipt_sha256": digest(receipt),
+            },
+        }, ensure_ascii=False), encoding="utf-8")
 
         report = self.ep / "90_reports" / "verification_report_v1.json"
         checks = {name: {"violations": [], "count": 0}
@@ -89,6 +113,23 @@ class LockCase(unittest.TestCase):
             body += f"recorded_by: {recorded_by}\n"
         if review_event:
             body += f"claude_review_event_id: {review_event}\n"
+        if origin == "codex_cli_external":
+            failure = self.ep / "90_reports" / "claude_call_failure_v1.json"
+            failure.write_text(json.dumps({
+                "schema": "politics-longform-review-fallback.v1",
+                "status": "CLAUDE_CALL_FAILED",
+                "script_sha256": self.script_sha,
+                "error_class": "TEST_FAILURE",
+            }), encoding="utf-8")
+            body += ("fallback_reason: CLAUDE_CALL_FAILURE\n"
+                     "claude_failure_report_path: "
+                     "90_reports/claude_call_failure_v1.json\n"
+                     f"claude_failure_report_sha256: {digest(failure)}\n")
+        body += ("unresolved: 0\n"
+                 "unresolved_high: 0\n"
+                 "unresolved_quote_mismatch: 0\n"
+                 "deferred_tts: 0\n"
+                 "deferred_assembly: 0\n")
         review.write_text(body, encoding="utf-8")
 
         approval = {
@@ -123,6 +164,25 @@ class TestHappyPath(LockCase):
     def test_all_evidence_same_sha_passes(self):
         self.write_all()
         self.assertEqual(self.run_gate(), [])
+
+    def test_codex_cli_without_claude_failure_evidence_blocks(self):
+        self.write_all(
+            origin="codex_cli_external",
+            recorded_by="CODEX_CLI_REVIEWER",
+            executor="CODEX_DESKTOP",
+            review_name="claude_review_v1_codex_fallback.md",
+        )
+        path = self.ep / "20_script" / "claude_review_v1_codex_fallback.md"
+        body = "\n".join(line for line in path.read_text(
+            encoding="utf-8").splitlines()
+            if not line.startswith("claude_failure_report_")
+            and not line.startswith("fallback_reason:")) + "\n"
+        path.write_text(body, encoding="utf-8")
+        approval = self.ep / "20_script" / "user_approval.json"
+        payload = json.loads(approval.read_text(encoding="utf-8"))
+        payload["claude_review_sha256"] = digest(path)
+        approval.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertCode("FAIL_REVIEW_FALLBACK_POLICY")
 
     def test_codex_cli_fallback_review_passes(self):
         self.write_all(
@@ -167,6 +227,10 @@ class TestPathScope(LockCase):
 
     def test_absolute_path_outside_episode_is_hard_failure(self):
         self.write_all(approved_script_path="C:/Windows/System32/x.md")
+        self.assertCode("FAIL_APPROVAL_PATH_OUT_OF_SCOPE")
+
+    def test_windows_backslash_absolute_path_is_hard_failure(self):
+        self.write_all(approved_script_path=r"C:\Windows\System32\x.md")
         self.assertCode("FAIL_APPROVAL_PATH_OUT_OF_SCOPE")
 
     def test_no_fallback_after_scope_violation(self):
@@ -337,6 +401,17 @@ class TestVerdictAndViolations(LockCase):
     def test_unapproved_user_blocks(self):
         self.write_all(approved=False)
         self.assertCode("WAIT_USER_SCRIPT_APPROVAL")
+
+    def test_nonzero_review_summary_blocks(self):
+        self.write_all()
+        path = self.ep / "20_script" / "claude_review_v1.md"
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "unresolved_high: 0", "unresolved_high: 2"), encoding="utf-8")
+        approval = self.ep / "20_script" / "user_approval.json"
+        payload = json.loads(approval.read_text(encoding="utf-8"))
+        payload["claude_review_sha256"] = digest(path)
+        approval.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertCode("WAIT_CLAUDE_REVIEW")
 
 
 if __name__ == "__main__":

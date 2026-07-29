@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "politics_term_record.schema.json",
+  "title": "Politics term registry record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "term_id",
+    "canonical",
+    "normalized",
+    "aliases",
+    "asr_confusions",
+    "category",
+    "status",
+    "approval",
+    "rank",
+    "priority",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "politics_term_record_v1"
+    },
+    "term_id": {
+      "type": "string",
+      "pattern": "^pt_[0-9a-f]{16}$"
+    },
+    "canonical": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "normalized": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40
+    },
+    "aliases": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 40
+      }
+    },
+    "asr_confusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "surface",
+          "evidence",
+          "approved_by",
+          "approved_at"
+        ],
+        "properties": {
+          "surface": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approved_by": {
+            "type": "string",
+            "minLength": 1
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "category": {
+      "enum": [
+        "named_entity",
+        "news_noun",
+        "news_noun_phrase",
+        "legal_term",
+        "institution",
+        "office",
+        "policy",
+        "election",
+        "diplomacy_security"
+      ]
+    },
+    "status": {
+      "enum": [
+        "observed",
+        "approved",
+        "deprecated",
+        "blocked"
+      ]
+    },
+    "approval": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "approved_by",
+            "approved_at",
+            "evidence"
+          ],
+          "properties": {
+            "approved_by": {
+              "type": "string",
+              "minLength": 1
+            },
+            "approved_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "evidence": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "rank": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "document_frequency",
+        "total_mentions",
+        "title_mentions",
+        "corpus_score"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "document_frequency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total_mentions": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title_mentions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "corpus_score": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

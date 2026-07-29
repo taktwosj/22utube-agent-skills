@@ -28,10 +28,22 @@ ALLOWED_REVIEWERS = ("CLAUDE", "CODEX_CLI")
 REQUIRED_EVIDENCE = (
     "approved_script",
     "source_packet",
+    "source_srt_review",
     "verification_report",
     "independent_review",
     "user_approval",
 )
+REQUIRED_VERIFICATION_CHECKS = (
+    "source_reference", "quote_fidelity", "quote_mode_marks",
+    "forbidden_display_marks", "allegation_framing", "declared_counts",
+    "packet_binding", "narration_quotes", "skip_classification")
+REQUIRED_REVIEW_ZERO_FIELDS = (
+    "unresolved", "unresolved_high", "unresolved_quote_mismatch",
+    "deferred_tts", "deferred_assembly")
+REVIEW_ORIGIN_TO_AUTHORITY = {
+    "claude_external": "CLAUDE",
+    "codex_cli_external": "CODEX_CLI",
+}
 TOP_LEVEL_FIELDS = (
     "schema", "episode_id", "status", "lock_version", "locked_at",
     "produced_by", "script_sha256", "locked_script", "evidence",
@@ -43,6 +55,18 @@ REVIEW_SHA_RE = re.compile(
     r"(?m)^script_sha256:\s*([0-9a-f]{64})\s*$")
 REVIEW_EVENT_RE = re.compile(
     r"(?m)^claude_review_event_id:\s*(\S+)\s*$")
+REVIEW_ORIGIN_RE = re.compile(r"(?m)^review_origin:\s*(\S+)\s*$")
+RECORDED_BY_RE = re.compile(r"(?m)^recorded_by:\s*(\S+)\s*$")
+FALLBACK_REASON_RE = re.compile(r"(?m)^fallback_reason:\s*(\S+)\s*$")
+FAILURE_PATH_RE = re.compile(
+    r"(?m)^claude_failure_report_path:\s*(\S+)\s*$")
+FAILURE_SHA_RE = re.compile(
+    r"(?m)^claude_failure_report_sha256:\s*([0-9a-f]{64})\s*$")
+
+
+def _review_int(body, name):
+    match = re.search(rf"(?m)^{re.escape(name)}:\s*([0-9]+)\s*$", body)
+    return int(match.group(1)) if match else None
 
 
 def sha256_of(path):
@@ -148,10 +172,6 @@ class Gate:
         self.check(authority.get("final_lock") == "USER",
                    "FINAL_LOCK_AUTHORITY_INVALID",
                    repr(authority.get("final_lock")))
-        if reviewer == "CODEX_CLI":
-            self.fail(
-                "REVIEW_POLICY_MISMATCH",
-                "CODEX_CLI fallback policy is not unified with 111 yet")
 
     def _check_events(self):
         events = self.lock.get("events")
@@ -260,11 +280,14 @@ class Gate:
     def _check_evidence_bindings(self):
         approval = self._load_json("user_approval")
         report = self._load_json("verification_report")
+        source_review = self._load_json("source_srt_review")
         review_path = self.paths.get("independent_review")
         if approval is not None:
             self._check_approval(approval)
         if report is not None:
             self._check_report(report)
+        if source_review is not None:
+            self._check_source_review(source_review)
         if review_path is not None and review_path.is_file():
             self._check_review(review_path.read_text(encoding="utf-8"))
 
@@ -273,6 +296,9 @@ class Gate:
         events = self.lock.get("events") or {}
         self.check(approval.get("approved") is True,
                    "APPROVAL_NOT_APPROVED", repr(approval.get("approved")))
+        self.check(approval.get("user_approval_origin") == "user_message",
+                   "SELF_APPROVAL_INVALID",
+                   repr(approval.get("user_approval_origin")))
         self.check(approval.get("approved_script_sha256")
                    == self.lock.get("script_sha256"),
                    "APPROVAL_SCRIPT_SHA_MISMATCH",
@@ -321,12 +347,95 @@ class Gate:
         self.check(report.get("source_packet_sha256_actual") == packet_sha,
                    "VERIFICATION_SOURCE_PACKET_SHA_MISMATCH",
                    repr(report.get("source_packet_sha256_actual")))
+        checks = report.get("checks")
+        self.check(isinstance(checks, dict),
+                   "VERIFICATION_CHECKS_INVALID", repr(checks))
+        if not isinstance(checks, dict):
+            return
+        self.check(set(checks) == set(REQUIRED_VERIFICATION_CHECKS),
+                   "VERIFICATION_CHECK_SET_INVALID",
+                   f"got={sorted(checks)} expected={sorted(REQUIRED_VERIFICATION_CHECKS)}")
+        counted = 0
+        for name, check in checks.items():
+            if not isinstance(check, dict):
+                self.fail("VERIFICATION_CHECK_INVALID", f"{name}: not object")
+                continue
+            violations = check.get("violations")
+            count = check.get("count")
+            self.check(isinstance(violations, list),
+                       "VERIFICATION_VIOLATIONS_INVALID", name)
+            valid_count = (isinstance(count, int)
+                           and not isinstance(count, bool) and count >= 0)
+            self.check(valid_count, "VERIFICATION_COUNT_INVALID",
+                       f"{name}: {count!r}")
+            if valid_count:
+                counted += count
+                if isinstance(violations, list):
+                    self.check(count == len(violations),
+                               "VERIFICATION_COUNT_MISMATCH", name)
+                self.check(count == 0, "VERIFICATION_CHECK_NOT_PASS",
+                           f"{name}: {count}")
+        if isinstance(total, int) and not isinstance(total, bool):
+            self.check(counted == total, "VERIFICATION_TOTAL_MISMATCH",
+                       f"{counted} != {total}")
+
+    def _check_source_review(self, report):
+        self.check(report.get("schema_version")
+                   == "source_srt_quality_report_v1",
+                   "SOURCE_SRT_REVIEW_SCHEMA_INVALID",
+                   repr(report.get("schema_version")))
+        self.check(report.get("episode_id") == self.episode.name,
+                   "SOURCE_SRT_REVIEW_EPISODE_MISMATCH",
+                   repr(report.get("episode_id")))
+        self.check(report.get("status") == "PASS_110_SOURCE_SRT_REVIEWED",
+                   "SOURCE_SRT_REVIEW_NOT_PASS", repr(report.get("status")))
+        transcripts = report.get("transcripts")
+        valid_transcripts = (
+            isinstance(transcripts, dict) and bool(transcripts)
+            and all(SHA_RE.fullmatch(str(value or ""))
+                    for value in transcripts.values()))
+        self.check(valid_transcripts, "SOURCE_SRT_REVIEW_TRANSCRIPTS_INVALID",
+                   repr(transcripts))
+        receipt = report.get("review_receipt")
+        valid_receipt = isinstance(receipt, dict) and receipt.get("errors") == []
+        self.check(valid_receipt, "SOURCE_SRT_REVIEW_RECEIPT_NOT_PASS",
+                   repr(receipt))
+        if not isinstance(receipt, dict):
+            receipt = {}
+        receipt_sha = receipt.get("sha256")
+        self.check(bool(SHA_RE.fullmatch(str(receipt_sha or ""))),
+                   "SOURCE_SRT_REVIEW_RECEIPT_SHA_INVALID", repr(receipt_sha))
+        receipt_path = self._safe_path(
+            "source_srt_review_receipt", receipt.get("path"))
+        if receipt_path is not None:
+            self.check(receipt_path.is_file(),
+                       "SOURCE_SRT_REVIEW_RECEIPT_MISSING", str(receipt_path))
+            if (receipt_path.is_file()
+                    and SHA_RE.fullmatch(str(receipt_sha or ""))):
+                self.check(sha256_of(receipt_path) == receipt_sha,
+                           "SOURCE_SRT_REVIEW_RECEIPT_SHA_MISMATCH",
+                           str(receipt_path))
+        packet = self._load_json("source_packet")
+        if packet is not None:
+            binding = packet.get("source_srt_review") or {}
+            evidence = (self.lock.get("evidence") or {}).get(
+                "source_srt_review") or {}
+            self.check(binding.get("sha256") == evidence.get("sha256"),
+                       "SOURCE_SRT_REVIEW_BINDING_MISMATCH", repr(binding))
+            self.check(binding.get("status") == report.get("status"),
+                       "SOURCE_SRT_REVIEW_STATUS_BINDING_MISMATCH",
+                       repr(binding))
+            self.check(binding.get("review_receipt_sha256") == receipt_sha,
+                       "SOURCE_SRT_REVIEW_RECEIPT_BINDING_MISMATCH",
+                       repr(binding))
 
     def _check_review(self, body):
         events = self.lock.get("events") or {}
         verdict = VERDICT_RE.search(body)
         script_sha = REVIEW_SHA_RE.search(body)
         event = REVIEW_EVENT_RE.search(body)
+        origin = REVIEW_ORIGIN_RE.search(body)
+        recorder = RECORDED_BY_RE.search(body)
         self.check(bool(verdict and verdict.group(1) == "APPROVED"),
                    "REVIEW_NOT_APPROVED",
                    verdict.group(1) if verdict else "missing")
@@ -338,6 +447,51 @@ class Gate:
                         == events.get("review_event_id")),
                    "REVIEW_EVENT_MISMATCH",
                    event.group(1) if event else "missing")
+        expected_reviewer = (self.lock.get("authority") or {}).get("reviewer")
+        self.check(bool(origin and REVIEW_ORIGIN_TO_AUTHORITY.get(
+                        origin.group(1)) == expected_reviewer),
+                   "REVIEW_ORIGIN_MISMATCH",
+                   origin.group(1) if origin else "missing")
+        self.check(bool(recorder), "REVIEW_RECORDER_MISSING", "recorded_by")
+        approval = self._load_json("user_approval") or {}
+        if recorder:
+            self.check(recorder.group(1) != approval.get("executor"),
+                       "SELF_REVIEW_INVALID",
+                       f"recorded_by={recorder.group(1)!r}")
+        if origin and origin.group(1) == "codex_cli_external":
+            reason = FALLBACK_REASON_RE.search(body)
+            failure_path = FAILURE_PATH_RE.search(body)
+            failure_sha = FAILURE_SHA_RE.search(body)
+            self.check(bool(reason and reason.group(1) == "CLAUDE_CALL_FAILURE"),
+                       "REVIEW_FALLBACK_POLICY_INVALID", "fallback_reason")
+            self.check(bool(failure_path and failure_sha),
+                       "REVIEW_FALLBACK_EVIDENCE_MISSING", "Claude failure")
+            if failure_path and failure_sha:
+                target = self._safe_path(
+                    "claude_failure_report", failure_path.group(1))
+                if target is not None:
+                    valid = (target.is_file()
+                             and sha256_of(target) == failure_sha.group(1))
+                    self.check(valid, "REVIEW_FALLBACK_EVIDENCE_MISMATCH",
+                               str(target))
+                    if valid:
+                        try:
+                            failure = json.loads(target.read_text(encoding="utf-8"))
+                        except Exception as exc:
+                            self.fail("REVIEW_FALLBACK_EVIDENCE_INVALID", str(exc))
+                        else:
+                            self.check(
+                                failure.get("schema")
+                                == "politics-longform-review-fallback.v1"
+                                and failure.get("status") == "CLAUDE_CALL_FAILED"
+                                and failure.get("script_sha256")
+                                == self.lock.get("script_sha256"),
+                                "REVIEW_FALLBACK_EVIDENCE_INVALID",
+                                repr(failure))
+        for field in REQUIRED_REVIEW_ZERO_FIELDS:
+            value = _review_int(body, field)
+            self.check(value == 0, "REVIEW_UNRESOLVED_OR_DEFERRED",
+                       f"{field}={value!r}")
 
 
 def main():

@@ -28,7 +28,7 @@ def sha256_of(path):
 
 QUOTE_RE = re.compile(r"[\"'“”‘’]")
 ASR_SPEAKER_MARK_RE = re.compile(r"(?:^|\s)(?:>>|<<)(?=\s|$)")
-FORBIDDEN_DISPLAY_MARKS = (">>", "<<", "·")
+FORBIDDEN_DISPLAY_MARKS = (">>", "<<")
 
 # 근거 없이 쓰면 의혹을 사실로 바꾸는 표현. 어간으로 둔다 --
 # '드러났다' 로 고정하면 '드러났습니다' 가 빠져나간다.

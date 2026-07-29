@@ -28,7 +28,7 @@ import json
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 EPISODE_ID_RE = re.compile(r"^PL_[0-9]{8}_[a-z0-9_]+$")
@@ -45,11 +45,16 @@ REQUIRED_CHECKS = ("source_reference", "quote_fidelity", "quote_mode_marks",
                    "forbidden_display_marks", "allegation_framing",
                    "declared_counts", "packet_binding", "narration_quotes",
                    "skip_classification")
+REQUIRED_REVIEW_ZERO_FIELDS = (
+    "unresolved", "unresolved_high", "unresolved_quote_mismatch",
+    "deferred_tts", "deferred_assembly")
 
 # 승인 대상은 final. locked 는 이 게이트만 만든다.
 APPROVAL_TARGET = "master_script_final.md"
 LOCKED_OUTPUT = "master_script_locked.md"
 SOURCE_PACKET_RELPATH = Path("20_script") / "source_packet_v1.json"
+SOURCE_REVIEW_RELPATH = (
+    Path("90_reports") / "source_srt_quality_report_v1.json")
 
 FIELD = {
     "script": ("approved_script_path", "approved_script_sha256"),
@@ -67,6 +72,15 @@ REVIEW_SHA_RE = re.compile(r"(?m)^script_sha256:\s*([0-9a-f]{64})\s*$")
 ORIGIN_RE = _line("review_origin")
 RECORDER_RE = _line("recorded_by")
 REVIEW_EVENT_RE = _line("claude_review_event_id")
+FALLBACK_REASON_RE = _line("fallback_reason")
+FAILURE_PATH_RE = _line("claude_failure_report_path")
+FAILURE_SHA_RE = re.compile(
+    r"(?m)^claude_failure_report_sha256:\s*([0-9a-f]{64})\s*$")
+
+
+def _review_int(body, name):
+    match = re.search(rf"(?m)^{re.escape(name)}:\s*([0-9]+)\s*$", body)
+    return int(match.group(1)) if match else None
 
 
 def sha256_of(path):
@@ -75,6 +89,20 @@ def sha256_of(path):
         for chunk in iter(lambda: fh.read(65536), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def episode_path(ep, rel):
+    """Resolve a receipt path without permitting absolute/path-traversal input."""
+    if (not isinstance(rel, str) or not rel
+            or Path(rel).is_absolute()
+            or re.match(r"^[A-Za-z]:", rel)
+            or ".." in Path(rel.replace("\\", "/")).parts):
+        return None
+    root = ep.resolve()
+    target = (root / rel).resolve()
+    if target != root and root not in target.parents:
+        return None
+    return target
 
 
 def collect(ep: Path):
@@ -87,7 +115,8 @@ def collect(ep: Path):
     그게 곧 fallback 이고, fallback 이 있으면 경로 지목이 무의미해진다.
     """
     files = {"script": None, "report": None, "review": None,
-             "approval": None, "source_packet": None}
+             "approval": None, "source_packet": None,
+             "source_review": None}
     errors = []
 
     approval_path = ep / "20_script" / "user_approval.json"
@@ -98,6 +127,9 @@ def collect(ep: Path):
     source_packet = ep / SOURCE_PACKET_RELPATH
     if source_packet.is_file():
         files["source_packet"] = source_packet
+    source_review = ep / SOURCE_REVIEW_RELPATH
+    if source_review.is_file():
+        files["source_review"] = source_review
 
     try:
         ap = json.loads(approval_path.read_text(encoding="utf-8"))
@@ -109,6 +141,14 @@ def collect(ep: Path):
     for key, (path_field, _) in FIELD.items():
         rel = ap.get(path_field)
         if not rel:
+            continue
+        normalized = str(rel).replace("\\", "/")
+        pure = PurePosixPath(normalized)
+        if (pure.is_absolute() or ".." in pure.parts
+                or re.match(r"^[A-Za-z]:", normalized)):
+            errors.append(
+                f"FAIL_APPROVAL_PATH_OUT_OF_SCOPE: {path_field}={rel} 가 "
+                "에피소드 밖을 가리킨다")
             continue
         p = (ep / rel).resolve()
         if root != p and root not in p.parents:
@@ -178,6 +218,33 @@ def check_provenance(approval, files):
         v.append("FAIL_SELF_APPROVAL: 검수본에 claude_review_event_id 없음")
     elif event.group(1) != approval.get("claude_review_event_id"):
         v.append("FAIL_SELF_APPROVAL: 검수본과 승인서의 검수 사건 id 가 다르다")
+    if origin and origin.group(1) == "codex_cli_external":
+        reason = FALLBACK_REASON_RE.search(body)
+        failure_path = FAILURE_PATH_RE.search(body)
+        failure_sha = FAILURE_SHA_RE.search(body)
+        if not reason or reason.group(1) != "CLAUDE_CALL_FAILURE":
+            v.append("FAIL_REVIEW_FALLBACK_POLICY: fallback_reason missing")
+        if not failure_path or not failure_sha:
+            v.append("FAIL_REVIEW_FALLBACK_POLICY: Claude failure evidence missing")
+        else:
+            root = files["review"].parents[1].resolve()
+            target = (root / failure_path.group(1)).resolve()
+            if root != target and root not in target.parents:
+                v.append("FAIL_REVIEW_FALLBACK_POLICY: failure path outside episode")
+            elif not target.is_file() or sha256_of(target) != failure_sha.group(1):
+                v.append("FAIL_REVIEW_FALLBACK_POLICY: failure evidence hash mismatch")
+            else:
+                try:
+                    failure = json.loads(target.read_text(encoding="utf-8"))
+                except Exception:
+                    v.append("FAIL_REVIEW_FALLBACK_POLICY: failure evidence unreadable")
+                else:
+                    if (failure.get("schema")
+                            != "politics-longform-review-fallback.v1"
+                            or failure.get("status") != "CLAUDE_CALL_FAILED"
+                            or failure.get("script_sha256")
+                            != approval.get("approved_script_sha256")):
+                        v.append("FAIL_REVIEW_FALLBACK_POLICY: failure evidence invalid")
     return v
 
 
@@ -220,16 +287,29 @@ def evaluate(files, path_errors=(), script_sha=None):
         if not isinstance(checks, dict):
             v.append("FAIL_VERIFICATION_REPORT_SHAPE: checks 가 없다")
         else:
-            missing = sorted(set(REQUIRED_CHECKS) - set(checks))
-            if missing:
-                v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: 검사 항목 누락 "
-                         f"{missing}")
-            if isinstance(n, int) and not isinstance(n, bool):
-                counted = sum(c.get("count", 0) for c in checks.values()
-                              if isinstance(c, dict))
-                if counted != n:
-                    v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: 합계 불일치 "
-                             f"({counted} != {n})")
+            if set(checks) != set(REQUIRED_CHECKS):
+                v.append("FAIL_VERIFICATION_REPORT_SHAPE: check set mismatch "
+                         f"got={sorted(checks)} expected={sorted(REQUIRED_CHECKS)}")
+            counted = 0
+            for name, check in checks.items():
+                if not isinstance(check, dict):
+                    v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: {name} not object")
+                    continue
+                violations = check.get("violations")
+                count = check.get("count")
+                if not isinstance(violations, list):
+                    v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: {name}.violations")
+                if (not isinstance(count, int) or isinstance(count, bool)
+                        or count < 0):
+                    v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: {name}.count")
+                    continue
+                counted += count
+                if isinstance(violations, list) and count != len(violations):
+                    v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: {name} count mismatch")
+                if count:
+                    v.append(f"WAIT_DRAFT_VERIFICATION: {name} violations={count}")
+            if isinstance(n, int) and not isinstance(n, bool) and counted != n:
+                v.append(f"FAIL_VERIFICATION_REPORT_SHAPE: total mismatch ({counted} != {n})")
         shas["report"] = rep.get("script_sha256")
         if files["source_packet"] is None:
             v.append("BLOCKED_SOURCE_PACKET_NOT_BUILT: source_packet_v1.json 없음")
@@ -238,6 +318,54 @@ def evaluate(files, path_errors=(), script_sha=None):
             if rep.get("source_packet_sha256_actual") != packet_sha:
                 v.append("FAIL_STALE_REVIEW_SHA: verification_report 의 "
                          "source_packet_sha256_actual 이 실제 패킷과 다르다")
+
+    if files["source_review"] is None:
+        v.append("WAIT_SOURCE_ASR_REVIEW: source_srt_quality_report_v1.json missing")
+    else:
+        try:
+            source_review = json.loads(
+                files["source_review"].read_text(encoding="utf-8"))
+        except Exception as exc:
+            v.append(f"WAIT_SOURCE_ASR_REVIEW: unreadable report: {exc}")
+        else:
+            if (source_review.get("schema_version")
+                    != "source_srt_quality_report_v1"):
+                v.append("WAIT_SOURCE_ASR_REVIEW: schema mismatch")
+            if source_review.get("episode_id") != files["approval"].parents[1].name:
+                v.append("WAIT_SOURCE_ASR_REVIEW: episode_id mismatch")
+            if source_review.get("status") != "PASS_110_SOURCE_SRT_REVIEWED":
+                v.append("WAIT_SOURCE_ASR_REVIEW: review not PASS")
+            transcripts = source_review.get("transcripts")
+            if (not isinstance(transcripts, dict) or not transcripts
+                    or any(not SHA_RE.fullmatch(str(value))
+                           for value in transcripts.values())):
+                v.append("WAIT_SOURCE_ASR_REVIEW: transcript SHA bindings invalid")
+            receipt = source_review.get("review_receipt")
+            if not isinstance(receipt, dict) or receipt.get("errors") != []:
+                v.append("WAIT_SOURCE_ASR_REVIEW: receipt errors remain")
+                receipt = {}
+            receipt_sha = receipt.get("sha256")
+            receipt_path = episode_path(
+                files["approval"].parents[1], receipt.get("path"))
+            if not SHA_RE.fullmatch(str(receipt_sha or "")):
+                v.append("WAIT_SOURCE_ASR_REVIEW: receipt SHA invalid")
+            if (receipt_path is None or not receipt_path.is_file()
+                    or (SHA_RE.fullmatch(str(receipt_sha or ""))
+                        and sha256_of(receipt_path) != receipt_sha)):
+                v.append("WAIT_SOURCE_ASR_REVIEW: receipt file binding invalid")
+            if files["source_packet"] is not None:
+                try:
+                    packet = json.loads(
+                        files["source_packet"].read_text(encoding="utf-8"))
+                    binding = packet.get("source_srt_review") or {}
+                    if binding.get("sha256") != sha256_of(files["source_review"]):
+                        v.append("FAIL_STALE_REVIEW_SHA: source SRT review binding")
+                    if binding.get("status") != source_review.get("status"):
+                        v.append("FAIL_STALE_REVIEW_SHA: source SRT review status binding")
+                    if binding.get("review_receipt_sha256") != receipt_sha:
+                        v.append("FAIL_STALE_REVIEW_SHA: source SRT receipt binding")
+                except Exception as exc:
+                    v.append(f"BLOCKED_SOURCE_PACKET_NOT_BUILT: {exc}")
 
     if files["review"] is None:
         v.append("WAIT_CLAUDE_REVIEW: claude_review 없음")
@@ -250,6 +378,12 @@ def evaluate(files, path_errors=(), script_sha=None):
             v.append(f"WAIT_CLAUDE_REVIEW: verdict={m.group(1)}")
         s = REVIEW_SHA_RE.search(body)
         shas["review"] = s.group(1) if s else None
+        for field in REQUIRED_REVIEW_ZERO_FIELDS:
+            value = _review_int(body, field)
+            if value is None:
+                v.append(f"WAIT_CLAUDE_REVIEW: {field} missing")
+            elif value != 0:
+                v.append(f"WAIT_CLAUDE_REVIEW: {field}={value}")
 
     if approval.get("approved") is not True:
         v.append("WAIT_USER_SCRIPT_APPROVAL: approved 가 true 가 아니다")
@@ -321,6 +455,7 @@ def main():
         "evidence": {
             "approved_script": evidence(files["script"]),
             "source_packet": evidence(files["source_packet"]),
+            "source_srt_review": evidence(files["source_review"]),
             "verification_report": evidence(files["report"]),
             "independent_review": evidence(files["review"]),
             "user_approval": evidence(files["approval"]),

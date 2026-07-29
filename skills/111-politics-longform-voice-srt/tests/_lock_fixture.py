@@ -22,8 +22,32 @@ def write_valid_lock(ep):
     final_script.write_text(script_body, encoding="utf-8")
     locked_script.write_text(script_body, encoding="utf-8")
 
+    receipt = ep / "90_reports" / "source_srt_review_receipt_v1.json"
+    receipt.write_text(json.dumps({
+        "schema_version": "source_srt_review_receipt_v1",
+        "status": "PASS",
+    }), encoding="utf-8")
+    source_review = ep / "90_reports" / "source_srt_quality_report_v1.json"
+    source_review.write_text(json.dumps({
+        "schema_version": "source_srt_quality_report_v1",
+        "episode_id": ep.name,
+        "status": "PASS_110_SOURCE_SRT_REVIEWED",
+        "transcripts": {"S01": "a" * 64},
+        "review_receipt": {
+            "path": "90_reports/source_srt_review_receipt_v1.json",
+            "sha256": digest(receipt),
+            "errors": [],
+        },
+    }), encoding="utf-8")
     packet = ep / "20_script" / "source_packet_v1.json"
-    packet.write_text('{"sources": []}\n', encoding="utf-8")
+    packet.write_text(json.dumps({
+        "sources": [],
+        "source_srt_review": {
+            "sha256": digest(source_review),
+            "status": "PASS_110_SOURCE_SRT_REVIEWED",
+            "review_receipt_sha256": digest(receipt),
+        },
+    }), encoding="utf-8")
     script_sha = digest(locked_script)
 
     report = ep / "90_reports" / "verification_report_v1.json"
@@ -32,7 +56,11 @@ def write_valid_lock(ep):
         "script_sha256": script_sha,
         "source_packet_sha256_actual": digest(packet),
         "total_violations": 0,
-        "checks": {},
+        "checks": {name: {"violations": [], "count": 0} for name in (
+            "source_reference", "quote_fidelity", "quote_mode_marks",
+            "forbidden_display_marks", "allegation_framing",
+            "declared_counts", "packet_binding", "narration_quotes",
+            "skip_classification")},
     }, ensure_ascii=False), encoding="utf-8")
 
     review = ep / "20_script" / "claude_review_v1.md"
@@ -41,7 +69,12 @@ def write_valid_lock(ep):
         f"script_sha256: {script_sha}\n"
         "review_origin: claude_external\n"
         "recorded_by: CLAUDE\n"
-        "claude_review_event_id: REV-TEST-001\n",
+        "claude_review_event_id: REV-TEST-001\n"
+        "unresolved: 0\n"
+        "unresolved_high: 0\n"
+        "unresolved_quote_mismatch: 0\n"
+        "deferred_tts: 0\n"
+        "deferred_assembly: 0\n",
         encoding="utf-8")
 
     approval = ep / "20_script" / "user_approval.json"
@@ -76,6 +109,7 @@ def write_valid_lock(ep):
         "evidence": {
             "approved_script": entry(final_script),
             "source_packet": entry(packet),
+            "source_srt_review": entry(source_review),
             "verification_report": entry(report),
             "independent_review": entry(review),
             "user_approval": entry(approval),

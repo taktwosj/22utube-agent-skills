@@ -92,6 +92,36 @@ class PreflightCase(unittest.TestCase):
             locked_tts_params(self.lock, self.ep)
         self.assertIn("tts_params 키 누락", str(cm.exception))
 
+    def test_tts_lock_rejects_extra_param(self):
+        self.write_tts_lock(tts_params=dict(TTS, extra=1))
+        with self.assertRaises(LockGateError):
+            locked_tts_params(self.lock, self.ep)
+
+    def test_tts_lock_rejects_extra_top_level_field(self):
+        self.write_tts_lock(extra=True)
+        with self.assertRaises(LockGateError):
+            locked_tts_params(self.lock, self.ep)
+
+    def test_tts_lock_rejects_empty_voice_id(self):
+        self.write_tts_lock(tts_params=dict(TTS, voice_id=""))
+        with self.assertRaises(LockGateError):
+            locked_tts_params(self.lock, self.ep)
+
+    def test_tts_lock_rejects_non_positive_speed(self):
+        self.write_tts_lock(tts_params=dict(TTS, speed=-100))
+        with self.assertRaises(LockGateError):
+            locked_tts_params(self.lock, self.ep)
+
+    def test_tts_lock_rejects_non_numeric_pitch_shift(self):
+        self.write_tts_lock(tts_params=dict(TTS, pitch_shift="bad"))
+        with self.assertRaises(LockGateError):
+            locked_tts_params(self.lock, self.ep)
+
+    def test_tts_lock_rejects_zero_pitch_variance(self):
+        self.write_tts_lock(tts_params=dict(TTS, pitch_variance=0))
+        with self.assertRaises(LockGateError):
+            locked_tts_params(self.lock, self.ep)
+
     def test_runtime_speed_mismatch_raises(self):
         with self.assertRaises(LockGateError):
             assert_runtime_matches(TTS, {"speed": 1.2})

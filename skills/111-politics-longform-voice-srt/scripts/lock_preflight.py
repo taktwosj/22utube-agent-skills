@@ -25,6 +25,8 @@ TTS_LOCK_RELPATH = Path("30_audio_srt") / "tts_params_lock_v1.json"
 
 REQUIRED_TTS_KEYS = ("provider", "voice_id", "model",
                      "speed", "pitch_shift", "pitch_variance")
+TTS_LOCK_FIELDS = {"schema", "status", "authority", "script_sha256",
+                   "tts_params"}
 
 
 class LockGateError(SystemExit):
@@ -74,6 +76,8 @@ def locked_tts_params(lock, episode):
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         raise LockGateError(f"TTS_PARAMS_INTEGRITY_FAIL: {path}: {exc}")
+    if not isinstance(payload, dict) or set(payload) != TTS_LOCK_FIELDS:
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: top-level fields mismatch")
     if payload.get("schema") != "politics-longform-tts-params-lock.v1":
         raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: schema 불일치")
     if payload.get("status") != "TTS_PARAMS_LOCKED":
@@ -83,10 +87,30 @@ def locked_tts_params(lock, episode):
     if payload.get("script_sha256") != (lock or {}).get("script_sha256"):
         raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: script_sha256 불일치")
     params = payload.get("tts_params") or {}
-    missing = [k for k in REQUIRED_TTS_KEYS if k not in params]
+    if not isinstance(params, dict):
+        raise LockGateError(
+            "TTS_PARAMS_INTEGRITY_FAIL: tts_params must be object")
+    missing = sorted(set(REQUIRED_TTS_KEYS) - set(params))
     if missing:
         raise LockGateError(
             f"TTS_PARAMS_INTEGRITY_FAIL: tts_params 키 누락 {missing}")
+    if set(params) != set(REQUIRED_TTS_KEYS):
+        raise LockGateError(
+            "TTS_PARAMS_INTEGRITY_FAIL: tts_params fields mismatch")
+    for key in ("provider", "voice_id", "model"):
+        if not isinstance(params[key], str) or not params[key].strip():
+            raise LockGateError(
+                f"TTS_PARAMS_INTEGRITY_FAIL: {key} must be non-empty string")
+    for key in ("speed", "pitch_shift", "pitch_variance"):
+        value = params[key]
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise LockGateError(
+                f"TTS_PARAMS_INTEGRITY_FAIL: {key} must be numeric")
+    if params["speed"] <= 0:
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: speed must be > 0")
+    if params["pitch_variance"] <= 0:
+        raise LockGateError(
+            "TTS_PARAMS_INTEGRITY_FAIL: pitch_variance must be > 0")
     return params
 
 
