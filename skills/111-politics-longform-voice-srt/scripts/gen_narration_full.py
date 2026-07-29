@@ -45,7 +45,7 @@ MANIFEST = EPISODE / "30_audio_srt" / "voice_manifest.json"
 
 # TTS 설정은 하드코딩하지 않는다. script_lock 에 잠긴 값만 쓴다.
 # speed 1.0 -> 1.2 면 같은 대본이라도 길이가 달라져 정렬·SRT·시간축이 전부 바뀐다.
-TTS_PARAMS = locked_tts_params(SCRIPT_LOCK)
+TTS_PARAMS = locked_tts_params(SCRIPT_LOCK, EPISODE)
 VOICE_ID = TTS_PARAMS["voice_id"]
 MODEL = TTS_PARAMS["model"]
 VOICE_SETTINGS = {k: TTS_PARAMS[k]
@@ -158,8 +158,7 @@ def main():
             "episode_id": SCRIPT_LOCK.get("episode_id"),
             "lock_version": SCRIPT_LOCK.get("lock_version"),
             "locked_at": SCRIPT_LOCK.get("locked_at"),
-            "script_sha256": (SCRIPT_LOCK.get("locked_inputs", {})
-                              .get("script", {}).get("sha256")),
+            "script_sha256": SCRIPT_LOCK.get("script_sha256"),
             "tts_params_sha256": TTS_FINGERPRINT,
         },
         "voice_id": VOICE_ID,

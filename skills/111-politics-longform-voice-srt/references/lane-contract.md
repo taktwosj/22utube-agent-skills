@@ -97,6 +97,11 @@ overflow가 나면 문구를 줄이지 말고 speech boundary에서 cue를 더 �
 
 ## 자막 권위 순서
 
+수집 원본 SRT의 용어·문장 의미 판정은 110의 `PASS_110_SOURCE_SRT_REVIEWED`에서
+끝난다. 111은 그 보고서와 source packet의 SHA 결합을 검사하고, 원본 문구를
+추정 교정하지 않는다. 아래 순서는 111이 만드는 제작용 SRT와 정렬 결과에
+적용한다.
+
 ```text
 1. PROJECT_GPT_CORRECTED_SRT_LOCK  (subtitle_corrections.json 또는 확정 교정 SRT)
 2. 사용자가 명시적으로 확정한 수정사항

@@ -1,0 +1,102 @@
+{
+  "schema_version": "politics_visual_timeline_v4",
+  "profile_id": "politics_documentary_broadcast_v4",
+  "duration_ms": 21500,
+  "fps": 30,
+  "sync_tolerance_ms": 150,
+  "chapter_box_regions": {
+    "01": [168, 616, 352, 176],
+    "02": [572, 616, 352, 176],
+    "03": [976, 616, 352, 176],
+    "04": [1380, 616, 352, 176]
+  },
+  "chapters": [
+    {
+      "chapter_id": "01",
+      "title": "개혁의 출발점",
+      "start_ms": 0,
+      "end_ms": 2500,
+      "active_frame_ms": 1200,
+      "active_state": "current"
+    },
+    {
+      "chapter_id": "02",
+      "title": "증언과 기록",
+      "start_ms": 11500,
+      "end_ms": 14500,
+      "active_frame_ms": 12800,
+      "active_state": "current"
+    },
+    {
+      "chapter_id": "03",
+      "title": "충돌하는 주장",
+      "start_ms": 14500,
+      "end_ms": 17500,
+      "active_frame_ms": 15800,
+      "active_state": "current"
+    },
+    {
+      "chapter_id": "04",
+      "title": "결론과 대안",
+      "start_ms": 17500,
+      "end_ms": 21500,
+      "active_frame_ms": 19000,
+      "active_state": "current"
+    }
+  ],
+  "semantic_events": [
+    {
+      "id": "semantic-fact",
+      "dom_id": "semantic-fact",
+      "start_ms": 2800,
+      "end_ms": 4500,
+      "srt_start_ms": 2800,
+      "semantic_role": "verified_fact",
+      "active_state": "active_when_spoken",
+      "evidence_frame_ms": 3200,
+      "region": [706, 222, 928, 174]
+    },
+    {
+      "id": "semantic-claim",
+      "dom_id": "semantic-claim",
+      "start_ms": 4700,
+      "end_ms": 6400,
+      "srt_start_ms": 4700,
+      "semantic_role": "allegation_unverified",
+      "active_state": "active_when_spoken",
+      "required_marker": "미확인",
+      "evidence_frame_ms": 5200,
+      "region": [742, 424, 820, 184]
+    },
+    {
+      "id": "semantic-conclusion",
+      "dom_id": "semantic-conclusion",
+      "start_ms": 6700,
+      "end_ms": 8200,
+      "srt_start_ms": 6700,
+      "semantic_role": "conclusion_alternative",
+      "active_state": "active_when_spoken",
+      "evidence_frame_ms": 7200,
+      "region": [690, 650, 980, 178]
+    }
+  ],
+  "focus_events": [
+    {
+      "id": "source-focus-lines",
+      "start_ms": 9250,
+      "enter_end_ms": 9450,
+      "end_ms": 10200,
+      "format": "transparent_svg",
+      "center": [1268, 450],
+      "before_frame_ms": 9100,
+      "during_frame_ms": 9550,
+      "after_frame_ms": 10400,
+      "focus_region": [820, 176, 890, 588],
+      "protected_regions": {
+        "face": [1188, 304, 160, 190],
+        "caption": [72, 888, 1776, 118],
+        "source_label": [72, 48, 520, 64]
+      }
+    }
+  ]
+}

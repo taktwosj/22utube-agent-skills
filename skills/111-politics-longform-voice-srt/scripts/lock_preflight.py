@@ -9,7 +9,7 @@
 
     from lock_preflight import require_gate, locked_tts_params
     LOCK = require_gate(EPISODE, "tts")          # 실패하면 여기서 exit 1
-    TTS = locked_tts_params(LOCK)                # 하드코딩 대신 잠긴 값
+    TTS = locked_tts_params(LOCK, EPISODE)       # 111 TTS 잠금만 사용
 
 이 파일을 직접 실행하면 self-check 를 돌고 인자가 없으면 비정상 종료한다.
 표준 라이브러리만 사용한다.
@@ -21,9 +21,12 @@ from pathlib import Path
 
 GATE = Path(__file__).resolve().parent / "gate_lock.py"
 LOCK_RELPATH = Path("20_script") / "script_lock.json"
+TTS_LOCK_RELPATH = Path("30_audio_srt") / "tts_params_lock_v1.json"
 
 REQUIRED_TTS_KEYS = ("provider", "voice_id", "model",
                      "speed", "pitch_shift", "pitch_variance")
+TTS_LOCK_FIELDS = {"schema", "status", "authority", "script_sha256",
+                   "tts_params"}
 
 
 class LockGateError(SystemExit):
@@ -59,17 +62,55 @@ def require_gate(episode, stage):
     return json.loads(lock_path.read_text(encoding="utf-8"))
 
 
-def locked_tts_params(lock):
-    """잠긴 TTS 설정을 돌려준다. 하드코딩·환경변수 override 를 대체한다.
+def locked_tts_params(lock, episode):
+    """111이 별도로 잠근 TTS 설정을 돌려준다.
 
     같은 대본이라도 speed 1.0 -> 1.2 면 음성 길이가 달라지고, 그러면
-    정렬·SRT·시간축이 전부 바뀐다. 잠금 시점 값으로만 생성해야 재현된다.
+    정렬·SRT·시간축이 전부 바뀐다. 110의 불변 대본 잠금에 TTS 결정을
+    끼워 넣지 않고, 프로젝트 GPT 음색 승인 뒤 만든 111 잠금을 사용한다.
     """
-    params = (lock or {}).get("tts_params") or {}
-    missing = [k for k in REQUIRED_TTS_KEYS if k not in params]
+    path = Path(episode) / TTS_LOCK_RELPATH
+    if not path.is_file():
+        raise LockGateError(f"WAIT_TTS_PARAMS_LOCK: {path} 없음")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise LockGateError(f"TTS_PARAMS_INTEGRITY_FAIL: {path}: {exc}")
+    if not isinstance(payload, dict) or set(payload) != TTS_LOCK_FIELDS:
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: top-level fields mismatch")
+    if payload.get("schema") != "politics-longform-tts-params-lock.v1":
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: schema 불일치")
+    if payload.get("status") != "TTS_PARAMS_LOCKED":
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: status 불일치")
+    if payload.get("authority") != "PROJECT_GPT":
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: authority 불일치")
+    if payload.get("script_sha256") != (lock or {}).get("script_sha256"):
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: script_sha256 불일치")
+    params = payload.get("tts_params") or {}
+    if not isinstance(params, dict):
+        raise LockGateError(
+            "TTS_PARAMS_INTEGRITY_FAIL: tts_params must be object")
+    missing = sorted(set(REQUIRED_TTS_KEYS) - set(params))
     if missing:
         raise LockGateError(
-            f"TTS_PARAMS_INTEGRITY_FAIL: script_lock.tts_params 키 누락 {missing}")
+            f"TTS_PARAMS_INTEGRITY_FAIL: tts_params 키 누락 {missing}")
+    if set(params) != set(REQUIRED_TTS_KEYS):
+        raise LockGateError(
+            "TTS_PARAMS_INTEGRITY_FAIL: tts_params fields mismatch")
+    for key in ("provider", "voice_id", "model"):
+        if not isinstance(params[key], str) or not params[key].strip():
+            raise LockGateError(
+                f"TTS_PARAMS_INTEGRITY_FAIL: {key} must be non-empty string")
+    for key in ("speed", "pitch_shift", "pitch_variance"):
+        value = params[key]
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            raise LockGateError(
+                f"TTS_PARAMS_INTEGRITY_FAIL: {key} must be numeric")
+    if params["speed"] <= 0:
+        raise LockGateError("TTS_PARAMS_INTEGRITY_FAIL: speed must be > 0")
+    if params["pitch_variance"] <= 0:
+        raise LockGateError(
+            "TTS_PARAMS_INTEGRITY_FAIL: pitch_variance must be > 0")
     return params
 
 
@@ -101,7 +142,7 @@ def _self_check():
               "환경변수 PL_EPISODE_DIR 도 사용된다.", file=sys.stderr)
         return 2
     lock = require_gate(sys.argv[1], "tts")
-    params = locked_tts_params(lock)
+    params = locked_tts_params(lock, sys.argv[1])
     print("PASS: 게이트 통과 · tts_params 지문 "
           f"{tts_params_fingerprint(params)[:16]}")
     return 0

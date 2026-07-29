@@ -28,7 +28,12 @@ NEW_SKILL=112-politics-longform-hyperframes
 작업 전에 현재 factory의 `AGENTS.md`, `docs/YOUTUBE_PRODUCTION_WORK_ORDER.md`,
 그리고 [template-contract.md](references/template-contract.md)를 읽는다. 에피소드 화면이나
 썸네일 전달안을 만들 때는 [political-documentary-design-preset.md](references/political-documentary-design-preset.md)와
-`assets/political-documentary-defaults.json`도 읽는다. 설치된
+[narration-visual-grammar.md](references/narration-visual-grammar.md),
+[visual-reference-frames.md](references/visual-reference-frames.md),
+`assets/political-documentary-defaults.json`,
+`assets/political-documentary-reference-frames.json`도 읽는다.
+사용자가 V4를 명시하면 [political-documentary-v4.md](references/political-documentary-v4.md)와
+`assets/political-documentary-v4.json`도 추가로 읽는다. 설치된
 `hyperframes`, `hyperframes-cli`, `hyperframes-registry` 스킬이 있으면 정확한
 syntax와 CLI 계약을 위해 읽는다. 없으면 설치를 추정하지 말고 실제
 `npx.cmd hyperframes --help`와 프로젝트 선언 버전을 확인한다.
@@ -41,6 +46,7 @@ PL_HYPERFRAMES_REPO=C:\Users\arajun\repos\politics-longform-hyperframes
 template_default=${PL_HYPERFRAMES_REPO}\template
 episode_project={episode}\60_hyperframes\project
 default_visual_profile=assets/political-documentary-defaults.json
+optional_visual_profile_v4=assets/political-documentary-v4.json
 ```
 
 공용 템플릿은 episode 밖에 둔다. episode 프로젝트는 공용 템플릿을 복제하거나
@@ -103,7 +109,7 @@ lock은 공용 템플릿이 에피소드마다 조금씩 달라지는 drift를 �
 ### 기본 디자인 프리셋 — 고정
 
 ```text
-DEFAULT_VISUAL_PROFILE=politics_documentary_broadcast_v1
+DEFAULT_VISUAL_PROFILE=politics_documentary_broadcast_v3
 PROFILE_AUTHORITY=assets/political-documentary-defaults.json
 PROFILE_SCOPE=EPISODE_VISUAL_LAYER_ONLY
 PROFILE_OVERRIDE=LATEST_EXPLICIT_USER_INSTRUCTION_ONLY
@@ -114,11 +120,42 @@ PROFILE_OVERRIDE=LATEST_EXPLICIT_USER_INSTRUCTION_ONLY
 정렬·여백·타이포그래피 중심의 화면을 사용한다. 고정 색상, 레이아웃, 출처 표기,
 댓글·구독 문구, 모션과 썸네일 전달 형식은
 [political-documentary-design-preset.md](references/political-documentary-design-preset.md)를 따른다.
+나레이션 장면은 대본의 의미에 따라 `FLOW_NODES`, `TIMELINE_PATH`, `CORE_ORBIT`,
+`COMPARE_SPLIT`, `STEP_PROGRESS`, `QUOTE_SPOTLIGHT` 중 하나를 선택하고
+[narration-visual-grammar.md](references/narration-visual-grammar.md)의 반복 방지와
+발화 동기화 규칙을 따른다. 사각형 카드와 직선 화살표만 반복하지 않는다.
+레이아웃과 화면 밀도는 사용자가 승인한 네 장의 시안을 담은
+[visual-reference-frames.md](references/visual-reference-frames.md)를 최우선 시각 기준으로 삼는다.
 
 공용 템플릿 lock을 고치지 않는다. 프리셋은 episode CSS·SVG·`design.md`에만
 주입하고, 적용한 profile ID와 JSON SHA-256을 episode `design.md` 또는 build manifest에
 기록한다. 명시적 사용자 변경 없이 색상·서체·CTA 문구·출처 위치를 임의 변경하면
 `FAIL_DEFAULT_VISUAL_PROFILE_DRIFT`다.
+
+### V4 반응형 화면·음량 프로필 — 명시적 선택만
+
+```text
+OPTIONAL_VISUAL_PROFILE=politics_documentary_broadcast_v4
+PROFILE_AUTHORITY=assets/political-documentary-v4.json
+EXTENDS=politics_documentary_broadcast_v3
+DEFAULT_PROFILE_REMAINS=politics_documentary_broadcast_v3
+ROLLBACK_PROFILE=politics_documentary_broadcast_v3
+```
+
+V4는 사용자가 명시한 episode에만 적용한다. V3 정본 JSON, 네 장의 reference frame,
+공용 template lock은 수정하지 않는다. V4 선택값을 제거하고 episode를 다시 빌드하면
+V3가 적용되어야 한다.
+
+V4 본문은 좌측 chapter rail을 고정하고 우측 요소를 실제 SRT 발화에 따라 순차
+반응시킨다. 각 요소의 `start_ms`, `end_ms`, `semantic_role`, `active_state`를 DOM과
+visual timeline에 모두 기록한다. 발화 시작과 반응 시작 오차는 ±150ms 이내다.
+색상·chapter 상태·집중선·금지 항목은
+[political-documentary-v4.md](references/political-documentary-v4.md)를 따른다.
+
+TTS와 원본 영상 발화에는 실제 FFmpeg `loudnorm` 2-pass를 적용한다. 음성 bus를
+만든 뒤 BGM ducking과 SFX mix를 적용하고 final master 및 실제 렌더 오디오를
+재측정한다. BGM과 SFX를 각각 -14 LUFS로 정규화하지 않는다. gain 또는 clipping
+한계를 넘으면 `FAIL_AUDIO_GAIN_OUTLIER`다.
 
 ### 시각 부호 체계 요건
 
@@ -160,6 +197,11 @@ npx.cmd hyperframes preview --port {available_port} --no-open --background
 lint 실패 시 check를 실행하지 않는다. check 실패 시 사용자 preview를 요청하지
 않는다. 저장된 과거 PASS 대신 현재 명령 출력을 사용한다.
 
+V4 선택 시에는 episode sample/project에서 `scripts/normalize_v4_audio.py`로 음성을
+실제 정규화하고, HyperFrames render MP4에서 evidence frame을 추출한 뒤
+`scripts/validate_v4_evidence.py`를 추가 실행한다. 파일 존재만 보는 정적 검사는
+V4 gate 증거가 아니다.
+
 ### P4 User Gate
 
 preview URL이 실제로 응답하고 세 composition 첫 프레임을 확인할 수 있을 때만
@@ -170,10 +212,21 @@ preview URL이 실제로 응답하고 세 composition 첫 프레임을 확인할
 
 사용자가 승인·LOCK한 템플릿으로 별도 episode 작업을 시작한다. 승인 대본,
 source range, WAV, SRT와 chapter 순서를 바꾸지 않고 HTML composition으로 구현한다.
-사용자 별도 디자인 지시가 없으면 `politics_documentary_broadcast_v1`을 episode
+사용자 별도 디자인 지시가 없으면 `politics_documentary_broadcast_v3`를 episode
 시각 레이어에 적용한다. 출처에는 `S12` 같은 내부 ID가 아니라 실제 유튜브 채널명과
 업로드 날짜를 표시한다. 썸네일 전달안은 프리셋의 고정 5항목 순서로 작성한다.
-preview 승인 전 render를 하지 않는다.
+원본 영상 장면은 영상과 표정이 우선이며 흐름도나 장식 도형을 덮지 않는다.
+나레이션 장면은 승인 대본 밖의 문구를 추가하지 않고 실제 SRT 발화 구간에 맞춰
+시각 요소를 등장시킨다. preview 승인 전 render를 하지 않는다.
+
+V4가 명시된 episode는 다음 네 gate가 실제 렌더·오디오 측정으로 모두 PASS해야 한다.
+
+```text
+PASS_CHAPTER_ACTIVE_STATE
+PASS_SEMANTIC_VISUAL_SYNC
+PASS_SOURCE_VIDEO_FOCUS_LINES
+PASS_AUDIO_LOUDNESS_NORMALIZATION
+```
 
 ## Hard Stops
 
@@ -182,6 +235,7 @@ preview 승인 전 render를 하지 않는다.
 | HyperFrames 설치·실행 환경 때문에 preview 불가 | `WAIT_HYPERFRAMES_ENV` |
 | 기존 프로젝트 수정이나 근본 원인 조사가 필요 | `WAIT_ROOT_CAUSE` |
 | 파일 또는 검증 실패 | `FAIL` |
+| 음성 gain 과다·clipping·측정 한계 실패 | `FAIL_AUDIO_GAIN_OUTLIER` |
 | lint/check/preview 정상, 사용자 화면 확인 대기 | `WAIT_USER_TEMPLATE_PREVIEW` |
 
 ## Common Mistakes
@@ -199,6 +253,10 @@ preview 승인 전 render를 하지 않는다.
 - 출처 자리에 `원본 S12` 같은 내부 source ID를 노출하지 않는다.
 - 댓글·구독 문구를 임의로 줄이거나 다른 문구로 바꾸지 않는다.
 - 붓글씨, 두꺼운 외곽선, 반복 점멸, 대각선 네온 장식을 기본값으로 사용하지 않는다.
+- 나레이션 장면을 사각형 카드와 직선 화살표만으로 연속 구성하지 않는다.
+- 의미를 무시하고 장식 다양성만을 위해 도형을 늘리지 않는다.
+- 외부 이미지 생성을 기본 공정에 넣지 않는다. 인물 누끼는 승인 시안과 같은
+  히어로 장면에 한해 기존 소스나 사용자 제공 자산으로 허용한다.
 - 가짜 Studio token UI나 지원되지 않는 control을 만들지 않는다.
 
 ## Validation Tool
@@ -206,3 +264,7 @@ preview 승인 전 render를 하지 않는다.
 `scripts/validate_template.py`는 공용 파일, composition, token group, DOM role,
 중복 ID, remote asset과 placeholder asset을 검사한다. 실행 결과가 0이 아니면
 HyperFrames lint/check로 진행하지 않는다.
+
+V4에서는 `scripts/normalize_v4_audio.py`가 clip/voice bus/final master의 2-pass
+loudnorm과 manifest를 만들고, `scripts/validate_v4_evidence.py`가 실제 렌더에서
+추출한 chapter·semantic·focus frame 및 렌더 오디오 재측정값을 검증한다.

@@ -1,0 +1,33 @@
+{
+  "duration": 21.5,
+  "assertions": [
+    {
+      "kind": "appearsBy",
+      "selector": "#chapter-01-title",
+      "bySec": 0.35
+    },
+    {
+      "kind": "before",
+      "a": "#semantic-fact",
+      "b": "#semantic-claim"
+    },
+    {
+      "kind": "before",
+      "a": "#semantic-claim",
+      "b": "#semantic-conclusion"
+    },
+    {
+      "kind": "appearsBy",
+      "selector": "#source-focus-lines",
+      "bySec": 9.5
+    },
+    {
+      "kind": "staysInFrame",
+      "selector": "#chapter-01 .chapter-map"
+    },
+    {
+      "kind": "staysInFrame",
+      "selector": "#body-scene .chapter-rail"
+    }
+  ]
+}

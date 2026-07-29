@@ -1,19 +1,7 @@
 #!/usr/bin/env python3
-"""gate_lock.py 회귀 테스트.
+"""Evidence-integrity tests for the 110 script lock consumed by 111."""
+from __future__ import annotations
 
-게이트는 "막는 것"이 일이다. 통과 케이스보다 **차단 케이스**를 먼저 증명한다.
-
-v1.0 의 15개 테스트는 "내가 생각한 것을 막는다"만 증명했고 우회 가능성을
-증명하지 못했다. 리스크 리뷰에서 10건이 나왔고 그중 실증된 두 개가 아프다.
-
-    RISK-002  v1.0 의 통과 픽스처는 locked_inputs 에 script 하나뿐이었다
-              -> 맞는 대본 + 틀린 클립으로 제작 가능
-    RISK-008  ep / "../../다른에피소드/x.md" 는 C:\\다른에피소드\\x.md 로 탈출
-
-실행:
-    py -3.14 -m unittest discover -s skills/112-politics-longform-hyperframes/tests
-"""
-import hashlib
 import json
 import subprocess
 import sys
@@ -21,379 +9,297 @@ import tempfile
 import unittest
 from pathlib import Path
 
-GATE = Path(__file__).resolve().parent.parent / "scripts" / "gate_lock.py"
+SKILL = Path(__file__).resolve().parent.parent
+GATE = SKILL / "scripts" / "gate_lock.py"
+sys.path.insert(0, str(SKILL / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-# 1-based 줄번호 기준으로 세그먼트 범위를 잡는다.
-SCRIPT_LINES = [
-    "# 테스트 대본",                                                     # 1
-    "",                                                                   # 2
-    "# CHAPTER 1. 무엇이 문제인가",                                        # 3
-    "",                                                                   # 4
-    "비판의 초점은 내각의 성과가 아니라 대통령과 민주당의 관계에 놓여 있습니다.",  # 5
-    "당 지배와 검찰개혁에 관한 특정한 선택이 계속될 경우 실패한다고 보았습니다.",  # 6
-    "",                                                                   # 7
-    "# CHAPTER 2. 남은 질문",                                             # 8
-    "",                                                                   # 9
-    "정부는 국민 통합을 국정 과제로 제시했습니다.",                          # 10
-]
-SCRIPT_BODY = "\n".join(SCRIPT_LINES) + "\n"
-
-INPUT_FILES = {
-    "script":             "20_script/master_script.md",
-    "source_map":         "20_script/source_map.json",
-    "clip_manifest":      "10_analysis/clip_manifest.json",
-    "intake_manifest":    "10_analysis/intake_manifest.json",
-    "episode_lexicon":    "10_analysis/episode_lexicon.json",
-    "machine_audit":      "90_reports/script_audit.json",
-    "project_gpt_ruling": "20_script/project_gpt_ruling.json",
-}
-
-
-def sha256_bytes(data):
-    return hashlib.sha256(data).hexdigest()
+from gate_lock import Gate  # noqa: E402
+from _lock_fixture import digest, rewrite_lock, write_valid_lock  # noqa: E402
 
 
 class GateCase(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
+        self.tmp = tempfile.TemporaryDirectory(prefix="PL_20260729_gate_")
         self.ep = Path(self.tmp.name)
-        self.shas = {}
-        for name, rel in INPUT_FILES.items():
-            p = self.ep / rel
-            p.parent.mkdir(parents=True, exist_ok=True)
-            data = (SCRIPT_BODY if name == "script"
-                    else json.dumps({"stub": name}, ensure_ascii=False)).encode("utf-8")
-            p.write_bytes(data)
-            self.shas[name] = sha256_bytes(data)
-        self.lock = self._base_lock()
+        self.lock = write_valid_lock(self.ep)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _base_lock(self):
-        return {
-            "schema_version": "politics-longform-script-lock.v1",
-            "episode_id": "PL_20260101_test",
-            "status": "SCRIPT_LOCKED",
-            "lock_version": 1,
-            "locked_at": "2026-01-01T00:00:00Z",
-            "authority": {"script_authority": "PROJECT_GPT",
-                          "audit_authority": "CLAUDE",
-                          "executor_editorial_authority": "NONE",
-                          "review_override": None},
-            "locked_inputs": {n: {"path": r, "sha256": self.shas[n]}
-                              for n, r in INPUT_FILES.items()},
-            "ruling_summary": {
-                "total_findings": 3, "approved_fix": 1, "rejected_no_change": 2,
-                "deferred": 0, "unresolved": 0, "unresolved_high": 0,
-                "unresolved_quote_mismatch": 0, "deferred_items": [],
-            },
-            "editorial_decisions": {
-                "chapter_order_approved": True, "source_media_verified": True,
-                "clip_timecodes_verified": True, "hook_selection_approved": True,
-                "lexicon_review_approved": True, "quote_accuracy_approved": True,
-                "lexicon_conflicts": 0,
-            },
-            "structure": {
-                "chapter_count": 2, "narration_block_count": 2,
-                "source_clip_count": 1, "logical_segment_count": 3,
-                "chapters": [
-                    {"no": 1, "title": "무엇이 문제인가",
-                     "script_line_range": [3, 7], "segment_indices": [1, 2]},
-                    {"no": 2, "title": "남은 질문",
-                     "script_line_range": [8, 10], "segment_indices": [3]},
-                ],
-                "segments": [
-                    {"index": 1, "segment_id": "SEG001", "kind": "NARRATION",
-                     "chapter_no": 1, "script_line_range": [5, 6],
-                     "source_id": None, "source_timecode": None},
-                    {"index": 2, "segment_id": "SEG002", "kind": "SOURCE_VIDEO",
-                     "chapter_no": 1, "script_line_range": [6, 6],
-                     "source_id": "S05", "source_timecode": "00:08:50~00:09:09"},
-                    {"index": 3, "segment_id": "SEG003", "kind": "NARRATION",
-                     "chapter_no": 2, "script_line_range": [10, 10],
-                     "source_id": None, "source_timecode": None},
-                ],
-            },
-            "hooks": {"1": {
-                "text": "비판의 초점은 내각의 성과가 아니라 대통령과 민주당의 관계에 놓여 있습니다.",
-                "underline": "대통령과 민주당의 관계", "script_line": 5}},
-            "labels": {"_rule": "세그먼트별", "1": ["당 지배", "검찰개혁"]},
-            "tts_params": {"provider": "supertone", "voice_id": "x",
-                           "model": "sona_speech_2", "speed": 1,
-                           "pitch_shift": 0, "pitch_variance": 1},
-            "render_target": {"canvas": "1920x1080", "fps": 30},
-        }
-
-    def write_lock(self, lock=None):
-        (self.ep / "20_script" / "script_lock.json").write_text(
-            json.dumps(lock if lock is not None else self.lock,
-                       ensure_ascii=False), encoding="utf-8")
-
     def run_gate(self, stage="tts"):
-        r = subprocess.run(
-            [sys.executable, str(GATE), "--episode", str(self.ep),
-             "--stage", stage, "--json"],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=120)
-        try:
-            payload = json.loads(r.stdout)
-        except Exception:
-            payload = {"failures": [], "raw": r.stdout + r.stderr}
-        return r.returncode, payload
+        gate = Gate(self.ep, stage)
+        gate.run()
+        return gate
 
-    def codes(self, payload):
-        return {f["code"] for f in payload.get("failures", [])}
+    def assertBlocked(self, code):
+        rewrite_lock(self.ep, self.lock)
+        gate = self.run_gate()
+        self.assertIn(code, {item[0] for item in gate.fails}, gate.fails)
 
-    def assertBlocked(self, code, stage="tts"):
-        self.write_lock()
-        rc, out = self.run_gate(stage)
-        self.assertEqual(rc, 1, out)
-        self.assertIn(code, self.codes(out), out)
+    def mutate_json_evidence(self, name, update):
+        entry = self.lock["evidence"][name]
+        path = self.ep / entry["path"]
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        update(payload)
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        entry["sha256"] = __import__("hashlib").sha256(
+            path.read_bytes()).hexdigest()
 
-    # ---------------------------------------------------------- 통과
-    def test_valid_lock_passes_tts(self):
-        self.write_lock()
-        rc, out = self.run_gate("tts")
-        self.assertEqual(rc, 0, out)
-        self.assertGreater(out["checks"], 20)
+    def mutate_review(self, transform):
+        entry = self.lock["evidence"]["independent_review"]
+        path = self.ep / entry["path"]
+        path.write_text(transform(path.read_text(encoding="utf-8")),
+                        encoding="utf-8")
+        entry["sha256"] = __import__("hashlib").sha256(
+            path.read_bytes()).hexdigest()
 
-    def test_rejected_no_change_does_not_block(self):
-        """기각 판정은 해결된 것이다. 미해결로 세면 영원히 안 잠긴다."""
-        self.lock["ruling_summary"].update(
-            {"total_findings": 11, "approved_fix": 2,
-             "rejected_no_change": 9, "deferred": 0, "unresolved": 0})
-        self.write_lock()
-        rc, out = self.run_gate("tts")
-        self.assertEqual(rc, 0, out)
+    def test_valid_110_lock_passes_tts(self):
+        self.assertEqual(self.run_gate("tts").fails, [])
 
-    def test_user_prohibited_claude_allows_pinned_codex_subagent(self):
-        review = self.ep / "90_workflow" / "codex_review.md"
-        approval = self.ep / "20_script" / "user_approval.json"
-        review.parent.mkdir(parents=True, exist_ok=True)
-        review.write_text("verdict: APPROVED\n", encoding="utf-8")
-        approval.write_text('{"approved": true}\n', encoding="utf-8")
-        self.lock["authority"] = {
-            "script_authority": "PROJECT_GPT",
-            "audit_authority": "CODEX_SUBAGENT",
-            "executor_editorial_authority": "NONE",
-            "review_override": {
-                "reason": "USER_EXPLICITLY_PROHIBITED_CLAUDE",
-                "claude_status": "NOT_RUN_USER_PROHIBITED",
-                "reviewer": "CODEX_SUBAGENT",
-                "executor": "CODEX_ORCHESTRATOR",
-                "review_event_id": "review-1",
-                "user_event_id": "user-1",
-                "user_instruction": {
-                    "path": "20_script/user_approval.json",
-                    "sha256": hashlib.sha256(approval.read_bytes()).hexdigest()},
-                "independent_review": {
-                    "path": "90_workflow/codex_review.md",
-                    "sha256": hashlib.sha256(review.read_bytes()).hexdigest()},
-            },
-        }
-        self.write_lock()
-        rc, out = self.run_gate("tts")
-        self.assertEqual(rc, 0, out)
+    def test_valid_110_lock_passes_assembly_entry_check(self):
+        self.assertEqual(self.run_gate("assembly").fails, [])
 
-    def test_codex_subagent_without_user_override_blocks(self):
-        self.lock["authority"]["audit_authority"] = "CODEX_SUBAGENT"
-        self.assertBlocked("REVIEW_OVERRIDE_REQUIRED")
-
-    def test_codex_override_evidence_sha_mismatch_blocks(self):
-        review = self.ep / "90_workflow" / "codex_review.md"
-        approval = self.ep / "20_script" / "user_approval.json"
-        review.parent.mkdir(parents=True, exist_ok=True)
-        review.write_text("verdict: APPROVED\n", encoding="utf-8")
-        approval.write_text('{"approved": true}\n', encoding="utf-8")
-        self.lock["authority"] = {
-            "script_authority": "PROJECT_GPT",
-            "audit_authority": "CODEX_SUBAGENT",
-            "executor_editorial_authority": "NONE",
-            "review_override": {
-                "reason": "USER_EXPLICITLY_PROHIBITED_CLAUDE",
-                "claude_status": "NOT_RUN_USER_PROHIBITED",
-                "reviewer": "CODEX_SUBAGENT",
-                "executor": "CODEX_ORCHESTRATOR",
-                "review_event_id": "review-1",
-                "user_event_id": "user-1",
-                "user_instruction": {
-                    "path": "20_script/user_approval.json",
-                    "sha256": "0" * 64},
-                "independent_review": {
-                    "path": "90_workflow/codex_review.md",
-                    "sha256": hashlib.sha256(review.read_bytes()).hexdigest()},
-            },
-        }
-        self.assertBlocked("REVIEW_OVERRIDE_EVIDENCE_SHA_MISMATCH")
-
-    def test_deferred_blocking_assembly_only_allows_tts(self):
-        self.lock["ruling_summary"].update(
-            {"total_findings": 4, "approved_fix": 1, "rejected_no_change": 2,
-             "deferred": 1, "unresolved": 0,
-             "deferred_items": [{"id": "SCA-014", "reason": "후속 확인",
-                                 "blocks": ["ASSEMBLY"],
-                                 "approved_by": "PROJECT_GPT",
-                                 "resolution_plan": "자막 QC 때 확인"}]})
-        self.write_lock()
-        rc, out = self.run_gate("tts")
-        self.assertEqual(rc, 0, out)
-
-    # ---------------------------------------------- 기본 잠금 (v1.0 회귀)
     def test_missing_lock_blocks(self):
-        rc, out = self.run_gate("tts")
-        self.assertEqual(rc, 1)
-        self.assertIn("LOCK_MISSING", self.codes(out))
+        (self.ep / "20_script" / "script_lock.json").unlink()
+        self.assertIn("LOCK_MISSING",
+                      {code for code, _ in self.run_gate().fails})
 
-    def test_status_not_locked_blocks(self):
+    def test_wrong_schema_blocks(self):
+        self.lock["schema"] = "legacy"
+        self.assertBlocked("SCHEMA_VERSION_MISMATCH")
+
+    def test_legacy_top_level_fields_block(self):
+        self.lock["tts_params"] = {"speed": 1}
+        self.assertBlocked("LOCK_FIELDS_INVALID")
+
+    def test_wrong_episode_blocks(self):
+        self.lock["episode_id"] = "PL_20260729_other"
+        self.assertBlocked("EPISODE_ID_MISMATCH")
+
+    def test_status_must_be_locked(self):
         self.lock["status"] = "DRAFT"
         self.assertBlocked("STATUS_NOT_LOCKED")
 
-    def test_script_edited_after_lock_blocks(self):
-        self.write_lock()
-        (self.ep / "20_script" / "master_script.md").write_text(
-            SCRIPT_BODY + "\n덧붙인 문장입니다.\n", encoding="utf-8")
-        rc, out = self.run_gate("tts")
-        self.assertEqual(rc, 1)
-        self.assertIn("LOCKED_INPUT_SHA_MISMATCH", self.codes(out))
+    def test_producer_must_be_110(self):
+        self.lock["produced_by"] = "manual"
+        self.assertBlocked("LOCK_PRODUCER_INVALID")
+
+    def test_next_stage_must_be_111(self):
+        self.lock["next_stage"] = "112-politics-longform-hyperframes"
+        self.assertBlocked("NEXT_STAGE_INVALID")
+
+    def test_authority_is_pinned(self):
+        self.lock["authority"]["drafter"] = "CODEX"
+        self.assertBlocked("SCRIPT_AUTHORITY_INVALID")
+
+    def test_codex_cli_fallback_passes_same_contract(self):
+        self.lock["authority"]["reviewer"] = "CODEX_CLI"
+        failure = self.ep / "90_reports" / "claude_call_failure_v1.json"
+        failure.write_text(json.dumps({
+            "schema": "politics-longform-review-fallback.v1",
+            "status": "CLAUDE_CALL_FAILED",
+            "script_sha256": self.lock["script_sha256"],
+        }), encoding="utf-8")
+        review = self.ep / self.lock["evidence"]["independent_review"]["path"]
+        body = review.read_text(encoding="utf-8")
+        body = body.replace("review_origin: claude_external",
+                            "review_origin: codex_cli_external")
+        body = body.replace("recorded_by: CLAUDE",
+                            "recorded_by: CODEX_CLI_REVIEWER")
+        body += ("fallback_reason: CLAUDE_CALL_FAILURE\n"
+                 "claude_failure_report_path: "
+                 "90_reports/claude_call_failure_v1.json\n"
+                 f"claude_failure_report_sha256: {digest(failure)}\n")
+        review.write_text(body, encoding="utf-8")
+        self.lock["evidence"]["independent_review"]["sha256"] = digest(review)
+        approval = self.ep / self.lock["evidence"]["user_approval"]["path"]
+        payload = json.loads(approval.read_text(encoding="utf-8"))
+        payload["claude_review_sha256"] = digest(review)
+        approval.write_text(json.dumps(payload), encoding="utf-8")
+        self.lock["evidence"]["user_approval"]["sha256"] = digest(approval)
+        rewrite_lock(self.ep, self.lock)
+        gate = Gate(self.ep, "tts")
+        gate.run()
+        self.assertEqual(gate.fails, [])
+
+    def test_codex_cli_without_failure_evidence_blocks(self):
+        self.lock["authority"]["reviewer"] = "CODEX_CLI"
+        self.mutate_review(lambda body: body.replace(
+            "review_origin: claude_external", "review_origin: codex_cli_external"
+        ).replace("recorded_by: CLAUDE", "recorded_by: CODEX_CLI_REVIEWER"))
+        self.assertBlocked("REVIEW_FALLBACK_EVIDENCE_MISSING")
+
+    def test_missing_required_evidence_blocks(self):
+        del self.lock["evidence"]["source_packet"]
+        self.assertBlocked("EVIDENCE_REQUIRED_MISSING")
+
+    def test_absolute_evidence_path_blocks(self):
+        self.lock["evidence"]["source_packet"]["path"] = "C:/other/x.json"
+        self.assertBlocked("EVIDENCE_PATH_OUTSIDE_EPISODE")
+
+    def test_parent_traversal_blocks(self):
+        self.lock["evidence"]["source_packet"]["path"] = "../../x.json"
+        self.assertBlocked("EVIDENCE_PATH_OUTSIDE_EPISODE")
+
+    def test_tampered_review_file_blocks(self):
+        path = self.ep / self.lock["evidence"]["independent_review"]["path"]
+        path.write_text(path.read_text(encoding="utf-8") + "tamper\n",
+                        encoding="utf-8")
+        self.assertBlocked("EVIDENCE_SHA_MISMATCH")
+
+    def test_locked_script_hash_mismatch_blocks(self):
+        path = self.ep / self.lock["locked_script"]
+        path.write_text("changed\n", encoding="utf-8")
+        self.assertBlocked("SCRIPT_SHA_MISMATCH")
+
+    def test_locked_script_must_equal_approved_script(self):
+        path = self.ep / self.lock["evidence"]["approved_script"]["path"]
+        path.write_text("changed\n", encoding="utf-8")
+        self.lock["evidence"]["approved_script"]["sha256"] = \
+            __import__("hashlib").sha256(path.read_bytes()).hexdigest()
+        self.assertBlocked("APPROVED_SCRIPT_SHA_MISMATCH")
+
+    def test_approval_false_blocks(self):
+        self.mutate_json_evidence(
+            "user_approval", lambda value: value.update(approved=False))
+        self.assertBlocked("APPROVAL_NOT_APPROVED")
+
+    def test_approval_script_sha_mismatch_blocks(self):
+        self.mutate_json_evidence(
+            "user_approval",
+            lambda value: value.update(approved_script_sha256="a" * 64))
+        self.assertBlocked("APPROVAL_SCRIPT_SHA_MISMATCH")
+
+    def test_approval_review_path_mismatch_blocks(self):
+        self.mutate_json_evidence(
+            "user_approval",
+            lambda value: value.update(claude_review_path="20_script/x.md"))
+        self.assertBlocked("APPROVAL_EVIDENCE_PATH_MISMATCH")
+
+    def test_report_violations_block(self):
+        self.mutate_json_evidence(
+            "verification_report",
+            lambda value: value.update(total_violations=1))
+        self.assertBlocked("VERIFICATION_NOT_PASS")
+
+    def test_report_script_sha_mismatch_blocks(self):
+        self.mutate_json_evidence(
+            "verification_report",
+            lambda value: value.update(script_sha256="b" * 64))
+        self.assertBlocked("VERIFICATION_SCRIPT_SHA_MISMATCH")
+
+    def test_report_source_packet_sha_mismatch_blocks(self):
+        self.mutate_json_evidence(
+            "verification_report",
+            lambda value: value.update(source_packet_sha256_actual="b" * 64))
+        self.assertBlocked("VERIFICATION_SOURCE_PACKET_SHA_MISMATCH")
+
+    def test_report_check_violation_cannot_hide_behind_zero_total(self):
+        def update(value):
+            value["checks"]["quote_fidelity"] = {
+                "violations": ["changed quote"], "count": 1}
+            value["total_violations"] = 0
+        self.mutate_json_evidence("verification_report", update)
+        self.assertBlocked("VERIFICATION_CHECK_NOT_PASS")
+
+    def test_report_check_count_must_match_violation_list(self):
+        def update(value):
+            value["checks"]["quote_fidelity"] = {
+                "violations": ["changed quote"], "count": 0}
+        self.mutate_json_evidence("verification_report", update)
+        self.assertBlocked("VERIFICATION_COUNT_MISMATCH")
+
+    def test_report_boolean_count_is_rejected(self):
+        self.mutate_json_evidence(
+            "verification_report",
+            lambda value: value["checks"]["quote_fidelity"].update(count=False))
+        self.assertBlocked("VERIFICATION_COUNT_INVALID")
+
+    def test_report_missing_security_check_is_rejected(self):
+        self.mutate_json_evidence(
+            "verification_report",
+            lambda value: value["checks"].pop("quote_fidelity"))
+        self.assertBlocked("VERIFICATION_CHECK_SET_INVALID")
+
+    def test_report_extra_check_is_rejected(self):
+        self.mutate_json_evidence(
+            "verification_report",
+            lambda value: value["checks"].update(
+                fake={"violations": [], "count": 0}))
+        self.assertBlocked("VERIFICATION_CHECK_SET_INVALID")
+
+    def test_source_srt_review_wait_status_blocks(self):
+        self.mutate_json_evidence(
+            "source_srt_review",
+            lambda value: value.update(status="WAIT_USER_SOURCE_TERM_CONFIRMATION"))
+        self.assertBlocked("SOURCE_SRT_REVIEW_NOT_PASS")
+
+    def test_source_srt_review_receipt_errors_block(self):
+        self.mutate_json_evidence(
+            "source_srt_review",
+            lambda value: value["review_receipt"].update(
+                errors=["audio comparison receipt missing"]))
+        self.assertBlocked("SOURCE_SRT_REVIEW_RECEIPT_NOT_PASS")
+
+    def test_source_srt_review_packet_binding_mismatch_blocks(self):
+        self.mutate_json_evidence(
+            "source_packet",
+            lambda value: value["source_srt_review"].update(sha256="a" * 64))
+        self.assertBlocked("SOURCE_SRT_REVIEW_BINDING_MISMATCH")
+
+    def test_inferred_user_approval_is_rejected(self):
+        self.mutate_json_evidence(
+            "user_approval",
+            lambda value: value.update(user_approval_origin="inferred"))
+        self.assertBlocked("SELF_APPROVAL_INVALID")
+
+    def test_review_verdict_must_be_approved(self):
+        self.mutate_review(lambda body: body.replace(
+            "verdict: APPROVED", "verdict: REWORK_REQUIRED"))
+        self.assertBlocked("REVIEW_NOT_APPROVED")
+
+    def test_review_script_sha_mismatch_blocks(self):
+        self.mutate_review(lambda body: __import__("re").sub(
+            r"script_sha256: [0-9a-f]{64}",
+            "script_sha256: " + "c" * 64, body))
+        self.assertBlocked("REVIEW_SCRIPT_SHA_MISMATCH")
+
+    def test_review_event_mismatch_blocks(self):
+        self.mutate_review(lambda body: body.replace(
+            "REV-TEST-001", "REV-OTHER"))
+        self.assertBlocked("REVIEW_EVENT_MISMATCH")
+
+    def test_review_origin_must_match_authority(self):
+        self.mutate_review(lambda body: body.replace(
+            "review_origin: claude_external", "review_origin: codex_cli_external"))
+        self.assertBlocked("REVIEW_ORIGIN_MISMATCH")
+
+    def test_executor_cannot_record_own_review(self):
+        self.mutate_review(lambda body: body.replace(
+            "recorded_by: CLAUDE", "recorded_by: CODEX"))
+        self.assertBlocked("SELF_REVIEW_INVALID")
 
     def test_unresolved_high_blocks(self):
-        """지난 에피소드에서 뚫린 바로 그 조건."""
-        self.lock["ruling_summary"].update(
-            {"total_findings": 6, "approved_fix": 0, "rejected_no_change": 0,
-             "deferred": 0, "unresolved": 6, "unresolved_high": 6})
-        self.assertBlocked("RULING_UNRESOLVED")
+        self.mutate_review(lambda body: body.replace(
+            "unresolved_high: 0", "unresolved_high: 3"))
+        self.assertBlocked("REVIEW_UNRESOLVED_OR_DEFERRED")
 
-    def test_ruling_count_inconsistent_blocks(self):
-        self.lock["ruling_summary"]["total_findings"] = 99
-        self.assertBlocked("RULING_COUNT_INCONSISTENT")
+    def test_deferred_tts_blocks(self):
+        self.mutate_review(lambda body: body.replace(
+            "deferred_tts: 0", "deferred_tts: 1"))
+        self.assertBlocked("REVIEW_UNRESOLVED_OR_DEFERRED")
 
-    # ---------------------------------------------- RISK-002 필수 입력
-    def test_missing_each_required_input_blocks(self):
-        for name in ("source_map", "clip_manifest", "intake_manifest",
-                     "episode_lexicon", "machine_audit", "project_gpt_ruling"):
-            with self.subTest(missing=name):
-                self.lock = self._base_lock()
-                del self.lock["locked_inputs"][name]
-                self.write_lock()
-                rc, out = self.run_gate("tts")
-                self.assertEqual(rc, 1)
-                self.assertIn("LOCKED_INPUT_REQUIRED_MISSING", self.codes(out))
+    def test_review_and_user_events_must_differ(self):
+        self.lock["events"]["user_approval_event_id"] = "REV-TEST-001"
+        self.assertBlocked("SELF_APPROVAL_EVENT_REUSED")
 
-    def test_malformed_sha_blocks(self):
-        self.lock["locked_inputs"]["script"]["sha256"] = "not-a-sha"
-        self.assertBlocked("LOCKED_INPUT_SHA_MALFORMED")
-
-    # ---------------------------------------------- RISK-008 경로 탈출
-    def test_absolute_locked_input_path_blocks(self):
-        self.lock["locked_inputs"]["script"]["path"] = "C:\\다른프로젝트\\x.md"
-        self.assertBlocked("LOCKED_INPUT_PATH_OUTSIDE_EPISODE")
-
-    def test_parent_traversal_path_blocks(self):
-        self.lock["locked_inputs"]["script"]["path"] = "../../다른에피소드/x.md"
-        self.assertBlocked("LOCKED_INPUT_PATH_OUTSIDE_EPISODE")
-
-    # ---------------------------------------------- RISK-003 순서 무결성
-    def test_segments_missing_blocks(self):
-        del self.lock["structure"]["segments"]
-        self.assertBlocked("SEGMENT_ORDER_INTEGRITY_FAIL")
-
-    def test_segment_index_gap_blocks(self):
-        self.lock["structure"]["segments"][2]["index"] = 9
-        self.assertBlocked("SEGMENT_ORDER_INTEGRITY_FAIL")
-
-    def test_segment_id_duplicate_blocks(self):
-        self.lock["structure"]["segments"][2]["segment_id"] = "SEG001"
-        self.assertBlocked("SEGMENT_ORDER_INTEGRITY_FAIL")
-
-    def test_segment_kind_count_mismatch_blocks(self):
-        self.lock["structure"]["narration_block_count"] = 3
-        self.assertBlocked("SEGMENT_KIND_COUNT_MISMATCH")
-
-    def test_source_video_without_source_id_blocks(self):
-        self.lock["structure"]["segments"][1]["source_id"] = None
-        self.assertBlocked("SEGMENT_SOURCE_FIELDS_MISSING")
-
-    def test_narration_with_source_id_blocks(self):
-        self.lock["structure"]["segments"][0]["source_id"] = "S05"
-        self.assertBlocked("SEGMENT_SOURCE_FIELDS_UNEXPECTED")
-
-    def test_chapter_segment_mapping_mismatch_blocks(self):
-        self.lock["structure"]["chapters"][1]["segment_indices"] = [7]
-        self.assertBlocked("CHAPTER_SEGMENT_MAPPING_MISMATCH")
-
-    def test_chapter_count_mismatch_blocks(self):
-        self.lock["structure"]["chapter_count"] = 4
-        self.assertBlocked("CHAPTER_COUNT_MISMATCH")
-
-    # ---------------------------------------------- RISK-004 세그먼트 범위
-    def test_label_from_other_segment_blocks(self):
-        """`국민 통합`은 챕터 2에 실재한다. 전역 검사면 통과, 범위 검사면 차단."""
-        self.lock["labels"]["1"] = ["당 지배", "국민 통합"]
-        self.assertBlocked("SEGMENT_SCOPED_TEXT_MISMATCH")
-
-    def test_hook_from_other_segment_blocks(self):
-        self.lock["hooks"]["1"]["text"] = "정부는 국민 통합을 국정 과제로 제시했습니다."
-        self.lock["hooks"]["1"]["underline"] = "국민 통합"
-        self.assertBlocked("SEGMENT_SCOPED_TEXT_MISMATCH")
-
-    def test_unknown_segment_key_blocks(self):
-        self.lock["labels"]["99"] = ["당 지배"]
-        self.assertBlocked("UNKNOWN_SEGMENT_KEY")
-
-    def test_invented_label_blocks(self):
-        """`실패 조건`처럼 시안이 만든 말이 라벨로 올라오는 것을 막는다."""
-        self.lock["labels"]["1"] = ["당 지배", "실패 조건"]
-        self.assertBlocked("SEGMENT_SCOPED_TEXT_MISMATCH")
-
-    def test_underline_not_in_hook_blocks(self):
-        self.lock["hooks"]["1"]["underline"] = "존재하지 않는 어구"
-        self.assertBlocked("UNDERLINE_NOT_IN_HOOK")
-
-    # ---------------------------------------------- RISK-006 편집 승인
-    def test_missing_editorial_key_blocks(self):
-        del self.lock["editorial_decisions"]["quote_accuracy_approved"]
-        self.assertBlocked("EDITORIAL_DECISION_REQUIRED_MISSING")
-
-    def test_misspelled_editorial_key_blocks(self):
-        ed = self.lock["editorial_decisions"]
-        ed["source_media_verifed"] = ed.pop("source_media_verified")
-        self.assertBlocked("EDITORIAL_DECISION_REQUIRED_MISSING")
-
-    def test_false_editorial_decision_blocks(self):
-        self.lock["editorial_decisions"]["source_media_verified"] = False
-        self.assertBlocked("EDITORIAL_NOT_APPROVED")
-
-    # ---------------------------------------------- RISK-007 DEFER 우회
-    def test_deferred_blocking_tts_blocks_lock(self):
-        self.lock["ruling_summary"].update(
-            {"total_findings": 4, "approved_fix": 1, "rejected_no_change": 2,
-             "deferred": 1, "unresolved": 0,
-             "deferred_items": [{"id": "SCA-014", "reason": "인명 확인 필요",
-                                 "blocks": ["TTS"], "approved_by": "PROJECT_GPT",
-                                 "resolution_plan": "원본 대조"}]})
-        self.assertBlocked("DEFERRED_ITEM_BLOCKS_STAGE")
-
-    def test_deferred_without_blocks_field_blocks(self):
-        self.lock["ruling_summary"].update(
-            {"total_findings": 4, "approved_fix": 1, "rejected_no_change": 2,
-             "deferred": 1, "unresolved": 0,
-             "deferred_items": [{"id": "SCA-014", "reason": "x",
-                                 "approved_by": "PROJECT_GPT"}]})
-        self.assertBlocked("DEFERRED_ITEM_BLOCKS_MISSING")
-
-    def test_deferred_count_without_items_blocks(self):
-        self.lock["ruling_summary"].update(
-            {"total_findings": 4, "approved_fix": 1, "rejected_no_change": 2,
-             "deferred": 1, "unresolved": 0, "deferred_items": []})
-        self.assertBlocked("DEFERRED_ITEMS_MISSING")
-
-    # ---------------------------------------------- 인자
-    def test_missing_episode_arg_exits_2(self):
-        r = subprocess.run([sys.executable, str(GATE), "--stage", "tts"],
-                           capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", env={"PATH": ""}, timeout=120)
-        self.assertEqual(r.returncode, 2)
+    def test_missing_args_exit_2(self):
+        result = subprocess.run(
+            [sys.executable, str(GATE), "--stage", "tts"],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", env={"PATH": ""}, timeout=30)
+        self.assertEqual(result.returncode, 2)
 
 
 if __name__ == "__main__":

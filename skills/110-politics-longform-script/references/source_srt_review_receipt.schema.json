@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "source_srt_review_receipt.schema.json",
+  "title": "110 source SRT audio review receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "reviewed_by",
+    "reviewed_at",
+    "review_origin",
+    "recorded_by",
+    "audio_compared",
+    "registry_sha256",
+    "term_pack_sha256",
+    "episode_candidates_sha256",
+    "transcripts",
+    "decisions"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "source_srt_review_receipt_v1"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "review_origin": {
+      "const": "USER_AUDIO_REVIEW"
+    },
+    "recorded_by": {
+      "const": "PROJECT_GPT"
+    },
+    "audio_compared": {
+      "const": true
+    },
+    "registry_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "term_pack_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "episode_candidates_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "transcripts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "issue_id",
+          "action",
+          "rationale"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "action": {
+            "enum": [
+              "corrected",
+              "accepted",
+              "false_positive"
+            ]
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

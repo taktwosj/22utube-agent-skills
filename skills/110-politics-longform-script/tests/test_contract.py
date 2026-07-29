@@ -149,6 +149,13 @@ class TestBoundaryDeclarations(unittest.TestCase):
                         f"{path.name}:{line_no} [{section}] "
                         "금지 선언 밖 CapCut 언급")
 
+    def test_script_lock_episode_id_pattern_is_closed(self):
+        self.assertIsNotNone(
+            gsl.EPISODE_ID_RE.fullmatch("PL_20260729_test_episode"))
+        for bad in ("ep_test", "PL_test", "PL_20260729_Test", "../PL_20260729_x"):
+            with self.subTest(bad=bad):
+                self.assertIsNone(gsl.EPISODE_ID_RE.fullmatch(bad))
+
 
 class TestRetentionStoryEditorContract(unittest.TestCase):
     @classmethod
@@ -208,6 +215,18 @@ class TestRetentionStoryEditorContract(unittest.TestCase):
         self.assertIn("읽기 전용 검수자", self.skill_text)
         self.assertIn("지적서만 작성", self.skill_text)
         self.assertIn("대본을 수정하지 않는다", self.skill_text)
+
+    def test_claude_first_codex_cli_fallback_is_explicit(self):
+        required = (
+            "Claude CLI에서 `opus`, `effort low`",
+            "Claude 호출 자체가 실패했을 때만 Codex CLI",
+            "`REWORK_REQUIRED`는 정상 검수 결과",
+            "claude_call_failure_vN.json",
+            "review_origin: codex_cli_external",
+            "WAIT_REVIEW_UNAVAILABLE",
+        )
+        for phrase in required:
+            self.assertIn(phrase, self.skill_text)
 
     def test_s6_required_and_omission_conditions_are_explicit(self):
         self.assertIn("S6 필수 조건", self.skill_text)
@@ -276,6 +295,13 @@ class TestRetentionStoryEditorContract(unittest.TestCase):
         self.assertNotIn("packet_text_match", gsl.REQUIRED_CHECKS)
         self.assertIn("quote_fidelity = SOURCE_PACKET_TEXT_ONLY",
                       self.editor_text)
+
+    def test_forbidden_display_marks_are_enforced(self):
+        self.assertIn("forbidden_display_marks", gsl.REQUIRED_CHECKS)
+        self.assertIn("가운데점 `·`은 `수사·기소`처럼 의미를", self.skill_text)
+        self.assertNotIn("·", vd.FORBIDDEN_DISPLAY_MARKS)
+        self.assertEqual(vd.normalize(">> 실제 발화 << 다음 화자"),
+                         "실제 발화 다음 화자")
 
     def test_s2r_keeps_machine_draft_separate_from_review_notes(self):
         self.assertIn("`20_script/script_draft_v1.md`", self.editor_text)

@@ -45,7 +45,10 @@ user_role                     = INTERMEDIARY_AND_VISUAL_QC
 executor_editorial_authority  = NONE
 ```
 
-최종 자막 오류 판정은 **프로젝트 GPT가 한다.** 사용자는 중개자다.
+수집한 원본 영상 SRT의 의미·용어 최종 검수는 **110**에서 끝난다. 111은
+`PASS_110_SOURCE_SRT_REVIEWED`와 오디오 대조 receipt·SRT SHA를 검증할 뿐 원본 문구를 다시 판단하거나
+고치지 않는다. 111이 생성하는 나레이션/제작용 SRT의 대본 충실도·정렬·기계 QC
+판정은 **프로젝트 GPT가 한다.** 사용자는 중개자다.
 확정 교정본이 나오면 `PROJECT_GPT_CORRECTED_SRT_LOCK`이 최상위 권위이며
 자동자막·생성 자막·초벌 SRT·정렬 결과보다 우선한다.
 `PROJECT_GPT_CORRECTED_SRT_LOCK=PASS` 전에는 최종 자막을 만들지 않는다.
@@ -194,10 +197,15 @@ SOURCE_SPEECH_CAPTION_FIDELITY (v2):
 ```text
 20_script/script_lock.json 존재
 script_sha256 == 실제 master_script_locked.md 해시
-locked_inputs 7종의 상대경로 · SHA-256 일치
-audit_authority 가 CLAUDE 이거나, CODEX_SUBAGENT + review_override 증거가 유효
-structure · editorial_decisions · tts_params 가 gate_lock.py 를 통과
+110이 고정한 승인 대본 · source packet · 검증 보고서 · 독립 검수서 · 사용자 승인서
+5종의 상대경로 · SHA-256 일치
+authority.reviewer 가 현재 111 검수정책과 일치
+검수 사건 · 사용자 승인 사건 · 대본 SHA 결합이 gate_lock.py 를 통과
 ```
+
+기계 계약은 110과 111에 byte-identical하게 배포된
+[script_lock.schema.json](references/script_lock.schema.json) 하나다. `tts_params`,
+렌더 목표, 화면 라벨은 110 대본 잠금 필드가 아니다.
 
 하나라도 어긋나면 `WAIT_110_SCRIPT_LOCK`으로 멈추고 **110으로 돌려보낸다.**
 여기서 감사를 대신 수행하지 않는다. 대체 경로를 남기면 그게 우회로가 되고,
@@ -249,6 +257,13 @@ API 키는 `winreg` HKCU\Environment에서 읽고 **출력·로그·manifest에 
 전량 생성 전 짧은 샘플로 음색을 확정하고 프로젝트 GPT 판정을 받는다
 (`WAIT_PROJECT_GPT_VOICE_SELECTION`). 샘플 텍스트는 대본 원문 발췌 —
 인명·법률용어가 함께 들어간 구간을 고른다.
+
+승인 뒤 `30_audio_srt/tts_params_lock_v1.json`을 별도 불변 잠금으로 만든다.
+`schema=politics-longform-tts-params-lock.v1`, `status=TTS_PARAMS_LOCKED`,
+`authority=PROJECT_GPT`, 현재 `script_sha256`, `tts_params` 6개 필드를 기록한다.
+파일이 없으면 `WAIT_TTS_PARAMS_LOCK`; 대본 SHA나 권위가 다르면
+`TTS_PARAMS_INTEGRITY_FAIL`이다. 110의 `script_lock.json`을 수정해 TTS 값을
+끼워 넣지 않는다.
 
 실행: `scripts/gen_narration_full.py`
 세그먼트별 WAV + SHA-256 + `ffprobe` 실측 + 누적 오프셋 → `voice_manifest.json`.
@@ -327,6 +342,7 @@ audio_duration_sec >= video_duration_sec - 0.25
 30_audio_srt/source_speech_caption_v1.srt
 30_audio_srt/final_srt_draft_v1.srt
 30_audio_srt/subtitle_qc_package_v1.json
+30_audio_srt/tts_params_lock_v1.json
 30_audio_srt/production_input_v1.json     <- 112로 넘기는 단일 입력
 90_reports/srt_validation_report_v1.json
 90_reports/113_validation_report_v1.json

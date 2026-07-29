@@ -1,26 +1,14 @@
 #!/usr/bin/env python3
-"""대본 잠금 하드 게이트 v1.1.
+"""Validate the immutable script lock produced by 110.
 
-잠금이 유효하지 않으면 exit 1 로 하류를 막는다.
-산문 규칙은 지켜지지 않는다. 지난 에피소드에서 감사 게이트가 SKILL.md 안의
-문장이었고, 그대로 무시된 채 TTS가 실행돼 미판정 지적 11건이 합성 음성에 박혔다.
-
-v1.0 대비 보강 (리스크 리뷰 반영):
-    필수 locked_inputs 집합 강제        대본만 맞고 클립이 틀린 제작 차단
-    episode 상대경로 강제                에피소드 밖 파일 잠금 차단
-    ordered segments 무결성              순서가 뒤집힌 제작 차단
-    hook/label 세그먼트 범위 검사         다른 챕터 문구 차용 차단
-    editorial_decisions 필수 키 강제      키 오타로 검사 누락되는 것 차단
-    deferred blocks 검사                 중대 오류를 DEFER로 우회하는 것 차단
-    gates_passed 제거                     잠금 불변성과 모순되던 구조 폐기
-
-사용:
-    py -3.14 gate_lock.py --episode <에피소드 디렉터리> --stage tts
-    PL_EPISODE_DIR=<...> py -3.14 gate_lock.py --stage tts
-
-표준 라이브러리만 사용한다.
+111 does not re-audit script content. It verifies that the exact locked script and
+the evidence already approved in 110 are still present, byte-identical, and bound
+to the same review and user-approval events.
 """
+from __future__ import annotations
+
 import argparse
+import datetime
 import hashlib
 import json
 import os
@@ -30,17 +18,55 @@ from pathlib import Path, PurePosixPath
 
 SCHEMA_VERSION = "politics-longform-script-lock.v1"
 LOCK_RELPATH = Path("20_script") / "script_lock.json"
-
-REQUIRED_INPUTS = ("script", "source_map", "clip_manifest", "intake_manifest",
-                   "episode_lexicon", "machine_audit", "project_gpt_ruling")
-
-REQUIRED_EDITORIAL = ("chapter_order_approved", "source_media_verified",
-                      "clip_timecodes_verified", "hook_selection_approved",
-                      "lexicon_review_approved", "quote_accuracy_approved")
-
-STAGE_BLOCKER = {"tts": "TTS", "assembly": "ASSEMBLY"}
+LOCKED_SCRIPT_RELPATH = "20_script/master_script_locked.md"
+PRODUCER = "110-politics-longform-script"
+NEXT_STAGE = "111-politics-longform-voice-srt"
+STAGES = ("assembly", "tts")
 SHA_RE = re.compile(r"^[0-9a-f]{64}$")
-AUDIT_AUTHORITIES = ("CLAUDE", "CODEX_SUBAGENT")
+EPISODE_ID_RE = re.compile(r"^PL_[0-9]{8}_[a-z0-9_]+$")
+ALLOWED_REVIEWERS = ("CLAUDE", "CODEX_CLI")
+REQUIRED_EVIDENCE = (
+    "approved_script",
+    "source_packet",
+    "source_srt_review",
+    "verification_report",
+    "independent_review",
+    "user_approval",
+)
+REQUIRED_VERIFICATION_CHECKS = (
+    "source_reference", "quote_fidelity", "quote_mode_marks",
+    "forbidden_display_marks", "allegation_framing", "declared_counts",
+    "packet_binding", "narration_quotes", "skip_classification")
+REQUIRED_REVIEW_ZERO_FIELDS = (
+    "unresolved", "unresolved_high", "unresolved_quote_mismatch",
+    "deferred_tts", "deferred_assembly")
+REVIEW_ORIGIN_TO_AUTHORITY = {
+    "claude_external": "CLAUDE",
+    "codex_cli_external": "CODEX_CLI",
+}
+TOP_LEVEL_FIELDS = (
+    "schema", "episode_id", "status", "lock_version", "locked_at",
+    "produced_by", "script_sha256", "locked_script", "evidence",
+    "events", "authority", "next_stage",
+)
+
+VERDICT_RE = re.compile(r"(?m)^verdict:\s*(\S+)\s*$")
+REVIEW_SHA_RE = re.compile(
+    r"(?m)^script_sha256:\s*([0-9a-f]{64})\s*$")
+REVIEW_EVENT_RE = re.compile(
+    r"(?m)^claude_review_event_id:\s*(\S+)\s*$")
+REVIEW_ORIGIN_RE = re.compile(r"(?m)^review_origin:\s*(\S+)\s*$")
+RECORDED_BY_RE = re.compile(r"(?m)^recorded_by:\s*(\S+)\s*$")
+FALLBACK_REASON_RE = re.compile(r"(?m)^fallback_reason:\s*(\S+)\s*$")
+FAILURE_PATH_RE = re.compile(
+    r"(?m)^claude_failure_report_path:\s*(\S+)\s*$")
+FAILURE_SHA_RE = re.compile(
+    r"(?m)^claude_failure_report_sha256:\s*([0-9a-f]{64})\s*$")
+
+
+def _review_int(body, name):
+    match = re.search(rf"(?m)^{re.escape(name)}:\s*([0-9]+)\s*$", body)
+    return int(match.group(1)) if match else None
 
 
 def sha256_of(path):
@@ -51,18 +77,14 @@ def sha256_of(path):
     return h.hexdigest()
 
 
-def norm(text):
-    """공백만 접어 비교한다. 문자는 바꾸지 않는다."""
-    return " ".join(text.split())
-
-
 class Gate:
     def __init__(self, episode, stage):
         self.episode = Path(episode).resolve()
         self.stage = stage
         self.fails = []
         self.checks = 0
-        self.script_lines = []
+        self.lock = {}
+        self.paths = {}
 
     def fail(self, code, detail):
         self.fails.append((code, detail))
@@ -73,354 +95,433 @@ class Gate:
             self.fail(code, detail)
         return ok
 
-    # ------------------------------------------------------------------
     def run(self):
         lock_path = self.episode / LOCK_RELPATH
         if not lock_path.is_file():
             self.fail("LOCK_MISSING", str(lock_path))
             return
         try:
-            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            self.lock = json.loads(lock_path.read_text(encoding="utf-8"))
         except Exception as exc:
             self.fail("LOCK_UNPARSEABLE", f"{lock_path}: {exc}")
             return
+        if not isinstance(self.lock, dict):
+            self.fail("LOCK_ROOT_INVALID", "script_lock.json root is not object")
+            return
 
-        self.check(lock.get("schema_version") == SCHEMA_VERSION,
+        self._check_top_level()
+        self._check_authority()
+        self._check_events()
+        self._check_files()
+        self._check_evidence_bindings()
+
+    def _check_top_level(self):
+        lock = self.lock
+        self.check(set(lock) == set(TOP_LEVEL_FIELDS),
+                   "LOCK_FIELDS_INVALID",
+                   f"got={sorted(lock)} expected={sorted(TOP_LEVEL_FIELDS)}")
+        self.check(lock.get("schema") == SCHEMA_VERSION,
                    "SCHEMA_VERSION_MISMATCH",
-                   f"{lock.get('schema_version')!r} != {SCHEMA_VERSION!r}")
+                   f"{lock.get('schema')!r} != {SCHEMA_VERSION!r}")
+        self.check(lock.get("episode_id") == self.episode.name,
+                   "EPISODE_ID_MISMATCH",
+                   f"{lock.get('episode_id')!r} != {self.episode.name!r}")
+        self.check(bool(EPISODE_ID_RE.fullmatch(
+                       str(lock.get("episode_id", "")))),
+                   "EPISODE_ID_INVALID", repr(lock.get("episode_id")))
         self.check(lock.get("status") == "SCRIPT_LOCKED",
                    "STATUS_NOT_LOCKED", repr(lock.get("status")))
+        version = lock.get("lock_version")
+        self.check(isinstance(version, int) and not isinstance(version, bool)
+                   and version >= 1,
+                   "LOCK_VERSION_INVALID", repr(version))
+        self.check(self._valid_datetime(lock.get("locked_at")),
+                   "LOCKED_AT_INVALID", repr(lock.get("locked_at")))
+        self.check(lock.get("produced_by") == PRODUCER,
+                   "LOCK_PRODUCER_INVALID", repr(lock.get("produced_by")))
+        self.check(lock.get("next_stage") == NEXT_STAGE,
+                   "NEXT_STAGE_INVALID", repr(lock.get("next_stage")))
+        self.check(bool(SHA_RE.fullmatch(str(lock.get("script_sha256", "")))),
+                   "SCRIPT_SHA_MALFORMED", repr(lock.get("script_sha256")))
+        self.check(lock.get("locked_script") == LOCKED_SCRIPT_RELPATH,
+                   "LOCKED_SCRIPT_PATH_INVALID", repr(lock.get("locked_script")))
 
-        self._check_authority(lock)
-        self._check_inputs(lock)
-        self._check_ruling(lock)
-        self._check_deferred(lock)
-        self._check_editorial(lock)
-        self._check_segments(lock)
-        self._load_script(lock)
-        self._check_blueprint_scoped(lock)
-
-    def _check_authority(self, lock):
-        """기본 Claude 검수와 사용자 명시 Codex 대체 검수를 구분한다.
-
-        Codex 대체는 Claude 사용 금지 지시와 독립 검수 파일을 SHA로 함께
-        고정한 경우에만 허용한다. 단순히 audit_authority 문자열만 바꾸면
-        통과하지 않는다.
-        """
-        auth = lock.get("authority") or {}
-        self.check(auth.get("script_authority") == "PROJECT_GPT",
-                   "SCRIPT_AUTHORITY_INVALID",
-                   repr(auth.get("script_authority")))
-        self.check(auth.get("executor_editorial_authority") == "NONE",
-                   "EXECUTOR_EDITORIAL_AUTHORITY_INVALID",
-                   repr(auth.get("executor_editorial_authority")))
-
-        audit = auth.get("audit_authority")
-        self.check(audit in AUDIT_AUTHORITIES, "AUDIT_AUTHORITY_INVALID",
-                   f"{audit!r} not in {AUDIT_AUTHORITIES}")
-        override = auth.get("review_override")
-
-        if audit == "CLAUDE":
-            self.check(override in (None, {}), "REVIEW_OVERRIDE_UNEXPECTED",
-                       "CLAUDE 검수인데 review_override 가 있다")
-            return
-
-        if audit != "CODEX_SUBAGENT":
-            return
-        if not isinstance(override, dict):
-            self.fail("REVIEW_OVERRIDE_REQUIRED",
-                      "CODEX_SUBAGENT 검수에는 review_override 가 필요하다")
-            return
-
-        self.check(override.get("reason") == "USER_EXPLICITLY_PROHIBITED_CLAUDE",
-                   "REVIEW_OVERRIDE_REASON_INVALID",
-                   repr(override.get("reason")))
-        self.check(override.get("claude_status") in (
-                       "NOT_RUN_USER_PROHIBITED",
-                       "NOT_RUN_QUOTA_EXHAUSTED_AND_USER_PROHIBITED"),
-                   "REVIEW_OVERRIDE_CLAUDE_STATUS_INVALID",
-                   repr(override.get("claude_status")))
-        self.check(override.get("reviewer") == "CODEX_SUBAGENT",
-                   "REVIEW_OVERRIDE_REVIEWER_INVALID",
-                   repr(override.get("reviewer")))
-        self.check(override.get("executor") == "CODEX_ORCHESTRATOR",
-                   "REVIEW_OVERRIDE_EXECUTOR_INVALID",
-                   repr(override.get("executor")))
-
-        review_event = override.get("review_event_id")
-        user_event = override.get("user_event_id")
-        self.check(bool(review_event) and bool(user_event),
-                   "REVIEW_OVERRIDE_EVENT_MISSING",
-                   f"review={review_event!r} user={user_event!r}")
-        self.check(not review_event or not user_event or review_event != user_event,
-                   "REVIEW_OVERRIDE_EVENT_COLLISION",
-                   f"review_event_id == user_event_id == {review_event!r}")
-
-        for name in ("user_instruction", "independent_review"):
-            entry = override.get(name) or {}
-            rel, want = entry.get("path"), entry.get("sha256")
-            if not rel or not want:
-                self.fail("REVIEW_OVERRIDE_EVIDENCE_INCOMPLETE",
-                          f"{name}: path/sha256 누락")
-                continue
-            if not SHA_RE.match(str(want)):
-                self.fail("REVIEW_OVERRIDE_EVIDENCE_SHA_MALFORMED",
-                          f"{name}: {want!r}")
-                continue
-            path = self._safe_path(name, rel)
-            if path is None:
-                continue
-            if not path.is_file():
-                self.fail("REVIEW_OVERRIDE_EVIDENCE_MISSING",
-                          f"{name}: {path}")
-                continue
-            got = sha256_of(path)
-            self.check(got == want, "REVIEW_OVERRIDE_EVIDENCE_SHA_MISMATCH",
-                       f"{name}: {rel}\n        기대 {want}\n        실제 {got}")
-
-    # ------------------------------------------------------------------
-    def _safe_path(self, name, rel):
-        """episode 상대경로만 허용한다. 절대경로·상위탐색은 탈출한다."""
-        p = PurePosixPath(str(rel).replace("\\", "/"))
-        if p.is_absolute() or re.match(r"^[A-Za-z]:", str(rel)):
-            self.fail("LOCKED_INPUT_PATH_OUTSIDE_EPISODE", f"{name}: 절대경로 {rel!r}")
-            return None
-        if ".." in p.parts:
-            self.fail("LOCKED_INPUT_PATH_OUTSIDE_EPISODE", f"{name}: 상위탐색 {rel!r}")
-            return None
-        full = (self.episode / str(p)).resolve()
+    @staticmethod
+    def _valid_datetime(value):
+        if not isinstance(value, str) or not value:
+            return False
         try:
-            full.relative_to(self.episode)
+            parsed = datetime.datetime.fromisoformat(
+                value.replace("Z", "+00:00"))
+            return parsed.tzinfo is not None
         except ValueError:
-            self.fail("LOCKED_INPUT_PATH_OUTSIDE_EPISODE",
-                      f"{name}: episode 밖 {full}")
-            return None
-        return full
+            return False
 
-    def _check_inputs(self, lock):
-        inputs = lock.get("locked_inputs") or {}
-        for name in REQUIRED_INPUTS:
-            self.check(name in inputs, "LOCKED_INPUT_REQUIRED_MISSING",
-                       f"필수 입력 {name} 없음")
-        for name, entry in inputs.items():
-            rel = (entry or {}).get("path")
-            want = (entry or {}).get("sha256")
-            if not rel or not want:
-                self.fail("LOCKED_INPUT_INCOMPLETE", f"{name}: path/sha256 누락")
+    def _check_authority(self):
+        authority = self.lock.get("authority")
+        if not isinstance(authority, dict):
+            self.fail("AUTHORITY_INVALID", repr(authority))
+            return
+        self.check(set(authority) == {"drafter", "reviewer", "final_lock"},
+                   "AUTHORITY_FIELDS_INVALID", repr(sorted(authority)))
+        self.check(authority.get("drafter") == "PROJECT_GPT",
+                   "SCRIPT_AUTHORITY_INVALID", repr(authority.get("drafter")))
+        reviewer = authority.get("reviewer")
+        self.check(reviewer in ALLOWED_REVIEWERS,
+                   "AUDIT_AUTHORITY_INVALID", repr(reviewer))
+        self.check(authority.get("final_lock") == "USER",
+                   "FINAL_LOCK_AUTHORITY_INVALID",
+                   repr(authority.get("final_lock")))
+
+    def _check_events(self):
+        events = self.lock.get("events")
+        if not isinstance(events, dict):
+            self.fail("EVENTS_INVALID", repr(events))
+            return
+        expected = {"review_event_id", "claude_review_event_id",
+                    "user_approval_event_id"}
+        self.check(set(events) == expected, "EVENT_FIELDS_INVALID",
+                   repr(sorted(events)))
+        review = events.get("review_event_id")
+        legacy_review = events.get("claude_review_event_id")
+        user = events.get("user_approval_event_id")
+        self.check(isinstance(review, str) and bool(review),
+                   "REVIEW_EVENT_MISSING", repr(review))
+        self.check(legacy_review == review,
+                   "REVIEW_EVENT_MISMATCH",
+                   f"{legacy_review!r} != {review!r}")
+        self.check(isinstance(user, str) and bool(user),
+                   "USER_APPROVAL_EVENT_MISSING", repr(user))
+        if review and user:
+            self.check(review != user, "SELF_APPROVAL_EVENT_REUSED",
+                       f"review_event_id == user_approval_event_id == {review!r}")
+
+    def _safe_path(self, name, rel):
+        if not isinstance(rel, str) or not rel:
+            self.fail("EVIDENCE_PATH_INVALID", f"{name}: {rel!r}")
+            return None
+        normalized = rel.replace("\\", "/")
+        pure = PurePosixPath(normalized)
+        if pure.is_absolute() or ".." in pure.parts or re.match(
+                r"^[A-Za-z]:", normalized):
+            self.fail("EVIDENCE_PATH_OUTSIDE_EPISODE", f"{name}: {rel}")
+            return None
+        target = (self.episode / Path(*pure.parts)).resolve()
+        if target != self.episode and self.episode not in target.parents:
+            self.fail("EVIDENCE_PATH_OUTSIDE_EPISODE", f"{name}: {rel}")
+            return None
+        return target
+
+    def _check_files(self):
+        script_path = self._safe_path(
+            "locked_script", self.lock.get("locked_script"))
+        if script_path is not None:
+            self.paths["locked_script"] = script_path
+            if not script_path.is_file():
+                self.fail("LOCKED_SCRIPT_MISSING", str(script_path))
+            elif sha256_of(script_path) != self.lock.get("script_sha256"):
+                self.fail("SCRIPT_SHA_MISMATCH", str(script_path))
+
+        evidence = self.lock.get("evidence")
+        if not isinstance(evidence, dict):
+            self.fail("EVIDENCE_INVALID", repr(evidence))
+            return
+        self.check(set(evidence) == set(REQUIRED_EVIDENCE),
+                   "EVIDENCE_FIELDS_INVALID", repr(sorted(evidence)))
+        for name in REQUIRED_EVIDENCE:
+            entry = evidence.get(name)
+            if not isinstance(entry, dict):
+                self.fail("EVIDENCE_REQUIRED_MISSING", name)
                 continue
-            if not SHA_RE.match(str(want)):
-                self.fail("LOCKED_INPUT_SHA_MALFORMED", f"{name}: {want!r}")
-                continue
+            self.check(set(entry) == {"path", "sha256"},
+                       "EVIDENCE_ENTRY_FIELDS_INVALID",
+                       f"{name}: {sorted(entry)}")
+            rel = entry.get("path")
+            wanted_sha = entry.get("sha256")
+            if not SHA_RE.fullmatch(str(wanted_sha or "")):
+                self.fail("EVIDENCE_SHA_MALFORMED",
+                          f"{name}: {wanted_sha!r}")
             path = self._safe_path(name, rel)
             if path is None:
                 continue
+            self.paths[name] = path
             if not path.is_file():
-                self.fail("LOCKED_INPUT_MISSING", f"{name}: {path}")
-                continue
-            got = sha256_of(path)
-            self.check(got == want, "LOCKED_INPUT_SHA_MISMATCH",
-                       f"{name}: {rel}\n        기대 {want}\n        실제 {got}")
+                self.fail("EVIDENCE_FILE_MISSING", f"{name}: {path}")
+            elif SHA_RE.fullmatch(str(wanted_sha or "")):
+                actual = sha256_of(path)
+                if actual != wanted_sha:
+                    self.fail("EVIDENCE_SHA_MISMATCH",
+                              f"{name}: {actual} != {wanted_sha}")
 
-    def _check_ruling(self, lock):
-        r = lock.get("ruling_summary") or {}
-        for key in ("unresolved", "unresolved_high", "unresolved_quote_mismatch"):
-            self.check(r.get(key) == 0, "RULING_UNRESOLVED",
-                       f"{key} = {r.get(key)!r} (0 이어야 한다)")
-        total = r.get("total_findings")
-        parts = [r.get(k) for k in
-                 ("approved_fix", "rejected_no_change", "deferred", "unresolved")]
-        if total is not None and all(isinstance(p, int) for p in parts):
-            self.check(sum(parts) == total, "RULING_COUNT_INCONSISTENT",
-                       f"합 {sum(parts)} != total_findings {total}")
+        approved = self.paths.get("approved_script")
+        locked = self.paths.get("locked_script")
+        if approved and approved.is_file():
+            self.check(sha256_of(approved) == self.lock.get("script_sha256"),
+                       "APPROVED_SCRIPT_SHA_MISMATCH", str(approved))
+        if approved and locked and approved.is_file() and locked.is_file():
+            self.check(approved.read_bytes() == locked.read_bytes(),
+                       "LOCKED_SCRIPT_NOT_BYTE_IDENTICAL",
+                       f"{approved} != {locked}")
 
-    def _check_deferred(self, lock):
-        """중대 오류를 DEFER 로 돌려 잠금을 통과하는 우회를 막는다."""
-        r = lock.get("ruling_summary") or {}
-        items = r.get("deferred_items")
-        declared = r.get("deferred")
-        if isinstance(declared, int) and declared > 0 and not items:
-            self.fail("DEFERRED_ITEMS_MISSING",
-                      f"deferred={declared} 인데 deferred_items 가 없다")
-            return
-        for it in (items or []):
-            ident = (it or {}).get("id", "?")
-            if "blocks" not in (it or {}):
-                self.fail("DEFERRED_ITEM_BLOCKS_MISSING",
-                          f"{ident}: blocks 필드 없음 (미기입 우회 방지)")
-                continue
-            blocks = it.get("blocks") or []
-            self.check(STAGE_BLOCKER[self.stage] not in blocks,
-                       "DEFERRED_ITEM_BLOCKS_STAGE",
-                       f"{ident}: blocks={blocks} (stage={self.stage})")
-            for field in ("reason", "approved_by"):
-                self.check(bool(it.get(field)), "DEFERRED_ITEM_INCOMPLETE",
-                           f"{ident}: {field} 누락")
-
-    def _check_editorial(self, lock):
-        ed = lock.get("editorial_decisions") or {}
-        for key in REQUIRED_EDITORIAL:
-            if key not in ed:
-                self.fail("EDITORIAL_DECISION_REQUIRED_MISSING",
-                          f"필수 키 {key} 없음 (오타 확인)")
-                continue
-            self.check(ed[key] is True, "EDITORIAL_NOT_APPROVED",
-                       f"{key} = {ed[key]!r}")
-        self.check(ed.get("lexicon_conflicts") == 0, "LEXICON_CONFLICT",
-                   f"lexicon_conflicts = {ed.get('lexicon_conflicts')!r}")
-
-    # ------------------------------------------------------------------
-    def _check_segments(self, lock):
-        st = lock.get("structure") or {}
-        chapters = st.get("chapters") or []
-        segs = st.get("segments")
-
-        self.check(st.get("chapter_count") == len(chapters),
-                   "CHAPTER_COUNT_MISMATCH",
-                   f"chapter_count={st.get('chapter_count')} vs {len(chapters)}")
-
-        if not segs:
-            self.fail("SEGMENT_ORDER_INTEGRITY_FAIL",
-                      "structure.segments 가 없다 (순서 계약 누락)")
-            return
-
-        idxs = [s.get("index") for s in segs]
-        self.check(idxs == list(range(1, len(segs) + 1)),
-                   "SEGMENT_ORDER_INTEGRITY_FAIL",
-                   f"index 가 1..{len(segs)} 연속이 아니다: {idxs[:12]}")
-
-        ids = [s.get("segment_id") for s in segs]
-        dupes = {x for x in ids if ids.count(x) > 1}
-        self.check(not dupes, "SEGMENT_ORDER_INTEGRITY_FAIL",
-                   f"segment_id 중복 {sorted(dupes)}")
-
-        self.check(st.get("logical_segment_count") == len(segs),
-                   "SEGMENT_ORDER_INTEGRITY_FAIL",
-                   f"logical_segment_count={st.get('logical_segment_count')} "
-                   f"vs segments={len(segs)}")
-
-        n_nar = sum(1 for s in segs if s.get("kind") == "NARRATION")
-        n_src = sum(1 for s in segs if s.get("kind") == "SOURCE_VIDEO")
-        self.check(st.get("narration_block_count") == n_nar,
-                   "SEGMENT_KIND_COUNT_MISMATCH",
-                   f"narration {st.get('narration_block_count')} vs {n_nar}")
-        self.check(st.get("source_clip_count") == n_src,
-                   "SEGMENT_KIND_COUNT_MISMATCH",
-                   f"source_clip {st.get('source_clip_count')} vs {n_src}")
-
-        for s in segs:
-            sid = s.get("segment_id", "?")
-            kind = s.get("kind")
-            if kind == "SOURCE_VIDEO":
-                self.check(bool(s.get("source_id")) and bool(s.get("source_timecode")),
-                           "SEGMENT_SOURCE_FIELDS_MISSING",
-                           f"{sid}: SOURCE_VIDEO 인데 source_id/timecode 누락")
-            elif kind == "NARRATION":
-                self.check(s.get("source_id") is None and
-                           s.get("source_timecode") is None,
-                           "SEGMENT_SOURCE_FIELDS_UNEXPECTED",
-                           f"{sid}: NARRATION 인데 source 필드가 있다")
-            else:
-                self.fail("SEGMENT_KIND_UNKNOWN", f"{sid}: kind={kind!r}")
-
-        mapped = set()
-        for ch in chapters:
-            mapped |= set(ch.get("segment_indices") or [])
-        self.check(mapped == set(idxs), "CHAPTER_SEGMENT_MAPPING_MISMATCH",
-                   f"챕터 매핑 {sorted(mapped)[:12]} != 세그먼트 {idxs[:12]}")
-
-    # ------------------------------------------------------------------
-    def _load_script(self, lock):
-        entry = (lock.get("locked_inputs") or {}).get("script") or {}
-        rel = entry.get("path")
-        if not rel:
-            return
-        path = self._safe_path("script", rel)
+    def _load_json(self, name):
+        path = self.paths.get(name)
         if path is None or not path.is_file():
+            return None
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            self.fail("EVIDENCE_JSON_INVALID", f"{name}: {exc}")
+            return None
+        if not isinstance(value, dict):
+            self.fail("EVIDENCE_JSON_INVALID", f"{name}: root is not object")
+            return None
+        return value
+
+    def _check_evidence_bindings(self):
+        approval = self._load_json("user_approval")
+        report = self._load_json("verification_report")
+        source_review = self._load_json("source_srt_review")
+        review_path = self.paths.get("independent_review")
+        if approval is not None:
+            self._check_approval(approval)
+        if report is not None:
+            self._check_report(report)
+        if source_review is not None:
+            self._check_source_review(source_review)
+        if review_path is not None and review_path.is_file():
+            self._check_review(review_path.read_text(encoding="utf-8"))
+
+    def _check_approval(self, approval):
+        evidence = self.lock.get("evidence") or {}
+        events = self.lock.get("events") or {}
+        self.check(approval.get("approved") is True,
+                   "APPROVAL_NOT_APPROVED", repr(approval.get("approved")))
+        self.check(approval.get("user_approval_origin") == "user_message",
+                   "SELF_APPROVAL_INVALID",
+                   repr(approval.get("user_approval_origin")))
+        self.check(approval.get("approved_script_sha256")
+                   == self.lock.get("script_sha256"),
+                   "APPROVAL_SCRIPT_SHA_MISMATCH",
+                   repr(approval.get("approved_script_sha256")))
+        bindings = (
+            ("approved_script", "approved_script_path",
+             "approved_script_sha256"),
+            ("verification_report", "verification_report_path",
+             "verification_report_sha256"),
+            ("independent_review", "claude_review_path",
+             "claude_review_sha256"),
+        )
+        for name, path_key, sha_key in bindings:
+            entry = evidence.get(name) or {}
+            self.check(approval.get(path_key) == entry.get("path"),
+                       "APPROVAL_EVIDENCE_PATH_MISMATCH",
+                       f"{path_key}: {approval.get(path_key)!r} != "
+                       f"{entry.get('path')!r}")
+            self.check(approval.get(sha_key) == entry.get("sha256"),
+                       "APPROVAL_EVIDENCE_SHA_MISMATCH",
+                       f"{sha_key}: {approval.get(sha_key)!r} != "
+                       f"{entry.get('sha256')!r}")
+        self.check(approval.get("claude_review_event_id")
+                   == events.get("review_event_id"),
+                   "APPROVAL_REVIEW_EVENT_MISMATCH",
+                   repr(approval.get("claude_review_event_id")))
+        self.check(approval.get("user_approval_event_id")
+                   == events.get("user_approval_event_id"),
+                   "APPROVAL_USER_EVENT_MISMATCH",
+                   repr(approval.get("user_approval_event_id")))
+
+    def _check_report(self, report):
+        evidence = self.lock.get("evidence") or {}
+        total = report.get("total_violations")
+        self.check(report.get("schema")
+                   == "politics-longform-draft-verification.v1",
+                   "VERIFICATION_SCHEMA_INVALID", repr(report.get("schema")))
+        self.check(isinstance(total, int) and not isinstance(total, bool)
+                   and total == 0,
+                   "VERIFICATION_NOT_PASS", repr(total))
+        self.check(report.get("script_sha256")
+                   == self.lock.get("script_sha256"),
+                   "VERIFICATION_SCRIPT_SHA_MISMATCH",
+                   repr(report.get("script_sha256")))
+        packet_sha = (evidence.get("source_packet") or {}).get("sha256")
+        self.check(report.get("source_packet_sha256_actual") == packet_sha,
+                   "VERIFICATION_SOURCE_PACKET_SHA_MISMATCH",
+                   repr(report.get("source_packet_sha256_actual")))
+        checks = report.get("checks")
+        self.check(isinstance(checks, dict),
+                   "VERIFICATION_CHECKS_INVALID", repr(checks))
+        if not isinstance(checks, dict):
             return
-        self.script_lines = path.read_text(encoding="utf-8").splitlines()
-
-    def _segment_text(self, lock, seg_key):
-        """세그먼트의 script_line_range 안 본문만 돌려준다."""
-        segs = (lock.get("structure") or {}).get("segments") or []
-        for s in segs:
-            if str(s.get("index")) == str(seg_key):
-                rng = s.get("script_line_range") or []
-                if len(rng) != 2:
-                    return None
-                a, b = int(rng[0]), int(rng[1])
-                return norm("\n".join(self.script_lines[max(0, a - 1):b]))
-        return None
-
-    def _check_blueprint_scoped(self, lock):
-        """hook/label 이 **그 세그먼트 범위 안에** 있는지 본다.
-
-        대본 전체에 존재하는지만 보면, 챕터 4의 문구를 챕터 1 화면에 써도
-        통과한다. 문구는 실재하지만 화면이 틀린다.
-        """
-        if not self.script_lines:
-            return
-
-        for seg, hook in (lock.get("hooks") or {}).items():
-            body = self._segment_text(lock, seg)
-            if body is None:
-                self.fail("UNKNOWN_SEGMENT_KEY", f"hooks.{seg}: 없는 세그먼트")
+        self.check(set(checks) == set(REQUIRED_VERIFICATION_CHECKS),
+                   "VERIFICATION_CHECK_SET_INVALID",
+                   f"got={sorted(checks)} expected={sorted(REQUIRED_VERIFICATION_CHECKS)}")
+        counted = 0
+        for name, check in checks.items():
+            if not isinstance(check, dict):
+                self.fail("VERIFICATION_CHECK_INVALID", f"{name}: not object")
                 continue
-            text = (hook or {}).get("text")
-            under = (hook or {}).get("underline")
-            if text:
-                self.check(norm(text) in body, "SEGMENT_SCOPED_TEXT_MISMATCH",
-                           f"hooks.{seg}: 세그먼트 범위 밖 문구 {text[:36]!r}")
-            if text and under:
-                self.check(under in text, "UNDERLINE_NOT_IN_HOOK",
-                           f"hooks.{seg}: {under!r}")
+            violations = check.get("violations")
+            count = check.get("count")
+            self.check(isinstance(violations, list),
+                       "VERIFICATION_VIOLATIONS_INVALID", name)
+            valid_count = (isinstance(count, int)
+                           and not isinstance(count, bool) and count >= 0)
+            self.check(valid_count, "VERIFICATION_COUNT_INVALID",
+                       f"{name}: {count!r}")
+            if valid_count:
+                counted += count
+                if isinstance(violations, list):
+                    self.check(count == len(violations),
+                               "VERIFICATION_COUNT_MISMATCH", name)
+                self.check(count == 0, "VERIFICATION_CHECK_NOT_PASS",
+                           f"{name}: {count}")
+        if isinstance(total, int) and not isinstance(total, bool):
+            self.check(counted == total, "VERIFICATION_TOTAL_MISMATCH",
+                       f"{counted} != {total}")
 
-        for seg, labels in (lock.get("labels") or {}).items():
-            if seg.startswith("_") or not isinstance(labels, list):
-                continue
-            body = self._segment_text(lock, seg)
-            if body is None:
-                self.fail("UNKNOWN_SEGMENT_KEY", f"labels.{seg}: 없는 세그먼트")
-                continue
-            for label in labels:
-                self.check(norm(label) in body, "SEGMENT_SCOPED_TEXT_MISMATCH",
-                           f"labels.{seg}: 세그먼트 범위 밖 라벨 {label!r}")
+    def _check_source_review(self, report):
+        self.check(report.get("schema_version")
+                   == "source_srt_quality_report_v1",
+                   "SOURCE_SRT_REVIEW_SCHEMA_INVALID",
+                   repr(report.get("schema_version")))
+        self.check(report.get("episode_id") == self.episode.name,
+                   "SOURCE_SRT_REVIEW_EPISODE_MISMATCH",
+                   repr(report.get("episode_id")))
+        self.check(report.get("status") == "PASS_110_SOURCE_SRT_REVIEWED",
+                   "SOURCE_SRT_REVIEW_NOT_PASS", repr(report.get("status")))
+        transcripts = report.get("transcripts")
+        valid_transcripts = (
+            isinstance(transcripts, dict) and bool(transcripts)
+            and all(SHA_RE.fullmatch(str(value or ""))
+                    for value in transcripts.values()))
+        self.check(valid_transcripts, "SOURCE_SRT_REVIEW_TRANSCRIPTS_INVALID",
+                   repr(transcripts))
+        receipt = report.get("review_receipt")
+        valid_receipt = isinstance(receipt, dict) and receipt.get("errors") == []
+        self.check(valid_receipt, "SOURCE_SRT_REVIEW_RECEIPT_NOT_PASS",
+                   repr(receipt))
+        if not isinstance(receipt, dict):
+            receipt = {}
+        receipt_sha = receipt.get("sha256")
+        self.check(bool(SHA_RE.fullmatch(str(receipt_sha or ""))),
+                   "SOURCE_SRT_REVIEW_RECEIPT_SHA_INVALID", repr(receipt_sha))
+        receipt_path = self._safe_path(
+            "source_srt_review_receipt", receipt.get("path"))
+        if receipt_path is not None:
+            self.check(receipt_path.is_file(),
+                       "SOURCE_SRT_REVIEW_RECEIPT_MISSING", str(receipt_path))
+            if (receipt_path.is_file()
+                    and SHA_RE.fullmatch(str(receipt_sha or ""))):
+                self.check(sha256_of(receipt_path) == receipt_sha,
+                           "SOURCE_SRT_REVIEW_RECEIPT_SHA_MISMATCH",
+                           str(receipt_path))
+        packet = self._load_json("source_packet")
+        if packet is not None:
+            binding = packet.get("source_srt_review") or {}
+            evidence = (self.lock.get("evidence") or {}).get(
+                "source_srt_review") or {}
+            self.check(binding.get("sha256") == evidence.get("sha256"),
+                       "SOURCE_SRT_REVIEW_BINDING_MISMATCH", repr(binding))
+            self.check(binding.get("status") == report.get("status"),
+                       "SOURCE_SRT_REVIEW_STATUS_BINDING_MISMATCH",
+                       repr(binding))
+            self.check(binding.get("review_receipt_sha256") == receipt_sha,
+                       "SOURCE_SRT_REVIEW_RECEIPT_BINDING_MISMATCH",
+                       repr(binding))
+
+    def _check_review(self, body):
+        events = self.lock.get("events") or {}
+        verdict = VERDICT_RE.search(body)
+        script_sha = REVIEW_SHA_RE.search(body)
+        event = REVIEW_EVENT_RE.search(body)
+        origin = REVIEW_ORIGIN_RE.search(body)
+        recorder = RECORDED_BY_RE.search(body)
+        self.check(bool(verdict and verdict.group(1) == "APPROVED"),
+                   "REVIEW_NOT_APPROVED",
+                   verdict.group(1) if verdict else "missing")
+        self.check(bool(script_sha and script_sha.group(1)
+                        == self.lock.get("script_sha256")),
+                   "REVIEW_SCRIPT_SHA_MISMATCH",
+                   script_sha.group(1) if script_sha else "missing")
+        self.check(bool(event and event.group(1)
+                        == events.get("review_event_id")),
+                   "REVIEW_EVENT_MISMATCH",
+                   event.group(1) if event else "missing")
+        expected_reviewer = (self.lock.get("authority") or {}).get("reviewer")
+        self.check(bool(origin and REVIEW_ORIGIN_TO_AUTHORITY.get(
+                        origin.group(1)) == expected_reviewer),
+                   "REVIEW_ORIGIN_MISMATCH",
+                   origin.group(1) if origin else "missing")
+        self.check(bool(recorder), "REVIEW_RECORDER_MISSING", "recorded_by")
+        approval = self._load_json("user_approval") or {}
+        if recorder:
+            self.check(recorder.group(1) != approval.get("executor"),
+                       "SELF_REVIEW_INVALID",
+                       f"recorded_by={recorder.group(1)!r}")
+        if origin and origin.group(1) == "codex_cli_external":
+            reason = FALLBACK_REASON_RE.search(body)
+            failure_path = FAILURE_PATH_RE.search(body)
+            failure_sha = FAILURE_SHA_RE.search(body)
+            self.check(bool(reason and reason.group(1) == "CLAUDE_CALL_FAILURE"),
+                       "REVIEW_FALLBACK_POLICY_INVALID", "fallback_reason")
+            self.check(bool(failure_path and failure_sha),
+                       "REVIEW_FALLBACK_EVIDENCE_MISSING", "Claude failure")
+            if failure_path and failure_sha:
+                target = self._safe_path(
+                    "claude_failure_report", failure_path.group(1))
+                if target is not None:
+                    valid = (target.is_file()
+                             and sha256_of(target) == failure_sha.group(1))
+                    self.check(valid, "REVIEW_FALLBACK_EVIDENCE_MISMATCH",
+                               str(target))
+                    if valid:
+                        try:
+                            failure = json.loads(target.read_text(encoding="utf-8"))
+                        except Exception as exc:
+                            self.fail("REVIEW_FALLBACK_EVIDENCE_INVALID", str(exc))
+                        else:
+                            self.check(
+                                failure.get("schema")
+                                == "politics-longform-review-fallback.v1"
+                                and failure.get("status") == "CLAUDE_CALL_FAILED"
+                                and failure.get("script_sha256")
+                                == self.lock.get("script_sha256"),
+                                "REVIEW_FALLBACK_EVIDENCE_INVALID",
+                                repr(failure))
+        for field in REQUIRED_REVIEW_ZERO_FIELDS:
+            value = _review_int(body, field)
+            self.check(value == 0, "REVIEW_UNRESOLVED_OR_DEFERRED",
+                       f"{field}={value!r}")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="대본 잠금 하드 게이트")
+    ap = argparse.ArgumentParser(description="110 script lock hard gate")
     ap.add_argument("--episode", default=os.environ.get("PL_EPISODE_DIR"),
-                    help="에피소드 디렉터리 (또는 PL_EPISODE_DIR)")
-    # required=True 로 두면 argparse 가 --stage 만 보고 먼저 죽어서
-    # 에피소드 경로를 어디서 주는지(PL_EPISODE_DIR)를 알려주지 못한다.
-    ap.add_argument("--stage", choices=sorted(STAGE_BLOCKER),
-                    help="검사할 하류 단계")
-    ap.add_argument("--json", action="store_true", help="기계 판독용 출력")
+                    help="episode directory (or PL_EPISODE_DIR)")
+    ap.add_argument("--stage", choices=STAGES, help="downstream stage")
+    ap.add_argument("--json", action="store_true", help="machine output")
     args = ap.parse_args()
 
     if not args.stage or not args.episode:
-        print("BLOCKED: 인자가 부족하다\n"
-              f"  --stage    {' | '.join(sorted(STAGE_BLOCKER))}\n"
-              "  --episode  에피소드 디렉터리 (환경변수 PL_EPISODE_DIR 도 가능)",
+        print("BLOCKED: --stage and --episode/PL_EPISODE_DIR are required",
               file=sys.stderr)
         return 2
 
     gate = Gate(args.episode, args.stage)
     gate.run()
-
     if args.json:
         print(json.dumps(
             {"stage": args.stage, "episode": str(args.episode),
              "checks": gate.checks, "passed": not gate.fails,
-             "failures": [{"code": c, "detail": d} for c, d in gate.fails]},
+             "failures": [{"code": code, "detail": detail}
+                          for code, detail in gate.fails]},
             ensure_ascii=False, indent=1))
+    elif gate.fails:
+        print(f"BLOCKED stage={args.stage} failures={len(gate.fails)}")
+        for code, detail in gate.fails:
+            print(f"  {code}\n        {detail}")
     else:
-        if gate.fails:
-            print(f"BLOCKED  stage={args.stage}  실패 {len(gate.fails)}건")
-            for code, detail in gate.fails:
-                print(f"  {code}\n        {detail}")
-        else:
-            print(f"PASS  stage={args.stage}  검사 {gate.checks}항목 통과")
-
+        print(f"PASS stage={args.stage} checks={gate.checks}")
     return 1 if gate.fails else 0
 
 
