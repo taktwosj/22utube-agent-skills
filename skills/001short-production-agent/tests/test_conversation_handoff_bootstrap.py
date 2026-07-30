@@ -37,6 +37,7 @@ class SessionHandoffBootstrapTest(unittest.TestCase):
         tools = json.loads((SKILL / "tools.json").read_text(encoding="utf-8"))
 
         self.assertIn("## New Session Handoff Bootstrap", skill_text)
+        self.assertIn("new-session 001 conversation handoff JSON", skill_text)
         self.assertIn("$HOME/.hermes/.env", skill_text)
         self.assertIn("scripts/validate_conversation_handoff.py", skill_text)
         self.assertEqual(protocol["schemas"]["session_handoff"], "schemas/conversation_handoff.schema.json")

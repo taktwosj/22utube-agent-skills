@@ -1,6 +1,6 @@
 ---
 name: 001short-production-agent
-description: Use when an original Shorts video, user review, and Gemini analysis must become an OCR-verified original blueprint, first recommendation, VMake-clean CapCut assembly, and evidence-backed production validation.
+description: Use for original-shorts production, or when a new-session 001 conversation handoff JSON must load env safely and resume the same lane.
 ---
 
 # 001short Compact Production
