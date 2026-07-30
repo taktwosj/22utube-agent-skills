@@ -18,6 +18,16 @@
     "self_check_required": true,
     "conflict_error": "STOP_PROTOCOL_CONFLICT"
   },
+  "session_bootstrap": {
+    "trigger": "new_session_with_001_conversation_handoff_json",
+    "env_file": "$HOME/.hermes/.env",
+    "env_load": "SOURCE_ONCE_WITHOUT_OUTPUT",
+    "schema": "schemas/conversation_handoff.schema.json",
+    "validator": "scripts/validate_conversation_handoff.py",
+    "safe_summary_only": true,
+    "resume_requires_episode_id_and_explicit_request": true,
+    "old_episode_access_without_resume": "FORBIDDEN"
+  },
   "runtime": {
     "state_path": "{episode_root}/90_workflow/state.json",
     "state_required": [

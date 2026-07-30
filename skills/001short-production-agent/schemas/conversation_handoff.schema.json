@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-session-handoff-v1.json",
+  "title": "001short New Session Handoff",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "owner_skill",
+    "lane",
+    "resume_requested",
+    "episode_id",
+    "request_scope",
+    "next_action"
+  ],
+  "properties": {
+    "schema_version": {"const": "001short-session-handoff-v1"},
+    "owner_skill": {"const": "001short-production-agent"},
+    "lane": {"const": "general_shorts_production"},
+    "resume_requested": {"type": "boolean"},
+    "episode_id": {
+      "anyOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "null"}
+      ]
+    },
+    "request_scope": {"type": "string", "minLength": 1},
+    "next_action": {"type": "string", "minLength": 1},
+    "current_state": {"type": "string"},
+    "input_paths": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "messages": {
+      "type": "array",
+      "items": {"type": "object"}
+    }
+  },
+  "additionalProperties": true
+}

@@ -14,6 +14,15 @@
     "pass": "PASS",
     "fail": "STOP_PROTOCOL_GATE"
   },
+  "session_handoff": {
+    "schema": "schemas/conversation_handoff.schema.json",
+    "validator": "scripts/validate_conversation_handoff.py",
+    "template": "templates/conversation-handoff.json",
+    "env_file": "$HOME/.hermes/.env",
+    "env_load": "SOURCE_ONCE_WITHOUT_OUTPUT",
+    "pass": "PASS",
+    "fail": "HANDOFF_INVALID"
+  },
   "analysis_tools": {
     "authority": "source.mp4",
     "inputs": ["user_brief_review", "gemini_analysis"],

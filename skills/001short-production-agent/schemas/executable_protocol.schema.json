@@ -9,6 +9,7 @@
     "lane",
     "authority",
     "schemas",
+    "session_handoff",
     "production_modes",
     "urakkai_review_loop",
     "invariants",
@@ -32,7 +33,8 @@
       "required": [
         "protocol",
         "production_plan",
-        "completion_report"
+        "completion_report",
+        "session_handoff"
       ],
       "properties": {
         "protocol": {
@@ -43,7 +45,40 @@
         },
         "completion_report": {
           "const": "schemas/completion_report.schema.json"
+        },
+        "session_handoff": {
+          "const": "schemas/conversation_handoff.schema.json"
         }
+      },
+      "additionalProperties": false
+    },
+    "session_handoff": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "owner_skill",
+        "lane",
+        "schema",
+        "validator",
+        "template",
+        "env_file",
+        "env_load",
+        "resume_requires_episode_id_and_explicit_request",
+        "old_episode_access_without_resume",
+        "secret_material"
+      ],
+      "properties": {
+        "schema_version": {"const": "001short-session-handoff-v1"},
+        "owner_skill": {"const": "001short-production-agent"},
+        "lane": {"const": "general_shorts_production"},
+        "schema": {"const": "schemas/conversation_handoff.schema.json"},
+        "validator": {"const": "scripts/validate_conversation_handoff.py"},
+        "template": {"const": "templates/conversation-handoff.json"},
+        "env_file": {"const": "$HOME/.hermes/.env"},
+        "env_load": {"const": "SOURCE_ONCE_WITHOUT_OUTPUT"},
+        "resume_requires_episode_id_and_explicit_request": {"const": true},
+        "old_episode_access_without_resume": {"const": "FORBIDDEN"},
+        "secret_material": {"const": "FORBIDDEN"}
       },
       "additionalProperties": false
     },
@@ -178,6 +213,9 @@
       "type": "object",
       "required": [
         "single_active_lane",
+        "session_handoff_secret_material_forbidden",
+        "session_handoff_owner_must_remain_001",
+        "old_episode_access_requires_explicit_resume",
         "state_advance_after_validator_pass_only",
         "vmake_dom_first",
         "vmake_full_download_required",
@@ -200,6 +238,15 @@
         "capcut_visual_confirmation_required_before_completion"
       ],
       "properties": {
+        "session_handoff_secret_material_forbidden": {
+          "const": true
+        },
+        "session_handoff_owner_must_remain_001": {
+          "const": true
+        },
+        "old_episode_access_requires_explicit_resume": {
+          "const": true
+        },
         "vmake_full_download_required": {
           "const": true
         },

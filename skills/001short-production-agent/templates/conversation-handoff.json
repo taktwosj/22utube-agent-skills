@@ -1,0 +1,11 @@
+{
+  "schema_version": "001short-session-handoff-v1",
+  "owner_skill": "001short-production-agent",
+  "lane": "general_shorts_production",
+  "resume_requested": false,
+  "episode_id": null,
+  "request_scope": "새 일반 쇼츠 제작",
+  "next_action": "원본 입력 확인",
+  "current_state": "NEW",
+  "input_paths": []
+}

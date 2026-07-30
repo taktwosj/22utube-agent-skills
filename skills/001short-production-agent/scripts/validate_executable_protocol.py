@@ -37,6 +37,27 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     if protocol.get("lane") != "general_shorts_production":
         errors.append("PROTOCOL_LANE")
 
+    session_handoff = protocol.get("session_handoff")
+    expected_session_handoff = {
+        "schema_version": "001short-session-handoff-v1",
+        "owner_skill": "001short-production-agent",
+        "lane": "general_shorts_production",
+        "schema": "schemas/conversation_handoff.schema.json",
+        "validator": "scripts/validate_conversation_handoff.py",
+        "template": "templates/conversation-handoff.json",
+        "env_file": "$HOME/.hermes/.env",
+        "env_load": "SOURCE_ONCE_WITHOUT_OUTPUT",
+        "resume_requires_episode_id_and_explicit_request": True,
+        "old_episode_access_without_resume": "FORBIDDEN",
+        "secret_material": "FORBIDDEN",
+    }
+    if not isinstance(session_handoff, dict):
+        errors.append("PROTOCOL_SESSION_HANDOFF")
+    else:
+        for key, value in expected_session_handoff.items():
+            if session_handoff.get(key) != value:
+                errors.append(f"PROTOCOL_SESSION_HANDOFF_GATE:{key}")
+
     modes = protocol.get("production_modes")
     expected_modes = {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}
     if not isinstance(modes, dict) or set(modes) != expected_modes:
@@ -117,6 +138,9 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
 
     invariants = protocol.get("invariants")
     required_invariants = (
+        "session_handoff_secret_material_forbidden",
+        "session_handoff_owner_must_remain_001",
+        "old_episode_access_requires_explicit_resume",
         "state_advance_after_validator_pass_only",
         "vmake_dom_first",
         "vmake_full_download_required",
@@ -153,6 +177,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     errors: List[str] = []
     authority = protocol.get("authority", {})
     schemas = protocol.get("schemas", {})
+    session_handoff = protocol.get("session_handoff", {})
     required_paths = [
         authority.get("policy"),
         authority.get("machine_contract"),
@@ -161,6 +186,9 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("protocol"),
         schemas.get("production_plan"),
         schemas.get("completion_report"),
+        schemas.get("session_handoff"),
+        session_handoff.get("validator"),
+        session_handoff.get("template"),
         "tools.json",
     ]
     for relative in required_paths:
@@ -177,6 +205,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("protocol"),
         schemas.get("production_plan"),
         schemas.get("completion_report"),
+        schemas.get("session_handoff"),
         "tools.json",
     ]:
         if isinstance(relative, str) and (root / relative).is_file():
@@ -194,6 +223,9 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             "URAKKAI_STRUCTURE_UNCHANGED",
             "UPLOAD_METADATA_MISSING",
             "PUBLIC_UPLOAD_NOT_APPROVED",
+            "## New Session Handoff Bootstrap",
+            "scripts/validate_conversation_handoff.py",
+            "HANDOFF_SECRET_MATERIAL_FORBIDDEN",
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
@@ -213,6 +245,13 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_FIELDS_MISMATCH")
             if workflow.get("completion_gate", {}).get("validator_pass_required") is not True:
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_GATE_DISABLED")
+            bootstrap = workflow.get("session_bootstrap", {})
+            if bootstrap.get("env_file") != session_handoff.get("env_file"):
+                errors.append("PROTOCOL_WORKFLOW_HANDOFF_ENV_MISMATCH")
+            if bootstrap.get("validator") != session_handoff.get("validator"):
+                errors.append("PROTOCOL_WORKFLOW_HANDOFF_VALIDATOR_MISMATCH")
+            if bootstrap.get("resume_requires_episode_id_and_explicit_request") is not True:
+                errors.append("PROTOCOL_WORKFLOW_HANDOFF_RESUME_GATE_DISABLED")
         except Exception:
             pass
 
@@ -227,6 +266,13 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_TOOLS_VALIDATOR_MISMATCH")
             if executable.get("completion_report") != "{episode_root}/90_reports/completion_report.json":
                 errors.append("PROTOCOL_TOOLS_COMPLETION_PATH_MISMATCH")
+            handoff_tool = tools.get("session_handoff", {})
+            if handoff_tool.get("schema") != session_handoff.get("schema"):
+                errors.append("PROTOCOL_TOOLS_HANDOFF_SCHEMA_MISMATCH")
+            if handoff_tool.get("validator") != session_handoff.get("validator"):
+                errors.append("PROTOCOL_TOOLS_HANDOFF_VALIDATOR_MISMATCH")
+            if handoff_tool.get("env_file") != session_handoff.get("env_file"):
+                errors.append("PROTOCOL_TOOLS_HANDOFF_ENV_MISMATCH")
         except Exception:
             pass
     return errors

@@ -26,6 +26,21 @@ Load `protocol.json` before mode routing, stage selection, production-plan compi
 - A skill update is not complete while the newest test is RED, errors before assertions, or has not been rerun after the latest edit. Report it as unfinished and do not promote, deploy, or replace the known-good version until the complete suite, protocol self-check, real-plan compatibility check, and positive/negative fixtures are GREEN.
 - An isolated archive and its SHA-256 become stale immediately when the active skill changes. After any post-package edit, rebuild the isolated copy, regenerate the file manifest and archive hash, rerun tests from the extracted copy, and only then hand it to another computer or agent.
 
+## New Session Handoff Bootstrap
+
+운영자가 `/new` 뒤 001 핸드오프 대화 JSON을 제공하면 다른 제작 스킬을 추가로 로드하지 않고 이 스킬 안에서 바로 재개한다.
+
+1. 터미널에서 `$HOME/.hermes/.env`가 있으면 **한 번만** 조용히 로드한다. 값·키 목록·파일 내용은 출력하거나 핸드오프에 저장하지 않는다.
+   ```bash
+   set -a; [ ! -f "$HOME/.hermes/.env" ] || . "$HOME/.hermes/.env"; set +a
+   ```
+2. JSON을 임시 파일로 받은 뒤 `python3 scripts/validate_conversation_handoff.py --handoff <path>`를 실행한다. `PASS` 전에는 제작을 시작하지 않는다.
+3. `owner_skill=001short-production-agent`, `lane=general_shorts_production`을 유지하고 안전 요약의 `request_scope`와 `next_action`부터 진행한다.
+4. `resume_requested=true`일 때만 `episode_id`와 실제 state/readback을 대조해 과거 회차를 연다. 둘 중 하나라도 없으면 `HANDOFF_EPISODE_ID_REQUIRED`로 중단한다.
+5. `resume_requested=false`이면 새 회차로 취급하며 과거 프로젝트를 열거나 수정하지 않는다.
+
+핸드오프 정본 모양은 `templates/conversation-handoff.json`, schema는 `schemas/conversation_handoff.schema.json`이다. 토큰·쿠키·API 키·비밀번호·OAuth 값·session/conversation ID가 들어 있는 JSON은 `HANDOFF_SECRET_MATERIAL_FORBIDDEN`으로 거부하며 원문을 다시 출력하지 않는다.
+
 ## Lane Isolation
 
 이 스킬은 `owner_skill=001short-production-agent`, `lane=general_shorts_production`인 독립 제작 lane이다. 활성화한 뒤에는 `000short-production-agent`, `top5isu-shorts`, `00-tikitaka`, `111-politics-longform` 또는 다른 영상 제작 스킬의 단계, 템플릿, 상태명, validator, 산출물 계약을 읽거나 합치지 않는다.

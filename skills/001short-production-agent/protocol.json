@@ -14,7 +14,8 @@
   "schemas": {
     "protocol": "schemas/executable_protocol.schema.json",
     "production_plan": "schemas/executable_production_plan.schema.json",
-    "completion_report": "schemas/completion_report.schema.json"
+    "completion_report": "schemas/completion_report.schema.json",
+    "session_handoff": "schemas/conversation_handoff.schema.json"
   },
   "activation": {
     "aliases": [
@@ -32,6 +33,19 @@
       "00-tikitaka",
       "111-politics-longform"
     ]
+  },
+  "session_handoff": {
+    "schema_version": "001short-session-handoff-v1",
+    "owner_skill": "001short-production-agent",
+    "lane": "general_shorts_production",
+    "schema": "schemas/conversation_handoff.schema.json",
+    "validator": "scripts/validate_conversation_handoff.py",
+    "template": "templates/conversation-handoff.json",
+    "env_file": "$HOME/.hermes/.env",
+    "env_load": "SOURCE_ONCE_WITHOUT_OUTPUT",
+    "resume_requires_episode_id_and_explicit_request": true,
+    "old_episode_access_without_resume": "FORBIDDEN",
+    "secret_material": "FORBIDDEN"
   },
   "production_modes": {
     "URAKKAI": {
@@ -92,6 +106,9 @@
   },
   "invariants": {
     "single_active_lane": true,
+    "session_handoff_secret_material_forbidden": true,
+    "session_handoff_owner_must_remain_001": true,
+    "old_episode_access_requires_explicit_resume": true,
     "source_is_read_only": true,
     "state_advance_after_validator_pass_only": true,
     "gui_owner_count": 1,
