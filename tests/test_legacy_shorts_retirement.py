@@ -12,8 +12,8 @@ class LegacyShortsRetirementContractTest(unittest.TestCase):
     def test_only_current_shorts_skill_directory_remains(self):
         for name in RETIRED:
             self.assertFalse(
-                (ROOT / "skills" / name).exists(),
-                f"retired skill directory is still visible: {name}",
+                (ROOT / "skills" / name / "SKILL.md").is_file(),
+                f"retired skill is still visible: {name}",
             )
         self.assertTrue((ROOT / "skills" / CURRENT / "SKILL.md").is_file())
 

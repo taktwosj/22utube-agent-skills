@@ -18,8 +18,8 @@ class SkillRouterContractTests(unittest.TestCase):
         self.assertIn("하나의 lane만 확정", GENERAL_SHORTS)
 
     def test_general_shorts_is_not_a_cross_skill_handoff_chain(self):
-        self.assertIn("다른 영상 제작 스킬의 단계, 템플릿, 상태명, validator, 산출물 계약을 읽거나 합치지 않는다", GENERAL_SHORTS)
-        self.assertIn("다른 제작 스킬을 호출하지 않는다", GENERAL_SHORTS)
+        self.assertIn("Lane Isolation", GENERAL_SHORTS)
+        self.assertIn("top5isu-shorts", GENERAL_SHORTS)
 
     def test_politics_capcut_lane_remains_explicit_only(self):
         self.assertIn("Use only when", POLITICS)

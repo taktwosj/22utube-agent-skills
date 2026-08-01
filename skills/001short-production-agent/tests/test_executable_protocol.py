@@ -239,7 +239,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         for field in ("source_file_evidence", "vmake_final_download", "capcut_visual_confirmation"):
             self.assertIn(field, protocol["completion_report"]["required_fields"])
 
-    def test_vmake_direct_insert_and_two_loop_urakkai_review_contract(self):
+    def test_vmake_direct_insert_and_creator_machine_urakkai_review_contract(self):
         module = load_validator()
         protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
         skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
@@ -256,21 +256,23 @@ class ExecutableProtocolContractTest(unittest.TestCase):
 
         review = protocol["urakkai_review_loop"]
         self.assertEqual(review["enabled_for"], ["URAKKAI"])
-        self.assertEqual(review["preferred_provider"], "first_party_claude_oauth")
-        self.assertEqual(review["preferred_model"], "Claude Opus")
+        self.assertEqual(review["preferred_provider"], "claude_cli")
+        self.assertEqual(review["preferred_model"], "Claude Opus 5")
         self.assertEqual(review["effort"], "low")
-        self.assertEqual(review["review_loop_count"], 2)
+        self.assertEqual(review["review_loop_count"], 1)
         self.assertEqual(review["reviews_per_loop"], 1)
-        self.assertIs(review["hermes_improvement_after_each_loop"], True)
-        self.assertIs(review["hermes_final_best_selection_required"], True)
-        self.assertEqual(review["authority"], "hermes_segment_id_and_approved_ranges")
+        self.assertEqual(review["creator_machine"], "macmini")
+        self.assertEqual(review["approval_authority"], "user")
+        self.assertEqual(review["fallback_provider"], "codex_cli")
+        self.assertEqual(review["fallback_model"], "gpt-5.6-sol")
+        self.assertEqual(review["fallback_effort"], "low")
 
         stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
-        self.assertEqual(stage04["pass"], "URAKKAI_REVIEW_LOOP_2_COMPLETE")
-        self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 2)
-        self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_TWO_LOOPS")
+        self.assertEqual(stage04["pass"], "WAIT_USER_URAKKAI_APPROVAL")
+        self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 1)
+        self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK")
         self.assertIn("VMake Direct-Insert Contract", skill_text)
-        self.assertIn("검토 개선 loop는 정확히 2회", skill_text)
+        self.assertIn("Urakkai Editorial Authority", skill_text)
 
         broken = json.loads(json.dumps(protocol, ensure_ascii=False))
         broken["invariants"]["vmake_direct_insert_required"] = False
@@ -279,9 +281,9 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             module.validate_protocol_document(broken),
         )
         broken = json.loads(json.dumps(protocol, ensure_ascii=False))
-        broken["urakkai_review_loop"]["review_loop_count"] = 1
+        broken["urakkai_review_loop"]["fallback_provider"] = "none"
         self.assertIn(
-            "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT",
+            "PROTOCOL_URAKKAI_REVIEW_GATE:fallback_provider",
             module.validate_protocol_document(broken),
         )
 

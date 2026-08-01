@@ -162,10 +162,11 @@
         "effort",
         "review_loop_count",
         "reviews_per_loop",
-        "hermes_improvement_after_each_loop",
-        "hermes_final_best_selection_required",
-        "authority",
+        "creator_machine",
+        "approval_authority",
         "fallback_provider",
+        "fallback_model",
+        "fallback_effort",
         "fallback_on_claude_failure",
         "evidence_path"
       ],
@@ -174,31 +175,34 @@
           "const": ["URAKKAI"]
         },
         "preferred_provider": {
-          "const": "first_party_claude_oauth"
+          "const": "claude_cli"
         },
         "preferred_model": {
-          "const": "Claude Opus"
+          "const": "Claude Opus 5"
         },
         "effort": {
           "const": "low"
         },
         "review_loop_count": {
-          "const": 2
+          "const": 1
         },
         "reviews_per_loop": {
           "const": 1
         },
-        "hermes_improvement_after_each_loop": {
-          "const": true
+        "creator_machine": {
+          "const": "macmini"
         },
-        "hermes_final_best_selection_required": {
-          "const": true
-        },
-        "authority": {
-          "const": "hermes_segment_id_and_approved_ranges"
+        "approval_authority": {
+          "const": "user"
         },
         "fallback_provider": {
-          "const": "Hermes subagent"
+          "const": "codex_cli"
+        },
+        "fallback_model": {
+          "const": "gpt-5.6-sol"
+        },
+        "fallback_effort": {
+          "const": "low"
         },
         "fallback_on_claude_failure": {
           "const": true

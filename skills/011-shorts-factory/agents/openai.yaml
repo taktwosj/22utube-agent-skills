@@ -1,0 +1,4 @@
+interface:
+  display_name: "011 Shorts Factory"
+  short_description: "Create and verify a clean Paperclip Shorts P0 company."
+  default_prompt: "Use $011-shorts-factory to create a clean Paperclip Shorts P0 company and agent layout."

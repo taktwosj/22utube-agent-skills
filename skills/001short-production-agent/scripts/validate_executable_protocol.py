@@ -88,18 +88,19 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     else:
         expected_review = {
             "enabled_for": ["URAKKAI"],
-            "preferred_provider": "first_party_claude_oauth",
-            "preferred_model": "Claude Opus",
+            "preferred_provider": "claude_cli",
+            "preferred_model": "Claude Opus 5",
             "effort": "low",
             "reviews_per_loop": 1,
-            "hermes_improvement_after_each_loop": True,
-            "hermes_final_best_selection_required": True,
-            "authority": "hermes_segment_id_and_approved_ranges",
-            "fallback_provider": "Hermes subagent",
+            "creator_machine": "macmini",
+            "approval_authority": "user",
+            "fallback_provider": "codex_cli",
+            "fallback_model": "gpt-5.6-sol",
+            "fallback_effort": "low",
             "fallback_on_claude_failure": True,
             "evidence_path": "20_script/external-review.json",
         }
-        if review.get("review_loop_count") != 2:
+        if review.get("review_loop_count") != 1:
             errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
         for key, value in expected_review.items():
             if review.get(key) != value:

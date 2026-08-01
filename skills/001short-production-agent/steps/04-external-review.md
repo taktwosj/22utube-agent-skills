@@ -1,8 +1,12 @@
-# 04 우라까이 2회 검토 개선
+# Stage 04 — Urakkai Draft Review and User Approval
 
-`URAKKAI`에서만 검토 개선 loop를 정확히 2회 실행한다.
+Run this stage only after the original blueprint and first recommendation are ready.
 
-1. Loop 1: 현재 승인 후보를 first-party Claude OAuth의 Claude Opus `--effort low`로 검토한다. Hermes가 훅 명확성·장면 이해도·이탈 지점·대사 중복·감정 연결 의견을 평가하고 후보를 개선한다.
-2. Loop 2: Loop 1 개선본을 같은 범위로 다시 검토한다. Hermes가 다시 개선한 뒤 baseline·Loop 1·Loop 2 후보 중 계약을 지키는 최상안을 확정한다.
+1. On the Mac mini creator machine, create or revise `20_script/URAKKAI_BLUEPRINT.md`.
+2. Call Claude CLI with **Claude Opus 5 / low** to review the draft against `references/stage04-external-review-contract.md`.
+3. If that CLI call fails because of authentication, quota, availability, or a non-zero exit, call Codex CLI with **gpt-5.6-sol / low** once using the same read-only review packet. Record the failure category, not credentials or command output containing secrets.
+4. Apply the accepted review changes to the same draft. Keep segment IDs, approved ranges, source order evidence, and audio mapping under the 001 contract.
+5. Write `20_script/external-review.md` and `.json`: input SHA-256, selected reviewer, fallback status, findings, applied changes, and output SHA-256.
+6. Report the revised draft and concise review summary to the user. Set `current_stage=04`, `status=WAIT_USER_URAKKAI_APPROVAL`, and `final_design_locked=false`.
 
-Claude는 조언자다. source/target range, segment ID, 장면 수, 실제 오디오 timing의 권위는 Hermes가 유지한다. 실패한 loop만 동일 입력의 Hermes 서브에이전트 검토 1회로 대체한다. 두 loop의 입력·출력 hash, 채택·반려, 개선점과 최종 선택 사유를 `20_script/external-review.md`와 `20_script/external-review.json`에 기록한다. 토큰·쿠키·conversation/session ID는 기록하지 않는다. 두 loop 증거가 모두 없으면 `WAIT_EXTERNAL_REVIEW`에서 멈춘다.
+The user is the approval authority. A user correction repeats this stage on the same draft. Do not compile the final blueprint, open CapCut, or advance to Stage 05 until explicit approval is recorded.

@@ -332,7 +332,7 @@
     {
       "id": "04",
       "file": "steps/04-external-review.md",
-      "pass": "URAKKAI_REVIEW_LOOP_2_COMPLETE",
+      "pass": "WAIT_USER_URAKKAI_APPROVAL",
       "required_evidence": [
         "20_script/external-review.md",
         "20_script/external-review.json"
@@ -426,14 +426,14 @@
       "enabled_for": [
         "URAKKAI"
       ],
-      "provider": "first_party_claude_oauth",
-      "model": "Claude Opus",
+      "provider": "claude_cli",
+      "model": "Claude Opus 5",
       "effort": "low",
-      "loop_count": 2,
+      "loop_count": 1,
       "reviews_per_loop": 1,
-      "hermes_improves_after_each_loop": true,
-      "hermes_selects_best_final_candidate": true,
-      "fallback": "Hermes subagent for the failed loop only",
+      "creator_machine": "macmini",
+      "approval_authority": "user",
+      "fallback": "Codex CLI gpt-5.6-sol at low effort",
       "evidence": "20_script/external-review.json"
     },
     "vmake": {
@@ -662,7 +662,7 @@
     }
   },
   "external_actions": {
-    "llm_calls": "URAKKAI_STAGE_04_TWO_LOOPS",
+    "llm_calls": "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK",
     "paid_tts": false,
     "vmake": "after_final_design_approval",
     "capcut_gui": "after_final_design_approval",

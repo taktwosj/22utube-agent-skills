@@ -43,6 +43,12 @@ Load `protocol.json` before mode routing, stage selection, production-plan compi
 
 ## Lane Isolation
 
+## Urakkai Editorial Authority
+
+- At Stage 04, the Mac mini creator machine calls Claude CLI with Claude Opus 5 at low effort first; only a failed CLI call falls back to Codex CLI `gpt-5.6-sol` at low effort.
+- The reviewer improves a draft; it never promotes a final design. Report the revised `URAKKAI_BLUEPRINT.md` and review evidence to the user, then stop at `WAIT_USER_URAKKAI_APPROVAL`. Apply user corrections to the same draft and report again. Stage 05 begins only after explicit user approval.
+- Situation captions describe the visible present action, relationship, or emotion with a hook. Do not use edit-outline copy such as “show the reaction first,” “reveal the reason later,” “connect to the second reaction,” or “warm ending.” Read `references/stage04-external-review-contract.md` for the full rubric and dynamic speaker-line rule.
+
 이 스킬은 `owner_skill=001short-production-agent`, `lane=general_shorts_production`인 독립 제작 lane이다. 활성화한 뒤에는 `000short-production-agent`, `top5isu-shorts`, `00-tikitaka`, `111-politics-longform` 또는 다른 영상 제작 스킬의 단계, 템플릿, 상태명, validator, 산출물 계약을 읽거나 합치지 않는다.
 
 - 요청을 시작할 때 하나의 lane만 확정한다.
