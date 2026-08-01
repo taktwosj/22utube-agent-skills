@@ -14,8 +14,6 @@
     "vmake_final_download",
     "capcut_visual_confirmation",
     "completion_claim",
-    "capcut_cloud_destination",
-    "capcut_cloud_row",
     "upload_title",
     "upload_description",
     "sources",
@@ -47,8 +45,28 @@
     "validation_status": {
       "const": "PASS"
     },
+    "capcut_cloud_sync_status": {
+      "enum": [
+        "NOT_REQUESTED",
+        "SYNCED"
+      ]
+    },
+    "capcut_cloud_sync_requested": {
+      "type": "boolean"
+    },
+    "writer_machine": {
+      "enum": [
+        "macmini",
+        "home_windows",
+        "office_windows"
+      ]
+    },
     "capcut_cloud_destination": {
-      "const": "User3160027826975의 공간/MAC"
+      "enum": [
+        "macmini",
+        "home",
+        "ofc"
+      ]
     },
     "capcut_cloud_row": {
       "type": "object",
@@ -293,6 +311,29 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "capcut_cloud_sync_status": {
+            "const": "SYNCED"
+          }
+        },
+        "required": ["capcut_cloud_sync_status"]
+      },
+      "then": {
+        "required": [
+          "capcut_cloud_sync_requested",
+          "writer_machine",
+          "capcut_cloud_destination",
+          "capcut_cloud_row"
+        ],
+        "properties": {
+          "capcut_cloud_sync_requested": {
+            "const": true
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

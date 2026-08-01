@@ -124,8 +124,6 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "vmake_final_download",
         "capcut_visual_confirmation",
         "completion_claim",
-        "capcut_cloud_destination",
-        "capcut_cloud_row",
         "upload_title",
         "upload_description",
         "sources",
@@ -134,8 +132,23 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     if not isinstance(completion, dict) or completion.get("required_fields") != required_completion:
         errors.append("PROTOCOL_COMPLETION_FIELDS")
     expected_cloud_row_fields = ["name", "size", "duration", "type", "modified_time"]
-    if not isinstance(completion, dict) or completion.get("cloud_row_required_fields") != expected_cloud_row_fields:
-        errors.append("PROTOCOL_CLOUD_ROW_FIELDS")
+    expected_cloud_sync = {
+        "default_status": "NOT_REQUESTED",
+        "requires_explicit_user_request": True,
+        "destination_by_writer_machine": {
+            "macmini": "macmini",
+            "home_windows": "home",
+            "office_windows": "ofc",
+        },
+        "forbid_preemptive_sync": True,
+        "synced_status": "SYNCED",
+    }
+    if (
+        not isinstance(completion, dict)
+        or completion.get("cloud_sync_row_required_fields") != expected_cloud_row_fields
+        or completion.get("capcut_cloud_sync") != expected_cloud_sync
+    ):
+        errors.append("PROTOCOL_CLOUD_SYNC_POLICY")
 
     invariants = protocol.get("invariants")
     required_invariants = (
@@ -159,8 +172,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "capcut_visual_confirmation_required_before_completion",
         "capcut_root_immutable",
         "capcut_project_media_internal",
-        "capcut_cloud_row_readback_required",
-        "capcut_cloud_reopen_playback_required",
+        "capcut_cloud_sync_explicit_request_required",
+        "capcut_cloud_destination_by_writer_machine_required",
+        "capcut_cloud_row_readback_required_when_requested",
+        "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
         "completion_report_requires_upload_metadata",
     )
@@ -673,10 +688,22 @@ def validate_completion_report(
             if any(_missing(render.get(field)) for field in config.get("render_evidence_required_fields", [])) or not valid:
                 errors.append("RENDER_EVIDENCE_INVALID")
 
-    destination = report.get("capcut_cloud_destination")
-    expected_destination = protocol.get("invariants", {}).get("capcut_cloud_destination")
-    if destination and expected_destination and destination != expected_destination:
-        errors.append("CAPCUT_CLOUD_DESTINATION_MISMATCH")
+    sync = config.get("capcut_cloud_sync", {})
+    sync_status = report.get("capcut_cloud_sync_status", sync.get("default_status", "NOT_REQUESTED"))
+    if sync_status not in {sync.get("default_status"), sync.get("synced_status")}:
+        errors.append("CAPCUT_CLOUD_SYNC_STATUS_INVALID")
+    elif sync_status == sync.get("synced_status"):
+        mapping = sync.get("destination_by_writer_machine", {})
+        writer_machine = report.get("writer_machine")
+        if report.get("capcut_cloud_sync_requested") is not True:
+            errors.append("CAPCUT_CLOUD_SYNC_EXPLICIT_REQUEST_REQUIRED")
+        if mapping.get(writer_machine) != report.get("capcut_cloud_destination"):
+            errors.append("CAPCUT_CLOUD_DESTINATION_MISMATCH")
+        row = report.get("capcut_cloud_row")
+        if not isinstance(row, dict) or any(_missing(row.get(field)) for field in config.get("cloud_sync_row_required_fields", [])):
+            errors.append("CAPCUT_CLOUD_ROW_MISSING")
+    elif any(field in report for field in ("capcut_cloud_sync_requested", "writer_machine")):
+        errors.append("CAPCUT_CLOUD_SYNC_UNREQUESTED")
 
     status = report.get("public_upload_status")
     if status in config.get("public_upload_done_values", []):

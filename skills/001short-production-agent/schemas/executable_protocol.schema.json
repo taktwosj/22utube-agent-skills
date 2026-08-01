@@ -235,9 +235,10 @@
         "clean_only_full_source_duration_required",
         "capcut_root_immutable",
         "capcut_project_media_internal",
-        "capcut_cloud_destination",
-        "capcut_cloud_row_readback_required",
-        "capcut_cloud_reopen_playback_required",
+        "capcut_cloud_sync_explicit_request_required",
+        "capcut_cloud_destination_by_writer_machine_required",
+        "capcut_cloud_row_readback_required_when_requested",
+        "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
         "completion_report_requires_upload_metadata",
         "source_file_evidence_required",
@@ -286,6 +287,18 @@
           "const": true
         },
         "clean_only_full_source_duration_required": {
+          "const": true
+        },
+        "capcut_cloud_sync_explicit_request_required": {
+          "const": true
+        },
+        "capcut_cloud_destination_by_writer_machine_required": {
+          "const": true
+        },
+        "capcut_cloud_row_readback_required_when_requested": {
+          "const": true
+        },
+        "capcut_cloud_reopen_playback_required_when_requested": {
           "const": true
         }
       }

@@ -71,8 +71,6 @@
       "vmake_final_download",
       "capcut_visual_confirmation",
       "completion_claim",
-      "capcut_cloud_destination",
-      "capcut_cloud_row",
       "upload_title",
       "upload_description",
       "sources",
@@ -721,6 +719,7 @@
     "paid_tts": false,
     "vmake": "submit_after_source_identity_verify_after_final_design",
     "capcut_gui": "after_final_design_approval",
+    "capcut_cloud_sync": "explicit_user_request_only_destination_by_writer_machine",
     "upload": false
   },
   "states": {

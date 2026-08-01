@@ -55,6 +55,8 @@ CapCut Home 검색 결과에 프로젝트 카드와 길이가 보이는 것은 *
 
 ## 5. Upload and reopen proof
 
+This section applies only after an explicit user sync request. Destination is not fixed: use `macmini` for `macmini`, `home` for `home_windows`, and `ofc` for `office_windows`. The older `MAC` example below is historical only.
+
 업로드 성공은 버튼 클릭이나 Home 카드만으로 확정하지 않는다.
 
 1. 목적지가 `User3160027826975의 공간/MAC`인지 확인한다.

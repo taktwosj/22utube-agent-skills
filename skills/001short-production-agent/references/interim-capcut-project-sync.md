@@ -39,6 +39,10 @@ If the downloaded source already has baked-in title/captions and the operator sa
 
 When the technically verified clean media arrives, replace the existing VIDEO asset only. Keep the project root, timeline, audio, text, and anchor structure. Do not rebuild the root structure or reuse another lane. User visual approval remains required before any final claim.
 
+## Explicit-only cloud sync (authoritative)
+
+Do not sync before the operator explicitly asks. When requested, choose exactly one destination from the active writer machine mapping: `macmini -> macmini`, `home_windows -> home`, `office_windows -> ofc`. Confirm the selected folder with row readback only after that requested sync. The legacy fixed `MAC` and `TAKKTWO` examples below are historical troubleshooting notes and do not authorize a sync or choose a destination.
+
 ## Cloud identity isolation
 
 A cloned root must not inherit the root project's cloud linkage.

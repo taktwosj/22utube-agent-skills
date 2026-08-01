@@ -134,10 +134,10 @@
     "capcut_id_mirror_pass_required": true,
     "capcut_cloud_media_pass_required": true,
     "capcut_zip_test_required": true,
-    "capcut_cloud_destination": "User3160027826975의 공간/MAC",
-    "capcut_cloud_ignore_space": "TAKKTWO",
-    "capcut_cloud_row_readback_required": true,
-    "capcut_cloud_reopen_playback_required": true,
+    "capcut_cloud_sync_explicit_request_required": true,
+    "capcut_cloud_destination_by_writer_machine_required": true,
+    "capcut_cloud_row_readback_required_when_requested": true,
+    "capcut_cloud_reopen_playback_required_when_requested": true,
     "public_upload_requires_explicit_approval": true,
     "completion_report_requires_upload_metadata": true,
     "source_file_evidence_required": true,
@@ -282,8 +282,6 @@
       "vmake_final_download",
       "capcut_visual_confirmation",
       "completion_claim",
-      "capcut_cloud_destination",
-      "capcut_cloud_row",
       "upload_title",
       "upload_description",
       "sources",
@@ -293,7 +291,7 @@
       "channel",
       "url"
     ],
-    "cloud_row_required_fields": [
+    "cloud_sync_row_required_fields": [
       "name",
       "size",
       "duration",
@@ -310,6 +308,17 @@
       "SCHEDULED"
     ],
     "public_upload_approval_field": "public_upload_approval",
+    "capcut_cloud_sync": {
+      "default_status": "NOT_REQUESTED",
+      "requires_explicit_user_request": true,
+      "destination_by_writer_machine": {
+        "macmini": "macmini",
+        "home_windows": "home",
+        "office_windows": "ofc"
+      },
+      "forbid_preemptive_sync": true,
+      "synced_status": "SYNCED"
+    },
     "missing_error_prefix": "UPLOAD_METADATA_MISSING",
     "source_file_evidence_required_fields": [
       "local_path",
@@ -357,7 +366,9 @@
     "CLEAN_ONLY_AUDIO_VOLUME": "clean-only A10 volume must be one",
     "CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY": "clean-only forbidden track contains segments",
     "UPLOAD_METADATA_MISSING": "completion report lacks title, description, or sources",
-    "CAPCUT_CLOUD_ROW_MISSING": "completion report lacks a verified cloud-row field",
+    "CAPCUT_CLOUD_ROW_MISSING": "requested cloud sync lacks a verified cloud-row field",
+    "CAPCUT_CLOUD_SYNC_EXPLICIT_REQUEST_REQUIRED": "cloud sync requires an explicit user request",
+    "CAPCUT_CLOUD_SYNC_UNREQUESTED": "cloud sync evidence is forbidden without an explicit user request",
     "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval",
     "URAKKAI_FAKE_SPLIT": "urakkai uses contiguous fake splits without an effective structural reorder",
     "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH": "used A10 source/target ranges do not exactly match VIDEO",

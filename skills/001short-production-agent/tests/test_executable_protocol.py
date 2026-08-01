@@ -135,7 +135,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"},
         )
         self.assertEqual(
-            protocol["completion_report"]["cloud_row_required_fields"],
+            protocol["completion_report"]["cloud_sync_row_required_fields"],
             ["name", "size", "duration", "type", "modified_time"],
         )
         self.assertEqual(
@@ -151,8 +151,6 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 "vmake_final_download",
                 "capcut_visual_confirmation",
                 "completion_claim",
-                "capcut_cloud_destination",
-                "capcut_cloud_row",
                 "upload_title",
                 "upload_description",
                 "sources",
@@ -395,6 +393,11 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             add_final_evidence(report, Path(td))
             self.assertEqual(module.validate_completion_report(report, protocol), [])
+            local_only = json.loads(json.dumps(report, ensure_ascii=False))
+            local_only.pop("capcut_cloud_destination")
+            local_only.pop("capcut_cloud_row")
+            local_only["capcut_cloud_sync_status"] = "NOT_REQUESTED"
+            self.assertEqual(module.validate_completion_report(local_only, protocol), [])
             substituted = json.loads(json.dumps(report, ensure_ascii=False))
             source_meta = substituted["source_file_evidence"]
             source_path = Path(source_meta["local_path"])
@@ -416,10 +419,27 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 module.validate_completion_report(render_claim, protocol),
             )
             incomplete_cloud_row = json.loads(json.dumps(report, ensure_ascii=False))
+            incomplete_cloud_row["capcut_cloud_sync_status"] = "SYNCED"
+            incomplete_cloud_row["capcut_cloud_sync_requested"] = True
+            incomplete_cloud_row["writer_machine"] = "macmini"
+            incomplete_cloud_row["capcut_cloud_destination"] = "macmini"
             del incomplete_cloud_row["capcut_cloud_row"]["size"]
             self.assertIn(
-                "CAPCUT_CLOUD_ROW_MISSING:size",
+                "CAPCUT_CLOUD_ROW_MISSING",
                 module.validate_completion_report(incomplete_cloud_row, protocol),
+            )
+            synced_home = json.loads(json.dumps(report, ensure_ascii=False))
+            synced_home.update({
+                "capcut_cloud_sync_status": "SYNCED",
+                "capcut_cloud_sync_requested": True,
+                "writer_machine": "home_windows",
+                "capcut_cloud_destination": "home",
+            })
+            self.assertEqual(module.validate_completion_report(synced_home, protocol), [])
+            synced_home["capcut_cloud_destination"] = "ofc"
+            self.assertIn(
+                "CAPCUT_CLOUD_DESTINATION_MISMATCH",
+                module.validate_completion_report(synced_home, protocol),
             )
             report["public_upload_status"] = "UPLOADED"
             report["public_upload_approval"] = False
