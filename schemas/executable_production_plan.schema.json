@@ -14,7 +14,9 @@
     "timeline"
   ],
   "properties": {
-    "schema_version": {"const": "001short-production-plan-v1"},
+    "schema_version": {
+      "enum": ["001short-production-plan-v1", "001short-production-plan-v2"]
+    },
     "episode_id": {"type": "string", "minLength": 1},
     "root_profile": {"type": "string", "minLength": 1},
     "project_name": {"type": "string", "minLength": 1},
@@ -47,7 +49,17 @@
       "items": {"type": "string"},
       "uniqueItems": true
     },
-    "locks": {"type": "object"}
+    "locks": {"type": "object"},
+    "root_structure_snapshot": {
+      "type": "object",
+      "required": ["SCREEN_WHITE"],
+      "properties": {
+        "SCREEN_WHITE": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "root_structure_readback": false,
+    "capcut_layer_time_contract": {"$ref": "#/$defs/capcut_layer_time_contract"}
   },
   "$defs": {
     "range": {
@@ -64,7 +76,7 @@
       "required": ["anchor", "operation", "target_range_us"],
       "properties": {
         "anchor": {
-          "enum": ["VIDEO", "T1", "T2", "A9", "A9_TEXT", "A10", "A10_TEXT", "STATE", "A11", "A12", "SCREEN"]
+          "enum": ["VIDEO", "T1", "T2", "A9", "A9_TEXT", "A10", "A10_TEXT", "STATE", "A11", "A12", "SCREEN", "SCREEN_EFFECT", "SCREEN_WHITE"]
         },
         "operation": {
           "enum": ["clone_template_segment", "replace_template_text", "replace_text_preserve_style", "replace_media_and_range", "omit", "clear"]
@@ -86,9 +98,38 @@
         }
       ],
       "additionalProperties": true
+    },
+    "capcut_layer_time_contract": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "visual_timeline_rows_bottom_to_top",
+        "screen_compositor_layers_bottom_to_top",
+        "audio_lanes"
+      ],
+      "properties": {
+        "contract_version": {"const": "capcut-layer-time-contract-v1"},
+        "visual_timeline_rows_bottom_to_top": {
+          "const": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE", "A10_TEXT", "A9_TEXT", "T2", "T1"]
+        },
+        "screen_compositor_layers_bottom_to_top": {
+          "const": ["VIDEO", "SCREEN_WHITE", "STATE", "A10_TEXT", "A9_TEXT", "T2", "T1"]
+        },
+        "audio_lanes": {"const": ["A9", "A10", "A11", "A12"]}
+      },
+      "additionalProperties": false
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "001short-production-plan-v2"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "required": ["capcut_layer_time_contract", "root_structure_snapshot"]
+      }
+    },
     {
       "if": {
         "properties": {"production_mode": {"const": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}}

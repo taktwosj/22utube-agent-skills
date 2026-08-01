@@ -1,5 +1,10 @@
+import copy
+import hashlib
 import importlib.util
 import json
+import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +15,28 @@ SCHEMA = SKILL / "schemas" / "executable_protocol.schema.json"
 PLAN_SCHEMA = SKILL / "schemas" / "executable_production_plan.schema.json"
 COMPLETION_SCHEMA = SKILL / "schemas" / "completion_report.schema.json"
 VALIDATOR = SKILL / "scripts" / "validate_executable_protocol.py"
+DETAILED_CONTRACT = SKILL / "references" / "detailed-contract-from-original-skill.md"
+
+
+def semantic_contract_corpus() -> str:
+    return "\n".join(
+        (
+            (SKILL / "SKILL.md").read_text(encoding="utf-8"),
+            DETAILED_CONTRACT.read_text(encoding="utf-8"),
+        )
+    )
+
+
+def runtime_routing_paths(router_text: str) -> set[str]:
+    routing_text = router_text.split("## Validators", maxsplit=1)[0]
+    routing_lines = (
+        line for line in routing_text.splitlines() if "Do not load" not in line
+    )
+    return {
+        path
+        for line in routing_lines
+        for path in re.findall(r"`((?:references|scripts)/[^`]+)`", line)
+    }
 
 
 def load_validator():
@@ -21,15 +48,120 @@ def load_validator():
     return module
 
 
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def add_final_evidence(report: dict, root: Path) -> None:
+    source = root / "source.mp4"
+    vmake = root / "vmake-final.mp4"
+    for path, color in ((source, "red"), (vmake, "blue")):
+        subprocess.run(
+            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i", f"color=c={color}:s=16x16:d=0.2", "-r", "10", "-pix_fmt", "yuv420p", str(path)],
+            check=True,
+        )
+    screen = root / "capcut-screen.png"
+    screen.write_bytes(b"screen-evidence")
+    draft = root / "draft_content.json"
+    draft.write_text('{"duration":200000}', encoding="utf-8")
+    def duration(path: Path) -> float:
+        return float(subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip())
+    source_duration = duration(source)
+    vmake_duration = duration(vmake)
+    report.update({
+        "source_file_evidence": {
+            "local_path": str(source), "sha256": sha256(source), "duration": source_duration,
+            "approved_source_time_ranges": [[0, round(source_duration * 1_000_000)]],
+        },
+        "vmake_final_download": {
+            "downloaded_file_path": str(vmake), "sha256": sha256(vmake),
+            "size_bytes": vmake.stat().st_size, "duration": vmake_duration,
+            "is_actual_vmake_final_download": True,
+        },
+        "capcut_visual_confirmation": {
+            "actual_project_name": report["capcut_project_name"],
+            "screen_confirmation_status": "PASS",
+            "screen_evidence_path": str(screen),
+            "screen_evidence_sha256": sha256(screen),
+            "draft_readback": {"local_path": str(draft), "sha256": sha256(draft)},
+            "final_project_hash": sha256(draft),
+        },
+        "completion_claim": "CAPCUT_PROJECT_COMPLETE",
+    })
+
+
+def make_v2_plan() -> dict:
+    plan = json.loads((SKILL / "tests" / "fixtures" / "clean_only_plan.pass.json").read_text(encoding="utf-8"))
+    plan["schema_version"] = "001short-production-plan-v2"
+    plan["capcut_layer_time_contract"] = {
+        "contract_version": "capcut-layer-time-contract-v1",
+        "visual_timeline_rows_bottom_to_top": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE", "A10_TEXT", "A9_TEXT", "T2", "T1"],
+        "screen_compositor_layers_bottom_to_top": ["VIDEO", "SCREEN_WHITE", "STATE", "A10_TEXT", "A9_TEXT", "T2", "T1"],
+        "audio_lanes": ["A9", "A10", "A11", "A12"],
+    }
+    plan["root_structure_snapshot"] = {"SCREEN_WHITE": {"style": {"fill": "#FFFFFF"}}}
+    return plan
+
+
+def make_physical_readback(plan: dict) -> dict:
+    return {
+        "SCREEN_WHITE": {"style": {"fill": "#FFFFFF"}, "target_range_us": [0, plan["total_duration_us"]]},
+        "SCREEN_EFFECT": [{"target_range_us": [1_000_000, 2_000_000]}],
+        "visual_timeline_rows_bottom_to_top": list(plan["capcut_layer_time_contract"]["visual_timeline_rows_bottom_to_top"]),
+        "screen_compositor_layers_bottom_to_top": list(plan["capcut_layer_time_contract"]["screen_compositor_layers_bottom_to_top"]),
+        "audio_lanes": list(plan["capcut_layer_time_contract"]["audio_lanes"]),
+    }
+
+
+def run_v2_cli(plan: dict, physical: dict | None = None) -> tuple[subprocess.CompletedProcess, dict]:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        plan_path = root / "production_plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        command = [sys.executable, "-B", str(VALIDATOR), "--plan", str(plan_path)]
+        if physical is not None:
+            readback_path = root / "physical-readback.json"
+            readback_path.write_text(json.dumps(physical), encoding="utf-8")
+            artifact_path = root / "postbuild-physical-readback.json"
+            artifact_path.write_text(json.dumps({
+                "artifact_type": "capcut-postbuild-physical-readback-v1",
+                "postbuild_status": "PASS",
+                "provenance": {
+                    "plan_sha256": sha256(plan_path),
+                    "readback_path": readback_path.name,
+                    "readback_sha256": sha256(readback_path),
+                    "postbuild_validator": "scripts/validate_postbuild.py",
+                    "postbuild_validator_status": "PASS",
+                },
+                "physical_readback": physical,
+            }), encoding="utf-8")
+            command.extend(["--postbuild-physical-readback", str(artifact_path)])
+        completed = subprocess.run(command, capture_output=True, text=True)
+    return completed, json.loads(completed.stdout)
+
+
 class ExecutableProtocolContractTest(unittest.TestCase):
     def test_skill_and_workflow_mandate_executable_protocol(self):
         skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        semantic_contract = semantic_contract_corpus()
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
         tools = json.loads((SKILL / "tools.json").read_text(encoding="utf-8"))
         self.assertIn("## Executable Protocol (Mandatory)", skill_text)
-        self.assertIn("Load `protocol.json` before mode routing", skill_text)
+        self.assertIn("Load `protocol.json` before mode routing", semantic_contract)
         self.assertIn("STOP_PROTOCOL_CONFLICT", skill_text)
         self.assertIn("UPLOAD_METADATA_MISSING", skill_text)
+        self.assertTrue(DETAILED_CONTRACT.is_file(), "detailed contract reference must exist")
+        self.assertIn(
+            "Do not load `references/detailed-contract-from-original-skill.md` at runtime",
+            skill_text,
+        )
+        self.assertNotIn(
+            "references/detailed-contract-from-original-skill.md",
+            runtime_routing_paths(skill_text),
+        )
         self.assertIn("protocol.json", workflow["common"])
         self.assertEqual(workflow["executable_protocol"]["path"], "protocol.json")
         self.assertEqual(
@@ -99,6 +231,10 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 "T1",
                 "T2",
                 "validation_status",
+                "source_file_evidence",
+                "vmake_final_download",
+                "capcut_visual_confirmation",
+                "completion_claim",
                 "capcut_cloud_destination",
                 "capcut_cloud_row",
                 "upload_title",
@@ -151,6 +287,140 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIn("URAKKAI_STRUCTURE_UNCHANGED", errors)
         self.assertEqual(module.validate_production_plan(reordered, protocol), [])
 
+    def test_urakkai_rejects_fake_split_and_a10_range_mismatch(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        valid = json.loads((SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8"))
+
+        mismatched = json.loads(json.dumps(valid))
+        mismatched["timeline"][0]["placements"][1]["source_range_us"] = [0, 1_000_000]
+        self.assertIn(
+            "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH",
+            module.validate_production_plan(mismatched, protocol),
+        )
+
+        fake = json.loads(json.dumps(valid))
+        fake["order_signature"] = ["1A", "1B", "1C"]
+        for index, row in enumerate(fake["timeline"]):
+            row["segment_key"] = fake["order_signature"][index]
+            source_range = [index * 1_000_000, (index + 1) * 1_000_000]
+            row["placements"][0]["source_range_us"] = source_range
+            row["placements"][1]["source_range_us"] = source_range
+        self.assertIn("URAKKAI_FAKE_SPLIT", module.validate_production_plan(fake, protocol))
+
+    def test_protocol_declares_final_shorts_hard_gates(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        urakkai = protocol["production_modes"]["URAKKAI"]
+        clean_only = protocol["production_modes"]["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+        self.assertIs(urakkai.get("fake_split_forbidden"), True)
+        self.assertIs(urakkai.get("approved_final_order_required"), True)
+        self.assertIs(urakkai.get("a10_sync_required_for_all_used_ranges"), True)
+        self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
+        self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")
+        self.assertEqual(clean_only.get("original_audio_duration"), "FULL_LENGTH")
+        self.assertEqual(clean_only.get("source_order_change"), "FORBIDDEN")
+        for field in ("source_file_evidence", "vmake_final_download", "capcut_visual_confirmation"):
+            self.assertIn(field, protocol["completion_report"]["required_fields"])
+
+    def test_vmake_direct_insert_and_two_loop_urakkai_review_contract(self):
+        module = load_validator()
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        semantic_contract = semantic_contract_corpus()
+        workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
+
+        invariants = protocol["invariants"]
+        self.assertIs(invariants.get("vmake_full_download_required"), True)
+        self.assertIs(invariants.get("vmake_direct_insert_required"), True)
+        self.assertEqual(
+            invariants.get("vmake_direct_insert_asset"),
+            "40_assets_used/clean_source.mp4",
+        )
+        self.assertEqual(invariants.get("vmake_direct_insert_asset_key"), "clean_video")
+
+        review = protocol["urakkai_review_loop"]
+        self.assertEqual(review["enabled_for"], ["URAKKAI"])
+        self.assertEqual(review["preferred_provider"], "first_party_claude_oauth")
+        self.assertEqual(review["preferred_model"], "Claude Opus")
+        self.assertEqual(review["effort"], "low")
+        self.assertEqual(review["review_loop_count"], 2)
+        self.assertEqual(review["reviews_per_loop"], 1)
+        self.assertIs(review["hermes_improvement_after_each_loop"], True)
+        self.assertIs(review["hermes_final_best_selection_required"], True)
+        self.assertEqual(review["authority"], "hermes_segment_id_and_approved_ranges")
+
+        stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
+        self.assertEqual(stage04["pass"], "URAKKAI_REVIEW_LOOP_2_COMPLETE")
+        self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 2)
+        self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_TWO_LOOPS")
+        self.assertIn("VMake Direct-Insert Contract", semantic_contract)
+        self.assertIn("검토 개선 loop는 정확히 2회", semantic_contract)
+
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["invariants"]["vmake_direct_insert_required"] = False
+        self.assertIn(
+            "PROTOCOL_INVARIANT_FALSE:vmake_direct_insert_required",
+            module.validate_protocol_document(broken),
+        )
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["urakkai_review_loop"]["review_loop_count"] = 1
+        self.assertIn(
+            "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT",
+            module.validate_protocol_document(broken),
+        )
+
+        invalid_plan = json.loads(
+            (SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8")
+        )
+        invalid_plan["timeline"][0]["placements"][0]["asset_key"] = "source_video"
+        self.assertIn(
+            "VMAKE_DIRECT_INSERT_ASSET_INVALID:source_video",
+            module.validate_production_plan(invalid_plan, protocol),
+        )
+
+    def test_urakkai_final_duration_is_not_forced_to_source_duration(self):
+        module = load_validator()
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        invariants = protocol["invariants"]
+        semantic_contract = semantic_contract_corpus()
+
+        self.assertIs(invariants.get("urakkai_final_duration_independent_from_source"), True)
+        self.assertIs(invariants.get("clean_visual_duration_matches_source_before_edit"), True)
+        self.assertIs(invariants.get("clean_only_full_source_duration_required"), True)
+        self.assertIn(
+            "원본 전체 길이와 최종 프로젝트 전체 길이를 같게 강제하지 않는다",
+            semantic_contract,
+        )
+
+        broken = copy.deepcopy(protocol)
+        broken["invariants"]["urakkai_final_duration_independent_from_source"] = False
+        self.assertIn(
+            "PROTOCOL_INVARIANT_FALSE:urakkai_final_duration_independent_from_source",
+            module.validate_protocol_document(broken),
+        )
+
+    def test_completion_report_rejects_missing_final_shorts_evidence(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        report = {
+            "episode_id": "SH_TEST",
+            "capcut_project_name": "SH_TEST_Hermes",
+            "production_mode": "URAKKAI",
+            "T1": "제목1",
+            "T2": "제목2",
+            "validation_status": "PASS",
+            "capcut_cloud_destination": "User3160027826975의 공간/MAC",
+            "capcut_cloud_row": {"name": "SH_TEST_Hermes", "size": "9MB", "duration": "00:09", "type": "프로젝트", "modified_time": "오늘"},
+            "upload_title": "업로드 제목",
+            "upload_description": "업로드 설명",
+            "sources": [{"channel": "원본", "url": "https://example.com"}],
+            "public_upload_status": "WAIT_APPROVAL",
+        }
+        errors = module.validate_completion_report(report, protocol)
+        self.assertIn("SOURCE_FILE_EVIDENCE_MISSING", errors)
+        self.assertIn("VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING", errors)
+        self.assertIn("CAPCUT_VISUAL_CONFIRMATION_MISSING", errors)
+
     def test_completion_report_rejects_missing_upload_metadata(self):
         module = load_validator()
         self.assertIsNotNone(module, "validate_executable_protocol.py must exist")
@@ -173,14 +443,12 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "public_upload_status": "WAIT_APPROVAL"
         }
         errors = module.validate_completion_report(report, protocol)
-        self.assertEqual(
-            errors,
-            [
-                "UPLOAD_METADATA_MISSING:upload_title",
-                "UPLOAD_METADATA_MISSING:upload_description",
-                "UPLOAD_METADATA_MISSING:sources",
-            ],
-        )
+        for expected in (
+            "UPLOAD_METADATA_MISSING:upload_title",
+            "UPLOAD_METADATA_MISSING:upload_description",
+            "UPLOAD_METADATA_MISSING:sources",
+        ):
+            self.assertIn(expected, errors)
 
     def test_completion_report_accepts_complete_metadata_and_blocks_unapproved_public_upload(self):
         module = load_validator()
@@ -206,19 +474,82 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "sources": [{"channel": "원본 채널", "url": "https://example.com/source"}],
             "public_upload_status": "WAIT_APPROVAL"
         }
-        self.assertEqual(module.validate_completion_report(report, protocol), [])
-        incomplete_cloud_row = json.loads(json.dumps(report, ensure_ascii=False))
-        del incomplete_cloud_row["capcut_cloud_row"]["size"]
-        self.assertIn(
-            "CAPCUT_CLOUD_ROW_MISSING:size",
-            module.validate_completion_report(incomplete_cloud_row, protocol),
-        )
-        report["public_upload_status"] = "UPLOADED"
-        report["public_upload_approval"] = False
-        self.assertIn(
-            "PUBLIC_UPLOAD_NOT_APPROVED",
-            module.validate_completion_report(report, protocol),
-        )
+        with tempfile.TemporaryDirectory() as td:
+            add_final_evidence(report, Path(td))
+            self.assertEqual(module.validate_completion_report(report, protocol), [])
+            substituted = json.loads(json.dumps(report, ensure_ascii=False))
+            source_meta = substituted["source_file_evidence"]
+            source_path = Path(source_meta["local_path"])
+            substituted["vmake_final_download"] = {
+                "downloaded_file_path": str(source_path),
+                "sha256": source_meta["sha256"],
+                "size_bytes": source_path.stat().st_size,
+                "duration": source_meta["duration"],
+                "is_actual_vmake_final_download": True,
+            }
+            self.assertIn(
+                "VMAKE_FINAL_DOWNLOAD_EVIDENCE_INVALID",
+                module.validate_completion_report(substituted, protocol),
+            )
+            render_claim = json.loads(json.dumps(report, ensure_ascii=False))
+            render_claim["completion_claim"] = "UPLOAD_READY"
+            self.assertIn(
+                "RENDER_EVIDENCE_MISSING",
+                module.validate_completion_report(render_claim, protocol),
+            )
+            incomplete_cloud_row = json.loads(json.dumps(report, ensure_ascii=False))
+            del incomplete_cloud_row["capcut_cloud_row"]["size"]
+            self.assertIn(
+                "CAPCUT_CLOUD_ROW_MISSING:size",
+                module.validate_completion_report(incomplete_cloud_row, protocol),
+            )
+            report["public_upload_status"] = "UPLOADED"
+            report["public_upload_approval"] = False
+            self.assertIn(
+                "PUBLIC_UPLOAD_NOT_APPROVED",
+                module.validate_completion_report(report, protocol),
+            )
+
+    def test_v2_inline_readback_is_schema_forbidden(self):
+        plan = make_v2_plan()
+        plan["root_structure_readback"] = make_physical_readback(plan)
+        completed, result = run_v2_cli(plan)
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["errors"], ["PRODUCTION_PLAN_SCHEMA_INVALID"])
+        self.assertIs(result["production_ready"], False)
+
+    def test_v2_plan_is_declared_only_without_external_readback(self):
+        completed, result = run_v2_cli(make_v2_plan())
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(result["status"], "DECLARED_ONLY")
+        self.assertEqual(result["errors"], [])
+        self.assertIs(result["production_ready"], False)
+        self.assertEqual(result["not_run"], ["postbuild_physical_readback"])
+
+    def test_v2_postbuild_readback_requires_hashes_and_separate_orders(self):
+        plan = make_v2_plan()
+        completed, result = run_v2_cli(plan, make_physical_readback(plan))
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(result["status"], "PASS")
+        self.assertIs(result["production_ready"], True)
+        self.assertIn("postbuild_physical_readback", result["checked"])
+
+    def test_v2_postbuild_rejects_missing_or_wrong_order_once(self):
+        plan = make_v2_plan()
+        physical = make_physical_readback(plan)
+        del physical["screen_compositor_layers_bottom_to_top"]
+        completed, result = run_v2_cli(plan, physical)
+        self.assertEqual(completed.returncode, 1, completed.stderr)
+        self.assertEqual(result["errors"], ["LAYER_STACK_ORDER_INVALID"])
+
+    def test_legacy_v1_plan_output_is_unchanged(self):
+        plan = json.loads((SKILL / "tests" / "fixtures" / "clean_only_plan.pass.json").read_text(encoding="utf-8"))
+        completed, result = run_v2_cli(plan)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(result["status"], "PASS")
+        self.assertNotIn("production_ready", result)
+        self.assertNotIn("not_run", result)
 
 
 if __name__ == "__main__":

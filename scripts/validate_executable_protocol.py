@@ -2,13 +2,21 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+from jsonschema import Draft202012Validator
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
+DEFAULT_PRODUCTION_PLAN_SCHEMA = SKILL_ROOT / "schemas" / "executable_production_plan.schema.json"
+LEGACY_PLAN_SCHEMA_VERSION = "001short-production-plan-v1"
+LAYER_CONTRACT_PLAN_SCHEMA_VERSION = "001short-production-plan-v2"
+POSTBUILD_ARTIFACT_TYPE = "capcut-postbuild-physical-readback-v1"
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -39,6 +47,48 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     expected_modes = {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}
     if not isinstance(modes, dict) or set(modes) != expected_modes:
         errors.append("PROTOCOL_MODES")
+    else:
+        urakkai = modes["URAKKAI"]
+        clean_only = modes["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+        for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required", "a10_sync_required_for_all_used_ranges"):
+            if urakkai.get(key) is not True:
+                errors.append(f"PROTOCOL_URAKKAI_GATE_FALSE:{key}")
+        if urakkai.get("minimum_video_segments", 0) < 2:
+            errors.append("PROTOCOL_URAKKAI_MINIMUM_CUTS")
+        expected_clean = {
+            "explicit_exception_to_multi_cut_gate": True,
+            "video_segments": 1,
+            "original_audio_segments": 1,
+            "video_duration": "FULL_LENGTH",
+            "original_audio_duration": "FULL_LENGTH",
+            "source_order_change": "FORBIDDEN",
+        }
+        for key, value in expected_clean.items():
+            if clean_only.get(key) != value:
+                errors.append(f"PROTOCOL_CLEAN_ONLY_GATE:{key}")
+
+    review = protocol.get("urakkai_review_loop")
+    if not isinstance(review, dict):
+        errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP")
+    else:
+        expected_review = {
+            "enabled_for": ["URAKKAI"],
+            "preferred_provider": "first_party_claude_oauth",
+            "preferred_model": "Claude Opus",
+            "effort": "low",
+            "reviews_per_loop": 1,
+            "hermes_improvement_after_each_loop": True,
+            "hermes_final_best_selection_required": True,
+            "authority": "hermes_segment_id_and_approved_ranges",
+            "fallback_provider": "Hermes subagent",
+            "fallback_on_claude_failure": True,
+            "evidence_path": "20_script/external-review.json",
+        }
+        if review.get("review_loop_count") != 2:
+            errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
+        for key, value in expected_review.items():
+            if review.get(key) != value:
+                errors.append(f"PROTOCOL_URAKKAI_REVIEW_GATE:{key}")
 
     stages = protocol.get("stages")
     expected_stages = [f"{number:02d}" for number in range(1, 10)]
@@ -54,6 +104,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "T1",
         "T2",
         "validation_status",
+        "source_file_evidence",
+        "vmake_final_download",
+        "capcut_visual_confirmation",
+        "completion_claim",
         "capcut_cloud_destination",
         "capcut_cloud_row",
         "upload_title",
@@ -71,6 +125,15 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     required_invariants = (
         "state_advance_after_validator_pass_only",
         "vmake_dom_first",
+        "vmake_full_download_required",
+        "vmake_direct_insert_required",
+        "urakkai_final_duration_independent_from_source",
+        "clean_visual_duration_matches_source_before_edit",
+        "clean_only_full_source_duration_required",
+        "source_file_evidence_required",
+        "vmake_final_download_evidence_required",
+        "vmake_substitute_file_forbidden",
+        "capcut_visual_confirmation_required_before_completion",
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_row_readback_required",
@@ -84,6 +147,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         for key in required_invariants:
             if invariants.get(key) is not True:
                 errors.append(f"PROTOCOL_INVARIANT_FALSE:{key}")
+        if invariants.get("vmake_direct_insert_asset") != "40_assets_used/clean_source.mp4":
+            errors.append("PROTOCOL_VMAKE_DIRECT_INSERT_ASSET")
+        if invariants.get("vmake_direct_insert_asset_key") != "clean_video":
+            errors.append("PROTOCOL_VMAKE_DIRECT_INSERT_ASSET_KEY")
     return errors
 
 
@@ -178,9 +245,138 @@ def _segments(tracks: Any, role: str) -> List[Dict[str, Any]]:
     return value if isinstance(value, list) else []
 
 
+def _append_once(errors: List[str], code: str) -> None:
+    if code not in errors:
+        errors.append(code)
+
+
+def _valid_range(value: Any, duration: int) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) == 2
+        and all(isinstance(item, int) and not isinstance(item, bool) for item in value)
+        and 0 <= value[0] < value[1] <= duration
+    )
+
+
+def validate_v2_layer_declaration(plan: Dict[str, Any]) -> List[str]:
+    if plan.get("schema_version") != LAYER_CONTRACT_PLAN_SCHEMA_VERSION:
+        return []
+    errors: List[str] = []
+    if "root_structure_readback" in plan:
+        _append_once(errors, "INLINE_ROOT_STRUCTURE_READBACK_FORBIDDEN")
+    contract = plan.get("capcut_layer_time_contract")
+    if not isinstance(contract, dict):
+        _append_once(errors, "CAPCUT_LAYER_TIME_CONTRACT_REQUIRED")
+    snapshot = plan.get("root_structure_snapshot")
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("SCREEN_WHITE"), dict):
+        _append_once(errors, "ROOT_FIXED_SNAPSHOT_REQUIRED")
+    return errors
+
+
+def validate_postbuild_physical_readback(
+    artifact: Dict[str, Any],
+    *,
+    artifact_path: Path,
+    plan_path: Path,
+    plan: Dict[str, Any],
+) -> List[str]:
+    """Validate external postbuild evidence without using physical track indexes."""
+    errors: List[str] = []
+    if not isinstance(artifact, dict) or artifact.get("artifact_type") != POSTBUILD_ARTIFACT_TYPE:
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+    if artifact.get("postbuild_status") != "PASS":
+        _append_once(errors, "POSTBUILD_PHYSICAL_READBACK_INVALID")
+
+    provenance = artifact.get("provenance")
+    required = ("plan_sha256", "readback_path", "readback_sha256", "postbuild_validator", "postbuild_validator_status")
+    if not isinstance(provenance, dict) or any(not isinstance(provenance.get(field), str) or not provenance[field] for field in required):
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+    if provenance["plan_sha256"].lower() != _sha256_file(plan_path).lower():
+        _append_once(errors, "POSTBUILD_PHYSICAL_READBACK_INVALID")
+    if provenance["postbuild_validator_status"] != "PASS":
+        _append_once(errors, "POSTBUILD_PHYSICAL_READBACK_INVALID")
+
+    readback_path = Path(provenance["readback_path"])
+    if not readback_path.is_absolute():
+        readback_path = artifact_path.resolve().parent / readback_path
+    readback_path = readback_path.resolve()
+    if (
+        readback_path == artifact_path.resolve()
+        or readback_path == plan_path.resolve()
+        or not readback_path.is_file()
+        or readback_path.is_symlink()
+        or _sha256_file(readback_path).lower() != provenance["readback_sha256"].lower()
+    ):
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+    try:
+        recorded_physical = read_json(readback_path)
+    except Exception:
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+
+    physical = artifact.get("physical_readback")
+    if not isinstance(physical, dict) or physical != recorded_physical:
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+    if any(field in physical for field in ("track_index", "track_indices", "physical_track_array", "ROOT_FIXED_FRAME_BACKGROUND", "absolute_layers")):
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+
+    duration = plan.get("total_duration_us")
+    screen_white = physical.get("SCREEN_WHITE")
+    effects = physical.get("SCREEN_EFFECT")
+    if (
+        not isinstance(duration, int)
+        or isinstance(duration, bool)
+        or not isinstance(screen_white, dict)
+        or screen_white.get("target_range_us") != [0, duration]
+        or not isinstance(effects, list)
+        or any(not isinstance(effect, dict) or not _valid_range(effect.get("target_range_us"), duration) for effect in effects)
+    ):
+        return ["POSTBUILD_PHYSICAL_READBACK_INVALID"]
+
+    snapshot = plan.get("root_structure_snapshot", {}).get("SCREEN_WHITE")
+    if isinstance(snapshot, dict) and any(screen_white.get(key) != value for key, value in snapshot.items()):
+        _append_once(errors, "ROOT_FIXED_STYLE_CHANGED")
+
+    contract = plan.get("capcut_layer_time_contract", {})
+    for field in ("visual_timeline_rows_bottom_to_top", "screen_compositor_layers_bottom_to_top", "audio_lanes"):
+        if physical.get(field) != contract.get(field):
+            _append_once(errors, "LAYER_STACK_ORDER_INVALID")
+    return errors
+
+
 def _full_range(segment: Dict[str, Any], duration: int) -> bool:
     expected = [0, duration]
     return segment.get("source_range_us") == expected and segment.get("target_range_us") == expected
+
+
+def _effective_video_groups(video: List[Dict[str, Any]]) -> int:
+    ordered = sorted(video, key=lambda row: (row.get("target_range_us") or [0, 0])[0])
+    groups = 0
+    previous: Dict[str, Any] | None = None
+    for segment in ordered:
+        if previous is None:
+            groups += 1
+        else:
+            previous_source = previous.get("source_range_us")
+            current_source = segment.get("source_range_us")
+            previous_target = previous.get("target_range_us")
+            current_target = segment.get("target_range_us")
+            source_contiguous = (
+                isinstance(previous_source, list) and len(previous_source) == 2
+                and isinstance(current_source, list) and len(current_source) == 2
+                and previous_source[1] == current_source[0]
+            )
+            target_contiguous = (
+                isinstance(previous_target, list) and len(previous_target) == 2
+                and isinstance(current_target, list) and len(current_target) == 2
+                and previous_target[1] == current_target[0]
+            )
+            same_asset = previous.get("asset_key") == segment.get("asset_key")
+            same_speed = previous.get("speed", 1) == segment.get("speed", 1)
+            if not (source_contiguous and target_contiguous and same_asset and same_speed):
+                groups += 1
+        previous = segment
+    return groups
 
 
 def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
@@ -264,6 +460,8 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     if not isinstance(plan, dict):
         return ["PRODUCTION_PLAN_OBJECT_REQUIRED"]
 
+    errors.extend(validate_v2_layer_declaration(plan))
+
     mode = plan.get("production_mode")
     modes = protocol.get("production_modes", {})
     if mode not in modes:
@@ -287,6 +485,14 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
 
+    invariants = protocol.get("invariants", {})
+    if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
+        expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
+        for segment in video:
+            if segment.get("asset_key") != expected_asset_key:
+                errors.append(f"VMAKE_DIRECT_INSERT_ASSET_INVALID:{segment.get('asset_key')}")
+                break
+
     if mode == "URAKKAI":
         config = modes[mode]
         if isinstance(original_order, list) and original_order == final_order:
@@ -294,8 +500,22 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
         minimum = config.get("minimum_video_segments", 2)
         if len(video) < minimum:
             errors.append("URAKKAI_VIDEO_SEGMENT_COUNT")
+        if config.get("fake_split_forbidden") and _effective_video_groups(video) < minimum:
+            errors.append("URAKKAI_FAKE_SPLIT")
         if config.get("video_audio_mapping_must_match") and len(video) != len(audio):
             errors.append("URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH")
+        if config.get("a10_sync_required_for_all_used_ranges"):
+            audio_by_target: Dict[tuple, List[Dict[str, Any]]] = {}
+            for segment in audio:
+                target = segment.get("target_range_us")
+                if isinstance(target, list) and len(target) == 2:
+                    audio_by_target.setdefault(tuple(target), []).append(segment)
+            for segment in video:
+                target = segment.get("target_range_us")
+                matches = audio_by_target.get(tuple(target), []) if isinstance(target, list) else []
+                if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
+                    errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
+                    break
         return errors
 
     config = modes[mode]
@@ -334,15 +554,89 @@ def _missing(value: Any) -> bool:
     return value is None or value == "" or value == [] or value == {}
 
 
-def validate_completion_report(report: Dict[str, Any], protocol: Dict[str, Any]) -> List[str]:
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _resolve_evidence_path(raw: Any, report_path: Path | None) -> Path | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    path = Path(raw).expanduser()
+    if not path.is_absolute() and report_path is not None:
+        path = report_path.resolve().parent / path
+    return path.resolve()
+
+
+def _probe_duration_seconds(path: Path) -> float | None:
+    try:
+        completed = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            return None
+        value = float(completed.stdout.strip())
+        return value if value > 0 else None
+    except (OSError, ValueError):
+        return None
+
+
+def _file_evidence_matches(
+    evidence: Any,
+    *,
+    path_field: str,
+    sha_field: str,
+    report_path: Path | None,
+    size_field: str | None = None,
+    duration_field: str | None = None,
+) -> tuple[bool, Path | None, float | None]:
+    if not isinstance(evidence, dict):
+        return False, None, None
+    path = _resolve_evidence_path(evidence.get(path_field), report_path)
+    if path is None or not path.is_file() or path.is_symlink():
+        return False, path, None
+    declared_sha = evidence.get(sha_field)
+    if not isinstance(declared_sha, str) or _sha256_file(path).lower() != declared_sha.lower():
+        return False, path, None
+    if size_field is not None and evidence.get(size_field) != path.stat().st_size:
+        return False, path, None
+    measured_duration = None
+    if duration_field is not None:
+        declared_duration = evidence.get(duration_field)
+        measured_duration = _probe_duration_seconds(path)
+        if (
+            not isinstance(declared_duration, (int, float))
+            or isinstance(declared_duration, bool)
+            or declared_duration <= 0
+            or measured_duration is None
+            or abs(float(declared_duration) - measured_duration) > 0.1
+        ):
+            return False, path, measured_duration
+    return True, path, measured_duration
+
+
+def validate_completion_report(
+    report: Dict[str, Any], protocol: Dict[str, Any], report_path: Path | None = None
+) -> List[str]:
     if not isinstance(report, dict):
         return ["COMPLETION_REPORT_OBJECT_REQUIRED"]
     config = protocol["completion_report"]
     prefix = config.get("missing_error_prefix", "UPLOAD_METADATA_MISSING")
     errors: List[str] = []
+    evidence_missing = {
+        "source_file_evidence": "SOURCE_FILE_EVIDENCE_MISSING",
+        "vmake_final_download": "VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING",
+        "capcut_visual_confirmation": "CAPCUT_VISUAL_CONFIRMATION_MISSING",
+    }
     for field in config["required_fields"]:
         if _missing(report.get(field)):
-            errors.append(f"{prefix}:{field}")
+            errors.append(evidence_missing.get(field, f"{prefix}:{field}"))
 
     sources = report.get("sources")
     if isinstance(sources, list) and sources:
@@ -359,6 +653,81 @@ def validate_completion_report(report: Dict[str, Any], protocol: Dict[str, Any])
         for field in config.get("cloud_row_required_fields", []):
             if _missing(cloud_row.get(field)):
                 errors.append(f"CAPCUT_CLOUD_ROW_MISSING:{field}")
+
+    source_evidence = report.get("source_file_evidence")
+    if isinstance(source_evidence, dict):
+        required = config.get("source_file_evidence_required_fields", [])
+        valid, _, measured = _file_evidence_matches(
+            source_evidence, path_field="local_path", sha_field="sha256",
+            report_path=report_path, duration_field="duration",
+        )
+        ranges = source_evidence.get("approved_source_time_ranges")
+        range_limit = round(measured * 1_000_000) + 100_000 if measured is not None else 0
+        ranges_valid = isinstance(ranges, list) and bool(ranges)
+        if ranges_valid:
+            for item in ranges:
+                if (
+                    not isinstance(item, list) or len(item) != 2
+                    or any(not isinstance(value, int) or isinstance(value, bool) for value in item)
+                    or item[0] < 0 or item[1] <= item[0] or item[1] > range_limit
+                ):
+                    ranges_valid = False
+                    break
+        if any(_missing(source_evidence.get(field)) for field in required) or not valid or not ranges_valid:
+            errors.append("SOURCE_FILE_EVIDENCE_INVALID")
+
+    vmake = report.get("vmake_final_download")
+    if isinstance(vmake, dict):
+        required = config.get("vmake_final_download_required_fields", [])
+        valid, _, _ = _file_evidence_matches(
+            vmake, path_field="downloaded_file_path", sha_field="sha256",
+            report_path=report_path, size_field="size_bytes", duration_field="duration",
+        )
+        if (
+            any(_missing(vmake.get(field)) for field in required)
+            or vmake.get("is_actual_vmake_final_download") is not True
+            or not valid
+            or (
+                isinstance(source_evidence, dict)
+                and isinstance(source_evidence.get("sha256"), str)
+                and str(vmake.get("sha256", "")).lower() == source_evidence["sha256"].lower()
+            )
+        ):
+            errors.append("VMAKE_FINAL_DOWNLOAD_EVIDENCE_INVALID")
+
+    visual = report.get("capcut_visual_confirmation")
+    if isinstance(visual, dict):
+        required = config.get("capcut_visual_confirmation_required_fields", [])
+        screen_ok, _, _ = _file_evidence_matches(
+            visual, path_field="screen_evidence_path", sha_field="screen_evidence_sha256",
+            report_path=report_path,
+        )
+        draft = visual.get("draft_readback")
+        draft_ok, _, _ = _file_evidence_matches(
+            draft, path_field="local_path", sha_field="sha256", report_path=report_path,
+        )
+        if (
+            any(_missing(visual.get(field)) for field in required)
+            or visual.get("actual_project_name") != report.get("capcut_project_name")
+            or visual.get("screen_confirmation_status") != "PASS"
+            or not screen_ok or not draft_ok
+            or not isinstance(draft, dict)
+            or visual.get("final_project_hash", "").lower() != str(draft.get("sha256", "")).lower()
+        ):
+            errors.append("CAPCUT_VISUAL_CONFIRMATION_INVALID")
+
+    claim = report.get("completion_claim")
+    if claim in config.get("render_claim_values", []):
+        render = report.get("render_evidence")
+        if not isinstance(render, dict):
+            errors.append("RENDER_EVIDENCE_MISSING")
+        else:
+            valid, _, _ = _file_evidence_matches(
+                render, path_field="mp4_path", sha_field="mp4_sha256",
+                report_path=report_path, size_field="size_bytes", duration_field="duration",
+            )
+            if any(_missing(render.get(field)) for field in config.get("render_evidence_required_fields", [])) or not valid:
+                errors.append("RENDER_EVIDENCE_INVALID")
 
     destination = report.get("capcut_cloud_destination")
     expected_destination = protocol.get("invariants", {}).get("capcut_cloud_destination")
@@ -377,6 +746,7 @@ def main(argv: List[str] = None) -> int:
     parser = argparse.ArgumentParser(description="Validate the 001short executable protocol, episode plan, and completion report.")
     parser.add_argument("--protocol", type=Path, default=DEFAULT_PROTOCOL)
     parser.add_argument("--plan", type=Path)
+    parser.add_argument("--postbuild-physical-readback", type=Path)
     parser.add_argument("--completion-report", type=Path)
     parser.add_argument("--self-check", action="store_true")
     args = parser.parse_args(argv)
@@ -390,22 +760,55 @@ def main(argv: List[str] = None) -> int:
     errors = validate_protocol_document(raw_protocol)
     errors.extend(validate_skill_contract(args.protocol.resolve().parent, raw_protocol))
     checked = ["protocol", "skill_contract"]
+    not_run: List[str] = []
+    plan_schema_version: str | None = None
     if args.plan:
         checked.append("production_plan")
         try:
-            errors.extend(validate_production_plan(read_json(args.plan), raw_protocol))
+            plan = read_json(args.plan)
+            plan_schema_version = plan.get("schema_version")
+            plan_schema = read_json(DEFAULT_PRODUCTION_PLAN_SCHEMA)
+            if list(Draft202012Validator(plan_schema).iter_errors(plan)):
+                _append_once(errors, "PRODUCTION_PLAN_SCHEMA_INVALID")
+            else:
+                errors.extend(validate_production_plan(plan, raw_protocol))
+                if plan_schema_version == LAYER_CONTRACT_PLAN_SCHEMA_VERSION:
+                    if args.postbuild_physical_readback:
+                        checked.append("postbuild_physical_readback")
+                        errors.extend(
+                            validate_postbuild_physical_readback(
+                                read_json(args.postbuild_physical_readback),
+                                artifact_path=args.postbuild_physical_readback.resolve(),
+                                plan_path=args.plan.resolve(),
+                                plan=plan,
+                            )
+                        )
+                    else:
+                        not_run.append("postbuild_physical_readback")
         except Exception as exc:
             errors.append(f"PRODUCTION_PLAN_READ:{exc}")
     if args.completion_report:
         checked.append("completion_report")
         try:
-            errors.extend(validate_completion_report(read_json(args.completion_report), raw_protocol))
+            errors.extend(validate_completion_report(read_json(args.completion_report), raw_protocol, args.completion_report))
         except Exception as exc:
             errors.append(f"COMPLETION_REPORT_READ:{exc}")
+    if args.postbuild_physical_readback and not args.plan:
+        errors.append("POSTBUILD_PHYSICAL_READBACK_PLAN_REQUIRED")
     if not (args.self_check or args.plan or args.completion_report):
         errors.append("VALIDATION_TARGET_REQUIRED")
 
-    result = {"status": "PASS" if not errors else "FAIL", "checked": checked, "errors": errors}
+    if errors:
+        status = "FAIL"
+    elif plan_schema_version == LAYER_CONTRACT_PLAN_SCHEMA_VERSION and not args.postbuild_physical_readback:
+        status = "DECLARED_ONLY"
+    else:
+        status = "PASS"
+    result = {"status": status, "checked": checked, "errors": errors}
+    if plan_schema_version == LAYER_CONTRACT_PLAN_SCHEMA_VERSION:
+        result["production_ready"] = status == "PASS"
+        if not_run:
+            result["not_run"] = not_run
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0 if not errors else 1
 

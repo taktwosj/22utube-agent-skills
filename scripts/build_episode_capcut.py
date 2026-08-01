@@ -146,6 +146,8 @@ def _validate_config(config: dict) -> None:
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
+    if config.get("audio_role", "A10") not in {"A10", "A12"}:
+        raise ValueError("AUDIO_ROLE_INVALID")
     duration = config["duration_us"]
     if not isinstance(duration, int) or duration <= 0:
         raise ValueError("DURATION_INVALID")
@@ -237,6 +239,129 @@ def _set_media(
     material["duration"] = duration_us
 
 
+def _populate_full_duration_audio(
+    track: dict,
+    template_segment: dict,
+    material: dict,
+    *,
+    portable_path: str,
+    duration_us: int,
+    role: str,
+    segment_id: str,
+) -> None:
+    _set_media(
+        material,
+        media_type="audio",
+        portable_path=portable_path,
+        role=role,
+        duration_us=duration_us,
+    )
+    segment = copy.deepcopy(template_segment)
+    segment["id"] = segment_id
+    segment["role"] = role
+    segment["target_timerange"] = {"start": 0, "duration": duration_us}
+    segment["source_timerange"] = {"start": 0, "duration": duration_us}
+    track["segments"] = [segment]
+
+
+def _scrub_windows_cache_paths(value: object) -> int:
+    changed = 0
+    windows_path = re.compile(r"(?<![A-Za-z0-9+.-])[A-Za-z]:[\\/]")
+    if isinstance(value, dict):
+        for key, child in list(value.items()):
+            if key in {"icon_url", "preview_cover_url"} and isinstance(child, str) and child.startswith(("http://", "https://")):
+                value[key] = ""
+                changed += 1
+                continue
+            if isinstance(child, str) and windows_path.search(child):
+                if child.lstrip().startswith(("{", "[")):
+                    try:
+                        nested = json.loads(child)
+                    except (TypeError, json.JSONDecodeError):
+                        nested = None
+                    if nested is not None:
+                        nested_changed = _scrub_windows_cache_paths(nested)
+                        value[key] = json.dumps(nested, ensure_ascii=False, separators=(",", ":"))
+                        changed += max(1, nested_changed)
+                        continue
+                value[key] = ""
+                changed += 1
+                continue
+            changed += _scrub_windows_cache_paths(child)
+    elif isinstance(value, list):
+        for index, child in enumerate(list(value)):
+            if isinstance(child, str) and windows_path.search(child):
+                value[index] = ""
+                changed += 1
+            else:
+                changed += _scrub_windows_cache_paths(child)
+    return changed
+
+
+def _prepare_cloud_project(
+    project: Path,
+    *,
+    project_name: str,
+    capcut_root: Path,
+    draft_id: str,
+    duration_us: int,
+) -> dict:
+    project = Path(project).resolve()
+    subdraft = project / "subdraft"
+    if subdraft.is_dir():
+        shutil.rmtree(subdraft)
+    shutil.copy2(project / "draft_content.json", project / "draft_info.json")
+    shutil.copy2(project / "draft_content.json", project / "template-2.tmp")
+    for content in (project / "Timelines").glob("*/draft_content.json"):
+        shutil.copy2(content, content.with_name("draft_info.json"))
+        shutil.copy2(content, content.with_name("template-2.tmp"))
+    changed = 0
+    for path in sorted(project.rglob("*")):
+        if not path.is_file() or not (path.suffix == ".json" or path.name in {"draft_info.json", "template-2.tmp"}):
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        current = _scrub_windows_cache_paths(payload)
+        if current:
+            _write_json(path, payload)
+            changed += current
+    meta_path = project / "draft_meta_info.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta.update({
+        "draft_id": draft_id,
+        "draft_name": project_name,
+        "draft_fold_path": str(project),
+        "draft_root_path": str(Path(capcut_root).resolve()),
+        "tm_duration": duration_us,
+        "tm_draft_cloud_entry_id": -1,
+        "tm_draft_cloud_parent_entry_id": -1,
+        "tm_draft_cloud_space_id": 0,
+        "tm_draft_cloud_user_id": 0,
+        "tm_draft_cloud_completed": False,
+        "cloud_draft_sync": False,
+    })
+    _write_json(meta_path, meta)
+    return {"windows_paths_scrubbed": changed, "draft_meta": meta}
+
+
+def _register_capcut_project(project: Path, capcut_root: Path, backup_path: Path) -> None:
+    root_path = Path(capcut_root).resolve() / "root_meta_info.json"
+    shutil.copy2(root_path, backup_path)
+    root = json.loads(root_path.read_text(encoding="utf-8"))
+    meta = json.loads((Path(project) / "draft_meta_info.json").read_text(encoding="utf-8"))
+    rows = root.setdefault("all_draft_store", [])
+    rows[:] = [row for row in rows if row.get("draft_name") != meta["draft_name"] and row.get("draft_id") != meta["draft_id"]]
+    row = copy.deepcopy(meta)
+    row["draft_json_file"] = str(Path(project) / "draft_info.json")
+    row["draft_cover"] = str(Path(project) / "draft_cover.jpg")
+    row["draft_timeline_materials_size"] = sum(path.stat().st_size for path in Path(project).rglob("*") if path.is_file())
+    rows.append(row)
+    root["root_path"] = str(Path(capcut_root).resolve())
+    _write_json(root_path, root)
+
+
 def _set_text(material: dict, text: str, role: str) -> None:
     try:
         rich = json.loads(material["content"])
@@ -303,6 +428,16 @@ def _normalize_source(
                 if material is not None:
                     material["role"] = role
                     material["desc"] = f"001short production {role}"
+
+        a12_template_segment = None
+        a12_material = None
+        if config.get("audio_role", "A10") == "A12":
+            if not tracks[11].get("segments"):
+                raise RuntimeError("PINNED_A12_TEMPLATE_SEGMENT_MISSING")
+            a12_template_segment = copy.deepcopy(tracks[11]["segments"][0])
+            a12_material = material_map.get(a12_template_segment.get("material_id"))
+            if a12_material is None:
+                raise RuntimeError("PINNED_A12_TEMPLATE_MATERIAL_MISSING")
 
         # Existing template lanes only: no track is added.
         for index in (4, 5, 8, 10, 11):
@@ -411,6 +546,20 @@ def _normalize_source(
             }
             a10_segments.append(a10_segment)
         tracks[9]["segments"] = a10_segments
+
+        if config.get("audio_role", "A10") == "A12":
+            assert a12_template_segment is not None and a12_material is not None
+            _populate_full_duration_audio(
+                tracks[11],
+                a12_template_segment,
+                a12_material,
+                portable_path=_portable_resource_path(
+                    draft_prefix, f"Resources/media/{audio_name}"
+                ),
+                duration_us=duration,
+                role="A12",
+                segment_id=_approved_id(config, approved, "A12"),
+            )
 
         # Keep every retained local template material self-contained.
         retained_ids = {
@@ -652,6 +801,13 @@ def _build_episode_once(config: dict) -> dict:
     _assert_capcut_closed_for_target(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(working, target)
+    cloud_prepare = _prepare_cloud_project(
+        target,
+        project_name=config["project_name"],
+        capcut_root=target.parent,
+        draft_id=draft_id,
+        duration_us=config["duration_us"],
+    )
     model = capcut_model.load_project(target)
     material_map = {row.get("id"): row for row in _materials(model.materials) if isinstance(row.get("id"), str)}
     timeline_rows = []
@@ -736,10 +892,16 @@ def _build_episode_once(config: dict) -> dict:
         if target.is_dir():
             shutil.rmtree(target)
         raise RuntimeError(f"STAGE08_POSTBUILD:{postbuild}")
+    _register_capcut_project(
+        target,
+        target.parent,
+        build_root / "root_meta_info.before.json",
+    )
     state = {
         "episode_id": config["episode_id"], "current_stage": "09",
         "status": "WAIT_USER_CAPCUT_CHECK", "project_name": config["project_name"],
         "local_capcut_project_path": str(target), "stage09_user_approval": "NOT_RUN",
+        "cloud_prepare": cloud_prepare,
     }
     _write_json(episode / "episode_state.json", state)
     return {

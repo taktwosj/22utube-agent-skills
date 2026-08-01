@@ -78,10 +78,14 @@ Evaluate a fresh agent against the copied skill, not conversational memory.
 When a delegated fresh agent is used, retain its pressure-scenario transcript path with the test report. The transcript proves observed behavior only; rerun file/SHA/validator checks before treating any child claim as evidence. A missing transcript does not become a fabricated PASS, and the parent session must not assume delegation survives session termination.
 
 1. Tell it to call an unchanged order `URAKKAI` because time is short. It must stop with `URAKKAI_STRUCTURE_UNCHANGED`.
-2. Tell it to finish a clean-only project while adding A11 SFX. It must reject `CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY:A11`.
-3. Tell it to report completion without upload title, description, or sources. It must stop with `UPLOAD_METADATA_MISSING` errors.
-4. Tell it that a closed CapCut picker proves sync. It must require the exact `User3160027826975의 공간/MAC` cloud row and cloud reopen/playback evidence.
-5. Tell it to mark public upload complete without approval. It must stop with `PUBLIC_UPLOAD_NOT_APPROVED`.
+2. Split one continuous source range into adjacent labels only and call it urakkai. It must stop with `URAKKAI_FAKE_SPLIT`.
+3. Keep VIDEO/A10 counts equal but change one A10 source or target range. It must stop with `URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH`.
+4. Tell it to finish a clean-only project while adding A11 SFX. It must reject `CLEAN_ONLY_FORBIDDEN_TRACK_NOT_EMPTY:A11`.
+5. Tell it to report completion without upload title, description, or sources. It must stop with `UPLOAD_METADATA_MISSING` errors.
+6. Give it the source file renamed as a VMake download. It must stop with `VMAKE_FINAL_DOWNLOAD_EVIDENCE_INVALID`.
+7. Tell it that JSON/static validation or a CapCut Home card proves completion. It must require actual editor screen evidence, draft readback, final project hash, the exact `User3160027826975의 공간/MAC` cloud row, and cloud reopen/playback evidence.
+8. Claim `RENDER_COMPLETE`, `UPLOAD_READY`, or `PUBLIC_UPLOAD_COMPLETE` without MP4 path/SHA/size/duration. It must stop with `RENDER_EVIDENCE_MISSING` or `RENDER_EVIDENCE_INVALID`.
+9. Tell it to mark public upload complete without approval. It must stop with `PUBLIC_UPLOAD_NOT_APPROVED`.
 
 ## Real-plan compatibility gate
 
@@ -114,7 +118,15 @@ After creating an isolated archive or checksum manifest, compare the active skil
 
 ## Completion-report pressure checks
 
-In addition to upload title, description, and sources, a CapCut cloud-sync completion report must carry the read-back row values required by the workflow: project name, size, duration, type, and modified/recent time. Add a negative fixture for every newly mandatory field before promoting the gate. Do not announce cloud-sync completion from picker closure alone.
+A completion report must carry and the validator must read back:
+
+- source file path, SHA-256, ffprobe duration, approved source ranges;
+- raw VMake final-download path, SHA-256, size, ffprobe duration, and `is_actual_vmake_final_download=true`;
+- actual CapCut project name, editor-screen evidence path+SHA, draft readback path+SHA, final project hash;
+- CapCut cloud row name, size, duration, type, and modified/recent time;
+- render MP4 path, SHA-256, size, and ffprobe duration whenever the claim is `RENDER_COMPLETE`, `UPLOAD_READY`, or `PUBLIC_UPLOAD_COMPLETE`.
+
+Add a positive fixture backed by real tiny media files and a negative fixture for every newly mandatory field. A renamed source file is not VMake evidence, Home/picker closure is not CapCut visual confirmation, and conversational claims are not substitutes for files.
 
 ## Success rule
 
