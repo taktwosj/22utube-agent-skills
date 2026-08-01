@@ -6,6 +6,10 @@ Use this reference whenever the operator says `VMAKE`, `VMAKE 클린영상`, `�
 
 This is browser UI automation, not a VMake API integration. Prefer deterministic DOM/CDP operations over screen coordinates.
 
+## Fast production rule
+
+Start one upload immediately after source identity, then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
+
 ## Scope routing
 
 `0쇼츠` is a content lane/category; `001short-production-agent` is a production workflow, so they are not mutually exclusive choices.

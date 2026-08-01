@@ -25,6 +25,17 @@ Reject edit-outline copy such as "show the reaction first", "reveal the reason l
 
 Create the hook through the current situation. Do not invent a twist, conclusion, or causal explanation unsupported by visible evidence. Speaker captions stay dynamic: use the actual current speaker count, do not force every video into two fixed lines, and do not create TTS merely to fill a layer. A `STATE` line is optional and must name the present scene or emotion.
 
+## Creative urakkai license (supersedes the conservative sentence above)
+
+Urakkai is an entertaining re-story, not a documentary transcript. The user may deliberately add a playful premise, emotional framing, hook, reversal, or imagined inner thought when it makes the visible situation more engaging. For example, a father and son walking can open with a warm “remember mom” premise, then land on the father briefly looking at a passing runner. The written story may connect these beats even when the source never literally states that message.
+
+Keep two fields separate in the blueprint:
+
+- `SOURCE_OBSERVATION`: only what is visibly/audibly evidenced.
+- `CREATIVE_URAKKAI`: the added story, narration, hook, emotional interpretation, or comic reversal.
+
+Creative copy may be witty, exaggerated, or fictional, but must not present an unverified real-world identity, crime, medical/legal claim, relationship, or defamatory allegation as fact. It should make the moment fun, not pretend to report a real event. The Stage 04 reviewer evaluates whether the creative premise is clear, funny, and aligned with the user's requested tone; it must not rewrite the draft back into a sterile literal description.
+
 ## Review result
 
 Report: `present_scene`, `emotional_hook`, `rewrite_or_keep`, and `approval_status=WAIT_USER_URAKKAI_APPROVAL`. Each user correction reuses this same stage and reports again.

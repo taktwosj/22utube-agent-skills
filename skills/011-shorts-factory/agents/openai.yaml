@@ -1,4 +1,4 @@
 interface:
   display_name: "011 Shorts Factory"
-  short_description: "Create and verify a clean Paperclip Shorts P0 company."
-  default_prompt: "Use $011-shorts-factory to create a clean Paperclip Shorts P0 company and agent layout."
+  short_description: "Operate the Paperclip P0 entry and verification flow for Korean Shorts."
+  default_prompt: "Use $011-shorts-factory to operate the required Paperclip P0 entry, team roles, and verification gates for a 001 Shorts episode."

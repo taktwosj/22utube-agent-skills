@@ -26,6 +26,13 @@ Create exactly three agents and attach the same verified 001 version to all thre
 
 Read `references/paperclip-operating-direction.md` when configuring agents, assigning an episode, or handing this company to another AI. It is the detailed model matrix and Mac mini urakkai route.
 
+## Mandatory Episode Entry And Fault Prevention
+
+- `쇼츠팩토리 P0` is the only entry for every new `001short-production-agent` episode. `P0-총괄` creates one Paperclip issue before source analysis; no local standalone episode may bypass it.
+- The coordinator writes `{episode_root}/90_workflow/paperclip_entry.json` with `episode_id`, Paperclip issue ID, `macmini` writer, all three P0 role names, and the attached 001 `SKILL.md` SHA-256. The producer must run the 001 entry validator before Stage 01; missing evidence is `WAIT_PAPERCLIP_ENTRY`.
+- The producer applies approved settings. The read-only verifier owns the Stage 08 profile verdict and must check source-audio vocal-retain, narration mute, -14 LUFS, `W Flash` joins, AI HD/adjustment values, and dynamic text evidence. A producer result is never its own PASS.
+- Treat a visible still/frozen clip, unmuted source under A9, voice removed instead of vocal-retain, a missing transition, or an outline-style situation caption as a `FAIL` routed back to `P0-제작`; do not advance the issue.
+
 ## Deployment Order
 
 1. Create the empty company.

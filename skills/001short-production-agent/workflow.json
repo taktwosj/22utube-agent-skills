@@ -30,6 +30,9 @@
   },
   "runtime": {
     "state_path": "{episode_root}/90_workflow/state.json",
+    "paperclip_entry_path": "{episode_root}/90_workflow/paperclip_entry.json",
+    "paperclip_entry_validator": "scripts/validate_paperclip_entry.py",
+    "paperclip_entry_required_before_stage": "01",
     "state_required": [
       "episode_id",
       "current_stage",
@@ -412,6 +415,18 @@
       "gemini_analysis"
     ],
     "analysis_authority": "source.mp4",
+    "comment_insights": {
+      "stage": "01",
+      "optional": true,
+      "artifact": "{episode_root}/10_analysis/comment_insights.json",
+      "live_api_probe_required_when_configured": true,
+      "api_key_visibility": "forbidden",
+      "live_success": ["ok=true", "video_title_present", "comment_error_absent"],
+      "request": "50_public_threads_then_local_like_reply_recency_rank_and_diverse_5_to_6_selection",
+      "use": "Stage_03_04_creative_hook_and_audience_interpretation_only",
+      "not_authority_for": ["source_fact", "identity", "event_claim"],
+      "failure": "COMMENTS_UNAVAILABLE_NONBLOCKING"
+    },
     "ocr": {
       "coverage": "full_source_scene_and_text_changes",
       "on_unresolved": "WAIT_OCR_UNRESOLVED"
@@ -486,7 +501,19 @@
       "template": "shrt white",
       "new_tracks": false,
       "new_tools": false,
-      "a10_authority": "source.mp4"
+      "a10_authority": "source.mp4",
+      "capcut_polish_profile": "001short-capcut-polish-v2",
+      "capcut_polish_validator": "scripts/validate_capcut_polish_profile.py",
+      "source_audio_separation": "vocal_retain_choice_2",
+      "source_audio_during_a9": "mute",
+      "audio_loudness_lufs": -14,
+      "transition_each_join": "W Flash",
+      "video_ai_hd_level": 3,
+      "video_smart_adjust": [42, 47],
+      "video_sharpen": 50,
+      "video_clear": 50,
+      "state_caption_meaningful_character_max": 8,
+      "speaker_caption_lines": "dynamic_current_speaker_count"
     }
   },
   "interim_capcut": {

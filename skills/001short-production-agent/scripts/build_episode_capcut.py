@@ -21,9 +21,11 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 import capcut_model
 import clone_and_sync
+import apply_capcut_polish_profile
 import validate_audio_caption
 import validate_build_inputs
 import validate_capcut_project
+import validate_capcut_polish_profile
 import validate_postbuild
 import validate_prebuild
 import validate_clean_visual
@@ -168,6 +170,11 @@ def _validate_config(config: dict) -> None:
             or ("cue_id" in cue and (not isinstance(cue["cue_id"], str) or not cue["cue_id"]))
         ):
             raise ValueError("STATE_CUES_INVALID")
+        # STATE is a punchy, present-scene cue, not a sentence-sized edit outline.
+        # Spaces and punctuation do not consume the eight Korean-character budget.
+        meaningful = "".join(char for char in cue["text"] if char.isalnum())
+        if len(meaningful) > 8:
+            raise ValueError("STATE_CUE_TOO_LONG")
         previous_end = cue["end_us"]
 
 
@@ -808,6 +815,12 @@ def _build_episode_once(config: dict) -> dict:
         draft_id=draft_id,
         duration_us=config["duration_us"],
     )
+    polish_receipt_path = build_root / "capcut_polish_profile_receipt.json"
+    polish_receipt = apply_capcut_polish_profile.apply_project(target)
+    _write_json(polish_receipt_path, polish_receipt)
+    polish_validation = validate_capcut_polish_profile.validate_project(target)
+    if polish_validation["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_POLISH:{polish_validation}")
     model = capcut_model.load_project(target)
     material_map = {row.get("id"): row for row in _materials(model.materials) if isinstance(row.get("id"), str)}
     timeline_rows = []
@@ -848,6 +861,9 @@ def _build_episode_once(config: dict) -> dict:
         "build_manifest_path": str(Path(config["build_manifest_path"]).resolve()),
         "build_manifest_sha256": _sha(Path(config["build_manifest_path"]).resolve()),
         "build_inputs_receipt_path": str(receipt_path.resolve()), "build_inputs_receipt_sha256": "0" * 64,
+        "capcut_polish_profile_receipt_path": str(polish_receipt_path.resolve()),
+        "capcut_polish_profile_receipt_sha256": _sha(polish_receipt_path),
+        "capcut_polish_profile_validation": polish_validation,
         "structure_snapshot_sha256": _sha(snapshot_path), "project_id": project_id,
         "draft_id": draft_id, "main_timeline_id": timeline_id,
         "required_asset_paths": sorted(required_assets), "approved_text": sorted(approved_text),

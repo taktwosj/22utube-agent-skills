@@ -111,6 +111,8 @@
     "source_is_read_only": true,
     "state_advance_after_validator_pass_only": true,
     "gui_owner_count": 1,
+    "paperclip_entry_required_before_stage_01": true,
+    "paperclip_entry_writer_machine": "macmini",
     "vmake_dom_first": true,
     "vmake_submit_after_source_identity": true,
     "vmake_candidate_integrity_only": true,
@@ -144,6 +146,15 @@
     "vmake_final_download_evidence_required": true,
     "vmake_substitute_file_forbidden": true,
     "capcut_visual_confirmation_required_before_completion": true
+    ,"capcut_polish_profile_required": true,
+    "capcut_polish_profile_validator_required": true,
+    "source_audio_vocal_retain_required": true,
+    "source_audio_mute_during_a9_required": true,
+    "all_audio_loudness_normalized_lufs": -14,
+    "video_join_transition_required": "W Flash",
+    "video_ai_hd_level_required": 3,
+    "state_caption_meaningful_character_max": 8,
+    "speaker_caption_line_count": "dynamic_current_speaker_count"
   },
   "anchors": {
     "VIDEO": "clean visual; embedded audio muted when A10 is present",

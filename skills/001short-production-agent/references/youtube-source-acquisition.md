@@ -46,6 +46,12 @@ The lesson is separation of authorities, not a permanent claim that subtitle dow
 - contact sheet or sampled frames
 - explicit note on baked-in title/subtitles/watermarks
 
+## Optional comment insight pass
+
+When the local Mac mini comment app reports `hasApiKey=true`, do not read, print, or persist the API key. Prove availability only with its live response: `ok=true`, a video title, and no `comment_error`. Request 50 public comment threads, sample relevance and latest ordering, then rank locally with like count, reply count, and recency. Select five or six genuinely different reaction clusters rather than six near-duplicate popular comments.
+
+Store only the compact insight result in `10_analysis/comment_insights.json`: reaction cluster, representative public comment excerpt, like/reply counts, and the creative use or rejection reason. Comments are audience interpretation for Stage 03/04 hooks; they never verify a source fact or identity. If comments are disabled, quota-limited, or the local request fails, record `COMMENTS_UNAVAILABLE` and continue source analysis.
+
 ## Visual-density gate
 
 Before planning T1/T2 or STATE, inspect whether the downloaded source already contains baked-in text. If it does, the human blueprint must explicitly choose one:

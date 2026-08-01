@@ -25,9 +25,19 @@
   },
   "analysis_tools": {
     "authority": "source.mp4",
-    "inputs": ["user_brief_review", "gemini_analysis"],
+    "inputs": ["user_brief_review", "gemini_analysis", "optional_comment_insights"],
     "methods": ["frame_inspection", "ocr", "audio_inspection"],
-    "unresolved": "WAIT_OCR_UNRESOLVED"
+    "unresolved": "WAIT_OCR_UNRESOLVED",
+    "comment_insights": {
+      "optional": true,
+      "authority": "audience_interpretation_only",
+      "api_key_handling": "local_app_hasApiKey_and_live_response_only; never_print_or_store_key",
+      "probe_success": "ok=true, video_title_present, comment_error_absent",
+      "fetch": "50_public_threads; relevance_and_time_samples; deduplicate",
+      "rank_locally_by": ["like_count", "reply_count", "published_at"],
+      "select": "five_to_six_meaningfully_different_reaction_clusters",
+      "failure": "COMMENTS_UNAVAILABLE_NONBLOCKING"
+    }
   },
   "production_engine": {
     "skill": ".",
@@ -59,7 +69,7 @@
     "url": "https://vmake.ai/video-watermark-remover/upload",
     "input": "source.mp4",
     "output": "clean_source.mp4",
-    "trigger": "FINAL_DESIGN_LOCKED",
+    "trigger": "SOURCE_OCR_VERIFIED_BACKGROUND_DOM",
     "role": "visual_only",
     "embedded_audio": "mute",
     "manifest": "clean_visual_manifest.json",

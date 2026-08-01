@@ -10,6 +10,7 @@ description: Use for original-shorts production, or when a new-session 001 conve
 Load `protocol.json` before mode routing, stage selection, production-plan compilation, CapCut assembly, completion reporting, or public-upload decisions. `protocol.json` is the machine-readable contract; `SKILL.md` explains semantic judgment; `workflow.json` declares state transitions.
 
 - Run `python3 scripts/validate_executable_protocol.py --self-check` before a new episode or isolated deployment test.
+- Enter every new 001 episode through the Mac mini `쇼츠팩토리 P0` Paperclip issue. Before Stage 01, require `{episode_root}/90_workflow/paperclip_entry.json` and pass `scripts/validate_paperclip_entry.py`; missing is `WAIT_PAPERCLIP_ENTRY`, mismatch is `FAIL_PAPERCLIP_ENTRY`. Do not start a standalone local 001 episode.
 - Validate every machine-readable Stage 05 production plan with `scripts/validate_executable_protocol.py --plan <path>` before advancing or building.
 - Validate `90_reports/completion_report.json` with `scripts/validate_executable_protocol.py --completion-report <path>` before any `all_harness_pass`, `WAIT_UPLOAD_APPROVAL`, `upload_ready`, or `uploaded` claim.
 - If `SKILL.md`, `protocol.json`, and `workflow.json` conflict, stop with `STOP_PROTOCOL_CONFLICT`. Do not choose the convenient interpretation.
@@ -291,6 +292,13 @@ Stage 05의 사람용 설계를 근본 CapCut anchor에 연결하거나 Stage 08
 - 완료 보고 전 promoted project readback, ID mirror, root-meta 단일 등록, ZIP 무결성, 전체 skill 테스트를 새로 실행한다.
 
 ## Mandatory Completion Upload Copy
+
+## P0 Polish and Creative Override
+
+- `P0-제작` applies `apply_capcut_polish_profile.py` to a closed, structurally assembled draft; `P0-검증` alone records `validate_capcut_polish_profile.py` PASS/FAIL before static-project PASS.
+- Require `W Flash` at every video join; AI HD level 3, smart adjustment 42/47, sharpen 50, and clear 50 on every video. Normalize all audio to -14 LUFS.
+- Source audio uses **보컬 유지** (`choice=2`), is muted under A9 narration, and is restored outside the overlap. The user alone judges VMake image quality.
+- When the user asks for it, use a playful fictional hook, imagined thought, exaggeration, or comic reversal. Mark it `CREATIVE_URAKKAI`, separate from `SOURCE_OBSERVATION`, and never frame invented identity, relationship, crime, medical/legal, or defamatory claims as a real fact. Speaker captions remain dynamic: two current speakers use two lines and three use three lines.
 
 운영자가 001쇼츠 제작 완료를 보고받을 때는 공개 업로드를 실행하지 않았더라도 **항상 메시지 마지막에 업로드 제목·설명·출처를 붙인다.** CapCut 프로젝트명이나 validator 결과만 보고하고 끝내지 않는다.
 
