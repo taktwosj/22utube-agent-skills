@@ -160,7 +160,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "vmake_submit_after_source_identity",
         "vmake_candidate_integrity_only",
         "vmake_visual_quality_authority_user",
-        "interim_original_capcut_when_vmake_remaining_over_10_minutes",
+        "vmake_nonblocking_source_provisional_allowed",
+        "source_provisional_report_required",
         "vmake_full_download_required",
         "vmake_direct_insert_required",
         "urakkai_final_duration_independent_from_source",
@@ -189,6 +190,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             errors.append("PROTOCOL_VMAKE_DIRECT_INSERT_ASSET")
         if invariants.get("vmake_direct_insert_asset_key") != "clean_video":
             errors.append("PROTOCOL_VMAKE_DIRECT_INSERT_ASSET_KEY")
+        if invariants.get("source_provisional_video_asset_key") != "source_video":
+            errors.append("PROTOCOL_SOURCE_PROVISIONAL_ASSET_KEY")
     return errors
 
 
@@ -446,10 +449,20 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
 
     invariants = protocol.get("invariants", {})
     if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
-        expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
+        visual_mode = plan.get("visual_asset_mode", "VMAKE_CLEAN")
+        if visual_mode == "SOURCE_VIDEO_PROVISIONAL":
+            expected_asset_key = invariants.get("source_provisional_video_asset_key", "source_video")
+            error_prefix = "SOURCE_PROVISIONAL_ASSET_INVALID"
+        elif visual_mode == "VMAKE_CLEAN":
+            expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
+            error_prefix = "VMAKE_DIRECT_INSERT_ASSET_INVALID"
+        else:
+            errors.append(f"VISUAL_ASSET_MODE_INVALID:{visual_mode}")
+            expected_asset_key = None
+            error_prefix = "VMAKE_DIRECT_INSERT_ASSET_INVALID"
         for segment in video:
-            if segment.get("asset_key") != expected_asset_key:
-                errors.append(f"VMAKE_DIRECT_INSERT_ASSET_INVALID:{segment.get('asset_key')}")
+            if expected_asset_key is not None and segment.get("asset_key") != expected_asset_key:
+                errors.append(f"{error_prefix}:{segment.get('asset_key')}")
                 break
 
     if mode == "URAKKAI":

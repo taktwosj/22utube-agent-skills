@@ -23,7 +23,7 @@ Never leave any live P0 agent on `gpt-5.3-codex-spark` or `Auto`. Luna, Max, Ult
 
 | Gate | P0-제작 delivers | P0-검증 decides |
 |---|---|---|
-| Source | source identity and one VMake DOM job started | issue receipt, source identity, no duplicate VMake upload |
+| Source | source identity and one VMake DOM job started | issue receipt, source identity, no duplicate VMake upload; VMake is nonblocking |
 | Comment insight (optional) | compact 5–6 diverse public-reaction clusters or `COMMENTS_UNAVAILABLE` | live-response proof only; no API key in task, artifact, or log; comments never become source fact |
 | Stage 03–04 | urakkai blueprint and dynamic speaker plan | evidence only; no subjective rewrite |
 | Urakkai review | Claude Opus 5/Low result; Codex Sol/Low only when Claude CLI call fails | correct provider/fallback evidence and `WAIT_USER_URAKKAI_APPROVAL` |
@@ -42,9 +42,13 @@ Every issue has one current gate record: `stage`, `status`, `owner`, `input_sha2
 
 Therefore Paperclip shows what is currently good or broken as work happens. Its history is also retained for later root-cause review, but it is not merely retrospective. It cannot judge VMake image beauty or user creative preference; those remain user decisions.
 
+## Stage time and recovery ledger
+
+For every stage attempt, P0-총괄 records in the same issue: `stage_started_at`, `stage_finished_at`, `elapsed_seconds`, `attempt_kind=normal|repair`, `outcome=PASS|WAIT|FAIL`, and the current gate record. On a failure it also records `first_failure_code`, `recovery_started_at`, `recovery_finished_at`, `recovery_elapsed_seconds`, and the one repair owner. The dashboard report must show normal stage elapsed time separately from repair elapsed time; do not hide repair time inside a successful stage total. Missing timestamps are `WAIT_STAGE_TIMING_RECEIPT`, not a completed-stage PASS.
+
 ## VMake speed path
 
-Immediately after source identity, `P0-제작` starts VMake via DOM/file input, then continues analysis and urakkai while VMake processes. No coordinate-driven Finder, blind sleep, repeated upload, or visual-quality judgment. If the clean file is pending near CapCut and at least ten minutes remain, create an original-visual review draft and swap only the later verified clean asset. A VMake pending/download failure is `WAIT_VMAKE_*`, not a reason to stall the rest of the episode.
+Immediately after source identity, `P0-제작` starts VMake via DOM/file input, then continues analysis, urakkai, audio/caption work, and the source-video CapCut review project while VMake processes. No coordinate-driven Finder, blind sleep, repeated upload, or visual-quality judgment. There is no ten-minute threshold: VMake processing, download delay, failure, or user-supplied-later clean file must never stop the episode. Mark the project `SOURCE_VIDEO_PROVISIONAL`, report that the original source is currently in VIDEO, and later swap only the verified clean asset without rebuilding structure. `WAIT_CLEAN_SOURCE_SWAP` blocks clean/final promotion only; it never blocks ordinary production work or the user's quick visual review.
 
 ## User authority
 

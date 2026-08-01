@@ -4,7 +4,7 @@
   "lane": "general_shorts_production",
   "blueprint_reference": "references/blueprint_matrix.md",
   "analysis_authority": "original_source_only",
-  "assembly_visual": "vmake_clean_submit_after_source_identity_then_verify_after_final_design",
+  "assembly_visual": "vmake_submit_after_source_identity_nonblocking_source_provisional_then_clean_swap",
   "common": [
     "protocol.json",
     "tools.json",
@@ -33,6 +33,19 @@
     "paperclip_entry_path": "{episode_root}/90_workflow/paperclip_entry.json",
     "paperclip_entry_validator": "scripts/validate_paperclip_entry.py",
     "paperclip_entry_required_before_stage": "01",
+    "paperclip_stage_ledger_path": "{episode_root}/90_workflow/paperclip_stage_ledger.json",
+    "paperclip_stage_ledger_required_fields": [
+      "stage",
+      "attempt_kind",
+      "stage_started_at",
+      "stage_finished_at",
+      "elapsed_seconds",
+      "outcome",
+      "first_failure_code",
+      "recovery_elapsed_seconds",
+      "next_action"
+    ],
+    "paperclip_stage_ledger_authority": "P0-verifier issue readback",
     "state_required": [
       "episode_id",
       "current_stage",
@@ -519,23 +532,28 @@
   "interim_capcut": {
     "allowed_when": {
       "after_status": "FINAL_DESIGN_LOCKED",
-      "clean_visual_evidence": "missing",
-      "vmake_remaining_minutes_strictly_greater_than": 10
+      "clean_visual_evidence": "missing_or_pending",
+      "vmake_status": ["PROCESSING", "UNAVAILABLE", "DOWNLOAD_PENDING", "USER_WILL_SUPPLY"]
     },
-    "purpose": "fast_user_visual_review_only",
+    "purpose": "continue_full_reviewable_source_video_project_without_waiting_for_vmake",
     "video_asset": "00_input/source.mp4",
     "video_volume": 0,
     "original_audio_anchor": "A10",
     "original_audio_volume": 1,
-    "status": "WAIT_USER_CAPCUT_CHECK",
+    "status": "SOURCE_VIDEO_PROVISIONAL",
     "does_not_advance": [
       "CLEAN_VISUAL_READY",
-      "CAPCUT_STATIC_VALIDATED",
-      "CAPCUT_POST_OPEN_REVALIDATED",
-      "USER_APPROVED"
+      "RENDER_COMPLETE",
+      "UPLOAD_READY",
+      "PUBLIC_UPLOAD_COMPLETE"
     ],
     "on_clean_arrival": "replace_existing_VIDEO_asset_only_keep_project_structure",
-    "quality_authority": "user"
+    "quality_authority": "user",
+    "report_required": {
+      "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL",
+      "video_asset": "00_input/source.mp4",
+      "next_action": "WAIT_CLEAN_SOURCE_SWAP"
+    }
   },
   "validation": {
     "router": "scripts/validate_stage.py",

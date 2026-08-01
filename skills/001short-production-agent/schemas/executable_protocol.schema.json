@@ -225,7 +225,9 @@
         "vmake_submit_after_source_identity",
         "vmake_candidate_integrity_only",
         "vmake_visual_quality_authority_user",
-        "interim_original_capcut_when_vmake_remaining_over_10_minutes",
+        "vmake_nonblocking_source_provisional_allowed",
+        "source_provisional_video_asset_key",
+        "source_provisional_report_required",
         "vmake_full_download_required",
         "vmake_direct_insert_required",
         "vmake_direct_insert_asset",
@@ -268,7 +270,13 @@
         "vmake_visual_quality_authority_user": {
           "const": true
         },
-        "interim_original_capcut_when_vmake_remaining_over_10_minutes": {
+        "vmake_nonblocking_source_provisional_allowed": {
+          "const": true
+        },
+        "source_provisional_video_asset_key": {
+          "const": "source_video"
+        },
+        "source_provisional_report_required": {
           "const": true
         },
         "vmake_direct_insert_required": {

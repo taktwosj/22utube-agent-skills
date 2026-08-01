@@ -21,6 +21,9 @@
     "production_mode": {
       "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
     },
+    "visual_asset_mode": {
+      "enum": ["VMAKE_CLEAN", "SOURCE_VIDEO_PROVISIONAL"]
+    },
     "total_duration_us": {"type": "integer", "minimum": 1},
     "original_order": {"type": "array", "minItems": 1},
     "order_signature": {"type": "array", "minItems": 1},

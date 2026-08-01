@@ -92,16 +92,18 @@ class ParallelContractTests(unittest.TestCase):
         self.assertEqual(checks["06"]["validator"], "scripts/validate_clean_visual.py")
         self.assertIn("clean_visual_evidence", checks["08"]["required_prerequisites"])
 
-    def test_interim_capcut_is_preview_only_and_requires_clean_video_swap(self):
+    def test_interim_capcut_never_waits_for_vmake_and_requires_clean_video_swap(self):
         interim = self.workflow["interim_capcut"]
         self.assertEqual(interim["allowed_when"]["after_status"], "FINAL_DESIGN_LOCKED")
-        self.assertEqual(interim["allowed_when"]["vmake_remaining_minutes_strictly_greater_than"], 10)
+        self.assertIn("PROCESSING", interim["allowed_when"]["vmake_status"])
+        self.assertNotIn("vmake_remaining_minutes_strictly_greater_than", interim["allowed_when"])
         self.assertEqual(interim["video_asset"], "00_input/source.mp4")
         self.assertEqual(interim["video_volume"], 0)
         self.assertEqual(interim["original_audio_anchor"], "A10")
         self.assertEqual(interim["original_audio_volume"], 1)
-        self.assertEqual(interim["status"], "WAIT_USER_CAPCUT_CHECK")
+        self.assertEqual(interim["status"], "SOURCE_VIDEO_PROVISIONAL")
         self.assertEqual(interim["on_clean_arrival"], "replace_existing_VIDEO_asset_only_keep_project_structure")
+        self.assertEqual(interim["report_required"]["next_action"], "WAIT_CLEAN_SOURCE_SWAP")
         self.assertEqual(interim["quality_authority"], "user")
 
     def test_stage08_postbuild_checks_are_read_only_and_stage09_is_serial(self):

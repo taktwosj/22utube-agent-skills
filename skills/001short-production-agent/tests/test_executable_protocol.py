@@ -251,6 +251,8 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "40_assets_used/clean_source.mp4",
         )
         self.assertEqual(invariants.get("vmake_direct_insert_asset_key"), "clean_video")
+        self.assertIs(invariants.get("vmake_nonblocking_source_provisional_allowed"), True)
+        self.assertEqual(invariants.get("source_provisional_video_asset_key"), "source_video")
 
         review = protocol["urakkai_review_loop"]
         self.assertEqual(review["enabled_for"], ["URAKKAI"])
@@ -292,6 +294,20 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIn(
             "VMAKE_DIRECT_INSERT_ASSET_INVALID:source_video",
             module.validate_production_plan(invalid_plan, protocol),
+        )
+        provisional_plan = json.loads(
+            (SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8")
+        )
+        provisional_plan["visual_asset_mode"] = "SOURCE_VIDEO_PROVISIONAL"
+        for row in provisional_plan["timeline"]:
+            for placement in row["placements"]:
+                if placement["anchor"] == "VIDEO":
+                    placement["asset_key"] = "source_video"
+        self.assertEqual(module.validate_production_plan(provisional_plan, protocol), [])
+        provisional_plan["timeline"][0]["placements"][0]["asset_key"] = "clean_video"
+        self.assertIn(
+            "SOURCE_PROVISIONAL_ASSET_INVALID:clean_video",
+            module.validate_production_plan(provisional_plan, protocol),
         )
 
     def test_urakkai_final_duration_is_not_forced_to_source_duration(self):

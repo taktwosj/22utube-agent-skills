@@ -117,7 +117,9 @@
     "vmake_submit_after_source_identity": true,
     "vmake_candidate_integrity_only": true,
     "vmake_visual_quality_authority_user": true,
-    "interim_original_capcut_when_vmake_remaining_over_10_minutes": true,
+    "vmake_nonblocking_source_provisional_allowed": true,
+    "source_provisional_video_asset_key": "source_video",
+    "source_provisional_report_required": true,
     "vmake_full_download_required": true,
     "vmake_direct_insert_required": true,
     "vmake_direct_insert_asset": "40_assets_used/clean_source.mp4",
@@ -157,7 +159,7 @@
     "speaker_caption_line_count": "dynamic_current_speaker_count"
   },
   "anchors": {
-    "VIDEO": "clean visual; embedded audio muted when A10 is present",
+    "VIDEO": "verified clean visual, or explicitly reported source-video provisional; embedded audio muted when A10 is present",
     "T1": "top title line 1",
     "T2": "top title line 2",
     "A9": "TTS or narration",
