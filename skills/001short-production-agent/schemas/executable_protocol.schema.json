@@ -222,6 +222,10 @@
         "old_episode_access_requires_explicit_resume",
         "state_advance_after_validator_pass_only",
         "vmake_dom_first",
+        "vmake_submit_after_source_identity",
+        "vmake_candidate_integrity_only",
+        "vmake_visual_quality_authority_user",
+        "interim_original_capcut_when_vmake_remaining_over_10_minutes",
         "vmake_full_download_required",
         "vmake_direct_insert_required",
         "vmake_direct_insert_asset",
@@ -252,6 +256,18 @@
           "const": true
         },
         "vmake_full_download_required": {
+          "const": true
+        },
+        "vmake_submit_after_source_identity": {
+          "const": true
+        },
+        "vmake_candidate_integrity_only": {
+          "const": true
+        },
+        "vmake_visual_quality_authority_user": {
+          "const": true
+        },
+        "interim_original_capcut_when_vmake_remaining_over_10_minutes": {
           "const": true
         },
         "vmake_direct_insert_required": {

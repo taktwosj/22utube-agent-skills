@@ -4,7 +4,7 @@
   "lane": "general_shorts_production",
   "blueprint_reference": "references/blueprint_matrix.md",
   "analysis_authority": "original_source_only",
-  "assembly_visual": "vmake_clean_after_final_design_approval",
+  "assembly_visual": "vmake_clean_submit_after_source_identity_then_verify_after_final_design",
   "common": [
     "protocol.json",
     "tools.json",
@@ -141,6 +141,7 @@
         "capcut"
       ],
       "mutual_exclusion": true,
+      "remote_job_processing_does_not_hold_gui_owner": true,
       "handoff_requires_closed_gui": true,
       "computer_use_delivery_ladder": [
         "background",
@@ -159,6 +160,27 @@
       "state_write_order": "sequential"
     },
     "fanout": {
+      "after_source_identity_verified": {
+        "trigger_status": "SOURCE_OCR_VERIFIED",
+        "workers": 1,
+        "lanes": [
+          {
+            "id": "vmake_submit",
+            "gui": "vmake",
+            "output": "vmake_submission_evidence"
+          }
+        ],
+        "nonblocking_next_stages": [
+          "02",
+          "03",
+          "04"
+        ],
+        "candidate_receipt": {
+          "validator": "scripts/validate_clean_candidate.py",
+          "status_meaning": "TECHNICAL_IDENTITY_ONLY",
+          "quality_authority": "user"
+        }
+      },
       "stage01": {
         "workers": 3,
         "source_mode": "read_only",
@@ -223,8 +245,8 @@
         "workers": 3,
         "lanes": [
           {
-            "id": "vmake_clean",
-            "gui": "vmake",
+            "id": "vmake_candidate_finalize",
+            "gui": null,
             "output": "clean_visual_evidence"
           },
           {
@@ -437,12 +459,24 @@
       "evidence": "20_script/external-review.json"
     },
     "vmake": {
-      "trigger": "FINAL_DESIGN_LOCKED",
+      "trigger": "SOURCE_OCR_VERIFIED",
       "url": "https://vmake.ai/video-watermark-remover/upload",
       "input": "source.mp4",
       "output": "clean_source.mp4",
       "role": "capcut_visual_only",
       "embedded_audio": "mute",
+      "submission_evidence": "90_workflow/vmake_submission.json",
+      "candidate_receipt": "90_workflow/clean_candidate_receipt.json",
+      "final_receipt": "90_workflow/clean_visual_receipt.json",
+      "technical_check_only": [
+        "source_identity_sha256",
+        "candidate_sha256_differs_from_source",
+        "ffprobe_duration",
+        "ffprobe_resolution",
+        "video_stream"
+      ],
+      "visual_quality_authority": "user",
+      "interim_capcut_threshold_remaining_minutes": 10,
       "verify": [
         "playback",
         "ffprobe_duration",
@@ -456,6 +490,27 @@
       "new_tools": false,
       "a10_authority": "source.mp4"
     }
+  },
+  "interim_capcut": {
+    "allowed_when": {
+      "after_status": "FINAL_DESIGN_LOCKED",
+      "clean_visual_evidence": "missing",
+      "vmake_remaining_minutes_strictly_greater_than": 10
+    },
+    "purpose": "fast_user_visual_review_only",
+    "video_asset": "00_input/source.mp4",
+    "video_volume": 0,
+    "original_audio_anchor": "A10",
+    "original_audio_volume": 1,
+    "status": "WAIT_USER_CAPCUT_CHECK",
+    "does_not_advance": [
+      "CLEAN_VISUAL_READY",
+      "CAPCUT_STATIC_VALIDATED",
+      "CAPCUT_POST_OPEN_REVALIDATED",
+      "USER_APPROVED"
+    ],
+    "on_clean_arrival": "replace_existing_VIDEO_asset_only_keep_project_structure",
+    "quality_authority": "user"
   },
   "validation": {
     "router": "scripts/validate_stage.py",
@@ -664,7 +719,7 @@
   "external_actions": {
     "llm_calls": "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK",
     "paid_tts": false,
-    "vmake": "after_final_design_approval",
+    "vmake": "submit_after_source_identity_verify_after_final_design",
     "capcut_gui": "after_final_design_approval",
     "upload": false
   },

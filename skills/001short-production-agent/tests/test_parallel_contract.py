@@ -57,8 +57,14 @@ class ParallelContractTests(unittest.TestCase):
         self.assertTrue(gui["foreground_requires_driver_recommendation"])
 
     def test_stage01_and_stage03_have_bounded_fanout(self):
+        early_vmake = self.contract["fanout"]["after_source_identity_verified"]
         stage01 = self.contract["fanout"]["stage01"]
         stage03 = self.contract["fanout"]["stage03"]
+        self.assertEqual(early_vmake["trigger_status"], "SOURCE_OCR_VERIFIED")
+        self.assertEqual(early_vmake["lanes"][0]["id"], "vmake_submit")
+        self.assertEqual(early_vmake["lanes"][0]["gui"], "vmake")
+        self.assertEqual(early_vmake["candidate_receipt"]["status_meaning"], "TECHNICAL_IDENTITY_ONLY")
+        self.assertEqual(early_vmake["candidate_receipt"]["quality_authority"], "user")
         self.assertEqual(stage01["workers"], 3)
         self.assertEqual(len(stage01["lanes"]), 3)
         self.assertEqual(stage03["workers"], 4)
@@ -72,8 +78,9 @@ class ParallelContractTests(unittest.TestCase):
         self.assertEqual(post["workers"], 3)
         self.assertEqual(
             [lane["id"] for lane in post["lanes"]],
-            ["vmake_clean", "audio_prep", "stage08_readonly_preflight"],
+            ["vmake_candidate_finalize", "audio_prep", "stage08_readonly_preflight"],
         )
+        self.assertIsNone(post["lanes"][0]["gui"])
         self.assertIn("clean_visual_evidence", post["barrier"]["required_evidence"])
         self.assertEqual(
             post["barrier"]["sequential_state_advance"],
@@ -84,6 +91,18 @@ class ParallelContractTests(unittest.TestCase):
         checks = self.workflow["validation"]["checks"]
         self.assertEqual(checks["06"]["validator"], "scripts/validate_clean_visual.py")
         self.assertIn("clean_visual_evidence", checks["08"]["required_prerequisites"])
+
+    def test_interim_capcut_is_preview_only_and_requires_clean_video_swap(self):
+        interim = self.workflow["interim_capcut"]
+        self.assertEqual(interim["allowed_when"]["after_status"], "FINAL_DESIGN_LOCKED")
+        self.assertEqual(interim["allowed_when"]["vmake_remaining_minutes_strictly_greater_than"], 10)
+        self.assertEqual(interim["video_asset"], "00_input/source.mp4")
+        self.assertEqual(interim["video_volume"], 0)
+        self.assertEqual(interim["original_audio_anchor"], "A10")
+        self.assertEqual(interim["original_audio_volume"], 1)
+        self.assertEqual(interim["status"], "WAIT_USER_CAPCUT_CHECK")
+        self.assertEqual(interim["on_clean_arrival"], "replace_existing_VIDEO_asset_only_keep_project_structure")
+        self.assertEqual(interim["quality_authority"], "user")
 
     def test_stage08_postbuild_checks_are_read_only_and_stage09_is_serial(self):
         postbuild = self.contract["fanout"]["stage08_postbuild"]

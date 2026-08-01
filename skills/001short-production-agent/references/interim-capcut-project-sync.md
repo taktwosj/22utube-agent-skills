@@ -10,6 +10,8 @@ This is an **interim editable project**, not a finished episode.
 - List every deferred anchor explicitly.
 - Do not report render, cloud upload, or final visual approval unless each was actually performed.
 - Do not use unfinished assets as a reason to skip structural validation.
+- This route is available only after `FINAL_DESIGN_LOCKED` when VMake still has **more than 10 minutes** remaining. It is a fast user-preview route, not an alternative final route.
+- A technical candidate receipt verifies only source identity, different SHA, ffprobe stream, duration, and resolution. It never evaluates whether VMake visually improved the video; that decision belongs only to the user.
 
 ## Safe assembly pattern
 
@@ -35,7 +37,7 @@ If the downloaded source already has baked-in title/captions and the operator sa
 - Set the VIDEO segment volume to 0 when a separate A10 track carries the source audio, preventing double playback.
 - Copy VIDEO and A10 files into the project `Resources/media` tree; do not leave references pointing only to episode-local absolute paths.
 
-When clean media arrives, replace the existing VIDEO/A9/STATE/A11/A12 anchors. Do not rebuild the root structure or reuse another lane.
+When the technically verified clean media arrives, replace the existing VIDEO asset only. Keep the project root, timeline, audio, text, and anchor structure. Do not rebuild the root structure or reuse another lane. User visual approval remains required before any final claim.
 
 ## Cloud identity isolation
 

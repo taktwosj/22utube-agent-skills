@@ -71,6 +71,14 @@ YouTube Shorts URL이 원본 권위이면 `references/youtube-source-acquisition
 
 ## VMake Browser Runbook
 
+### Early VMake dispatch and user-only visual decision
+
+Immediately after `SOURCE_OCR_VERIFIED`, submit the source to VMake. Continue Stages 02--04 while its remote job runs. This explicit VMake rule overrides any earlier general wording that waits for final design approval.
+
+`validate_clean_candidate.py` is a technical identity check only: original/candidate SHA difference, source identity, playable video stream, duration, and resolution. It never scores visual cleanliness, OCR residue, watermark removal, or output quality. Its `PASS` means only `TECHNICAL_IDENTITY_ONLY`; the user alone decides visual quality and final clean acceptance.
+
+After `FINAL_DESIGN_LOCKED`, use `validate_clean_visual.py` to bind the downloaded candidate to the locked design before `CLEAN_VISUAL_READY`. If VMake has more than 10 minutes remaining immediately before CapCut work, create the interim original-video project for quick user review: mute `VIDEO`, preserve original audio on A10, set `WAIT_USER_CAPCUT_CHECK`, and later replace only the existing VIDEO asset with the verified clean file. Do not rebuild the project structure and do not call the interim project final.
+
 VMake 업로드·처리 polling·다운로드·clean asset 등록을 수행하기 전에 `references/vmake-dom-clean-video-automation.md`를 읽는다. 이 reference가 DOM selector, `DOM.setFileInputFiles`, 다운로드 확인, 타 컴퓨터 이식성의 상세 권위다.
 
 VMake가 완료됐지만 짧게 남는 댓글·워터마크·제목 또는 인페인팅 손상이 의심되면 `references/vmake-residual-cleanup-qa.md`를 추가로 읽는다. 전체 1fps 접촉시트와 첫 1.5초 4fps 접촉시트를 모두 통과하기 전에는 canonical `clean_source.mp4`로 승격하지 않는다. 로컬 보정을 쓴 결과는 순수 VMake 결과로 부르지 않고 hybrid 범위와 원본 오디오 PCM 검증을 manifest에 기록한다.

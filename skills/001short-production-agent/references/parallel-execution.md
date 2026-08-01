@@ -33,9 +33,9 @@
 
 | 시점 | 작업자 | 독립 lane | Barrier 뒤 조정자 작업 |
 |---|---:|---|---|
-| Stage01 | 3 | source probe, full OCR, scene/audio inventory | `source-analysis.md` 통합·검증 후 `SOURCE_OCR_VERIFIED` 기록 |
+| Stage01 | 3 | source probe, full OCR, scene/audio inventory | `source-analysis.md` 통합·검증 후 `SOURCE_OCR_VERIFIED` 기록; then one GUI owner submits VMake and records submission evidence while Stage02--04 continue |
 | Stage03 | 4 | hook options, caption structure, audio/SFX plan, screen composition | `first-recommendation.md` 통합·검증 후 `FIRST_RECOMMENDATION_READY` 기록 |
-| `FINAL_DESIGN_LOCKED` 직후 | 3 | VMake clean, audio prep, Stage08 read-only preflight | 세 증거 barrier 뒤 clean visual을 먼저 검증하고 audio/caption을 다음에 검증해 상태를 순차 갱신 |
+| `FINAL_DESIGN_LOCKED` 직후 | 3 | VMake candidate finalization, audio prep, Stage08 read-only preflight | clean receipt is technically verified first, then audio/caption advances sequentially; visual quality remains user-only |
 | Stage08 build 종료·CapCut 닫힘 | 최대 4 | identity/paths, structure/materials, timeline/text, media/duration | 동결 snapshot 증거 barrier 뒤 통합 CapCut validator 실행 |
 
 `FINAL_DESIGN_LOCKED` 직후 fanout의 필수 증거는 `clean_visual_evidence`, `audio_prep_evidence`, `stage08_readonly_preflight_evidence`다. Stage08 진입 전 clean visual evidence는 반드시 정식 경로와 SHA-256으로 state에 연결되어야 한다.

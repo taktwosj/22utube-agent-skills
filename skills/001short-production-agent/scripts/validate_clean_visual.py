@@ -116,6 +116,8 @@ def validate_clean_visual(
         clean_sha = sha256_file(clean_source)
         if clean_sha.lower() != manifest["clean_source_sha256"].lower():
             errors.append({"code": "CLEAN_VISUAL_FILE_SHA_MISMATCH"})
+        if clean_sha.lower() == source["media_sha256"].lower():
+            errors.append({"code": "CLEAN_VISUAL_SAME_AS_SOURCE"})
         valid_video, duration_us, width, height = _probe_video(clean_source)
         if not valid_video:
             errors.append({"code": "CLEAN_VISUAL_VIDEO_STREAM_INVALID"})
