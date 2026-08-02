@@ -1,0 +1,98 @@
+diff --git a/packages/producer/src/services/render/shared.ts b/packages/producer/src/services/render/shared.ts
+index e48f3f51..65b19b70 100644
+--- a/packages/producer/src/services/render/shared.ts
++++ b/packages/producer/src/services/render/shared.ts
+@@ -16,0 +17 @@ import {
++  lstatSync,
+@@ -17,0 +19 @@ import {
++  readdirSync,
+@@ -422,0 +425,35 @@ let warnedSymlinkFallback = false;
++function hasNonAsciiPathSegment(path: string): boolean {
++  return path.split(/[\\/]+/).some((segment) => /[^\x00-\x7f]/.test(segment));
++}
++
++function copyFrameDirWithoutCpSync(src: string, dest: string): void {
++  const source = lstatSync(src);
++  if (!source.isDirectory()) {
++    throw new Error(`Expected extracted frames source to be a directory: ${src}`);
++  }
++
++  mkdirSync(dest, { recursive: true });
++  for (const entry of readdirSync(src, { withFileTypes: true })) {
++    const sourcePath = join(src, entry.name);
++    const destinationPath = join(dest, entry.name);
++    if (entry.isDirectory()) {
++      copyFrameDirWithoutCpSync(sourcePath, destinationPath);
++    } else if (entry.isFile()) {
++      copyFileSync(sourcePath, destinationPath);
++    } else {
++      throw new Error(`Cannot materialize non-file extracted frame entry: ${sourcePath}`);
++    }
++  }
++}
++
++function copyFrameDir(fileSystem: MaterializeFileSystem, src: string, dest: string): void {
++  if (
++    process.platform === "win32" &&
++    (hasNonAsciiPathSegment(src) || hasNonAsciiPathSegment(dest))
++  ) {
++    copyFrameDirWithoutCpSync(src, dest);
++    return;
++  }
++  fileSystem.cpSync(src, dest, { recursive: true });
++}
++
+@@ -442 +479 @@ function linkOrCopyFrameDir(fileSystem: MaterializeFileSystem, src: string, dest
+-    fileSystem.cpSync(src, dest, { recursive: true });
++    copyFrameDir(fileSystem, src, dest);
+@@ -478 +515 @@ function stageExtractedFrameDirOnce(
+-    fileSystem.cpSync(src, dest, { recursive: true });
++    copyFrameDir(fileSystem, src, dest);
+diff --git a/packages/producer/src/services/renderOrchestrator.test.ts b/packages/producer/src/services/renderOrchestrator.test.ts
+index deec16be..4b3d98ea 100644
+--- a/packages/producer/src/services/renderOrchestrator.test.ts
++++ b/packages/producer/src/services/renderOrchestrator.test.ts
+@@ -637,0 +638,43 @@ describe("materializeExtractedFramesForCompiledDir", () => {
++  it("materializes extracted frames without cpSync for a Windows Unicode destination", () => {
++    const tempDir = mkdtempSync(join(tmpdir(), "hf-unicode-cp-"));
++    try {
++      const outputDir = join(tempDir, "cache");
++      const framePath = join(outputDir, "nested", "frame_000001.jpg");
++      const compiledDir = join(tempDir, "컴파일됨");
++      mkdirSync(join(outputDir, "nested"), { recursive: true });
++      writeFileSync(framePath, "frame-data");
++      const extracted = createExtractedFrames(outputDir, framePath);
++      const platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
++
++      try {
++        materializeExtractedFramesForCompiledDir([extracted], compiledDir, {
++          materializeSymlinks: true,
++          fileSystem: {
++            existsSync,
++            mkdirSync,
++            symlinkSync: () => {
++              throw new Error("eager-copy path must not symlink");
++            },
++            cpSync: () => {
++              throw new Error("cpSync must not be called for a Windows Unicode destination");
++            },
++          },
++        });
++      } finally {
++        platform.mockRestore();
++      }
++
++      const materializedFrame = join(
++        compiledDir,
++        "__hyperframes_video_frames",
++        "video-1",
++        "nested",
++        "frame_000001.jpg",
++      );
++      expect(readFileSync(materializedFrame, "utf8")).toBe("frame-data");
++      expect(extracted.framePaths.get(0)).toBe(materializedFrame);
++    } finally {
++      rmSync(tempDir, { recursive: true, force: true });
++    }
++  });
++

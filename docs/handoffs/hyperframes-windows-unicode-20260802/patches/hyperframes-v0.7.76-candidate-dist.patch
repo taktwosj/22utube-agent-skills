@@ -1,0 +1,56 @@
+--- dist/cli.js
++++ dist/cli.js
+@@ -109379,6 +109379,8 @@
+   cpSync as cpSync2,
+   existsSync as existsSync39,
+   mkdirSync as mkdirSync17,
++  readdirSync as readdirSyncShared,
++  readlinkSync as readlinkSyncShared,
+   rmSync as rmSync9,
+   symlinkSync as symlinkSync2,
+   writeFileSync as writeFileSync14
+@@ -109527,7 +109529,25 @@
+         `[Render] Symlinking extracted frames was rejected (${code}); copying them into the compiled dir instead. Expected on Windows without Developer Mode/Administrator.`
+       );
+     }
++    copyFrameDir(fileSystem, src, dest);
++  }
++}
++function copyFrameDir(fileSystem, src, dest) {
++  if (process.platform !== "win32" || !/[^\x00-\x7F]/.test(src + dest)) {
+     fileSystem.cpSync(src, dest, { recursive: true });
++    return;
++  }
++  fileSystem.mkdirSync(dest, { recursive: true });
++  for (const entry of fileSystem.readdirSync(src, { withFileTypes: true })) {
++    const source = join35(src, entry.name);
++    const destination = join35(dest, entry.name);
++    if (entry.isDirectory()) {
++      copyFrameDir(fileSystem, source, destination);
++    } else if (entry.isSymbolicLink()) {
++      fileSystem.symlinkSync(fileSystem.readlinkSync(source), destination);
++    } else {
++      fileSystem.copyFileSync(source, destination);
++    }
+   }
+ }
+ function stageExtractedFrameDir(fileSystem, src, dest, materializeSymlinks) {
+@@ -109541,7 +109561,7 @@
+ }
+ function stageExtractedFrameDirOnce(fileSystem, src, dest, materializeSymlinks) {
+   if (materializeSymlinks) {
+-    fileSystem.cpSync(src, dest, { recursive: true });
++    copyFrameDir(fileSystem, src, dest);
+     return;
+   }
+   linkOrCopyFrameDir(fileSystem, src, dest);
+@@ -109593,6 +109613,9 @@
+       mkdirSync: mkdirSync17,
+       symlinkSync: symlinkSync2,
+       cpSync: cpSync2,
++      copyFileSync: copyFileSync3,
++      readdirSync: readdirSyncShared,
++      readlinkSync: readlinkSyncShared,
+       rmSync: rmSync9
+     };
+     warnedSymlinkFallback = false;

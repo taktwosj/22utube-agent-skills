@@ -1,0 +1,116 @@
+{
+  "schema_version": "22utube.hyperframes-windows-unicode-handoff.v1",
+  "handoff_id": "hyperframes-windows-unicode-20260802",
+  "created_utc": "2026-08-02T04:54:57Z",
+  "repository": {
+    "url": "https://github.com/taktwosj/22utube-agent-skills",
+    "branch": "handoff/hyperframes-windows-unicode-20260802",
+    "base_branch": "main",
+    "base_commit": "b85dcb0c058cedcea1513ca3661d83dd04ab55c3",
+    "package_root": "docs/handoffs/hyperframes-windows-unicode-20260802"
+  },
+  "purpose": "Windows Node fs.cpSync fail-fast를 재현·검증한 HyperFrames 후보 수정과 다음 PC용 재개 정보를, 22utube 스킬 본체를 수정하지 않고 전달한다.",
+  "scope": {
+    "branch_only": true,
+    "existing_22utube_skills_modified": false,
+    "skill_manifest_modified": false,
+    "global_hyperframes_modified": false,
+    "episode_media_included": false,
+    "secrets_or_profile_paths_included": false
+  },
+  "upstream": {
+    "repository": "https://github.com/heygen-com/hyperframes",
+    "release_tag": "v0.7.76",
+    "git_head": "5cad2bc31292f68a18b6e0c98e906641c4a4842f",
+    "npm_package": "hyperframes@0.7.76",
+    "runtime": {
+      "node": "v24.14.0",
+      "platform": "Windows"
+    }
+  },
+  "problem": {
+    "symptom": "Windows의 비ASCII 사용자 프로필/Temp 경로에서 프레임 materialization 중 Node fs.cpSync가 0xC0000409 (FAST_FAIL_INVALID_ARG)로 종료한다.",
+    "confirmed_native_boundary": "node::fs::CpSyncCopyDir → std::filesystem::_Convert_narrow_to_wide → FAST_FAIL_INVALID_ARG",
+    "scope_limit": "비ASCII 문자가 단일·보편 원인이라고 단정하지 않는다. 확인된 Windows Node v24.14.0 / HyperFrames frame-materialization 경계에만 적용한다."
+  },
+  "runtime_baseline": {
+    "global_dist_cli_sha256": "e8fda485571d0b0405e347d745014e38c7c190cead2ee57756d4d98dd80b838a",
+    "candidate_dist_cli_sha256": "dbb8ab08cd8b6f8885e0caf2a54ee5849d467f85b842794cb4fafaa29a44c21d",
+    "global_runtime_status": "unchanged"
+  },
+  "artifacts": [
+    {
+      "path": "patches/hyperframes-v0.7.76-candidate-dist.patch",
+      "sha256": "d642bfba93023d6c0fb17b8921365425a38307bcff5f5dd99d19e6159826645d",
+      "status": "VERIFIED_CANDIDATE_ONLY",
+      "description": "Windows이고 source 또는 destination에 비ASCII 세그먼트가 있을 때만 recursive cpSync를 파일별 복사로 우회한다. ASCII·비Windows 경로는 기존 cpSync를 유지한다.",
+      "do_not": [
+        "전역 npm 설치본에 무단 적용하지 말 것",
+        "HyperFrames release/upstream patch로 간주하지 말 것"
+      ]
+    },
+    {
+      "path": "patches/hyperframes-v0.7.76-source-wip.patch",
+      "sha256": "3aab7ca71b599a2db0ae8cd8e67801f51e03df45d8bfb3aa917224635adfa3a4",
+      "status": "SOURCE_WIP_NOT_BUILT_OR_PROMOTED",
+      "description": "권위 upstream v0.7.76의 shared.ts와 renderOrchestrator.test.ts에 대한 최소 source-level 후보와 RED/Unicode 회귀 테스트 초안이다.",
+      "apply_command": "git apply --unidiff-zero patches/hyperframes-v0.7.76-source-wip.patch",
+      "do_not": [
+        "빌드·포맷·테스트·패키징 전 production-ready로 선언하지 말 것",
+        "전역 npm 설치본 또는 기존 22utube 스킬에 적용하지 말 것"
+      ]
+    }
+  ],
+  "verified_evidence": {
+    "candidate_unicode_render": {
+      "status": "PASS",
+      "conditions": "candidate-local CLI, Unicode Temp, Windows, actual frame materialization",
+      "result": "위험한 cpSync 호출 0건, 5초 렌더 성공"
+    },
+    "candidate_ascii_regression": {
+      "status": "PASS",
+      "conditions": "candidate-local CLI, ASCII Temp",
+      "result": "기존 cpSync before/after 경로가 유지됨"
+    },
+    "media_artifact": {
+      "status": "PASS",
+      "video": "H.264, 1920x1080, 5.000 seconds",
+      "full_decode": true,
+      "sha256": "0a94938bd5b242ed082cef6f77fdc5e56b058d8c00870510df44cae26b8d9cdc"
+    },
+    "sixty_second_mixed_review": {
+      "status": "PASS",
+      "video": "H.264/AAC, 1920x1080, 30fps, 60.000 seconds",
+      "full_decode": true,
+      "sha256": "e18ff4157d7c4c94ddc4269f51c424ab2597f7f0a3c070767dbd7a91bf75fdb0",
+      "coverage": ["narration", "source video", "Korean captions", "source-to-narration transition"]
+    }
+  },
+  "skill_context": {
+    "22utube_production_authority": [
+      "110-politics-longform-script",
+      "111-politics-longform-voice-srt",
+      "112-politics-longform-hyperframes"
+    ],
+    "existing_22utube_skills": "UNCHANGED",
+    "external_support_skill_observation": {
+      "name": "windows-filesystem-automation",
+      "status": "not copied, installed, or changed by this branch",
+      "reason": "이 handoff는 현재 22utube production skill set에 대한 설치 변경이 아니라 별도 작업 연속성 기록이다."
+    }
+  },
+  "resume_on_other_machine": [
+    "git clone --branch handoff/hyperframes-windows-unicode-20260802 https://github.com/taktwosj/22utube-agent-skills.git",
+    "python docs/handoffs/hyperframes-windows-unicode-20260802/scripts/verify_handoff.py",
+    "handoff.json의 source WIP 상태와 candidate-only 상태를 읽고, 전역 설치본이 아닌 새 upstream v0.7.76 worktree에서만 다음 변경을 검토한다.",
+    "해당 PC의 Node, HyperFrames 버전, 후보/전역 SHA-256을 새로 확인한다. 이 문서의 경로나 과거 상태를 현재 사실로 가정하지 않는다.",
+    "source WIP를 계속할 경우 새 worktree에서 git apply --unidiff-zero <handoff-package>/patches/hyperframes-v0.7.76-source-wip.patch를 적용하고 RED → Unicode GREEN → ASCII regression → build/package → isolated smoke 순으로 검증한다.",
+    "전역 승격은 별도 명시 승인 후 백업·해시·rollback·실제 전역 smoke를 모두 갖춘 경우에만 한다."
+  ],
+  "prohibited_automatic_actions": [
+    "22utube-agent-skills의 scripts/install 또는 update를 자동 실행하지 않는다.",
+    "--prune 또는 --strict를 사용하지 않는다.",
+    "기존 skills/ 또는 manifests/skill-set.json을 변경하지 않는다.",
+    "Node, FFmpeg, 원본 미디어, canonical episode 파일, 전역 HyperFrames를 자동 수정하지 않는다."
+  ]
+}
