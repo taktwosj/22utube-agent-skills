@@ -78,9 +78,9 @@ Immediately after `SOURCE_OCR_VERIFIED`, submit the source to VMake. Continue St
 
 `validate_clean_candidate.py` is a technical identity check only: original/candidate SHA difference, source identity, playable video stream, duration, and resolution. It never scores visual cleanliness, OCR residue, watermark removal, or output quality. Its `PASS` means only `TECHNICAL_IDENTITY_ONLY`; the user alone decides visual quality and final clean acceptance.
 
-After `FINAL_DESIGN_LOCKED`, use `validate_clean_visual.py` to bind a downloaded candidate to the locked design before `CLEAN_VISUAL_READY`. VMake is never a production-stop gate: while it is processing, unavailable, or awaiting download, continue the analysis, urakkai, audio/caption work, and an original-video CapCut review draft. Mute `VIDEO`, preserve original audio on A10, set `SOURCE_VIDEO_PROVISIONAL`, and report plainly that the current project uses `00_input/source.mp4`. Do not wait for a ten-minute threshold and do not ask the user to wait for VMake.
+After `FINAL_DESIGN_LOCKED`, use `validate_clean_visual.py` to bind a downloaded candidate to the locked design before `CLEAN_VISUAL_READY`. VMake is never a production-stop gate: while it is processing, unavailable, or awaiting download, continue the analysis, urakkai, audio/caption work, original-video CapCut build, user review, and any requested source-provisional preview render. Mute `VIDEO`, preserve original audio on A10, set `SOURCE_VIDEO_PROVISIONAL`, and report plainly that the current project uses `00_input/source.mp4`. Do not wait for a ten-minute threshold and do not ask the user to wait for VMake.
 
-When the user later supplies a VMake file or a VMake download completes, validate it technically and replace only the existing `VIDEO` asset; keep the approved timeline, tracks, text, audio, effects, and project structure intact. A source-video provisional project is eligible for user review and normal work reporting, but it is not `CLEAN_VISUAL_READY`, final render, upload-ready, or public-upload complete until the clean-file swap and its evidence pass. If VMake never arrives, report `WAIT_CLEAN_SOURCE_SWAP` with the original project path and one next action; never silently call the original video VMake-clean.
+When the user later supplies a VMake file or a VMake download completes, validate it technically and replace only the existing `VIDEO` asset; keep the approved timeline, tracks, text, audio, effects, and project structure intact. A source-video provisional project is eligible for CapCut build, user review, normal reporting, and a requested preview render. Label such a render `SOURCE_VIDEO_PROVISIONAL`; it is never `CLEAN_VISUAL_READY`, upload-ready, or public-upload complete. `CLEAN_SOURCE_SWAP_NONBLOCKING` is an asset follow-up, not a user wait and never a block on the current review, preview render, or next episode. Never silently call the original video VMake-clean.
 
 ### Explicit-only CapCut cloud sync
 
@@ -131,7 +131,7 @@ matches[0].click();
 7. OS 파일 선택창은 DOM/file-input 경로가 실제로 없을 때만 최후 fallback으로 사용하며, Upload 클릭만 성공하고 file arm이 실패한 상태를 업로드 완료로 오인하지 않는다.
 8. `Processing...` 완료까지 대기. 진행 중 새로고침·중복 업로드 금지.
 9. 완료 화면의 `Download` 또는 `Download HD`로 결과 MP4 다운로드. 결제·크레딧·약관 화면은 자동 승인하지 않는다.
-10. Downloads 결과를 회차 내부 `clean_source.mp4`로 복사하고 SHA-256·ffprobe·길이·해상도·OCR/눈검수 후에만 `CLEAN_VISUAL_READY`.
+10. Downloads 결과를 회차 내부 `clean_source.mp4`로 복사하고 SHA-256·ffprobe·길이·해상도 기술 검증 후에만 `CLEAN_VISUAL_READY`. OCR·눈검수·품질 평가는 하지 않는다.
 
 과거 실작업은 `Processing... 94%`에서 운영자가 취소했으므로 당시 다운로드 이후는 완료 증거가 아니다. 새 회차마다 실제 다운로드 파일과 clean receipt가 필요하다.
 

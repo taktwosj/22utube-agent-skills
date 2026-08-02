@@ -111,6 +111,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     observed_stages = [stage.get("id") for stage in stages] if isinstance(stages, list) else []
     if observed_stages != expected_stages:
         errors.append("PROTOCOL_STAGE_ORDER")
+    elif stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
+        errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
+    elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
+        errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
 
     completion = protocol.get("completion_report")
     required_completion = [

@@ -242,7 +242,7 @@
     {
       "id": "07",
       "name": "AUDIO_CAPTION_LOCK",
-      "requires_state": "CLEAN_VISUAL_READY",
+      "requires_state": "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY",
       "produces": [
         "30_audio_srt/audio_caption_lock.json"
       ],
@@ -254,7 +254,7 @@
     {
       "id": "08",
       "name": "CAPCUT_BUILD",
-      "requires_state": "AUDIO_CAPTION_VALIDATED_OR_EXPLICIT_CLEAN_ONLY_ASSET_LOCK",
+      "requires_state": "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL",
       "produces": [
         "50_capcut_project/project.zip",
         "50_capcut_project/build_receipt.json"

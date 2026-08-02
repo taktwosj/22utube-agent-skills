@@ -276,17 +276,18 @@
         ],
         "barrier": {
           "required_evidence": [
-            "clean_visual_evidence",
             "audio_prep_evidence",
             "stage08_readonly_preflight_evidence"
           ],
-          "coordinator_action": "promote_candidates_validate_then_advance",
+          "nonblocking_evidence": [
+            "clean_visual_evidence"
+          ],
+          "coordinator_action": "advance_audio_and_source_provisional_build_without_clean_wait",
           "sequential_state_advance": [
-            "CLEAN_VISUAL_READY",
             "AUDIO_CAPTION_VALIDATED"
           ]
         },
-        "next_stage": "08"
+        "next_stage": "07_AND_08"
       },
       "stage08_postbuild": {
         "trigger": "CAPCUT_BUILD_CREATED_AND_CLOSED",
@@ -543,16 +544,23 @@
     "status": "SOURCE_VIDEO_PROVISIONAL",
     "does_not_advance": [
       "CLEAN_VISUAL_READY",
-      "RENDER_COMPLETE",
       "UPLOAD_READY",
       "PUBLIC_UPLOAD_COMPLETE"
     ],
+    "allows": [
+      "CAPCUT_BUILD",
+      "CAPCUT_STATIC_VALIDATION",
+      "SOURCE_PROVISIONAL_RENDER",
+      "USER_REVIEW"
+    ],
+    "batch_nonblocking": true,
     "on_clean_arrival": "replace_existing_VIDEO_asset_only_keep_project_structure",
     "quality_authority": "user",
     "report_required": {
       "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL",
       "video_asset": "00_input/source.mp4",
-      "next_action": "WAIT_CLEAN_SOURCE_SWAP"
+      "paperclip_status": "IN_REVIEW",
+      "next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING"
     }
   },
   "validation": {
@@ -586,9 +594,15 @@
         ],
         "required_prerequisites": [
           "design_lock_evidence",
-          "clean_visual_evidence",
           "audio_lock",
           "caption_lock"
+        ],
+        "optional_prerequisites": [
+          "clean_visual_evidence"
+        ],
+        "allowed_visual_asset_modes": [
+          "CLEAN_VISUAL_READY",
+          "SOURCE_VIDEO_PROVISIONAL"
         ]
       },
       "09": {
@@ -783,6 +797,10 @@
     "WAIT_USER_CAPCUT_CHECK": {
       "executes_external_action": false,
       "meaning": "static CapCut evidence is stored and human visual confirmation is required"
+    },
+    "CLEAN_SOURCE_SWAP_NONBLOCKING": {
+      "executes_external_action": false,
+      "meaning": "a VMake clean asset may replace VIDEO later; it never blocks the current source-video review, preview render, or another episode"
     },
     "WAIT_UPLOAD_APPROVAL": {
       "executes_external_action": false,

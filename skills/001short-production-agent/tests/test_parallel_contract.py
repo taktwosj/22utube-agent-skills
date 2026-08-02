@@ -72,7 +72,7 @@ class ParallelContractTests(unittest.TestCase):
         self.assertEqual(stage01["commit_status"], "SOURCE_OCR_VERIFIED")
         self.assertEqual(stage03["commit_status"], "FIRST_RECOMMENDATION_READY")
 
-    def test_post_design_fanout_has_three_lanes_and_clean_visual_barrier(self):
+    def test_post_design_fanout_has_three_lanes_and_nonblocking_clean_visual(self):
         post = self.contract["fanout"]["after_final_design_locked"]
         self.assertEqual(post["trigger_status"], "FINAL_DESIGN_LOCKED")
         self.assertEqual(post["workers"], 3)
@@ -81,16 +81,25 @@ class ParallelContractTests(unittest.TestCase):
             ["vmake_candidate_finalize", "audio_prep", "stage08_readonly_preflight"],
         )
         self.assertIsNone(post["lanes"][0]["gui"])
-        self.assertIn("clean_visual_evidence", post["barrier"]["required_evidence"])
+        self.assertNotIn("clean_visual_evidence", post["barrier"]["required_evidence"])
+        self.assertIn("clean_visual_evidence", post["barrier"]["nonblocking_evidence"])
         self.assertEqual(
             post["barrier"]["sequential_state_advance"],
-            ["CLEAN_VISUAL_READY", "AUDIO_CAPTION_VALIDATED"],
+            ["AUDIO_CAPTION_VALIDATED"],
         )
 
-    def test_stage06_validator_and_stage08_clean_visual_prerequisite_are_registered(self):
+    def test_stage06_validator_and_stage08_source_provisional_path_are_registered(self):
         checks = self.workflow["validation"]["checks"]
         self.assertEqual(checks["06"]["validator"], "scripts/validate_clean_visual.py")
-        self.assertIn("clean_visual_evidence", checks["08"]["required_prerequisites"])
+        self.assertNotIn("clean_visual_evidence", checks["08"]["required_prerequisites"])
+        self.assertIn("clean_visual_evidence", checks["08"]["optional_prerequisites"])
+        self.assertEqual(
+            checks["08"]["allowed_visual_asset_modes"],
+            ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"],
+        )
+        stages = {stage["id"]: stage for stage in json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))["stages"]}
+        self.assertEqual(stages["07"]["requires_state"], "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY")
+        self.assertEqual(stages["08"]["requires_state"], "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL")
 
     def test_interim_capcut_never_waits_for_vmake_and_requires_clean_video_swap(self):
         interim = self.workflow["interim_capcut"]
@@ -103,7 +112,10 @@ class ParallelContractTests(unittest.TestCase):
         self.assertEqual(interim["original_audio_volume"], 1)
         self.assertEqual(interim["status"], "SOURCE_VIDEO_PROVISIONAL")
         self.assertEqual(interim["on_clean_arrival"], "replace_existing_VIDEO_asset_only_keep_project_structure")
-        self.assertEqual(interim["report_required"]["next_action"], "WAIT_CLEAN_SOURCE_SWAP")
+        self.assertEqual(interim["report_required"]["next_action"], "CLEAN_SOURCE_SWAP_NONBLOCKING")
+        self.assertEqual(interim["report_required"]["paperclip_status"], "IN_REVIEW")
+        self.assertTrue(interim["batch_nonblocking"])
+        self.assertIn("SOURCE_PROVISIONAL_RENDER", interim["allows"])
         self.assertEqual(interim["quality_authority"], "user")
 
     def test_stage08_postbuild_checks_are_read_only_and_stage09_is_serial(self):
