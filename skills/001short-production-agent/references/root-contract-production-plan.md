@@ -36,6 +36,8 @@ Do not hand-author CapCut IDs in an episode plan. Generate the contract from the
 
 Each root project gets its own contract. Never borrow or fall back to anchors from another root profile.
 
+For every episode, copy the single verified root ZIP to that episode's `50_capcut_project/root_authority/root.zip` and write its `90_workflow/root_contract.json` before extraction. The ZIP SHA-256 is the root authority. Never reuse an earlier episode's extracted root, draft, or contract.
+
 ## Production plan
 
 Stage 05 compiles the approved human matrix into a machine plan. Every placement must contain enough information to execute without inference:

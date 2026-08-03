@@ -3,7 +3,7 @@
   "title": "001short actual CAPCUT_PROJECT build contract",
   "type": "object",
   "required": [
-    "schema_version", "episode_id", "source_project_path", "working_project_path", "evidence_root_path",
+    "schema_version", "episode_id", "visual_asset_mode", "source_video_provisional", "source_project_path", "working_project_path", "materialized_project_path", "evidence_root_path",
     "source_core_sha256", "source_root_sha256", "template_sha256", "design_lock_evidence_path",
     "design_lock_evidence_sha256", "structure_snapshot_sha256", "project_id", "draft_id",
     "audio_lock_path", "audio_lock_sha256", "caption_lock_path",
@@ -16,8 +16,11 @@
   "properties": {
     "schema_version": {"type": "string", "const": "001short-build-contract-v1"},
     "episode_id": {"type": "string", "minLength": 1},
+    "visual_asset_mode": {"enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]},
+    "source_video_provisional": {"type": "boolean"},
     "source_project_path": {"type": "string", "minLength": 1},
     "working_project_path": {"type": "string", "minLength": 1},
+    "materialized_project_path": {"type": "string", "minLength": 1},
     "evidence_root_path": {"type": "string", "minLength": 1},
     "source_core_sha256": {"type": "object"},
     "source_root_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},

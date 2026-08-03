@@ -12,7 +12,7 @@ Use one clean P0 company when legacy agents, tasks, or rules must not affect new
 1. Confirm the exact 001 source package and SHA-256.
 2. Require user approval before company creation, agent creation, skill import, agent enablement, or a real production task.
 3. Do not treat a Paperclip card, draft skill, zero-agent version, or model configuration alone as deployment PASS.
-4. Keep external creative review user-controlled. Never auto-approve a draft or advance to CapCut without user approval.
+4. Keep external creative review user-controlled. Only exact Paperclip P0 automatic mode may continue after Hermes delegated routine-approval evidence; it never authorizes publication, credentials, payment, destructive actions, or final creative judgment.
 
 ## Fixed P0 Layout
 

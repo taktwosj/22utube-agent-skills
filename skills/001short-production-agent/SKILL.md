@@ -46,8 +46,11 @@ Load `protocol.json` before mode routing, stage selection, production-plan compi
 
 ## Urakkai Editorial Authority
 
-- At Stage 04, the Mac mini creator machine calls Claude CLI with Claude Opus 5 at low effort first; only a failed CLI call falls back to Codex CLI `gpt-5.6-sol` at low effort.
-- The reviewer improves a draft; it never promotes a final design. Report the revised `URAKKAI_BLUEPRINT.md` and review evidence to the user, then stop at `WAIT_USER_URAKKAI_APPROVAL`. Apply user corrections to the same draft and report again. Stage 05 begins only after explicit user approval.
+- At Stage 04, the Mac mini creator machine calls Claude CLI with Claude Opus 5 at low effort exactly once; only a failed CLI call permits exactly one Codex CLI `gpt-5.6-sol` low-effort fallback. An ordinary second review is forbidden.
+- The reviewer improves a draft; it never promotes a final design. Normal episodes stop at `WAIT_USER_URAKKAI_APPROVAL`. In exact Paperclip P0 automatic mode, Hermes records delegated routine approval after the required evidence and continues; this never includes publication, credentials, payment, destructive actions, or creative final judgment.
+<!-- stage04-contract
+{"primary":{"provider":"claude_cli","model":"Claude Opus 5","effort":"low","reviews":1},"fallback":{"provider":"codex_cli","model":"gpt-5.6-sol","effort":"low","reviews":1,"only_when":"claude_call_failed"},"ordinary_second_review":"FORBIDDEN","paperclip_p0_automatic":"HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE","normal_approval":"WAIT_USER_URAKKAI_APPROVAL"}
+-->
 - Situation captions describe the visible present action, relationship, or emotion with a hook. Do not use edit-outline copy such as “show the reaction first,” “reveal the reason later,” “connect to the second reaction,” or “warm ending.” Read `references/stage04-external-review-contract.md` for the full rubric and dynamic speaker-line rule.
 
 이 스킬은 `owner_skill=001short-production-agent`, `lane=general_shorts_production`인 독립 제작 lane이다. 활성화한 뒤에는 `000short-production-agent`, `top5isu-shorts`, `00-tikitaka`, `111-politics-longform` 또는 다른 영상 제작 스킬의 단계, 템플릿, 상태명, validator, 산출물 계약을 읽거나 합치지 않는다.
@@ -230,15 +233,11 @@ Stage 03~05에서는 JSON 이름이나 선택지만 먼저 말하지 않는다. 
 
 ## Urakkai Claude Review Loop Contract
 
-001 `URAKKAI` Stage 04의 검토 개선 loop는 정확히 2회 실행한다. 이는 독립 검토 대화 두 개를 한 번에 모으는 방식이 아니라, **검토 → Hermes 개선**을 순서대로 두 번 반복하는 계약이다.
-
-1. Loop 1은 현재 승인 후보를 first-party Claude OAuth의 Claude Opus `--effort low`로 검토하고 Hermes가 개선한다.
-2. Loop 2는 Loop 1 개선본을 같은 항목으로 다시 검토하고 Hermes가 재개선한다.
-3. Hermes는 baseline·Loop 1·Loop 2 후보를 비교해 source range·segment ID·승인 범위를 지키는 최상안을 직접 확정한다. Claude가 제안한 절대 초나 구조를 그대로 권위로 승격하지 않는다.
+001 `URAKKAI` Stage 04는 Claude Opus 5/low 검토 1회만 실행한다. Claude CLI 호출 자체가 실패한 경우에만 동일 입력으로 Codex Sol/low 1회 fallback을 실행하며, 일반적인 재검토 loop는 금지한다.
 
 - 검토 범위는 훅 명확성, 장면 이해도, 이탈 지점, 대사 중복, 감정 연결이다.
-- 실패한 Claude loop만 동일 입력의 Hermes 서브에이전트 검토 1회로 대체한다. 두 loop 증거가 채워지지 않으면 `WAIT_EXTERNAL_REVIEW`에서 중단한다.
-- `20_script/external-review.md`와 `.json`에 loop별 입력·출력 hash, Hermes 개선, 채택·반려와 최종 선택 사유를 기록한다.
+- `20_script/external-review.md`와 `.json`에 단일 검토의 입력·출력 hash, 선택한 reviewer, fallback 사유, Hermes 적용 내용, 채택·반려를 기록한다.
+- 일반 모드는 `WAIT_USER_URAKKAI_APPROVAL`에 머문다. 정확한 Paperclip P0 automatic mode만 Hermes delegated routine approval 증거 뒤 계속할 수 있으며, 공개·자격증명·결제·파괴 작업·창작 최종판단은 이 위임에 포함되지 않는다.
 - 토큰, 쿠키, OAuth 값, URL, tab/conversation/session ID는 저장하지 않는다.
 - `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY`에는 이 loop를 강제하지 않는다.
 

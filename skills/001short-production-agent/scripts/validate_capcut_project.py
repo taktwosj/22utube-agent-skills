@@ -664,6 +664,7 @@ def validate_capcut_project(
 
     source_path = Path(contract["source_project_path"]).resolve()
     declared_working = Path(contract["working_project_path"]).resolve()
+    declared_materialized = Path(contract.get("materialized_project_path", "")).resolve()
     if evidence_path is not None:
         if approved_evidence_root_path is None:
             return {**result([_error("EVIDENCE_ROOT_REQUIRED")]), "next_action": "NONE"}
@@ -700,7 +701,7 @@ def validate_capcut_project(
         except ValueError:
             overlaps = False
     errors: list[dict] = []
-    if declared_working != project_path or source_path == project_path or overlaps:
+    if project_path not in {declared_working, declared_materialized} or source_path == project_path or overlaps:
         errors.append(_error("SOURCE_WORKING_CONFLICT"))
     try:
         actual_source_core = hash_project_core(source_path)
@@ -834,6 +835,8 @@ def validate_capcut_project(
         "project_id": contract["project_id"],
         "draft_id": contract["draft_id"],
         "main_timeline_id": contract["main_timeline_id"],
+        "visual_asset_mode": contract.get("visual_asset_mode", "CLEAN_VISUAL_READY"),
+        "source_video_provisional": contract.get("source_video_provisional", False),
         "timeline_json_files": sorted(
             path.relative_to(project_path).as_posix() for path in timeline_json_paths
         ),

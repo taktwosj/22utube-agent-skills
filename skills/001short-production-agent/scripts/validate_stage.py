@@ -21,13 +21,18 @@ def _contracts():
         validators = route.get("validators") or [route["validator"]]
         checks[stage] = tuple(Path(v).stem.removeprefix("validate_") for v in validators)
     stages = flow["production_stages"]
-    entry = {row["id"]: stages[i - 1]["pass"] for i, row in enumerate(stages) if i and row["id"] in checks}
+    entry = {}
+    for i, row in enumerate(stages):
+        if not i or row["id"] not in checks:
+            continue
+        entry[row["id"]] = row.get("requires_by_mode", stages[i - 1]["pass"])
     return checks, entry
 
 
 STAGE_CHECKS, STAGE_ENTRY_STATUS = _contracts()
 ALL_CHECKS = tuple(dict.fromkeys(c for values in STAGE_CHECKS.values() for c in values))
 RECEIPTS = {
+    "external_review": ("external_review_evidence_path", "external_review_evidence_sha256", "external_review_evidence.schema.json"),
     "design_lock": ("design_lock_evidence_path", "design_lock_evidence_sha256", "design_lock_evidence.schema.json"),
     "clean_visual": ("clean_visual_receipt_path", "clean_visual_receipt_sha256", "clean_visual_receipt.schema.json"),
     "audio_lock": ("audio_lock_path", "audio_lock_sha256", "audio_lock.schema.json"),
@@ -36,12 +41,30 @@ RECEIPTS = {
     "capcut_project": ("capcut_project_evidence_path", "capcut_project_evidence_sha256", "capcut_project_evidence.schema.json"),
 }
 PREREQUISITES = {
-    "05": (),
+    "05": ("external_review",),
     "06": ("design_lock",),
     "07": ("design_lock",),
     "08": ("design_lock", "clean_visual", "audio_lock", "caption_lock"),
     "09": ("design_lock", "audio_lock", "caption_lock", "build_inputs", "capcut_project"),
 }
+
+
+def prerequisites_for_stage(stage: str, state: dict) -> tuple[str, ...]:
+    required = PREREQUISITES[stage]
+    if stage == "08" and state.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL":
+        return tuple(receipt for receipt in required if receipt != "clean_visual")
+    return required
+
+
+def expected_entry_status(stage: str, state: dict) -> str:
+    contract = STAGE_ENTRY_STATUS[stage]
+    if isinstance(contract, dict):
+        mode = str(state.get("approval_mode", "normal"))
+        expected = contract.get(mode)
+        if not isinstance(expected, str):
+            raise ValueError(f"APPROVAL_MODE_INVALID:{mode}")
+        return expected
+    return contract
 
 
 def resolve_stage(state: dict) -> str:
@@ -72,6 +95,27 @@ def _receipt_error(state, state_path, name):
         return "FAIL", {"code": "PREREQUISITE_EVIDENCE_INVALID", "receipt": name, "detail": str(exc)}
 
 
+def _external_review_mode_error(state: dict, state_path: Path):
+    if state.get("approval_mode", "normal") != "exact_paperclip_p0_automatic":
+        return None
+    raw = state.get("external_review_evidence_path")
+    if not isinstance(raw, str) or not raw:
+        return "WAIT", {"code": "EXTERNAL_REVIEW_APPROVAL_EVIDENCE_MISSING"}
+    path = Path(raw) if Path(raw).is_absolute() else state_path.parent / raw
+    try:
+        evidence = read_json(path)
+    except (OSError, ValueError, TypeError) as exc:
+        return "FAIL", {"code": "EXTERNAL_REVIEW_APPROVAL_EVIDENCE_INVALID", "detail": str(exc)}
+    expected = "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE"
+    if evidence.get("approval_status") != expected:
+        return "FAIL", {
+            "code": "EXTERNAL_REVIEW_APPROVAL_MODE_MISMATCH",
+            "expected": expected,
+            "actual": evidence.get("approval_status"),
+        }
+    return None
+
+
 def _run(check, a):
     module = importlib.import_module("validate_" + check)
     if check == "design_lock":
@@ -87,13 +131,18 @@ def _run(check, a):
     if check == "audio_caption":
         return module.validate_audio_caption(a.audio_lock, a.caption_lock)
     if check == "prebuild":
-        return module.validate_prebuild(a.build_manifest)
+        return module.validate_prebuild(
+            a.build_manifest,
+            allow_source_provisional=a.visual_asset_mode == "SOURCE_VIDEO_PROVISIONAL",
+        )
     if check == "build_inputs":
         return module.validate_build_inputs(a.caption_lock, a.srt, a.build_contract, a.timeline)
     if check == "capcut_project":
         return module.validate_capcut_project(a.project, a.snapshot, a.build_contract, a.evidence, a.evidence_root)
     if check == "postbuild":
-        return module.validate_postbuild(a.build_manifest, a.project)
+        return module.validate_postbuild(
+            a.build_manifest, a.project, visual_asset_mode=a.visual_asset_mode
+        )
     return module.validate_render(
         a.capcut_project_evidence,
         a.capcut_project_sha256,
@@ -122,20 +171,33 @@ def main() -> int:
     p.add_argument("--capcut-project-evidence", type=Path); p.add_argument("--capcut-project-sha256")
     p.add_argument("--stage09-review-evidence", type=Path); p.add_argument("--stage09-review-sha256")
     p.add_argument("--render", type=Path); p.add_argument("--render-sha256")
+    p.add_argument(
+        "--visual-asset-mode",
+        choices=("CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"),
+    )
     a = p.parse_args(); state_path = a.state.resolve()
     try:
         state = read_json(state_path); stage = resolve_stage(state)
     except (OSError, ValueError, TypeError) as exc:
         return _emit({"status": "FAIL", "errors": [{"code": "STATE_INVALID", "detail": str(exc)}], "evidence": {}, "stage_complete": False})
+    a.visual_asset_mode = a.visual_asset_mode or state.get(
+        "visual_asset_mode", "CLEAN_VISUAL_READY"
+    )
     if a.stage is not None and a.stage != stage:
         return _emit({"status": "FAIL", "errors": [{"code": "CALLER_STAGE_MISMATCH", "canonical_stage": stage, "caller_stage": a.stage}], "evidence": {}, "stage_complete": False})
-    expected = STAGE_ENTRY_STATUS[stage]
+    try:
+        expected = expected_entry_status(stage, state)
+    except ValueError as exc:
+        return _emit({"status": "FAIL", "errors": [{"code": "STATE_APPROVAL_MODE_INVALID", "detail": str(exc)}], "evidence": {}, "stage": stage, "stage_complete": False})
     if state.get("status") != expected:
         return _emit({"status": "FAIL", "errors": [{"code": "STATE_STATUS_MISMATCH", "stage": stage, "expected": expected, "actual": state.get("status")}], "evidence": {}, "stage": stage, "stage_complete": False})
-    for receipt in PREREQUISITES[stage]:
+    for receipt in prerequisites_for_stage(stage, state):
         if failure := _receipt_error(state, state_path, receipt):
             status, error = failure
             return _emit({"status": status, "errors": [error], "evidence": {}, "stage": stage, "stage_complete": False})
+    if stage == "05" and (failure := _external_review_mode_error(state, state_path)):
+        status, error = failure
+        return _emit({"status": status, "errors": [error], "evidence": {}, "stage": stage, "stage_complete": False})
     required = STAGE_CHECKS[stage]; selected = (a.check,) if a.check else required
     if any(check not in required for check in selected):
         return _emit({"status": "FAIL", "errors": [{"code": "CHECK_STAGE_MISMATCH", "stage": stage, "check": selected[0]}], "evidence": {}, "stage": stage, "stage_complete": False})

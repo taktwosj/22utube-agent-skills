@@ -51,7 +51,7 @@ def _manifest_errors(manifest: object) -> tuple[list[dict], dict | None]:
     return [], manifest
 
 
-def validate_prebuild(build_manifest_path: Path) -> dict:
+def validate_prebuild(build_manifest_path: Path, *, allow_source_provisional: bool = False) -> dict:
     path = Path(build_manifest_path).resolve()
     try:
         manifest = read_json(path)
@@ -70,6 +70,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     source_path = Path(source.get("path", "")).resolve()
     source_sha = source.get("sha256")
     source_duration = source.get("duration_us")
+    source_provisional = allow_source_provisional and payload.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL"
     if (
         not source_path.is_file() or not isinstance(source_sha, str) or len(source_sha) != 64
         or sha256_file(source_path).lower() != source_sha.lower()
@@ -92,7 +93,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     except (OSError, ValueError, TypeError):
         receipt = None
     binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
-    if (
+    if not source_provisional and (
         not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
         or not vmake.get("final_download") or not receipt.get("final_download")
         or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
@@ -189,8 +190,9 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-manifest", type=Path, required=True)
+    parser.add_argument("--allow-source-provisional", action="store_true")
     args = parser.parse_args()
-    payload = validate_prebuild(args.build_manifest)
+    payload = validate_prebuild(args.build_manifest, allow_source_provisional=args.allow_source_provisional)
     print(__import__("json").dumps(payload, ensure_ascii=False, indent=2))
     return 0 if payload["status"] == "PASS" else 1
 

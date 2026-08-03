@@ -96,12 +96,20 @@
     "review_loop_count": 1,
     "reviews_per_loop": 1,
     "creator_machine": "macmini",
-    "approval_authority": "user",
+    "approval_authority": "hermes_delegated_routine_authority_in_paperclip_p0",
     "fallback_provider": "codex_cli",
     "fallback_model": "gpt-5.6-sol",
     "fallback_effort": "low",
     "fallback_on_claude_failure": true,
-    "evidence_path": "20_script/external-review.json"
+    "evidence_path": "20_script/external-review.json",
+    "evidence_schema": "schemas/external_review_evidence.schema.json"
+  },
+  "stage04_contract": {
+    "primary": {"provider": "claude_cli", "model": "Claude Opus 5", "effort": "low", "reviews": 1},
+    "fallback": {"provider": "codex_cli", "model": "gpt-5.6-sol", "effort": "low", "reviews": 1, "only_when": "claude_call_failed"},
+    "ordinary_second_review": "FORBIDDEN",
+    "paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+    "normal_approval": "WAIT_USER_URAKKAI_APPROVAL"
   },
   "invariants": {
     "single_active_lane": true,
@@ -209,12 +217,20 @@
       "produces": [
         "20_script/external-review.md"
       ],
-      "pass_state": "WAIT_USER_URAKKAI_APPROVAL"
+      "pass_state": "MODE_SPECIFIC_STAGE04_APPROVAL",
+      "pass_state_by_mode": {
+        "normal": "WAIT_USER_URAKKAI_APPROVAL",
+        "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE"
+      }
     },
     {
       "id": "05",
       "name": "FINAL_DESIGN",
-      "requires_state": "USER_URAKKAI_APPROVED",
+      "requires_state": "USER_OR_HERMES_DELEGATED_URAKKAI_APPROVED",
+      "requires_state_by_mode": {
+        "normal": "USER_URAKKAI_APPROVED",
+        "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE"
+      },
       "produces": [
         "20_script/final-blueprint.md",
         "20_script/production_plan.json"

@@ -27,8 +27,11 @@ def validate_clean_candidate(
     if receipt_path is not None:
         if approved_evidence_root_path is None:
             return result([{"code": "CLEAN_CANDIDATE_EVIDENCE_ROOT_REQUIRED"}])
-        receipt_target = Path(receipt_path).absolute()
-        guard = inspect_write_target(Path(approved_evidence_root_path), receipt_target, require_new=True)
+        # macOS temporary directories can be reached through /var -> /private/var.
+        # Resolve both sides before the containment guard; this changes no media
+        # identity check and still rejects symlinks below the approved root.
+        receipt_target = Path(receipt_path).resolve(strict=False)
+        guard = inspect_write_target(Path(approved_evidence_root_path).resolve(), receipt_target, require_new=True)
         if guard == "PATH_EXISTS":
             return result([{"code": "CLEAN_CANDIDATE_RECEIPT_PATH_EXISTS"}])
         if guard is not None:

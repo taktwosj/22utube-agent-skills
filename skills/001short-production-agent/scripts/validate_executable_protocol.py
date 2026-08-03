@@ -93,12 +93,13 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             "effort": "low",
             "reviews_per_loop": 1,
             "creator_machine": "macmini",
-            "approval_authority": "user",
+            "approval_authority": "hermes_delegated_routine_authority_in_paperclip_p0",
             "fallback_provider": "codex_cli",
             "fallback_model": "gpt-5.6-sol",
             "fallback_effort": "low",
             "fallback_on_claude_failure": True,
             "evidence_path": "20_script/external-review.json",
+            "evidence_schema": "schemas/external_review_evidence.schema.json",
         }
         if review.get("review_loop_count") != 1:
             errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
@@ -106,15 +107,42 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             if review.get(key) != value:
                 errors.append(f"PROTOCOL_URAKKAI_REVIEW_GATE:{key}")
 
+    expected_stage04 = {
+        "primary": {"provider": "claude_cli", "model": "Claude Opus 5", "effort": "low", "reviews": 1},
+        "fallback": {"provider": "codex_cli", "model": "gpt-5.6-sol", "effort": "low", "reviews": 1, "only_when": "claude_call_failed"},
+        "ordinary_second_review": "FORBIDDEN",
+        "paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+        "normal_approval": "WAIT_USER_URAKKAI_APPROVAL",
+    }
+    if protocol.get("stage04_contract") != expected_stage04:
+        errors.append("PROTOCOL_STAGE04_CONTRACT")
+
     stages = protocol.get("stages")
     expected_stages = [f"{number:02d}" for number in range(1, 10)]
     observed_stages = [stage.get("id") for stage in stages] if isinstance(stages, list) else []
     if observed_stages != expected_stages:
         errors.append("PROTOCOL_STAGE_ORDER")
-    elif stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
-        errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
-    elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
-        errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
+    else:
+        assert isinstance(stages, list)
+        approval_by_mode = {
+            "normal": "WAIT_USER_URAKKAI_APPROVAL",
+            "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+        }
+        stage05_entry_by_mode = {
+            "normal": "USER_URAKKAI_APPROVED",
+            "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+        }
+        if (
+            stages[3].get("pass_state") != "MODE_SPECIFIC_STAGE04_APPROVAL"
+            or stages[3].get("pass_state_by_mode") != approval_by_mode
+            or stages[4].get("requires_state") != "USER_OR_HERMES_DELEGATED_URAKKAI_APPROVED"
+            or stages[4].get("requires_state_by_mode") != stage05_entry_by_mode
+        ):
+            errors.append("PROTOCOL_STAGE04_MODE_TRANSITION")
+        if stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
+            errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
+        if stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
+            errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
 
     completion = protocol.get("completion_report")
     required_completion = [

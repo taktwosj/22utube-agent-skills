@@ -262,13 +262,25 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertEqual(review["review_loop_count"], 1)
         self.assertEqual(review["reviews_per_loop"], 1)
         self.assertEqual(review["creator_machine"], "macmini")
-        self.assertEqual(review["approval_authority"], "user")
+        self.assertEqual(
+            review["approval_authority"],
+            "hermes_delegated_routine_authority_in_paperclip_p0",
+        )
         self.assertEqual(review["fallback_provider"], "codex_cli")
         self.assertEqual(review["fallback_model"], "gpt-5.6-sol")
         self.assertEqual(review["fallback_effort"], "low")
 
         stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
-        self.assertEqual(stage04["pass"], "WAIT_USER_URAKKAI_APPROVAL")
+        self.assertEqual(stage04["pass"], "MODE_SPECIFIC_STAGE04_APPROVAL")
+        self.assertEqual(stage04["pass_by_mode"], {
+            "normal": "WAIT_USER_URAKKAI_APPROVAL",
+            "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+        })
+        stage05 = next(stage for stage in workflow["production_stages"] if stage["id"] == "05")
+        self.assertEqual(stage05["requires_by_mode"], {
+            "normal": "USER_URAKKAI_APPROVED",
+            "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+        })
         self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 1)
         self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK")
         self.assertIn("VMake Direct-Insert Contract", skill_text)

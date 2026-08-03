@@ -54,11 +54,24 @@ def _asset(project: Path, raw_path: object) -> Path | None:
     return candidate
 
 
-def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
-    pre = validate_prebuild(build_manifest_path)
+def _volume_is(segment: dict, expected: float) -> bool:
+    value = segment.get("volume")
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and abs(float(value) - expected) < 1e-9
+    )
+
+
+def validate_postbuild(build_manifest_path: Path, project_path: Path, *, visual_asset_mode: str = "CLEAN_VISUAL_READY") -> dict:
+    manifest = read_json(Path(build_manifest_path).resolve())
+    source_provisional = (
+        visual_asset_mode == "SOURCE_VIDEO_PROVISIONAL"
+        or manifest.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL"
+    )
+    pre = validate_prebuild(build_manifest_path, allow_source_provisional=source_provisional)
     if pre["status"] != "PASS":
         return result([_error("E_MANIFEST_INVALID", prerequisite_errors=pre["errors"])])
-    manifest = read_json(Path(build_manifest_path).resolve())
     project = Path(project_path).resolve()
     content_path = project / "draft_content.json"
     try:
@@ -94,8 +107,14 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
             continue
         material = materials.get(actual.get("material_id"))
         asset = _asset(project, material.get("path") if isinstance(material, dict) else None)
-        if not isinstance(material, dict) or material.get("type") != "video" or asset is None or not asset.is_file() or sha256_file(asset).lower() != manifest["vmake"]["output_sha256"].lower():
+        expected_sha = manifest["source"]["sha256"] if source_provisional else manifest["vmake"]["output_sha256"]
+        if not isinstance(material, dict) or material.get("type") != "video" or asset is None or not asset.is_file() or sha256_file(asset).lower() != expected_sha.lower():
             errors.append(_error("E_DRAFT_MISMATCH", clip_id=planned["clip_id"], detail="vmake_media"))
+        if source_provisional and not _volume_is(actual, 0.0):
+            errors.append(_error(
+                "E_DRAFT_MISMATCH", clip_id=planned["clip_id"],
+                detail="provisional_video_not_muted",
+            ))
     audio_by_clip = {row["clip_id"]: row for row in manifest["source_audio"] if row.get("mode") in {"on", "duck"}}
     if len(actual_a10) != len(audio_by_clip):
         errors.append(_error("E_DRAFT_MISMATCH", detail="a10_count"))
@@ -104,6 +123,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
         expected_source_range = planned.get("capcut_source_range_us", planned["source_range_us"])
         if _range(actual, "source_timerange") != expected_source_range or _range(actual, "target_timerange") != planned["target_range_us"]:
             errors.append(_error("E_DRAFT_MISMATCH", detail="a10_range"))
+        if source_provisional and not _volume_is(actual, 1.0):
+            errors.append(_error("E_DRAFT_MISMATCH", detail="provisional_a10_volume"))
     if manifest["urakkai"].get("reorder_required"):
         if [row.get("id") for row in actual_video] != manifest["urakkai"].get("locked_permutation"):
             errors.append(_error("E_DRAFT_MISMATCH", detail="order"))
@@ -114,8 +135,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--build-manifest", type=Path, required=True)
     parser.add_argument("--project", type=Path, required=True)
+    parser.add_argument("--visual-asset-mode", default="CLEAN_VISUAL_READY")
     args = parser.parse_args()
-    payload = validate_postbuild(args.build_manifest, args.project)
+    payload = validate_postbuild(args.build_manifest, args.project, visual_asset_mode=args.visual_asset_mode)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0 if payload["status"] == "PASS" else 1
 

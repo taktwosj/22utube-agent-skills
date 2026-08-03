@@ -1,13 +1,13 @@
 # Stage 04: Mac Mini Urakkai Review Contract
 
-Load only for Stage 04 and only for `URAKKAI`. Run one creator-machine review before a user decision; never turn it into automatic approval.
+Load only for Stage 04 and only for `URAKKAI`. Run exactly one creator-machine review. Normal episodes require a user decision; exact Paperclip P0 automatic mode may use Hermes delegated routine approval after evidence only.
 
 ## Execution and authority
 
 1. The Mac mini producer creates the candidate and calls Claude CLI with Claude Opus 5 / Low.
 2. If that CLI call fails because of authentication, quota, availability, or a non-zero exit, run one same-input fallback: Codex CLI `gpt-5.6-sol` / Low.
 3. A reviewer may recommend or rewrite copy. It cannot lock the design, change source ranges without evidence, or advance the episode.
-4. Report the revised `20_script/URAKKAI_BLUEPRINT.md` and review summary to the user. Remain at `WAIT_USER_URAKKAI_APPROVAL` until explicit approval.
+4. Report the revised `20_script/URAKKAI_BLUEPRINT.md` and review summary. Normal mode remains at `WAIT_USER_URAKKAI_APPROVAL`. In exact Paperclip P0 automatic mode, record `HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE` and continue after evidence; it cannot authorize publication, credentials, payment, destructive actions, or final creative judgment.
 
 Record reviewer choice, fallback category, input/output SHA-256, findings, accepted changes, and rejected changes in `20_script/external-review.md` and `.json`. Never record credentials, tokens, cookies, private URLs, or raw session identifiers.
 
@@ -38,4 +38,4 @@ Creative copy may be witty, exaggerated, or fictional, but must not present an u
 
 ## Review result
 
-Report: `present_scene`, `emotional_hook`, `rewrite_or_keep`, and `approval_status=WAIT_USER_URAKKAI_APPROVAL`. Each user correction reuses this same stage and reports again.
+Report: `present_scene`, `emotional_hook`, `rewrite_or_keep`, and the mode-specific approval status. Normal mode uses `approval_status=WAIT_USER_URAKKAI_APPROVAL`; exact Paperclip P0 automatic mode uses `approval_status=HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE` and continues after evidence. Each correction reuses this same Stage 04 review without adding a second ordinary review loop.

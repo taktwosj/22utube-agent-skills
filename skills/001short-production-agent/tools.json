@@ -124,5 +124,13 @@
     {"id": "A12", "role": "background music"},
     {"id": "SCREEN", "role": "approved screen treatment"}
   ],
-  "policies": {"new_tracks": false, "new_tools": false, "external_review_auto": false}
+  "policies": {
+    "new_tracks": false,
+    "new_tools": false,
+    "external_review_auto": {
+      "default": false,
+      "exact_paperclip_p0_automatic": true,
+      "requires_receipt": "external_review_evidence"
+    }
+  }
 }

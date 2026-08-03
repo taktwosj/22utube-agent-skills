@@ -20,6 +20,7 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 import capcut_model
+import capcut_materialization
 import clone_and_sync
 import apply_capcut_polish_profile
 import validate_audio_caption
@@ -140,7 +141,7 @@ def _normalize_paths(value: Any, project: Path, draft_prefix: str) -> None:
 
 def _validate_config(config: dict) -> None:
     required = (
-        "episode_id", "clean_video", "duration_us", "T1", "T2", "state_cues",
+        "episode_id", "duration_us", "T1", "T2", "state_cues",
         "project_name", "template_zip", "episode_root", "work_root", "local_capcut_root",
         "source_identity_path", "approved_timeline_path", "design_handoff_path",
         "design_lock_evidence_path", "build_manifest_path",
@@ -148,6 +149,12 @@ def _validate_config(config: dict) -> None:
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
+    mode = config.get("visual_asset_mode", "CLEAN_VISUAL_READY")
+    if mode not in {"CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"}:
+        raise ValueError("VISUAL_ASSET_MODE_INVALID")
+    visual_key = "source_video" if mode == "SOURCE_VIDEO_PROVISIONAL" else "clean_video"
+    if visual_key not in config:
+        raise ValueError(f"CONFIG_MISSING:{visual_key}")
     if config.get("audio_role", "A10") not in {"A10", "A12"}:
         raise ValueError("AUDIO_ROLE_INVALID")
     duration = config["duration_us"]
@@ -176,6 +183,22 @@ def _validate_config(config: dict) -> None:
         if len(meaningful) > 8:
             raise ValueError("STATE_CUE_TOO_LONG")
         previous_end = cue["end_us"]
+
+
+def _visual_asset_path(config: dict) -> Path:
+    key = "source_video" if config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL" else "clean_video"
+    return Path(config[key]).resolve()
+
+
+def _visual_asset_filename(config: dict) -> str:
+    return "source_video.mp4" if config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL" else "clean_video.mp4"
+
+
+def _episode_work_root(config: dict) -> Path:
+    episode_id = str(config["episode_id"])
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", episode_id).strip("._-")[:48] or "episode"
+    digest = hashlib.sha256(episode_id.encode("utf-8")).hexdigest()[:12]
+    return Path(config["work_root"]).resolve() / f"{slug}-{digest}"
 
 
 def _approved_rows(config: dict) -> list[dict]:
@@ -411,7 +434,9 @@ def _normalize_source(
     approved_by_id = {row["segment_id"]: row for row in approved}
     media = project / "Resources" / "media"
     media.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(Path(config["clean_video"]), media / "clean_video.mp4")
+    visual_asset = _visual_asset_path(config)
+    visual_name = _visual_asset_filename(config)
+    shutil.copy2(visual_asset, media / visual_name)
     audio_suffix = audio_source.suffix.lower() or ".wav"
     audio_name = f"source_audio{audio_suffix}"
     shutil.copy2(audio_source, media / audio_name)
@@ -454,7 +479,7 @@ def _normalize_source(
         video_material = material_map[base_video_segment["material_id"]]
         _set_media(
             video_material, media_type="video",
-            portable_path=_portable_resource_path(draft_prefix, "Resources/media/clean_video.mp4"),
+            portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{visual_name}"),
             role="VIDEO", duration_us=duration,
         )
         video_segments = []
@@ -477,6 +502,8 @@ def _normalize_source(
                 "start": clip["source_range_us"][0],
                 "duration": clip["source_range_us"][1] - clip["source_range_us"][0],
             }
+            if config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL":
+                video_segment["volume"] = 0.0
             video_segments.append(video_segment)
         tracks[0]["segments"] = video_segments
 
@@ -551,6 +578,8 @@ def _normalize_source(
                 "start": capcut_source_range[0],
                 "duration": capcut_source_range[1] - capcut_source_range[0],
             }
+            if config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL":
+                a10_segment["volume"] = 1.0
             a10_segments.append(a10_segment)
         tracks[9]["segments"] = a10_segments
 
@@ -661,13 +690,38 @@ def _srt_time(microseconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
 
+def _clean_receipt_fields_match(stored: dict, expected: dict) -> bool:
+    return stored.get("status") == "PASS" and all(
+        stored.get(field) == value for field, value in expected.items()
+    )
+
+
+def _build_manifest_visual_matches(config: dict, build_manifest: dict, visual_asset: Path) -> bool:
+    visual_asset = Path(visual_asset).resolve()
+    provisional = config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL"
+    section = build_manifest.get("source" if provisional else "vmake")
+    if not isinstance(section, dict):
+        return False
+    raw_path = section.get("path" if provisional else "output_path")
+    raw_sha = section.get("sha256" if provisional else "output_sha256")
+    return (
+        isinstance(raw_path, str)
+        and isinstance(raw_sha, str)
+        and len(raw_sha) == 64
+        and Path(raw_path).resolve() == visual_asset
+        and visual_asset.is_file()
+        and _sha(visual_asset).lower() == raw_sha.lower()
+    )
+
+
 def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -> dict:
     del source_rows
     episode_id = config["episode_id"]
-    clean_video = Path(config["clean_video"]).resolve()
-    audio_source = Path(config.get("source_audio") or config["clean_video"]).resolve()
+    visual_asset = _visual_asset_path(config)
+    provisional = config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL"
+    audio_source = Path(config.get("source_audio") or config.get("source_video") or visual_asset).resolve()
     duration = config["duration_us"]
-    width, height = _video_dimensions(clean_video)
+    width, height = _video_dimensions(visual_asset)
     source_identity = Path(config["source_identity_path"]).resolve()
     approved_timeline = Path(config["approved_timeline_path"]).resolve()
     handoff = Path(config["design_handoff_path"]).resolve()
@@ -693,11 +747,12 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     clean_root = Path(config.get("clean_asset_root", episode / "40_assets_used")).resolve()
     clean_evidence_root = Path(config.get("clean_evidence_root", clean_root)).resolve()
     try:
-        clean_video.relative_to(clean_root.resolve())
+        if not provisional:
+            visual_asset.relative_to(clean_root.resolve())
     except ValueError:
         raise RuntimeError("STAGE06_CLEAN_OUTPUT_OUTSIDE_ASSET_ROOT") from None
     build_manifest_path = Path(config["build_manifest_path"]).resolve()
-    prebuild = validate_prebuild.validate_prebuild(build_manifest_path)
+    prebuild = validate_prebuild.validate_prebuild(build_manifest_path, allow_source_provisional=provisional)
     if prebuild["status"] != "PASS":
         raise RuntimeError(f"STAGE08_PREBUILD:{prebuild}")
     build_manifest = json.loads(build_manifest_path.read_text(encoding="utf-8"))
@@ -709,25 +764,24 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         != Path(config["template_zip"]).resolve()
         or build_manifest["template"]["root_zip_sha256"].lower()
         != _sha(Path(config["template_zip"])).lower()
-        or Path(build_manifest["vmake"]["output_path"]).resolve() != clean_video
-        or build_manifest["vmake"]["output_sha256"].lower() != _sha(clean_video).lower()
+        or not _build_manifest_visual_matches(config, build_manifest, visual_asset)
     ):
         raise RuntimeError("STAGE08_BUILD_MANIFEST_AUTHORITY_MISMATCH")
 
-    clean_manifest = clean_evidence_root / "clean_visual_manifest.json"
-    clean_receipt = clean_evidence_root / "clean_visual_receipt.json"
-    if not clean_manifest.is_file() or not clean_receipt.is_file():
-        raise RuntimeError("STAGE06_EVIDENCE_MISSING")
-    clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
-    stored_clean_receipt = json.loads(clean_receipt.read_text(encoding="utf-8"))
-    expected_receipt = clean.get("evidence", {})
-    if clean["status"] != "PASS" or stored_clean_receipt.get("status") != "PASS" or any(
-        stored_clean_receipt.get(field) != expected_receipt.get(field)
-        for field in expected_receipt
-    ):
-        raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
-    if clean["status"] != "PASS":
-        raise RuntimeError(f"STAGE06:{clean}")
+    if not provisional:
+        clean_manifest = clean_evidence_root / "clean_visual_manifest.json"
+        clean_receipt = clean_evidence_root / "clean_visual_receipt.json"
+        if not clean_manifest.is_file() or not clean_receipt.is_file():
+            raise RuntimeError("STAGE06_EVIDENCE_MISSING")
+        clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
+        stored_clean_receipt = json.loads(clean_receipt.read_text(encoding="utf-8"))
+        expected_receipt = clean.get("evidence", {})
+        if clean["status"] != "PASS" or not _clean_receipt_fields_match(
+            stored_clean_receipt, expected_receipt
+        ):
+            raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
+        if clean["status"] != "PASS":
+            raise RuntimeError(f"STAGE06:{clean}")
 
     audio_root = episode / "30_audio_srt"
     audio_lock = audio_root / "audio_lock.json"
@@ -761,21 +815,25 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
 def _build_episode_once(config: dict) -> dict:
     _ensure_media_tools()
     _validate_config(config)
-    clean_video = Path(config["clean_video"]).resolve()
-    audio_source = Path(config.get("source_audio") or clean_video).resolve()
-    if not clean_video.is_file() or not audio_source.is_file():
+    visual_asset = _visual_asset_path(config)
+    audio_source = Path(config.get("source_audio") or config.get("source_video") or visual_asset).resolve()
+    if not visual_asset.is_file() or not audio_source.is_file():
         raise FileNotFoundError("INPUT_MEDIA_MISSING")
     episode = Path(config["episode_root"]).resolve()
-    target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
+    capcut_root = Path(config["local_capcut_root"]).resolve()
+    target = capcut_root / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
     episode.mkdir(parents=True, exist_ok=True)
     build_root = episode / "50_capcut_project"
     evidence_root = build_root / "evidence"
     evidence_root.mkdir(parents=True, exist_ok=True)
-    work_root = Path(config["work_root"]).resolve()
+    work_root = _episode_work_root(config)
     work_root.mkdir(parents=True, exist_ok=True)
-    source = _extract_template(Path(config["template_zip"]).resolve(), work_root / "source_authority")
+    root_contract = capcut_materialization.stage_episode_root_authority(
+        Path(config["template_zip"]), episode, config["episode_id"]
+    )
+    source = _extract_template(Path(root_contract["episode_root_zip_path"]), work_root / "source_authority")
     pre = _stage_prerequisites(config, episode, [])
     source_rows = _normalize_source(source, config, audio_source, pre["build_manifest"])
 
@@ -805,23 +863,22 @@ def _build_episode_once(config: dict) -> dict:
     snapshot_path = build_root / "structure_snapshot.json"
     _write_json(snapshot_path, snapshot)
 
-    _assert_capcut_closed_for_target(target)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(working, target)
+    staging_target = work_root / "materialized_project"
+    shutil.copytree(working, staging_target)
     cloud_prepare = _prepare_cloud_project(
-        target,
+        staging_target,
         project_name=config["project_name"],
-        capcut_root=target.parent,
+        capcut_root=capcut_root,
         draft_id=draft_id,
         duration_us=config["duration_us"],
     )
     polish_receipt_path = build_root / "capcut_polish_profile_receipt.json"
-    polish_receipt = apply_capcut_polish_profile.apply_project(target)
+    polish_receipt = apply_capcut_polish_profile.apply_project(staging_target)
     _write_json(polish_receipt_path, polish_receipt)
-    polish_validation = validate_capcut_polish_profile.validate_project(target)
+    polish_validation = validate_capcut_polish_profile.validate_project(staging_target)
     if polish_validation["status"] != "PASS":
         raise RuntimeError(f"STAGE08_POLISH:{polish_validation}")
-    model = capcut_model.load_project(target)
+    model = capcut_model.load_project(staging_target)
     material_map = {row.get("id"): row for row in _materials(model.materials) if isinstance(row.get("id"), str)}
     timeline_rows = []
     approved_text: set[str] = set()
@@ -848,7 +905,10 @@ def _build_episode_once(config: dict) -> dict:
     receipt_path = build_root / "build_inputs_receipt.json"
     contract = {
         "schema_version": "001short-build-contract-v1", "episode_id": config["episode_id"],
-        "source_project_path": str(source.resolve()), "working_project_path": str(target.resolve()),
+        "visual_asset_mode": config.get("visual_asset_mode", "CLEAN_VISUAL_READY"),
+        "source_video_provisional": config.get("visual_asset_mode") == "SOURCE_VIDEO_PROVISIONAL",
+        "source_project_path": str(source.resolve()), "working_project_path": str(staging_target.resolve()),
+        "materialized_project_path": str(target.resolve()),
         "evidence_root_path": str(evidence_root.resolve()), "source_core_sha256": source_manifest,
         "source_root_sha256": source_root_sha, "template_sha256": template_sha,
         "design_lock_evidence_path": str(pre["design_evidence"].resolve()),
@@ -895,29 +955,43 @@ def _build_episode_once(config: dict) -> dict:
             raise RuntimeError("UNSAFE_PREVIOUS_CAPCUT_EVIDENCE")
         capcut_evidence.unlink()
     checked = validate_capcut_project.validate_capcut_project(
+        staging_target, snapshot_path, contract_path, capcut_evidence, evidence_root
+    )
+    if checked["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_VALIDATE:{checked}")
+    postbuild = validate_postbuild.validate_postbuild(
+        Path(config["build_manifest_path"]), staging_target,
+        visual_asset_mode=config.get("visual_asset_mode", "CLEAN_VISUAL_READY"),
+    )
+    if postbuild["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_POSTBUILD:{postbuild}")
+    materialized = capcut_materialization.materialize_validated_package(
+        staging_target, capcut_root, config["project_name"], config["episode_id"],
+        assert_closed=lambda: _assert_capcut_closed_for_target(target),
+    )
+    if materialized["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_MATERIALIZATION:{materialized}")
+    capcut_evidence.unlink()
+    checked = validate_capcut_project.validate_capcut_project(
         target, snapshot_path, contract_path, capcut_evidence, evidence_root
     )
     if checked["status"] != "PASS":
-        if target.is_dir():
-            shutil.rmtree(target)
-        raise RuntimeError(f"STAGE08_VALIDATE:{checked}")
+        raise RuntimeError(f"STAGE08_FINAL_VALIDATE:{checked}")
     postbuild = validate_postbuild.validate_postbuild(
-        Path(config["build_manifest_path"]), target
+        Path(config["build_manifest_path"]), target,
+        visual_asset_mode=config.get("visual_asset_mode", "CLEAN_VISUAL_READY"),
     )
     if postbuild["status"] != "PASS":
-        if target.is_dir():
-            shutil.rmtree(target)
-        raise RuntimeError(f"STAGE08_POSTBUILD:{postbuild}")
-    _register_capcut_project(
-        target,
-        target.parent,
-        build_root / "root_meta_info.before.json",
-    )
+        raise RuntimeError(f"STAGE08_FINAL_POSTBUILD:{postbuild}")
+    canonical_identity = materialized["canonical_identity"]
+    materialization_receipt = {"resource": "Mac_CapCut_global_root", **materialized}
+    _write_json(build_root / "materialization_receipt.json", materialization_receipt)
     state = {
         "episode_id": config["episode_id"], "current_stage": "09",
         "status": "WAIT_USER_CAPCUT_CHECK", "project_name": config["project_name"],
         "local_capcut_project_path": str(target), "stage09_user_approval": "NOT_RUN",
-        "cloud_prepare": cloud_prepare,
+        "cloud_prepare": cloud_prepare, "visual_asset_mode": config.get("visual_asset_mode", "CLEAN_VISUAL_READY"),
+        "canonical_identity": canonical_identity,
     }
     _write_json(episode / "episode_state.json", state)
     return {
@@ -928,7 +1002,7 @@ def _build_episode_once(config: dict) -> dict:
 
 def _cleanup_generated_work(work_root: Path) -> None:
     work_root = Path(work_root).resolve()
-    for name in ("normalized_source", "working_project"):
+    for name in ("normalized_source", "working_project", "materialized_project"):
         candidate = work_root / name
         if candidate.parent != work_root:
             raise RuntimeError("UNSAFE_GENERATED_WORK_PATH")
@@ -965,6 +1039,15 @@ def _assert_optional_edit_lock(config: dict) -> None:
 
 
 def _assert_capcut_closed_for_target(target: Path) -> None:
+    if sys.platform == "darwin":
+        completed = subprocess.run(
+            ["pgrep", "-x", "CapCut"], capture_output=True, text=True, check=False
+        )
+        if completed.returncode == 0:
+            raise RuntimeError("CAPCUT_PROCESS_OPEN")
+        if completed.returncode != 1:
+            raise RuntimeError("CAPCUT_PROCESS_CHECK_FAILED")
+        return
     if os.name != "nt":
         return
     local_appdata = Path(os.environ.get("LOCALAPPDATA", "")).resolve()
@@ -989,7 +1072,7 @@ def build_episode(config: dict) -> dict:
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
     _assert_optional_edit_lock(config)
-    work_root = Path(config["work_root"]).resolve()
+    work_root = _episode_work_root(config)
     work_root.mkdir(parents=True, exist_ok=True)
     _cleanup_generated_work(work_root)
     _reset_source_authority(work_root)

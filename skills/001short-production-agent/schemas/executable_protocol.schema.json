@@ -12,6 +12,7 @@
     "session_handoff",
     "production_modes",
     "urakkai_review_loop",
+    "stage04_contract",
     "invariants",
     "anchors",
     "stages",
@@ -168,7 +169,8 @@
         "fallback_model",
         "fallback_effort",
         "fallback_on_claude_failure",
-        "evidence_path"
+        "evidence_path",
+        "evidence_schema"
       ],
       "properties": {
         "enabled_for": {
@@ -193,7 +195,7 @@
           "const": "macmini"
         },
         "approval_authority": {
-          "const": "user"
+          "const": "hermes_delegated_routine_authority_in_paperclip_p0"
         },
         "fallback_provider": {
           "const": "codex_cli"
@@ -209,7 +211,22 @@
         },
         "evidence_path": {
           "const": "20_script/external-review.json"
+        },
+        "evidence_schema": {
+          "const": "schemas/external_review_evidence.schema.json"
         }
+      },
+      "additionalProperties": false
+    },
+    "stage04_contract": {
+      "type": "object",
+      "required": ["primary", "fallback", "ordinary_second_review", "paperclip_p0_automatic", "normal_approval"],
+      "properties": {
+        "primary": {"const": {"provider": "claude_cli", "model": "Claude Opus 5", "effort": "low", "reviews": 1}},
+        "fallback": {"const": {"provider": "codex_cli", "model": "gpt-5.6-sol", "effort": "low", "reviews": 1, "only_when": "claude_call_failed"}},
+        "ordinary_second_review": {"const": "FORBIDDEN"},
+        "paperclip_p0_automatic": {"const": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE"},
+        "normal_approval": {"const": "WAIT_USER_URAKKAI_APPROVAL"}
       },
       "additionalProperties": false
     },

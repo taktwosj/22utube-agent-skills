@@ -26,7 +26,7 @@ Never leave any live P0 agent on `gpt-5.3-codex-spark` or `Auto`. Luna, Max, Ult
 | Source | source identity and one VMake DOM job started | issue receipt, source identity, no duplicate VMake upload; VMake is nonblocking |
 | Comment insight (optional) | compact 5–6 diverse public-reaction clusters or `COMMENTS_UNAVAILABLE` | live-response proof only; no API key in task, artifact, or log; comments never become source fact |
 | Stage 03–04 | urakkai blueprint and dynamic speaker plan | evidence only; no subjective rewrite |
-| Urakkai review | Claude Opus 5/Low result; Codex Sol/Low only when Claude CLI call fails | correct provider/fallback evidence and `WAIT_USER_URAKKAI_APPROVAL` |
+| Urakkai review | exactly one Claude Opus 5/Low result; exactly one Codex Sol/Low fallback only when Claude CLI call fails | normal mode: `WAIT_USER_URAKKAI_APPROVAL`; exact P0 automatic mode: Hermes delegated routine approval after evidence |
 | CapCut polish | closed-draft profile receipt | every source-audio segment is vocal-retain `choice=2`; source audio is muted under A9 and restored outside; all audio is -14 LUFS; every video join has W Flash; every video has AI HD=3, smart 42/47, sharpen/clear 50 |
 | Text/motion | track readback and project evidence | STATE is a present scene/emotion hook at most 8 meaningful characters; 2 speakers use 2 lines and 3 speakers use 3 lines; no frozen/offline media |
 
@@ -52,7 +52,7 @@ Immediately after source identity, `P0-제작` starts VMake via DOM/file input, 
 
 ## User authority
 
-The user supplies episode-specific emotional direction and makes the final visual judgment. The coordinator transmits it, including permission for a playful fictional hook, imagined thought, exaggeration, or reversal. The producer records source observation separately from `CREATIVE_URAKKAI`; it may not frame invented identity, relationship, crime, medical/legal, or defamatory claims as fact. Stage 04 runs Claude Opus 5/Low once; only an actual Claude CLI failure permits one Codex Sol/Low fallback. Report the revised draft and wait for user approval before Stage 05, unless the user explicitly says automatic mode for that episode.
+The user supplies episode-specific emotional direction and makes the final visual judgment. The coordinator transmits it, including permission for a playful fictional hook, imagined thought, exaggeration, or reversal. The producer records source observation separately from `CREATIVE_URAKKAI`; it may not frame invented identity, relationship, crime, medical/legal, or defamatory claims as fact. Stage 04 runs Claude Opus 5/Low exactly once; only an actual Claude CLI failure permits one Codex Sol/Low fallback. Normal mode waits for user approval before Stage 05. Exact Paperclip P0 automatic mode records Hermes delegated routine approval after evidence and continues, but excludes publication, credentials, payment, destructive actions, and final creative judgment.
 
 ## Deployment truth
 

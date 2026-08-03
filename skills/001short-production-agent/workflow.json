@@ -18,6 +18,13 @@
     "self_check_required": true,
     "conflict_error": "STOP_PROTOCOL_CONFLICT"
   },
+  "stage04_contract": {
+    "primary": {"provider": "claude_cli", "model": "Claude Opus 5", "effort": "low", "reviews": 1},
+    "fallback": {"provider": "codex_cli", "model": "gpt-5.6-sol", "effort": "low", "reviews": 1, "only_when": "claude_call_failed"},
+    "ordinary_second_review": "FORBIDDEN",
+    "paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE",
+    "normal_approval": "WAIT_USER_URAKKAI_APPROVAL"
+  },
   "session_bootstrap": {
     "trigger": "new_session_with_001_conversation_handoff_json",
     "env_file": "$HOME/.hermes/.env",
@@ -350,6 +357,23 @@
       ]
     }
   },
+  "capcut_materialization_queue": {
+    "resource": "Mac_CapCut_global_root",
+    "concurrency": 1,
+    "episode_staging": "parallel_without_home_registration_shared_root_write_or_capcut_open",
+    "sequence": [
+      "acquire_lock",
+      "verify_capcut_closed",
+      "materialize_one_validated_package",
+      "register_one_project",
+      "record_project_folder_draft_manifest_sha_draft_id",
+      "graceful_close_receipt",
+      "release_lock"
+    ],
+    "canonical_identity": ["project_folder", "draft_manifest_sha", "draft_id"],
+    "ui_receipt": "UI_PENDING_AUXILIARY_NONBLOCKING",
+    "graceful_close_failure": "WAIT_CAPCUT_GRACEFUL_CLOSE_FAILED_CURRENT_MATERIALIZATION_ONLY"
+  },
   "production_stages": [
     {
       "id": "01",
@@ -369,7 +393,11 @@
     {
       "id": "04",
       "file": "steps/04-external-review.md",
-      "pass": "WAIT_USER_URAKKAI_APPROVAL",
+      "pass": "MODE_SPECIFIC_STAGE04_APPROVAL",
+      "pass_by_mode": {
+        "normal": "WAIT_USER_URAKKAI_APPROVAL",
+        "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE"
+      },
       "required_evidence": [
         "20_script/external-review.md",
         "20_script/external-review.json"
@@ -378,6 +406,10 @@
     {
       "id": "05",
       "file": "steps/05-final-blueprint.md",
+      "requires_by_mode": {
+        "normal": "USER_URAKKAI_APPROVED",
+        "exact_paperclip_p0_automatic": "HERMES_DELEGATED_ROUTINE_APPROVAL_AFTER_EVIDENCE"
+      },
       "pass": "FINAL_DESIGN_LOCKED",
       "checks": [
         "references/checks/design-lock.md"
@@ -481,7 +513,7 @@
       "loop_count": 1,
       "reviews_per_loop": 1,
       "creator_machine": "macmini",
-      "approval_authority": "user",
+      "approval_authority": "hermes_delegated_routine_authority_in_paperclip_p0",
       "fallback": "Codex CLI gpt-5.6-sol at low effort",
       "evidence": "20_script/external-review.json"
     },
@@ -571,7 +603,10 @@
       "05": {
         "reference": "references/checks/design-lock.md",
         "validator": "scripts/validate_design_lock.py",
-        "protocol_validator": "python3 scripts/validate_executable_protocol.py --plan {episode_root}/20_script/production_plan.json"
+        "protocol_validator": "python3 scripts/validate_executable_protocol.py --plan {episode_root}/20_script/production_plan.json",
+        "required_prerequisites": [
+          "external_review_evidence"
+        ]
       },
       "06": {
         "reference": "references/checks/clean-visual.md",

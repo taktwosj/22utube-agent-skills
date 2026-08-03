@@ -29,6 +29,13 @@
 5. 모두 통과하면 조정자가 후보를 권위 경로로 승격하고 canonical validator를 실행한다.
 6. validator 통과 뒤 조정자만 state를 한 단계씩 갱신한다. 여러 상태를 한 번에 쓰지 않는다.
 
+## Mac CapCut materialization queue
+
+- episode별 root ZIP 복사·root contract·package staging·정적 검증은 병렬 가능하지만 Home 등록, 공유 root 쓰기, CapCut 열기는 절대 병렬화하지 않는다.
+- 공유 자원 이름은 `Mac_CapCut_global_root`, 동시성은 1이다. queue는 lock 획득 → CapCut closed 확인 → 검증된 package 1개 materialize → project folder/draft manifest SHA/draft ID 기록 → graceful close receipt → lock 해제 순서다.
+- canonical identity는 `project_folder`, `draft_manifest_sha`, `draft_id` 세 필드뿐이다. Home card/editor entry는 `UI_PENDING` 보조 receipt이므로 `IN_REVIEW`나 preview render를 막지 않는다.
+- graceful close가 실패하면 `WAIT_CAPCUT_GRACEFUL_CLOSE_FAILED`로 현재 materialization만 멈춘다. 강제 종료하거나 다른 회차 queue를 막지 않는다.
+
 ## 허용 fanout
 
 | 시점 | 작업자 | 독립 lane | Barrier 뒤 조정자 작업 |
