@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -205,6 +206,9 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     authority = protocol.get("authority", {})
     schemas = protocol.get("schemas", {})
     session_handoff = protocol.get("session_handoff", {})
+    review = protocol.get("urakkai_review_loop", {})
+    review_loop_count = review.get("review_loop_count") if isinstance(review, dict) else None
+    reviews_per_loop = review.get("reviews_per_loop") if isinstance(review, dict) else None
     required_paths = [
         authority.get("policy"),
         authority.get("machine_contract"),
@@ -258,6 +262,16 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
+        review_contract = re.search(
+            r"Stage 04의 검토 개선 loop는 정확히 (\d+)회 실행한다\.", skill_text
+        )
+        if (
+            not isinstance(review_loop_count, int)
+            or isinstance(review_loop_count, bool)
+            or review_contract is None
+            or int(review_contract.group(1)) != review_loop_count
+        ):
+            errors.append("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH")
 
     workflow_path = root / str(authority.get("state_machine", "workflow.json"))
     if workflow_path.is_file():
@@ -281,6 +295,11 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_VALIDATOR_MISMATCH")
             if bootstrap.get("resume_requires_episode_id_and_explicit_request") is not True:
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_RESUME_GATE_DISABLED")
+            external_review = workflow.get("blueprint_frontend", {}).get("external_review", {})
+            if external_review.get("loop_count") != review_loop_count:
+                errors.append("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH")
+            if external_review.get("reviews_per_loop") != reviews_per_loop:
+                errors.append("PROTOCOL_WORKFLOW_REVIEWS_PER_LOOP_MISMATCH")
         except Exception:
             pass
 

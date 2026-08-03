@@ -1,7 +1,10 @@
 import copy
+import contextlib
 import hashlib
+import io
 import importlib.util
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -170,6 +173,34 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "PROTOCOL_REQUIRED_FILE_MISSING:schemas/not-present.schema.json",
             module.validate_skill_contract(SKILL, broken),
         )
+
+    def test_self_check_catches_dynamic_review_loop_contract_mismatch(self):
+        module = load_validator()
+        self.assertIsNotNone(module, "validate_executable_protocol.py must exist")
+        protocol = module.load_protocol(PROTOCOL)
+        mismatched_protocol = copy.deepcopy(protocol)
+        mismatched_protocol["urakkai_review_loop"]["review_loop_count"] = 2
+        errors = module.validate_skill_contract(SKILL, mismatched_protocol)
+        self.assertIn("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH", errors)
+        self.assertIn("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH", errors)
+
+        with tempfile.TemporaryDirectory() as directory:
+            copied_skill = Path(directory) / "001short-production-agent"
+            shutil.copytree(SKILL, copied_skill)
+            skill_path = copied_skill / "SKILL.md"
+            skill_path.write_text(
+                skill_path.read_text(encoding="utf-8").replace(
+                    "Stage 04의 검토 개선 loop는 정확히 1회 실행한다.",
+                    "Stage 04의 검토 개선 loop는 정확히 2회 실행한다.",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    module.main(["--protocol", str(copied_skill / "protocol.json"), "--self-check"]),
+                    1,
+                )
 
     def test_clean_only_plan_requires_single_video_audio_and_empty_tracks(self):
         module = load_validator()

@@ -271,15 +271,14 @@ Stage 03~05에서는 JSON 이름이나 선택지만 먼저 말하지 않는다. 
 
 ## Urakkai Claude Review Loop Contract
 
-001 `URAKKAI` Stage 04의 검토 개선 loop는 정확히 2회 실행한다. 이는 독립 검토 대화 두 개를 한 번에 모으는 방식이 아니라, **검토 → Hermes 개선**을 순서대로 두 번 반복하는 계약이다.
+001 `URAKKAI` Stage 04의 검토 개선 loop는 정확히 1회 실행한다. 이는 독립 검토 대화를 모으거나 재검토를 반복하는 방식이 아니라, **검토 → Hermes 개선**을 한 번 수행하는 계약이다.
 
-1. Loop 1은 현재 승인 후보를 first-party Claude OAuth의 Claude Opus `--effort low`로 검토하고 Hermes가 개선한다.
-2. Loop 2는 Loop 1 개선본을 같은 항목으로 다시 검토하고 Hermes가 재개선한다.
-3. Hermes는 baseline·Loop 1·Loop 2 후보를 비교해 source range·segment ID·승인 범위를 지키는 최상안을 직접 확정한다. Claude가 제안한 절대 초나 구조를 그대로 권위로 승격하지 않는다.
+1. 현재 승인 후보를 Mac mini creator machine의 Claude CLI Claude Opus 5 `--effort low`로 검토하고 Hermes가 개선한다.
+2. Hermes는 개선본이 source range·segment ID·승인 범위를 지키는지 확인한다. Claude가 제안한 절대 초나 구조를 그대로 권위로 승격하지 않는다.
 
 - 검토 범위는 훅 명확성, 장면 이해도, 이탈 지점, 대사 중복, 감정 연결이다.
-- 실패한 Claude loop만 동일 입력의 Hermes 서브에이전트 검토 1회로 대체한다. 두 loop 증거가 채워지지 않으면 `WAIT_EXTERNAL_REVIEW`에서 중단한다.
-- `20_script/external-review.md`와 `.json`에 loop별 입력·출력 hash, Hermes 개선, 채택·반려와 최종 선택 사유를 기록한다.
+- Claude CLI 검토가 실패했을 때만 동일 입력의 Codex CLI `gpt-5.6-sol` `--effort low` 검토 1회로 대체한다. 해당 1회 검토 증거가 없으면 `WAIT_EXTERNAL_REVIEW`에서 중단한다.
+- `20_script/external-review.md`와 `.json`에 입력·출력 hash, 선택한 reviewer, fallback 상태, Hermes 개선, 채택·반려와 최종 선택 사유를 기록한다.
 - 토큰, 쿠키, OAuth 값, URL, tab/conversation/session ID는 저장하지 않는다.
 - `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY`에는 이 loop를 강제하지 않는다.
 
