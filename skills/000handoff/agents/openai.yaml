@@ -1,0 +1,4 @@
+interface:
+  display_name: "000handoff"
+  short_description: "Create a compact verified-context handoff block"
+  default_prompt: "Use $000handoff to create a compact copy-ready handoff from this conversation only."
