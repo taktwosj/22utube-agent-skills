@@ -788,7 +788,7 @@
     },
     "WAIT_EXTERNAL_REVIEW": {
       "executes_external_action": false,
-      "meaning": "one or both required urakkai review loops lack verified evidence"
+      "meaning": "the required urakkai review lacks verified evidence"
     },
     "FAIL": {
       "executes_external_action": false,
