@@ -1,0 +1,657 @@
+#!/usr/bin/env python3
+"""Build a clean politics-longform CapCut draft from episode_cards.json.
+
+The project is intentionally created with unique *offline* media paths.  A
+single CapCut Media Relink action against the emitted Media folder reconnects
+all card assets; no media path from a prior episode is reused.
+"""
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import uuid
+import zipfile
+from pathlib import Path
+from typing import Any
+
+from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
+
+
+LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
+CARD_TYPES = {
+    "INTRO",
+    "CHAPTER_CARD",
+    "SOURCE_VIDEO",
+    "NARRATION_IMAGE",
+    "NARRATION_VIDEO",
+    "TEXT_EXPLAINER",
+    "ENDING",
+}
+
+
+def uid() -> str:
+    return str(uuid.uuid4()).upper()
+
+
+def text_of(material: dict[str, Any]) -> str:
+    return json.loads(material["content"])["text"]
+
+
+def set_range(segment: dict[str, Any], start: int, duration: int) -> None:
+    segment["target_timerange"] = {"start": start, "duration": duration}
+
+
+def require_capcut_closed() -> None:
+    tasklist = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV", "/NH"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if "CapCut.exe" in tasklist.stdout:
+        raise RuntimeError("CAPCUT_PROCESS_MUST_BE_CLOSED")
+
+
+def extract_root(archive: Path, destination: Path) -> Path:
+    with zipfile.ZipFile(archive) as package:
+        members = [Path(row.filename) for row in package.infolist() if not row.is_dir()]
+        roots = {row.parts[0] for row in members if row.parts}
+        if len(roots) != 1 or any(row.is_absolute() or ".." in row.parts for row in members):
+            raise RuntimeError("ROOT_ARCHIVE_SHAPE_INVALID")
+        package.extractall(destination)
+    root = destination / next(iter(roots))
+    if not (root / "draft_content.json").is_file():
+        raise RuntimeError("ROOT_DRAFT_MISSING")
+    return root
+
+
+def remap_ids(stage: Path, final_root: Path, project_name: str, archive_root_name: str) -> tuple[dict[str, Any], Path]:
+    old_timeline = json_load(stage / "draft_content.json")["id"]
+    parsed: dict[Path, Any] = {}
+    ids: set[str] = set()
+    for path in stage.rglob("*"):
+        if path.is_file() and path.suffix.lower() in {".json", ".tmp"}:
+            try:
+                parsed[path] = json_load(path)
+                collect_uuids(parsed[path], ids)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+    id_map = {old: uid() for old in ids}
+    new_timeline = id_map.get(old_timeline)
+    if not new_timeline:
+        raise RuntimeError("TIMELINE_ID_REMAP_FAILED")
+    old_dir = stage / "Timelines" / old_timeline
+    timeline = stage / "Timelines" / new_timeline
+    if not old_dir.is_dir():
+        raise RuntimeError("ROOT_TIMELINE_DIR_MISSING")
+    old_dir.rename(timeline)
+    replacements = {
+        str(stage).replace("\\", "/"): str(final_root).replace("\\", "/"),
+        str(stage): str(final_root),
+        str(final_root.parent / archive_root_name).replace("\\", "/"): str(final_root).replace("\\", "/"),
+        str(final_root.parent / archive_root_name): str(final_root),
+        stage.name: project_name,
+    }
+    for old_path, value in parsed.items():
+        relative = old_path.relative_to(stage)
+        if len(relative.parts) > 1 and relative.parts[0] == "Timelines" and relative.parts[1] == old_timeline:
+            relative = Path("Timelines", new_timeline, *relative.parts[2:])
+        value = rewrite_value(value, id_map, replacements)
+        if isinstance(value, dict) and value.get("draft_name") == stage.name:
+            value["draft_name"] = project_name
+        json_write(stage / relative, value)
+    return json_load(stage / "draft_content.json"), timeline
+
+
+def mirror(root: Path, timeline: Path, document: dict[str, Any]) -> None:
+    for path in (root / "draft_content.json", root / "template-2.tmp", timeline / "draft_content.json", timeline / "template-2.tmp"):
+        json_write(path, document)
+
+
+def probe_media(path: Path) -> dict[str, int | bool]:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height", "-of", "json", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    data = json.loads(result.stdout)
+    video = next((stream for stream in data.get("streams", []) if stream.get("codec_type") == "video"), None)
+    if video is None:
+        raise RuntimeError(f"MEDIA_VIDEO_STREAM_MISSING:{path.name}")
+    return {
+        "duration_us": round(float(data["format"]["duration"]) * MICROS),
+        "width": int(video["width"]),
+        "height": int(video["height"]),
+        "has_audio": any(stream.get("codec_type") == "audio" for stream in data.get("streams", [])),
+    }
+
+
+def image_size(path: Path) -> tuple[int, int]:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height", "-of", "json", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    streams = json.loads(result.stdout).get("streams", [])
+    video = next((stream for stream in streams if stream.get("codec_type") == "video"), None)
+    if video is None:
+        raise RuntimeError(f"IMAGE_STREAM_MISSING:{path.name}")
+    return int(video["width"]), int(video["height"])
+
+
+def material_by_text(document: dict[str, Any], predicate: Any, label: str) -> dict[str, Any]:
+    matches = [row for row in document["materials"]["texts"] if predicate(text_of(row))]
+    if len(matches) != 1:
+        raise RuntimeError(f"TEXT_TEMPLATE_NOT_UNIQUE:{label}:{len(matches)}")
+    return matches[0]
+
+
+def segment_for(document: dict[str, Any], material_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    matches = [
+        (track, segment)
+        for track in document["tracks"]
+        for segment in track.get("segments", [])
+        if segment.get("material_id") == material_id
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"TEMPLATE_SEGMENT_NOT_UNIQUE:{material_id}:{len(matches)}")
+    return matches[0]
+
+
+def remove_segment(track: dict[str, Any], segment: dict[str, Any]) -> None:
+    track["segments"] = [row for row in track.get("segments", []) if row is not segment]
+
+
+def prune_unreferenced_text_materials(document: dict[str, Any]) -> None:
+    """Remove template-only text after the visible episode segments are made."""
+    referenced = {
+        segment.get("material_id")
+        for track in document["tracks"]
+        if track.get("type") == "text"
+        for segment in track.get("segments", [])
+    }
+    document["materials"]["texts"] = [
+        material
+        for material in document["materials"]["texts"]
+        if material.get("id") in referenced
+    ]
+
+
+def trim_all_tracks_to_duration(document: dict[str, Any], total: int) -> None:
+    """CapCut derives project duration from the longest visible segment.
+
+    The root's decorative frame is intentionally long.  A short episode must
+    shorten that frame too, otherwise CapCut silently restores the old 3-minute
+    tail after opening the draft.
+    """
+    for track in document["tracks"]:
+        retained = []
+        for segment in track.get("segments", []):
+            timerange = segment.get("target_timerange", {})
+            start = int(timerange.get("start", 0))
+            duration = int(timerange.get("duration", 0))
+            if duration <= 0 or start >= total:
+                continue
+            allowed = min(duration, total - start)
+            if allowed != duration:
+                timerange["duration"] = allowed
+                source = segment.get("source_timerange")
+                if isinstance(source, dict):
+                    source["duration"] = min(int(source.get("duration", allowed)), allowed)
+            retained.append(segment)
+        track["segments"] = retained
+
+
+def clone_text(
+    document: dict[str, Any],
+    template_material: dict[str, Any],
+    template_segment: dict[str, Any],
+    target_track: dict[str, Any],
+    text: str,
+    start: int,
+    duration: int,
+) -> None:
+    material = copy.deepcopy(template_material)
+    material["id"] = uid()
+    set_material_text(material, text)
+    segment = copy.deepcopy(template_segment)
+    segment["id"] = uid()
+    segment["material_id"] = material["id"]
+    set_range(segment, start, duration)
+    document["materials"]["texts"].append(material)
+    target_track["segments"].append(segment)
+
+
+def clone_media(
+    document: dict[str, Any],
+    template_material: dict[str, Any],
+    template_segment: dict[str, Any],
+    insert_after: int | None,
+    *,
+    target_track: dict[str, Any] | None = None,
+    kind: str,
+    offline_path: str,
+    filename: str,
+    width: int,
+    height: int,
+    source_start: int,
+    source_duration: int,
+    media_duration: int,
+    target_start: int,
+    target_duration: int,
+    has_audio: bool,
+) -> None:
+    material = copy.deepcopy(template_material)
+    material.update(
+        {
+            "id": uid(),
+            "type": kind,
+            "path": offline_path,
+            "media_path": "",
+            # CapCut uses native media duration while resolving an offline
+            # asset.  The segment may be a short cut, but recording that cut
+            # as the material duration makes the real source file fail relink.
+            "duration": media_duration,
+            "width": width,
+            "height": height,
+            "has_audio": has_audio,
+            "material_name": filename,
+            "material_id": "",
+            "material_url": "",
+            "local_material_id": uid().lower(),
+            "local_id": "",
+            "category_id": "",
+            "category_name": "local",
+            "request_id": "",
+            "online_id": "",
+            "team_id": "",
+            "source": 0,
+            "source_platform": 0,
+        }
+    )
+    segment = copy.deepcopy(template_segment)
+    segment.update(
+        {
+            "id": uid(),
+            "material_id": material["id"],
+            "source_timerange": {"start": source_start, "duration": source_duration},
+            "target_timerange": {"start": target_start, "duration": target_duration},
+            "extra_material_refs": [],
+            "volume": 1.0 if has_audio else 0.0,
+            "last_nonzero_volume": 1.0 if has_audio else 0.0,
+        }
+    )
+    document["materials"]["videos"].append(material)
+    if target_track is not None:
+        target_track["segments"].append(segment)
+        return
+    if insert_after is None:
+        raise RuntimeError("MEDIA_TRACK_TARGET_REQUIRED")
+    track = copy.deepcopy(next(row for row in document["tracks"] if row.get("type") == "video"))
+    track["id"] = uid()
+    track["segments"] = [segment]
+    document["tracks"].insert(insert_after, track)
+
+
+def normalize_cards(cards_doc: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
+    cards = cards_doc.get("cards")
+    if not isinstance(cards, list) or not cards:
+        raise RuntimeError("CARDS_REQUIRED")
+    ordered = sorted(cards, key=lambda card: int(card["target_start_us"]))
+    cursor = 0
+    for card in ordered:
+        card_type = card.get("card_type")
+        start = int(card.get("target_start_us", -1))
+        duration = int(card.get("target_duration_us", 0))
+        lower_mode = card.get("lower_mode", "NONE")
+        if card_type not in CARD_TYPES or start != cursor or duration <= 0:
+            raise RuntimeError(f"CARD_TIMELINE_INVALID:{card.get('card_id', '?')}")
+        if lower_mode not in LOWER_MODES:
+            raise RuntimeError(f"CARD_LOWER_MODE_INVALID:{card.get('card_id', '?')}")
+        if card_type == "CHAPTER_CARD" and lower_mode != "NONE":
+            raise RuntimeError("CHAPTER_CARD_REQUIRES_LOWER_NONE")
+        if lower_mode != "NONE" and not str(card.get("lower_text", "")).strip():
+            raise RuntimeError(f"LOWER_TEXT_REQUIRED:{card.get('card_id', '?')}")
+        cursor += duration
+    first = ordered[0]
+    if first.get("card_type") != "INTRO" or int(first["target_duration_us"]) != 5 * MICROS:
+        raise RuntimeError("INTRO_MUST_BE_FIRST_5_SECONDS")
+    for card in ordered:
+        if card["card_type"] == "CHAPTER_CARD" and not card.get("narration_audio") and int(card["target_duration_us"]) != 3 * MICROS:
+            raise RuntimeError("SILENT_CHAPTER_MUST_BE_3_SECONDS")
+    return ordered, cursor
+
+
+def copy_card_media(cards: list[dict[str, Any]], media_dir: Path, episode_id: str) -> dict[str, dict[str, Any]]:
+    media_dir.mkdir(parents=True)
+    records: dict[str, dict[str, Any]] = {}
+    for card in cards:
+        field = "source_file" if card["card_type"] in {"SOURCE_VIDEO", "NARRATION_VIDEO"} else "image_file"
+        if field not in card:
+            continue
+        source = Path(card[field]).resolve()
+        if not source.is_file():
+            raise RuntimeError(f"CARD_MEDIA_MISSING:{card['card_id']}")
+        filename = f"{card['card_id']}_{source.name}"
+        is_image = source.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp"}
+        # Images are part of the project design, not user media to relink.  Put
+        # them in the draft Resources directory later; only audio/video files
+        # remain deliberately offline.  CapCut's folder relink accepts the
+        # latter reliably (as proven by the v3 probe), but not a mixed PNG/MP4
+        # batch.
+        if is_image:
+            width, height = image_size(source)
+            info: dict[str, Any] = {"width": width, "height": height, "duration_us": int(card["target_duration_us"]), "has_audio": False, "kind": "photo"}
+            target = source
+            storage = "embedded"
+        else:
+            target = media_dir / filename
+            if target.exists():
+                raise RuntimeError(f"MEDIA_NAME_COLLISION:{filename}")
+            shutil.copy2(source, target)
+            info = dict(probe_media(target))
+            info["kind"] = "video"
+            storage = "relink"
+        if card["card_type"] in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
+            start = int(card.get("source_start_us", 0))
+            duration = int(card.get("source_duration_us", card["target_duration_us"]))
+            if start < 0 or duration <= 0 or start + duration > int(info["duration_us"]):
+                raise RuntimeError(f"SOURCE_RANGE_INVALID:{card['card_id']}")
+        else:
+            start, duration = 0, int(card["target_duration_us"])
+        records[card["card_id"]] = {
+            "file": str(target),
+            "filename": filename,
+            "sha256": sha256(target),
+            "offline_path": f"C:/__CAPCUT_RELINK_REQUIRED__/{episode_id}/Media/{filename}" if storage == "relink" else "",
+            "storage": storage,
+            "source_start": start,
+            "source_duration": duration,
+            **info,
+        }
+    return records
+
+
+def embed_design_images(stage: Path, final_root: Path, records: dict[str, dict[str, Any]]) -> None:
+    """Copy design images into this project; never make them relink candidates."""
+    resource_dir = stage / "Resources" / "media"
+    for record in records.values():
+        if record.get("storage") != "embedded":
+            continue
+        destination = resource_dir / record["filename"]
+        if destination.exists():
+            raise RuntimeError(f"EMBEDDED_IMAGE_NAME_COLLISION:{record['filename']}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(Path(record["file"]), destination)
+        if sha256(destination) != record["sha256"]:
+            raise RuntimeError("EMBEDDED_IMAGE_COPY_INTEGRITY_INVALID")
+        record["embedded_relpath"] = destination.relative_to(stage).as_posix()
+        record["offline_path"] = str(final_root / record["embedded_relpath"]).replace("\\", "/")
+
+
+def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total: int, media: dict[str, dict[str, Any]], project_name: str) -> dict[str, Any]:
+    text_intro = material_by_text(document, lambda value: value.startswith("__INTRO_HOOK_LINE_1__"), "INTRO")
+    text_chapter = material_by_text(document, lambda value: value == "__CHAPTER__", "CHAPTER")
+    text_source = material_by_text(document, lambda value: value.startswith("출처 __SOURCE__"), "SOURCE")
+    text_lower = material_by_text(document, lambda value: value.startswith("__LOWER_LINE_1__"), "LOWER")
+    text_cta = material_by_text(document, lambda value: value.startswith("구독은 "), "CTA")
+    intro_track, intro_segment = segment_for(document, text_intro["id"])
+    chapter_track, chapter_segment = segment_for(document, text_chapter["id"])
+    source_track, source_segment = segment_for(document, text_source["id"])
+    lower_track, lower_segment = segment_for(document, text_lower["id"])
+    cta_track, cta_segment = segment_for(document, text_cta["id"])
+    for track, segment in ((chapter_track, chapter_segment), (source_track, source_segment), (lower_track, lower_segment)):
+        remove_segment(track, segment)
+    # The GUI relink probe deliberately carried one literal chapter-hook sample.
+    # It is never allowed to leak into a real episode; each CHAPTER_CARD below
+    # creates its own hook from the editable intro-text geometry.
+    for material in document["materials"]["texts"]:
+        value = text_of(material)
+        if value.startswith("챕터 ") and "\n" in value:
+            trial_track, trial_segment = segment_for(document, material["id"])
+            remove_segment(trial_track, trial_segment)
+
+    intro_duration = int(cards[0]["target_duration_us"])
+    main_ui_start = next(
+        int(card["target_start_us"])
+        for card in cards[1:]
+        if card["card_type"] != "CHAPTER_CARD"
+    )
+    set_material_text(text_intro, str(cards[0].get("text", cards[0].get("intro_text", ""))))
+    set_range(intro_segment, 0, intro_duration)
+    set_range(cta_segment, main_ui_start, total - main_ui_start)
+    videos = document["materials"]["videos"]
+    intro_video = next(item for item in videos if item.get("type") == "video")
+    photo_video = next(item for item in videos if item.get("type") == "photo")
+    video_tracks = [track for track in document["tracks"] if track.get("type") == "video"]
+    intro_video_track, intro_video_segment = next(
+        (track, segment) for track in video_tracks for segment in track.get("segments", []) if segment.get("material_id") == intro_video["id"]
+    )
+    photo_track, photo_segment = next(
+        (track, segment) for track in video_tracks for segment in track.get("segments", []) if segment.get("material_id") == photo_video["id"]
+    )
+    set_range(intro_video_segment, 0, intro_duration)
+    intro_video_segment["source_timerange"] = {"start": 0, "duration": intro_duration}
+    photo_video["duration"] = total
+    set_range(photo_segment, intro_duration, total - intro_duration)
+    photo_segment["source_timerange"] = {"start": 0, "duration": total - intro_duration}
+    # Keep every visible card on one contiguous primary video lane.  CapCut
+    # compacts a source-video lane across gaps when chapter stills live on a
+    # different lane, which shifts every following source clip earlier.  The
+    # intro, silent chapter images, narration images, and source clips must
+    # therefore occupy this same lane in their declared card order.
+    # The focus-lines photo remains a separate full-duration overlay track.
+    photo_segment.setdefault("clip", {})["alpha"] = 0.8
+
+    # The upper/lower decorative rails are static sticker assets.  Preserve
+    # their authored start point, but carry them to the actual episode end.
+    for track in document["tracks"]:
+        if track.get("type") != "sticker":
+            continue
+        for segment in track.get("segments", []):
+            start = int(segment.get("target_timerange", {}).get("start", 0))
+            if 0 < start < total:
+                set_range(segment, start, total - start)
+
+    for card_index, card in enumerate(cards[1:], start=1):
+        start, duration = int(card["target_start_us"]), int(card["target_duration_us"])
+        kind = card["card_type"]
+        lower_mode = card.get("lower_mode", "NONE")
+        record = media.get(card["card_id"])
+        if kind == "CHAPTER_CARD":
+            if record is None:
+                raise RuntimeError(f"CHAPTER_IMAGE_REQUIRED:{card['card_id']}")
+            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+            next_chapter_start = next(
+                (
+                    int(next_card["target_start_us"])
+                    for next_card in cards[card_index + 1 :]
+                    if next_card["card_type"] == "CHAPTER_CARD"
+                ),
+                total,
+            )
+            # A chapter is a state, not a 3-second flash: keep its concise
+            # upper title across the following source-video block.
+            clone_text(document, text_chapter, chapter_segment, chapter_track, str(card["chapter_label"]), start, next_chapter_start - start)
+            clone_text(document, text_intro, intro_segment, intro_track, str(card["chapter_hook"]), start, duration)
+        elif kind in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
+            if record is None:
+                raise RuntimeError(f"VIDEO_REQUIRED:{card['card_id']}")
+            clone_media(document, intro_video, intro_video_segment, None, target_track=intro_video_track, kind="video", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=int(record["source_start"]), source_duration=int(record["source_duration"]), media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=bool(record["has_audio"]))
+            if kind == "SOURCE_VIDEO":
+                channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
+                if not channel or not date:
+                    raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
+                clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
+        elif kind == "NARRATION_IMAGE":
+            if record is None:
+                raise RuntimeError(f"IMAGE_REQUIRED:{card['card_id']}")
+            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+        elif kind in {"TEXT_EXPLAINER", "ENDING"}:
+            pass
+        else:
+            raise RuntimeError(f"CARD_TYPE_UNSUPPORTED:{kind}")
+        if lower_mode != "NONE":
+            clone_text(document, text_lower, lower_segment, lower_track, str(card["lower_text"]), start, duration)
+
+    trim_all_tracks_to_duration(document, total)
+    for index, track in enumerate(document["tracks"]):
+        for segment in track.get("segments", []):
+            segment["track_render_index"] = index
+    prune_unreferenced_text_materials(document)
+    document["duration"] = total
+    document["name"] = project_name
+    return document
+
+
+def validate_build(root: Path, media_records: dict[str, dict[str, Any]], total: int, *, path_reference: Path | None = None) -> dict[str, Any]:
+    junk = [path.relative_to(root).as_posix() for path in root.rglob("*") if JUNK_RE.search(path.name)]
+    if junk:
+        raise RuntimeError("PROJECT_JUNK_PRESENT")
+    mirrors = [root / "draft_content.json", root / "template-2.tmp"] + sorted((root / "Timelines").glob("*/draft_content.json")) + sorted((root / "Timelines").glob("*/template-2.tmp"))
+    if len(mirrors) != 4 or any(not path.is_file() for path in mirrors):
+        raise RuntimeError("PROJECT_MIRROR_SET_INVALID")
+    hashes = {sha256(path) for path in mirrors}
+    if len(hashes) != 1:
+        raise RuntimeError("PROJECT_MIRROR_MISMATCH")
+    document = json_load(root / "draft_content.json")
+    root_prefix = str(path_reference or root).replace("\\", "/").lower().rstrip("/") + "/"
+    foreign_root_media = [
+        item.get("path", "")
+        for item in document.get("materials", {}).get("videos", [])
+        if item.get("path")
+        and "__CAPCUT_RELINK_REQUIRED__" not in item["path"]
+        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
+    ]
+    if foreign_root_media:
+        raise RuntimeError("FOREIGN_ROOT_MEDIA_PATH:" + " | ".join(foreign_root_media[:3]))
+    if int(document["duration"]) != total:
+        raise RuntimeError("PROJECT_DURATION_INVALID")
+    valid_ids = {item.get("id") for group in document.get("materials", {}).values() if isinstance(group, list) for item in group if isinstance(item, dict)}
+    if any(segment.get("material_id") not in valid_ids for track in document["tracks"] for segment in track.get("segments", [])):
+        raise RuntimeError("PROJECT_DANGLING_SEGMENT")
+    referenced_text = {
+        segment.get("material_id")
+        for track in document["tracks"]
+        if track.get("type") == "text"
+        for segment in track.get("segments", [])
+    }
+    if any(item.get("id") not in referenced_text for item in document["materials"]["texts"]):
+        raise RuntimeError("UNREFERENCED_TEXT_MATERIAL")
+    if any("3분 연결 시험" in text_of(item) for item in document["materials"]["texts"]):
+        raise RuntimeError("LEGACY_TRIAL_TEXT_PRESENT")
+    lower = [
+        segment["target_timerange"]
+        for track in document["tracks"]
+        if track.get("type") == "text"
+        for segment in track.get("segments", [])
+        if any(item.get("id") == segment.get("material_id") and text_of(item).count("\n") == 1 and not text_of(item).startswith("출처 ") and not text_of(item).startswith("구독은 ") for item in document["materials"]["texts"])
+    ]
+    lower.sort(key=lambda row: row["start"])
+    if any(left["start"] + left["duration"] > right["start"] for left, right in zip(lower, lower[1:])):
+        raise RuntimeError("LOWER_SLOT_OVERLAP")
+    for record in media_records.values():
+        media_file = root / record["embedded_relpath"] if record.get("storage") == "embedded" else Path(record["file"])
+        if not media_file.is_file() or sha256(media_file) != record["sha256"]:
+            raise RuntimeError("MEDIA_COPY_INTEGRITY_INVALID")
+    return {"status": "PASS", "duration_sec": total / MICROS, "mirror_sha256": next(iter(hashes)), "media_count": len(media_records), "lower_slot_overlap": False}
+
+
+def register_project(meta_path: Path, source_name: str, project_name: str, project_root: Path, duration: int) -> bytes:
+    original = meta_path.read_bytes()
+    meta = json.loads(original.decode("utf-8"))
+    source = next((item for item in meta.get("all_draft_store", []) if item.get("draft_name") == source_name), None)
+    if source is None or any(item.get("draft_name") == project_name for item in meta.get("all_draft_store", [])):
+        raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+    entry = copy.deepcopy(source)
+    root_posix = str(project_root).replace("\\", "/")
+    entry.update({"draft_name": project_name, "draft_id": uid(), "draft_fold_path": root_posix, "draft_json_file": root_posix + "/draft_content.json", "draft_cover": root_posix + "/draft_cover.jpg", "draft_root_path": str(project_root.parent).replace("\\", "/"), "tm_duration": duration, "draft_cloud_sync": False, "draft_cloud_template_id": ""})
+    meta["all_draft_store"].append(entry)
+    json_write(meta_path, meta)
+    return original
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cards", type=Path, required=True)
+    parser.add_argument("--root-archive", type=Path, required=True)
+    parser.add_argument("--root-sha256", required=True)
+    parser.add_argument("--capcut-root", type=Path, required=True)
+    parser.add_argument("--media-dir", type=Path, required=True)
+    parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--replace-invalid-target", action="store_true")
+    args = parser.parse_args()
+    require_capcut_closed()
+    if sha256(args.root_archive).upper() != args.root_sha256.upper():
+        raise RuntimeError("ROOT_ARCHIVE_INTEGRITY_INVALID")
+    cards_doc = json_load(args.cards)
+    episode_id = str(cards_doc.get("episode_id", "")).strip()
+    project_name = str(cards_doc.get("project_name", "")).strip()
+    if not episode_id or not project_name or Path(project_name).name != project_name:
+        raise RuntimeError("EPISODE_OR_PROJECT_NAME_INVALID")
+    cards, total = normalize_cards(cards_doc)
+    final_root = args.capcut_root / project_name
+    meta_path = args.capcut_root / "root_meta_info.json"
+    if not meta_path.is_file():
+        raise RuntimeError("ROOT_META_INFO_MISSING")
+    if final_root.exists() or args.media_dir.exists():
+        if not args.replace_invalid_target:
+            raise RuntimeError("PROJECT_TARGET_OR_MEDIA_DIR_EXISTS")
+        if final_root.exists():
+            try:
+                validate_build(final_root, {}, int(json_load(final_root / "draft_content.json")["duration"]))
+            except RuntimeError:
+                meta = json_load(meta_path)
+                meta["all_draft_store"] = [item for item in meta.get("all_draft_store", []) if item.get("draft_name") != project_name]
+                json_write(meta_path, meta)
+                shutil.rmtree(final_root)
+            else:
+                raise RuntimeError("PROJECT_TARGET_ALREADY_VALID")
+        if args.media_dir.exists():
+            shutil.rmtree(args.media_dir)
+        if args.report.exists():
+            args.report.unlink()
+    original_meta: bytes | None = None
+    published = False
+    staging_parent = Path(os.environ["LOCALAPPDATA"]) / "CodexCapCutStaging"
+    staging_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="politics-cards-", dir=staging_parent) as temporary:
+        try:
+            stage = extract_root(args.root_archive, Path(temporary))
+            source_root_name = stage.name
+            renamed = Path(temporary) / project_name
+            stage.rename(renamed)
+            stage = renamed
+            media_records = copy_card_media(cards, args.media_dir, episode_id)
+            embed_design_images(stage, final_root, media_records)
+            document, timeline = remap_ids(stage, final_root, project_name, source_root_name)
+            document = build_document(document, cards, total, media_records, project_name)
+            mirror(stage, timeline, document)
+            static = validate_build(stage, media_records, total, path_reference=final_root)
+            shutil.copytree(stage, final_root)
+            published = True
+            static = validate_build(final_root, media_records, total)
+            original_meta = register_project(meta_path, source_root_name, project_name, final_root, total)
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            json_write(args.report, {"status": "PROJECT_CREATED_WAIT_MEDIA_RELINK", "project": str(final_root), "media_folder_to_select": str(args.media_dir), "root_archive": str(args.root_archive), "root_sha256": args.root_sha256.upper(), "cards": cards, "media": media_records, "static_validation": static, "next": "Open in CapCut, select Media Relink, choose media_folder_to_select, save, close, then run post-open readback."})
+            print(json.dumps({"status": "PASS", "project": str(final_root), "media_dir": str(args.media_dir), "static": static}, ensure_ascii=False))
+        except Exception:
+            if original_meta is not None:
+                meta_path.write_bytes(original_meta)
+            if published and final_root.exists():
+                shutil.rmtree(final_root)
+            if args.media_dir.exists():
+                shutil.rmtree(args.media_dir)
+            raise
+
+
+if __name__ == "__main__":
+    main()

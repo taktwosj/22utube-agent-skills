@@ -12,7 +12,7 @@
 조립 전에 `50_capcut_project/assembly_contract.json`을 만든다. 이 파일은 다음
 항목의 유일한 기준이다.
 
-- `root_template`: `jungchilong_base_v3_intro15`, 역할 `TEMPLATE_ONLY`
+- `root_template`: `jungchilong_base_v4_hook10_lower2`, 역할 `TEMPLATE_ONLY`
 - `production_inputs`: 실제 사용할 영상·이미지·오디오·자막, 역할 `PRODUCTION`
 - `reference_inputs`: 배치·구조 참고용 자료, 역할 `REFERENCE_ONLY`
 - `expected_timeline_order`: 사용자 승인 순서
@@ -71,7 +71,7 @@ material 참조, 화면 텍스트 집합, JSON 미러, 역할별 시간과 geome
 구조 오염이 확인되면 상태는
 `STRUCTURAL_CONTAMINATION_REQUIRES_CLEAN_REBUILD`다. 실패한 대상 빌드를
 부분 패치하지 않는다. 그 빌드만 폐기하고 고정 근본
-`jungchilong_base_v3_intro15`에서 새 대상 프로젝트를 다시 만든다. 근본
+`jungchilong_base_v4_hook10_lower2`에서 새 대상 프로젝트를 다시 만든다. 근본
 아카이브와 로컬 근본 자체는 삭제하거나 수정하지 않는다.
 
 ## Evidence
