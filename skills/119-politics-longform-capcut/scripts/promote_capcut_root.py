@@ -373,8 +373,9 @@ def copy_required_resources(source_root: Path, stage: Path, ffmpeg: str, final_r
         "onlineMaterial/74ce29b9d8294a2c88c345a10249e987": posix(final_root / "Resources" / "textures" / "lower-panel-texture.bin"),
         "effect/7528305055972199681/0e4893968fe2d82714917f69c69826aa/font.ttf": posix(final_root / "Resources" / "fonts" / "lower-panel-font.ttf"),
     }
+    user_profile_root = "C:" + "/Users/"
     return {
-        f"C:/Users/{user}/AppData/Local/CapCut/User Data/Cache/{suffix}": target
+        f"{user_profile_root}{user}/AppData/Local/CapCut/User Data/Cache/{suffix}": target
         for user in ("arajun", "정상준")
         for suffix, target in targets.items()
     }

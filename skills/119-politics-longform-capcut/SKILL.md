@@ -7,6 +7,9 @@ description: Use only when a political-longform request explicitly contains CapC
 
 ## 역할과 경계
 
+사용자가 CapCut을 직접 말했을 때만 119를 사용한다.
+110·111·112 요청을 119로 자동 우회하지 않는다.
+FORBIDDEN: 사용자가 명시하지 않은 CapCut 조립으로의 자동 전환.
 119는 잠긴 제작 입력을 **기계적으로 CapCut 프로젝트로 조립·검증**하는 단계다.
 정치적 사실판단, 대본 작성, 음성 생성, SRT 교정은 각각 110·111의 책임이다.
 
@@ -36,7 +39,7 @@ OneDrive: 근본 ZIP, manifest, contract, cards, 검증 보고서, 해시, hando
 ```
 
 다른 PC에서는 OneDrive가 동기화된 뒤 각 PC의 `WORKSPACE_ROOT`만 다르게 잡는다.
-contract와 episode JSON에 `C:\Users\...`, `%LOCALAPPDATA%`, CapCut cache 경로를
+contract와 episode JSON에 사용자 프로필 절대경로, `%LOCALAPPDATA%`, CapCut cache 경로를
 기록하지 않는다.
 
 ## 공용 근본 계약
