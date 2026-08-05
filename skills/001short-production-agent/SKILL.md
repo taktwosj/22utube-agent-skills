@@ -10,7 +10,7 @@ description: Use for original-shorts production, or when a new-session 001 conve
 Load `protocol.json` before mode routing, stage selection, production-plan compilation, CapCut assembly, completion reporting, or public-upload decisions. `protocol.json` is the machine-readable contract; `SKILL.md` explains semantic judgment; `workflow.json` declares state transitions.
 
 - Run `python3 scripts/validate_executable_protocol.py --self-check` before a new episode or isolated deployment test.
-- Enter every new 001 episode through the Mac mini `쇼츠팩토리 P0` Paperclip issue. Before Stage 01, require `{episode_root}/90_workflow/paperclip_entry.json` and pass `scripts/validate_paperclip_entry.py`; missing is `WAIT_PAPERCLIP_ENTRY`, mismatch is `FAIL_PAPERCLIP_ENTRY`. Do not start a standalone local 001 episode.
+- Start each 001 episode locally from its episode root. Use Paperclip only when the user explicitly requests Paperclip tracking; then save `{episode_root}/90_workflow/paperclip_entry.json` and pass `scripts/validate_paperclip_entry.py`. Paperclip is never a prerequisite for local Stage 01 work.
 - Validate every machine-readable Stage 05 production plan with `scripts/validate_executable_protocol.py --plan <path>` before advancing or building.
 - Validate `90_reports/completion_report.json` with `scripts/validate_executable_protocol.py --completion-report <path>` before any `all_harness_pass`, `WAIT_UPLOAD_APPROVAL`, `upload_ready`, or `uploaded` claim.
 - If `SKILL.md`, `protocol.json`, and `workflow.json` conflict, stop with `STOP_PROTOCOL_CONFLICT`. Do not choose the convenient interpretation.
@@ -44,9 +44,34 @@ Load `protocol.json` before mode routing, stage selection, production-plan compi
 
 ## Lane Isolation
 
+## Shared CapCut Media Names
+
+공통 episode 미디어 폴더는 군림보의 검증된 재료 이름을 기준으로 사용한다. 이 규칙은 **이 001 스킬의 미디어 연결 호환성만** 추가하며, 군림보의 root·트랙·빌더·파일 계약을 수정하지 않는다.
+
+| 최종 용도 | 공통 이름 | 001 호환 이름 |
+|---|---|---|
+| 장면 이미지/영상 | `scene_01.png`, `scene_02.mp4` … | 같은 이름 유지 |
+| 전체 나레이션 | `narration_final.wav` | 같은 이름 유지 |
+| 문장별 TTS | `sentences/001.wav` … | `tts_01.wav` … |
+| 분리 화자 음성 | `vocals.wav` | `source_vocals.wav` |
+| 분리 배경 | `no_vocals.wav` | 같은 이름 유지 |
+| 원본/검증 clean 영상 | `source.mp4` / `clean_video.mp4` | 같은 이름 유지 |
+
+Stage 08에서 사용자가 선택한 공통 미디어 폴더를 대상으로 실행한다.
+
+```text
+python scripts/prepare_shared_capcut_media.py --media-root <선택한_미디어_폴더> --profile 001
+```
+
+- 결과 폴더는 `<미디어_폴더>/capcut_media/001`이며, CapCut 수동 미디어 연결 때 이 폴더를 선택한다.
+- 같은 파일은 하드링크를 우선 사용하고 불가능한 파일시스템에서만 복사한다. `media_name_mapping.json`이 모든 source→target 이름과 SHA를 기록한다.
+- 이미 존재하는 target 파일이 source와 다르면 `CAPCUT_MEDIA_TARGET_CONFLICT`로 멈춘다. 자동 대체·덮어쓰기를 하지 않는다.
+- `source.mp4 is never substituted for clean_video.mp4`. VMake 승인 상태는 파일명 변환이 아니라 별도의 episode evidence가 결정한다.
+- 군림보용 폴더가 필요한 별도 요청에는 같은 생성기의 `--profile gunlimbo`를 사용할 수 있다. 이 profile은 공통 이름을 그대로 준비할 뿐 군림보 스킬을 수정하지 않는다.
+
 ## Urakkai Editorial Authority
 
-- At Stage 04, the Mac mini creator machine calls Claude CLI with Claude Opus 5 at low effort first; only a failed CLI call falls back to Codex CLI `gpt-5.6-sol` at low effort.
+- At Stage 04, the current local runtime calls Claude CLI with Claude Opus 5 at low effort first; only a failed CLI call falls back to Codex CLI `gpt-5.6-sol` at low effort.
 - The reviewer improves a draft; it never promotes a final design. Report the revised `URAKKAI_BLUEPRINT.md` and review evidence to the user, then stop at `WAIT_USER_URAKKAI_APPROVAL`. Apply user corrections to the same draft and report again. Stage 05 begins only after explicit user approval.
 - Situation captions describe the visible present action, relationship, or emotion with a hook. Do not use edit-outline copy such as “show the reaction first,” “reveal the reason later,” “connect to the second reaction,” or “warm ending.” Read `references/stage04-external-review-contract.md` for the full rubric and dynamic speaker-line rule.
 
@@ -84,7 +109,7 @@ When the user later supplies a VMake file or a VMake download completes, validat
 
 ### Explicit-only CapCut cloud sync
 
-Never preemptively sync a CapCut project. Local project creation, visual review, render, and cloud sync are separate actions. Sync only when the user expressly asks for it, then route by the active writer machine: `macmini -> macmini`, `home_windows -> home`, and `office_windows -> ofc`. Record the requested destination and readback only for that requested sync. Any earlier fixed `MAC`/`TAKKTWO` destination wording is superseded by this rule.
+Never preemptively sync a CapCut project. Local project creation, visual review, render, and cloud sync are separate actions. Sync only when the user expressly asks for it and names the destination. Record that requested destination and readback only for the requested sync.
 
 VMake 업로드·처리 polling·다운로드·clean asset 등록을 수행하기 전에 `references/vmake-dom-clean-video-automation.md`를 읽는다. 이 reference가 DOM selector, `DOM.setFileInputFiles`, 다운로드 확인, 타 컴퓨터 이식성의 상세 권위다.
 
@@ -145,28 +170,30 @@ matches[0].click();
 
 우라까이 설계·production plan·다중 VIDEO/A10 조립·눈검수·post-open 검증을 수행할 때는 `references/urakkai-structural-reorder-capcut.md`를 읽는다.
 
-### BGM + 화면 텍스트 전용 우라까이
+### 원본 음성 전체 mute + 새 TTS 우라까이
 
-운영자가 `나레이션 아니고 BGM에 텍스트만`, `음성 없이 글자만`, `TTS 말고 화면 글자`, 또는 동등한 표현으로 정정하면 이를 **음성 TTS가 없는 화면 텍스트 모드**로 해석한다. 운영자가 나레이션을 명시적으로 거부한 문맥에서 `텍스트 TTS`라고 표현해도 음성 합성을 뜻한다고 되묻거나 자동 생성하지 않는다.
+운영자가 원본 대화·BGM·효과음을 모두 끄고 새 TTS만 쓰라고 승인하면 production plan에 `audio_policy=TTS_ONLY_MUTE_SOURCE`를 선언한다. 모든 VIDEO는 `volume=0`, A10/A11/A12는 비우고 clear anchor로 기록하며, A9는 실제 새 TTS 파일을 하나 이상 둔다. 원본 화자발언은 분석·사실 귀속의 근거로만 문서에 남기고 CapCut 음원으로 재사용하지 않는다. 원본 화자발언을 살리는 경우에만 `audio_policy=A10_RETAINED_SYNC`를 쓰고 VIDEO/A10 source·target 동기 배치를 강제한다.
+
+### 음성 없는 화면 텍스트 전용 우라까이
+
+운영자가 `나레이션 아니고 화면 텍스트만`, `음성 없이 글자만`, `TTS 말고 화면 글자`, 또는 동등한 표현으로 정정하면 이를 **음성 TTS가 없는 화면 텍스트 모드**로 해석한다. 운영자가 나레이션을 명시적으로 거부한 문맥에서 `텍스트 TTS`라고 표현해도 음성 합성을 뜻한다고 되묻거나 자동 생성하지 않는다.
 
 ```text
 spoken_narration=false
 tts_audio=false
 original_audio_volume=0
-bgm_required=true
+capcut_a12=EMPTY
 screen_text_anchor=STATE
-clear_anchors=A9,A9_TEXT
+clear_anchors=A9,A9_TEXT,A12
 ```
 
-- 원본 A10은 source range와 함께 재배치하되 `volume=0`으로 유지해 기존 내레이션이 새 순서와 충돌하지 않게 한다.
-- 승인된 BGM은 A12에 전체 길이로 배치한다. 제작 단계에서 BGM 자산이 아직 정해지지 않았으면 `WAIT_BGM_SELECTION`으로 남기되 대본·구조 설계 단계는 계속할 수 있다.
+- 원본 A10은 source range와 함께 재배치하되 `volume=0`으로 유지해 기존 음성이 새 순서와 충돌하지 않게 한다.
+- A12는 비운다. 음원 선택은 001 스킬 범위가 아니며, 음원 선택을 이유로 멈추지 않는다.
 - 설명 문구는 `STATE` 화면 텍스트이며 `A9_TEXT` 또는 TTS-linked caption으로 부르지 않는다.
 - `tts_spoken_copy.txt`, 음성용 문장 manifest, A9 TTS 계획을 만들지 않는다. 이전 초안에 있으면 제거하고 `screen_text_copy.txt`와 production plan의 `screen_text`를 정본으로 갱신한다.
 - T1/T2는 고정 상단 제목, STATE는 시간별 설명 문구로 분리한다.
 - 수정 후 사람눈 설계도, 추천안, production-plan draft, writer gate를 함께 갱신하고 공통 script contract와 executable protocol validator를 다시 실행한다.
 - 사용자가 나레이션을 거부하지 않은 채 `텍스트 TTS`만 단독으로 말해 음성 여부가 실제로 불명확한 경우에만 최소 질문으로 확인한다.
-- BGM 모드 쇼츠의 완료 보고에는 영상 주제·정서·편집 속도에 맞는 **노래 후보를 정확히 3개** 추천한다. 각 후보는 곡명 또는 실제 검색 가능한 트랙 키워드와 추천 이유를 한 줄로 쓰고, 저작권·플랫폼 제공 여부를 확인하지 못했으면 `사용 전 권리/제공 여부 확인`을 표시한다.
-- BGM-only의 A12 배치, 음성 stem 검증, VMAKE transient overlay fallback, CDP 완료 이벤트 다운로드, CapCut cloud-safe mirror·Windows-path scrub 절차는 `references/bgm-a12-capcut-cloud.md`를 따른다.
 
 우라까이는 원본 장면 순서 `1→2→3→4→5`를 유지한 채 제목·크롭·TTS·자막만 바꾸는 리패키징이 아니다. 최소 한 번 이상 의미 있는 장면 재배치로 훅·충돌·맥락·검증·결말의 서사 순서를 새로 만들어야 한다. 예: `1→2→3→4→5`를 `3→4→1→2→5` 또는 결과 훅을 분할한 `5A→2→1→3→4→5B→6`으로 변경한다.
 
@@ -195,6 +222,20 @@ Stage 02 원본 설계도는 줄거리 요약이 아니라 **원본 멀티모달
 - 원본 AAC가 단일 혼합 트랙이면 A10·현장음·A11·A12가 stream 수준에서 분리되었다고 주장하지 않는다. 청취 증거가 없는 음향은 `UNVERIFIED`다.
 - Stage 02 정본에는 시간 구간을 가로축, `VIDEO·T1·T2·A9·A10·STATE·A11·A12·SCREEN`을 세로축으로 한 원본 매트릭스를 포함한다. 긴 표는 같은 세로축을 유지한 채 여러 표로 나눈다.
 - 자세한 보고 규칙은 `references/structure-blueprint-reporting.md`를 따른다.
+- 운영자가 `상세하게`, `원본/우라까이 구조 보고`, `CapCut 조립 보고서`, `화자발언·화면설명·나레이션까지` 또는 동등한 요구를 하면, 같은 reference의 **조립용 상세 보고서** 계약을 적용한다. 요약표만 제출하지 않는다.
+
+### ORIGINAL_CAPCUT_GRID_REQUIRED_ROWS
+
+Stage 02 `original-blueprint.md`는 `templates/original-capcut-grid.md`를 사용해 원본을 CapCut 근본 세로줄로 번역한다. 모든 source 구간 열에는 아래 행을 **반드시** 넣는다.
+
+`VIDEO`, `T1`, `T2`, `A9 TTS`, `A9_TEXT`, `A10 작가 나레이션`, `A10 화자발언 1`, `A10 화자발언 2`, `A10 화자발언 3`, `STATE 상황설명문구`, `A11`, `A12`, `SCREEN`.
+
+- `T1`·`T2`는 원본 제목·상단 문구·제목 evidence를 넣는다. 원본에 title evidence가 없으면 `미확정 — 제목 evidence 필요`라고 쓴다. 최종용 새 제목을 추측해 넣지 않는다.
+- `A9 TTS`는 원본 작가 나레이션을 재현할 대본만 넣고, 실제 새 WAV가 있다는 뜻으로 쓰지 않는다. `A9_TEXT`에는 같은 문장을 넣고, 한 줄은 15자 이하로 줄바꿈만 한다. 원문 의미를 줄이거나 바꾸지 않는다.
+- `A10 작가 나레이션`과 `A10 화자발언 1~3`에는 실제 source range·발화 순서·대사 또는 검증된 요약을 넣는다. 화자 ID가 없으면 `화자발언 N (인물 미확정)`으로 쓰되, 대사와 시간 칸을 비우지 않는다.
+- `STATE 상황설명문구`에는 화면에서 보이는 현재 행동·감정·관계를 짧은 비문장 문구로 넣는다. 편집 지시나 긴 문장을 쓰지 않는다.
+- `A11`·`A12`·어떤 음성 행도 bare `없음`, `비움`, `UNVERIFIED`만으로 끝내지 않는다. 실제 부재는 `해당 없음 — 원본에서 들리지 않음`, 미확정은 `미확정 — 원본 음성 재확인 필요`처럼 근거와 함께 적는다.
+- 이 표의 필수 행 전체가 채워지기 전에는 `ORIGINAL_BLUEPRINT_READY`를 보고하지 않는다.
 
 ## Human-Readable Approval Gate
 
@@ -299,7 +340,7 @@ Stage 05의 사람용 설계를 근본 CapCut anchor에 연결하거나 Stage 08
 
 - `P0-제작` applies `apply_capcut_polish_profile.py` to a closed, structurally assembled draft; `P0-검증` alone records `validate_capcut_polish_profile.py` PASS/FAIL before static-project PASS.
 - Require `W Flash` at every video join; AI HD level 3, smart adjustment 42/47, sharpen 50, and clear 50 on every video. Normalize all audio to -14 LUFS.
-- Source audio uses **보컬 유지** (`choice=2`), is muted under A9 narration, and is restored outside the overlap. The user alone judges VMake image quality.
+- Retained source speech must be a validated external vocal stem on A10; CapCut vocal-retain metadata is not evidence of background-audio removal. Mute A10 under A9 narration and restore it outside the overlap. The user alone judges VMake image quality.
 - When the user asks for it, use a playful fictional hook, imagined thought, exaggeration, or comic reversal. Mark it `CREATIVE_URAKKAI`, separate from `SOURCE_OBSERVATION`, and never frame invented identity, relationship, crime, medical/legal, or defamatory claims as a real fact. Speaker captions remain dynamic: two current speakers use two lines and three use three lines.
 
 운영자가 001쇼츠 제작 완료를 보고받을 때는 공개 업로드를 실행하지 않았더라도 **항상 메시지 마지막에 업로드 제목·설명·출처를 붙인다.** CapCut 프로젝트명이나 validator 결과만 보고하고 끝내지 않는다.

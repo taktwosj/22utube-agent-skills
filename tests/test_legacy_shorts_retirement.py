@@ -6,6 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RETIRED = ("00-tikitaka", "000short-production-agent")
 CURRENT = "001short-production-agent"
+VISIBLE_SHORTS = ("001short-production-agent", "top5isu-shorts")
+HIDDEN_SHORTS = ("00-tikitaka", "000short-production-agent", "011-shorts-factory")
 
 
 class LegacyShortsRetirementContractTest(unittest.TestCase):
@@ -31,6 +33,18 @@ class LegacyShortsRetirementContractTest(unittest.TestCase):
             manifest["active_shorts_script_authority"],
             "skills/001short-production-agent/SKILL.md",
         )
+
+    def test_manifest_exposes_only_the_selected_shorts_skills(self):
+        manifest = json.loads(
+            (ROOT / "manifests" / "skill-set.json").read_text(encoding="utf-8")
+        )
+        enabled = {
+            item["name"] for item in manifest["skills"] if item.get("enabled") is True
+        }
+        for name in VISIBLE_SHORTS:
+            self.assertIn(name, enabled)
+        for name in HIDDEN_SHORTS:
+            self.assertNotIn(name, enabled)
 
     def test_readme_does_not_advertise_retired_skill_folders(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

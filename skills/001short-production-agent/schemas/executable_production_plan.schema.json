@@ -21,6 +21,9 @@
     "production_mode": {
       "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
     },
+    "audio_policy": {
+      "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]
+    },
     "visual_asset_mode": {
       "enum": ["VMAKE_CLEAN", "SOURCE_VIDEO_PROVISIONAL"]
     },
@@ -80,7 +83,7 @@
       },
       "allOf": [
         {
-          "if": {"properties": {"anchor": {"enum": ["VIDEO", "A10"]}}},
+          "if": {"properties": {"anchor": {"enum": ["VIDEO", "A9", "A10"]}}},
           "then": {"required": ["asset_key", "source_range_us", "volume"]}
         },
         {

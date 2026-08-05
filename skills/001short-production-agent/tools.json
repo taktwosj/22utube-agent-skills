@@ -39,6 +39,17 @@
       "failure": "COMMENTS_UNAVAILABLE_NONBLOCKING"
     }
   },
+  "source_vocal_separation": {
+    "engine": "demucs",
+    "preflight": "scripts/separate_source_vocals.py --preflight",
+    "separator": "scripts/separate_source_vocals.py",
+    "validator": "scripts/validate_vocal_stem.py",
+    "when": "approved source speaker audio remains on A10",
+    "output": "{episode_root}/30_audio_srt/source_vocals/vocals.wav",
+    "capcut_role": "A10",
+    "A12": "EMPTY",
+    "automatic_claim_limit": "human listen QC required before completion"
+  },
   "production_engine": {
     "skill": ".",
     "stage": "05",
@@ -84,7 +95,7 @@
     "postbuild_validator": "scripts/validate_postbuild.py",
     "required_before_build": ["EDIT_LOCK_HELD", "CAPCUT_CLOSED", "FINAL_DESIGN_LOCKED", "AUDIO_CAPTION_VALIDATED", "ROOT_CONTRACT_VERIFIED", "MEDIA_NORMALIZED", "TRACK_MAPPING_VERIFIED"],
     "edit_lock": {
-      "required_fields": ["episode_id", "active_writer_machine", "lock_owner"],
+      "required_fields": ["episode_id", "lock_owner"],
       "conflict": "WAIT_EDIT_LOCK"
     },
     "root_contract": {
@@ -121,7 +132,7 @@
     {"id": "A10", "role": "speaker caption and original point audio"},
     {"id": "STATE", "role": "situation emotion status caption"},
     {"id": "A11", "role": "sound effects"},
-    {"id": "A12", "role": "background music"},
+    {"id": "A12", "role": "reserved empty"},
     {"id": "SCREEN", "role": "approved screen treatment"}
   ],
   "policies": {"new_tracks": false, "new_tools": false, "external_review_auto": false}
