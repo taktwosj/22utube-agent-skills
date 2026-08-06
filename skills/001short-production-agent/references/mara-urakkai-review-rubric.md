@@ -22,13 +22,17 @@ Inventing family ties, prior promises, jobs, or purposes is allowed. FAIL only w
 
 Check that the message is not a restatement of the source, that the viewer's final emotional payoff is explicit, that one sentence carries the center, that the whole script moves toward that one message, and that the message is repaid as scene emotion rather than stated as a lesson. If the message is weak, propose two stronger replacements.
 
-## 3. 가단야 structure
+## 3. narrative_arc
 
-- 가: a strong opening situation or question
-- 단: the protagonist's goal and the escalation of the obstacle
-- 야: a reversal or emotional ending that defies expectation
+Do NOT call this 가단야. In this skill 가단야 is the **production process** defined in `references/shorts-structure-taxonomy.md` — 가(가이드라인) decides the message, 단(단어변경) rewrites the wording, 야(야부리) reorders the cuts so the wow point leads. The three beats below are the **story shape** and are named `narrative_arc`.
+
+- opening: a strong opening situation or question
+- escalation: the protagonist's goal and the escalation of the obstacle
+- reversal: a reversal or emotional ending that defies expectation
 
 Judge whether 0–3s is a real hook — a result, conflict, crisis, or strong reaction — instead of a plain introduction.
+
+Judge 야부리 separately: `source_order_signature` and `target_order_signature` must differ, and the lead cut must be the strongest wow point. Identical signatures are `URAKKAI_STRUCTURE_UNCHANGED`.
 
 ## 4. Independent narrative
 
@@ -109,7 +113,7 @@ Mixing original voice and new TTS without evidence is FAIL.
 
 1. **Verdict** — exactly one of `PASS_CANDIDATE`, `REVISE_REQUIRED`, `WAIT_SOURCE_RECHECK`, `REJECTED_MARA_INSUFFICIENT`.
 2. **Core judgment** — strongest point, biggest problem, reason the viewer watches to the end, emotional payoff at the ending.
-3. **Item table** — PASS/FAIL, evidence, and fix needed for: MARA_MESSAGE, 가단야, 주인공·목표, 장애·미해결 질문, 반전·결말, 원본과 독립성, VIDEO 재배열, 사실·창작 경계, A9 대본, T1·T2·STATE, 오디오 정책.
+3. **Item table** — PASS/FAIL, evidence, and fix needed for: MARA_MESSAGE, narrative_arc, 주인공·목표, 장애·미해결 질문, 반전·결말, 원본과 독립성, 야부리(VIDEO 재배열), 사실·창작 경계, A9 대본, T1·T2·STATE, 오디오 정책.
 4. **Must-fix list** — at most five, ordered P0 through P4 by severity.
 5. **Improved final draft** — when a fix is needed, rewrite all of: MARA_MESSAGE, creative premise, protagonist/goal/obstacle/unresolved question/reversal/ending, target VIDEO order, full A9 narration, T1, T2, A9_TEXT, STATE, and the fact/creation boundary table.
 6. **Final state** — `USER_APPROVAL_REQUIRED=true`, `NEXT_STATE=WAIT_USER_URAKKAI_APPROVAL`.
