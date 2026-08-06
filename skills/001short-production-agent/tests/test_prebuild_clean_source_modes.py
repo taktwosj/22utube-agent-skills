@@ -149,6 +149,19 @@ class PrebuildCleanSourceModesTest(unittest.TestCase):
         self.assertEqual(payload["evidence"]["clean_source_type"], "USER_PROVIDED")
         self.assertIs(payload["evidence"]["provisional"], False)
 
+    def test_legacy_vmake_manifest_key_remains_the_cli_interface_for_all_modes(self):
+        for source_type in ("VMAKE", "USER_PROVIDED", "SOURCE_PROVISIONAL"):
+            with self.subTest(source_type=source_type):
+                manifest = self._manifest(source_type)
+                self.assertIn("vmake", manifest)
+                self.assertNotIn("clean_source", manifest)
+
+                completed, payload = self._run_cli(manifest)
+
+                self.assertEqual(completed.returncode, 0, payload)
+                self.assertEqual(payload["status"], "PASS")
+                self.assertEqual(payload["evidence"]["clean_source_type"], source_type)
+
     def test_vmake_and_source_provisional_are_formal_modes(self):
         vmake_completed, vmake = self._run_cli(self._manifest("VMAKE"))
         provisional_completed, provisional = self._run_cli(self._manifest("SOURCE_PROVISIONAL"))

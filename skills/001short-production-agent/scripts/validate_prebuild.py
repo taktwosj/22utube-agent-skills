@@ -109,9 +109,10 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
 
     source = payload["source"]
     template = payload["template"]
-    vmake = payload["vmake"]
+    # `vmake` is the locked external key for the generic clean-source envelope.
+    clean_source = payload["vmake"]
     urakkai = payload["urakkai"]
-    if not isinstance(source, dict) or not isinstance(template, dict) or not isinstance(vmake, dict) or not isinstance(urakkai, dict):
+    if not isinstance(source, dict) or not isinstance(template, dict) or not isinstance(clean_source, dict) or not isinstance(urakkai, dict):
         return result([_error("E_MANIFEST_INVALID", field="sections")])
     source_path = Path(source.get("path", "")).resolve()
     source_sha = source.get("sha256")
@@ -127,35 +128,38 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     ):
         errors.append(_error("E_MANIFEST_INVALID", field="template"))
 
-    clean_source_type = vmake.get("source_type", "VMAKE")
-    output_path = Path(vmake.get("output_path", "")).resolve()
-    output_sha = vmake.get("output_sha256")
+    clean_source_type = clean_source.get("source_type", "VMAKE")
+    output_path = Path(clean_source.get("output_path", "")).resolve()
+    output_sha = clean_source.get("output_sha256")
     if clean_source_type not in {"VMAKE", "USER_PROVIDED", "SOURCE_PROVISIONAL"}:
         errors.append(_error("E_CLEAN_SOURCE_TYPE", actual=clean_source_type))
-    if not _media_binding_valid(vmake, output_path, "output_sha256"):
+    if not _media_binding_valid(clean_source, output_path, "output_sha256"):
         errors.append(_error("E_CLEAN_MEDIA_BINDING"))
-    if str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower():
+    if str(clean_source.get("input_sha256", "")).lower() != str(source_sha).lower():
         errors.append(_error("E_CLEAN_MEDIA_BINDING", detail="source_origin"))
-    if isinstance(source_duration, int) and isinstance(vmake.get("duration_us"), int):
-        if abs(vmake["duration_us"] - source_duration) > 50_000:
+    if isinstance(source_duration, int) and isinstance(clean_source.get("duration_us"), int):
+        if abs(clean_source["duration_us"] - source_duration) > 50_000:
             errors.append(_error("E_CLEAN_MEDIA_BINDING", detail="duration"))
 
-    receipt_path = Path(vmake.get("receipt_path", "")).resolve()
+    receipt_path = Path(clean_source.get("receipt_path", "")).resolve()
     try:
         receipt = read_json(receipt_path)
     except (OSError, ValueError, TypeError):
         receipt = None
-    binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
+    vmake_receipt_binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
     if clean_source_type == "VMAKE" and (
         not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
-        or not vmake.get("final_download") or not receipt.get("final_download")
-        or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
-        or receipt.get("run_id") != vmake.get("run_id")
-        or receipt.get("job_id") != vmake.get("job_id")
-        or receipt.get("uploaded_source_sha256", "").lower() != str(vmake.get("input_sha256", "")).lower()
-        or receipt.get("downloaded_output_sha256", "").lower() != str(vmake.get("output_sha256", "")).lower()
-        or str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower()
-        or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
+        or not clean_source.get("final_download") or not receipt.get("final_download")
+        or any(
+            not isinstance(clean_source.get(field), str) or not clean_source[field]
+            for field in vmake_receipt_binding_fields
+        )
+        or receipt.get("run_id") != clean_source.get("run_id")
+        or receipt.get("job_id") != clean_source.get("job_id")
+        or receipt.get("uploaded_source_sha256", "").lower() != str(clean_source.get("input_sha256", "")).lower()
+        or receipt.get("downloaded_output_sha256", "").lower() != str(clean_source.get("output_sha256", "")).lower()
+        or str(clean_source.get("input_sha256", "")).lower() != str(source_sha).lower()
+        or str(clean_source.get("output_sha256", "")).lower() == str(source_sha).lower()
     ):
         errors.append(_error("E_VMAKE_BINDING"))
     if clean_source_type == "USER_PROVIDED" and (
