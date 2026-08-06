@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+from schema_runtime import validate_schema
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
 
@@ -389,6 +391,136 @@ def _effective_video_groups(video: List[Dict[str, Any]]) -> int:
     return groups
 
 
+def _validate_v2_production_plan(plan: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    schema = read_json(SKILL_ROOT / "schemas" / "executable_production_plan.schema.json")
+    schema_errors = validate_schema(plan, schema)
+    errors.extend(f"PRODUCTION_PLAN_SCHEMA:{detail}" for detail in schema_errors)
+    if plan.get("root_profile") != "shrt_white_base_v2":
+        errors.append("V2_ROOT_PROFILE_INVALID")
+    duration = plan.get("total_duration_us")
+    if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
+        errors.append("V2_DURATION_INVALID")
+        return errors
+    primary_speaker_id = plan.get("primary_speaker_id")
+    if not isinstance(primary_speaker_id, str) or not primary_speaker_id:
+        errors.append("V2_PRIMARY_SPEAKER_ID_INVALID")
+
+    placements: List[Dict[str, Any]] = []
+    timeline = plan.get("timeline")
+    if isinstance(timeline, list):
+        for row in timeline:
+            if isinstance(row, dict) and isinstance(row.get("placements"), list):
+                placements.extend(item for item in row["placements"] if isinstance(item, dict))
+    ids = [item.get("placement_id") for item in placements]
+    if any(not isinstance(item, str) or not item for item in ids) or len(ids) != len(set(ids)):
+        errors.append("V2_PLACEMENT_ID_INVALID")
+
+    by_anchor: Dict[str, List[Dict[str, Any]]] = {}
+    for placement in placements:
+        by_anchor.setdefault(str(placement.get("anchor")), []).append(placement)
+        target_range = placement.get("target_range_us")
+        if (
+            not isinstance(target_range, list)
+            or len(target_range) != 2
+            or any(not isinstance(item, int) or isinstance(item, bool) for item in target_range)
+            or not (0 <= target_range[0] < target_range[1] <= duration)
+        ):
+            errors.append(f"V2_TARGET_RANGE_INVALID:{placement.get('placement_id')}")
+        source_range = placement.get("source_range_us")
+        if source_range is not None and (
+            not isinstance(source_range, list)
+            or len(source_range) != 2
+            or any(not isinstance(item, int) or isinstance(item, bool) for item in source_range)
+            or not (0 <= source_range[0] < source_range[1])
+        ):
+            errors.append(f"V2_SOURCE_RANGE_INVALID:{placement.get('placement_id')}")
+    for anchor in ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT"):
+        rows = by_anchor.get(anchor, [])
+        if len(rows) != 1 or rows[0].get("target_range_us") != [0, duration]:
+            errors.append(f"V2_FULL_DURATION_ANCHOR_INVALID:{anchor}")
+    video = by_anchor.get("VIDEO", [])
+    if not video or any(item.get("volume") != 0 for item in video):
+        errors.append("V2_VIDEO_MUTE_INVALID")
+
+    lane_policies = plan.get("lane_policies", {})
+    for lane in ("VIDEO", "A9", "A10"):
+        rows = sorted(
+            [
+                row
+                for row in by_anchor.get(lane, [])
+                if row.get("operation") not in {"omit", "clear", "preserve_muted_seed"}
+                and isinstance(row.get("target_range_us"), list)
+                and len(row["target_range_us"]) == 2
+                and all(isinstance(item, int) and not isinstance(item, bool) for item in row["target_range_us"])
+            ],
+            key=lambda row: row["target_range_us"],
+        )
+        if not rows and lane != "VIDEO":
+            continue
+        policy = lane_policies.get(lane, {}) if isinstance(lane_policies, dict) else {}
+        cursor = 0
+        for row in rows:
+            start, end = row["target_range_us"]
+            if start > cursor and policy.get("allow_gaps") is not True:
+                errors.append(f"V2_LANE_GAP_UNDECLARED:{lane}")
+            if start < cursor and policy.get("allow_overlaps") is not True:
+                errors.append(f"V2_LANE_OVERLAP_UNDECLARED:{lane}")
+            cursor = max(cursor, end)
+        if cursor < duration and policy.get("allow_gaps") is not True:
+            errors.append(f"V2_LANE_GAP_UNDECLARED:{lane}")
+
+    for placement in placements:
+        anchor = placement.get("anchor")
+        speaker_id = placement.get("speaker_id")
+        if anchor == "A10_TEXT_UNASSIGNED":
+            if placement.get("operation") != "omit" or placement.get("speaker_route") != "UNASSIGNED":
+                errors.append("V2_UNASSIGNED_SPEAKER_INVALID")
+        elif anchor in {"A10_TEXT_WHITE", "A10_TEXT_YELLOW"}:
+            if speaker_id == primary_speaker_id:
+                if anchor != "A10_TEXT_WHITE" or placement.get("speaker_route") != "WHITE":
+                    errors.append("V2_PRIMARY_SPEAKER_ROUTE_INVALID")
+            elif not isinstance(speaker_id, str) or not speaker_id or speaker_id == "UNASSIGNED":
+                errors.append("V2_UNASSIGNED_SPEAKER_INVALID")
+            elif anchor != "A10_TEXT_YELLOW" or placement.get("speaker_route") != "YELLOW":
+                errors.append("V2_OTHER_SPEAKER_ROUTE_INVALID")
+
+    state_map = {
+        "FLICKER_RAVE": "STATE_EFFECT_1",
+        "GLITCH_SHAKE": "STATE_EFFECT_2",
+        "LASER_CUT": "STATE_EFFECT_3",
+    }
+    state = [item for item in placements if str(item.get("anchor", "")).startswith("STATE_EFFECT_")]
+    state.sort(key=lambda item: item.get("target_range_us", [0, 0]))
+    for placement in state:
+        if state_map.get(placement.get("state_effect")) != placement.get("anchor"):
+            errors.append(f"V2_STATE_EFFECT_ROUTE_INVALID:{placement.get('placement_id')}")
+    for previous, current in zip(state, state[1:]):
+        previous_range = previous.get("target_range_us", [0, 0])
+        current_range = current.get("target_range_us", [0, 0])
+        if previous_range[1] > current_range[0]:
+            errors.append("V2_STATE_EFFECT_OVERLAP")
+            break
+
+    for placement in by_anchor.get("A11_SFX", []):
+        sfx_seed_by_kind = {"TRANSITION": 1, "REVERSAL": 2, "WOW": 3}
+        if sfx_seed_by_kind.get(placement.get("sfx_kind")) != placement.get("sfx_seed"):
+            errors.append(f"V2_A11_SFX_MAPPING_INVALID:{placement.get('placement_id')}")
+        if placement.get("sfx_seed") not in {1, 2, 3} or placement.get("volume") != 1:
+            errors.append(f"V2_A11_SFX_INVALID:{placement.get('placement_id')}")
+    for anchor in ("A9", "A10"):
+        rows = by_anchor.get(anchor, [])
+        if not rows:
+            errors.append(f"V2_MUTED_SEED_MISSING:{anchor}")
+        for placement in rows:
+            if placement.get("operation") == "preserve_muted_seed" and placement.get("volume") != 0:
+                errors.append(f"V2_MUTED_SEED_AUDIBLE:{anchor}")
+    a12 = by_anchor.get("A12", [])
+    if len(a12) != 1 or a12[0].get("target_range_us") != [0, duration] or a12[0].get("volume") != 1:
+        errors.append("V2_A12_FULL_DURATION_INVALID")
+    return errors
+
+
 def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
     direct_tracks = plan.get("tracks")
     if isinstance(direct_tracks, dict):
@@ -469,6 +601,9 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     errors: List[str] = []
     if not isinstance(plan, dict):
         return ["PRODUCTION_PLAN_OBJECT_REQUIRED"]
+
+    if plan.get("schema_version") == "001short-production-plan-v2":
+        return _validate_v2_production_plan(plan)
 
     mode = plan.get("production_mode")
     modes = protocol.get("production_modes", {})

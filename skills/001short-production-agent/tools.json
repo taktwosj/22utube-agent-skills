@@ -1,7 +1,7 @@
 {
   "schema_version": "001short-tools-v1",
-  "capcut_root": "shrt white",
-  "root_zip": "00_asset_tools/templates/capcut/shrt_white_base_v1/shrt_white_base_v1_CAPCUT_20260709_openfix.zip",
+  "capcut_root": "shrt_white_base_v2",
+  "root_zip": "00_asset_tools/templates/capcut/shrt_white_base_v2/shrt_white_base_v2_CAPCUT_20260807.zip",
   "matrix": {"time_axis": "horizontal", "tool_axis": "vertical", "repeat": true, "coexist": true},
   "executable_protocol": {
     "file": "protocol.json",
@@ -47,7 +47,10 @@
     "when": "approved source speaker audio remains on A10",
     "output": "{episode_root}/30_audio_srt/source_vocals/vocals.wav",
     "capcut_role": "A10",
-    "A12": "EMPTY",
+    "A12": {
+      "shrt_white_base_v1": "EMPTY",
+      "shrt_white_base_v2": "FULL_DURATION_BGM_VOLUME_1"
+    },
     "automatic_claim_limit": "human listen QC required before completion"
   },
   "production_engine": {
@@ -63,8 +66,8 @@
     "approved_timeline": {
       "file": "approved_timeline.json",
       "schema": "schemas/approved_timeline.schema.json",
-      "schema_version": "approved-timeline-v1",
-      "compiler": "scripts/compile_approved_timeline.py",
+      "schema_version": "approved-timeline-v2",
+      "compiler": "scripts/compile_production_plan.py",
       "required": ["episode_id", "source_fingerprint", "segments"],
       "segment_required": ["segment_id", "timeline_order", "role", "start", "duration", "source_ref"]
     },
@@ -100,6 +103,8 @@
       "conflict": "WAIT_EDIT_LOCK"
     },
     "root_contract": {
+      "path": "00_asset_tools/templates/capcut/shrt_white_base_v2/shorts_capcut_root_contract_v2.json",
+      "layout_contract": "00_asset_tools/templates/capcut/shrt_white_base_v2/shrt_white_base_v2_layout_contract_v1.json",
       "required_files": ["draft_content.json", "draft_meta_info.json", "Timelines/project.json", "Resources/media/transparent_center_white_1080x1920.png"],
       "forbidden_globs": ["*.bak", ".before_*", "before_*", "*_backup_*", "*_old.*", "*_copy.*", "helper_*", "temp_*", "*.partial"],
       "missing": "WAIT_CAPCUT_ROOT_CONTRACT"
@@ -111,7 +116,11 @@
       "A9_A10_audio": {"container": "WAV", "codec": "PCM_S16LE", "sample_rate": 48000, "channels": 1}
     },
     "track_mapping": {
-      "required": ["VIDEO", "T1", "T2", "A9", "A10", "STATE", "A11", "A12", "SCREEN"],
+      "profile": "shrt_white_base_v2",
+      "required": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_EFFECT_3", "STATE_EFFECT_2", "STATE_EFFECT_1", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1", "A9", "A10", "A11_SFX", "A12"],
+      "speaker_routes": ["A10_TEXT_WHITE", "A10_TEXT_YELLOW"],
+      "A12": "FULL_DURATION_BGM_VOLUME_1",
+      "sfx_seed_map": {"TRANSITION": 1, "REVERSAL": 2, "WOW": 3},
       "missing": "WAIT_CAPCUT_TRACK_MAPPING",
       "new_tracks": false
     },
@@ -121,20 +130,25 @@
       "replacement_request_id": "REMOVE",
       "canonical_fixed_assets": "PRESERVE_UNCHANGED"
     },
-    "builder": "scripts/build_episode_capcut.py",
+    "builder": "scripts/build_v2_contract_project.py",
     "build_inputs_validator": "scripts/validate_build_inputs.py",
-    "static_validator": "scripts/validate_capcut_project.py"
+    "static_validator": "scripts/validate_v2_contract_project.py"
   },
   "production_tools": [
     {"id": "VIDEO", "role": "VMake clean visual", "audio": "mute"},
     {"id": "T1", "role": "top title 1"},
     {"id": "T2", "role": "top title 2"},
     {"id": "A9", "role": "TTS and TTS caption"},
-    {"id": "A10", "role": "speaker caption and original point audio"},
-    {"id": "STATE", "role": "situation emotion status caption"},
-    {"id": "A11", "role": "sound effects"},
-    {"id": "A12", "role": "reserved empty"},
-    {"id": "SCREEN", "role": "approved screen treatment"}
+    {"id": "A10", "role": "original speaker audio; muted seed retained when no placement"},
+    {"id": "A10_TEXT_WHITE", "role": "primary speaker caption with fuzzy blur"},
+    {"id": "A10_TEXT_YELLOW", "role": "other resolved speaker captions with fuzzy blur"},
+    {"id": "STATE_EFFECT_1", "role": "FLICKER_RAVE situation caption"},
+    {"id": "STATE_EFFECT_2", "role": "GLITCH_SHAKE situation caption"},
+    {"id": "STATE_EFFECT_3", "role": "LASER_CUT situation caption"},
+    {"id": "A11_SFX", "role": "approved transition reversal wow SFX seed"},
+    {"id": "A12", "role": "full-duration BGM"},
+    {"id": "SCREEN_EFFECT", "role": "full-duration screen effect"},
+    {"id": "SCREEN_WHITE", "role": "full-duration screen plate"}
   ],
   "policies": {"new_tracks": false, "new_tools": false, "external_review_auto": false}
 }

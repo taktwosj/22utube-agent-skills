@@ -36,6 +36,30 @@ Do not hand-author CapCut IDs in an episode plan. Generate the contract from the
 
 Each root project gets its own contract. Never borrow or fall back to anchors from another root profile.
 
+### Current runtime authority: `shrt_white_base_v2` 15-track role map
+
+Stage 05 and Stage 08 use `shrt_white_base_v2`; the v1 map below is historical reference only. The immutable v2 archive is bound to SHA-256 `bb4a09b7f9334594e087b56ee52efae4e9d8856a41754d9b36ef89c1dde5f33a`. Runtime identity comes from the reviewed layout contract's `track_id` and `type`, never array position.
+
+| role | type | track_id | runtime contract |
+|---|---|---|---|
+| `VIDEO` | `video` | `87074004-5895-4963-A536-91A8D163149E` | episode media; volume `0` |
+| `SCREEN_EFFECT` | `effect` | `D08A03AF-328A-4bc7-B0BC-27FF6DFFDA1E` | full episode duration |
+| `SCREEN_WHITE` | `video` | `D434E862-E960-4c18-BE6A-E7778F98657C` | full episode duration |
+| `STATE_EFFECT_3` | `text` | `B8E30AA7-4DAA-40df-9E66-855F344DB87F` | `LASER_CUT` seed |
+| `STATE_EFFECT_2` | `text` | `BD486150-9596-4e58-B0FD-EFC809EA956B` | `GLITCH_SHAKE` seed |
+| `STATE_EFFECT_1` | `text` | `5DF23088-4DF6-4eb2-95B3-B5A40DD6EAB8` | `FLICKER_RAVE` seed |
+| `A10_TEXT_WHITE` | `text` | `4FEF3E81-010E-417f-8BA6-EBCCF4C7133C` | primary speaker only |
+| `A10_TEXT_YELLOW` | `text` | `9B6875F3-CC8B-46cd-A565-5C432A0ADFC9` | every other resolved speaker |
+| `A9_TEXT` | `text` | `1C649FC9-0312-4d8d-A1EA-3093B9B8EB1B` | approved TTS caption |
+| `T2` | `text` | `D44CF2E1-D024-417e-B972-DFF5A15231AE` | full episode duration |
+| `T1` | `text` | `FBBECFF2-12F3-4291-BD22-43D1B7A68944` | full episode duration |
+| `A9` | `audio` | `DD2665AE-9FF5-46b9-B863-8B17A9B0EABB` | muted seed retained when no TTS media placement exists |
+| `A10` | `audio` | `ABF4EBDC-FE4B-42b6-B7C7-C1AF9E35097F` | muted seed retained when no source-audio placement exists |
+| `A11_SFX` | `audio` | `A1E0292E-7BB5-46c1-93C8-74B49C4931DC` | three seeds: transition `1`, reversal `2`, wow `3`; volume `1` |
+| `A12` | `audio` | `ABFBB04B-6CCF-45a6-B134-DBEFC749C31F` | approved BGM; full duration and volume `1` |
+
+Situation captions are sequential placements at the approved target position and use exactly one approved effect lane per cue. Uncertain speakers are `A10_TEXT_UNASSIGNED` and are omitted; the compiler must not guess. The builder preserves seed styling and changes only allowlisted text/range/media fields.
+
 ### `shrt_white_base_v1` 12-track role map
 
 This table is the human-readable projection of `shrt_white_base_v1_layout_contract_v1.json`. Track identity is anchored by the contract's root archive SHA-256, `track_id`, and `type`; the array index and role are supporting lookup clues. `UNDETERMINED` must not be treated as optional or required without the episode audio/content policy.
@@ -55,7 +79,7 @@ This table is the human-readable projection of `shrt_white_base_v1_layout_contra
 | 10 | `20812C0B-5B18-44e8-A3E0-4837AD25408B` | `audio` | `A11` | `UNDETERMINED` | 근본 1개; start `5250000`, duration `3500000` | 오디오 소재명 미채집; timing만 계약에 기록됨 |
 | 11 | `ABFBB04B-6CCF-45a6-B134-DBEFC749C31F` | `audio` | `A12` | `UNDETERMINED` | 근본 1개; duration `48133333` | 오디오 소재명 미채집; timing만 계약에 기록됨 |
 
-The role order must remain identical to `ROLE_BY_TRACK` in `scripts/build_episode_capcut.py`: `VIDEO`, `SCREEN_EFFECT`, `SCREEN_WHITE`, `STATE`, `A10_TEXT`, `A9_TEXT`, `T2`, `T1`, `A9`, `A10`, `A11`, `A12`.
+The v1 role order remains identical to historical `ROLE_BY_TRACK` in `scripts/build_episode_capcut.py`: `VIDEO`, `SCREEN_EFFECT`, `SCREEN_WHITE`, `STATE`, `A10_TEXT`, `A9_TEXT`, `T2`, `T1`, `A9`, `A10`, `A11`, `A12`. Do not use that index map for v2 assembly.
 
 ## Production plan
 

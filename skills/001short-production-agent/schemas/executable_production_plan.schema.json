@@ -14,21 +14,31 @@
     "timeline"
   ],
   "properties": {
-    "schema_version": {"const": "001short-production-plan-v1"},
+    "schema_version": {"enum": ["001short-production-plan-v1", "001short-production-plan-v2"]},
     "episode_id": {"type": "string", "minLength": 1},
     "root_profile": {"type": "string", "minLength": 1},
     "project_name": {"type": "string", "minLength": 1},
+    "primary_speaker_id": {"type": "string", "minLength": 1},
     "production_mode": {
       "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
     },
     "audio_policy": {
-      "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]
+      "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "V2_TRACK_MIX"]
     },
     "visual_asset_mode": {
       "enum": ["VMAKE_CLEAN", "SOURCE_VIDEO_PROVISIONAL"]
     },
     "total_duration_us": {"type": "integer", "minimum": 1},
     "original_order": {"type": "array", "minItems": 1},
+    "lane_policies": {
+      "type": "object",
+      "properties": {
+        "VIDEO": {"$ref": "#/$defs/lane_policy"},
+        "A9": {"$ref": "#/$defs/lane_policy"},
+        "A10": {"$ref": "#/$defs/lane_policy"}
+      },
+      "additionalProperties": false
+    },
     "order_signature": {"type": "array", "minItems": 1},
     "timeline": {
       "type": "array",
@@ -56,6 +66,15 @@
     "locks": {"type": "object"}
   },
   "$defs": {
+    "lane_policy": {
+      "type": "object",
+      "required": ["allow_gaps", "allow_overlaps"],
+      "properties": {
+        "allow_gaps": {"type": "boolean"},
+        "allow_overlaps": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
     "range": {
       "type": "array",
       "prefixItems": [
@@ -69,25 +88,31 @@
       "type": "object",
       "required": ["anchor", "operation", "target_range_us"],
       "properties": {
+        "placement_id": {"type": "string", "minLength": 1},
         "anchor": {
-          "enum": ["VIDEO", "T1", "T2", "A9", "A9_TEXT", "A10", "A10_TEXT", "STATE", "A11", "A12", "SCREEN"]
+          "enum": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "T1", "T2", "A9", "A9_TEXT", "A10", "A10_TEXT", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A10_TEXT_UNASSIGNED", "STATE", "STATE_EFFECT_1", "STATE_EFFECT_2", "STATE_EFFECT_3", "A11", "A11_SFX", "A12", "SCREEN"]
         },
         "operation": {
-          "enum": ["clone_template_segment", "replace_template_text", "replace_text_preserve_style", "replace_media_and_range", "omit", "clear"]
+          "enum": ["clone_template_segment", "replace_template_text", "replace_text_preserve_style", "replace_media_and_range", "extend_seed_full_duration", "preserve_muted_seed", "omit", "clear"]
         },
         "asset_key": {"type": "string", "minLength": 1},
         "text": {"type": "string"},
         "source_range_us": {"$ref": "#/$defs/range"},
         "target_range_us": {"$ref": "#/$defs/range"},
-        "volume": {"type": "number", "minimum": 0}
+        "volume": {"type": "number", "minimum": 0},
+        "speaker_id": {"type": "string"},
+        "speaker_route": {"enum": ["WHITE", "YELLOW", "UNASSIGNED"]},
+        "state_effect": {"enum": ["FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"]},
+        "sfx_kind": {"enum": ["TRANSITION", "REVERSAL", "WOW"]},
+        "sfx_seed": {"type": "integer", "minimum": 1, "maximum": 3}
       },
       "allOf": [
         {
-          "if": {"properties": {"anchor": {"enum": ["VIDEO", "A9", "A10"]}}},
+          "if": {"properties": {"operation": {"const": "replace_media_and_range"}}},
           "then": {"required": ["asset_key", "source_range_us", "volume"]}
         },
         {
-          "if": {"properties": {"anchor": {"enum": ["T1", "T2", "A9_TEXT", "A10_TEXT", "STATE"]}}},
+          "if": {"properties": {"anchor": {"enum": ["T1", "T2", "A9_TEXT", "A10_TEXT", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "STATE", "STATE_EFFECT_1", "STATE_EFFECT_2", "STATE_EFFECT_3"]}}},
           "then": {"required": ["text"]}
         }
       ],
@@ -95,6 +120,14 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "001short-production-plan-v2"}}
+      },
+      "then": {
+        "required": ["primary_speaker_id", "lane_policies"]
+      }
+    },
     {
       "if": {
         "properties": {"production_mode": {"const": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}}

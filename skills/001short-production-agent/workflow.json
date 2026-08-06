@@ -308,7 +308,7 @@
             "timeline_text_evidence",
             "media_duration_evidence"
           ],
-          "coordinator_validator": "scripts/validate_capcut_project.py"
+          "coordinator_validator": "scripts/validate_v2_contract_project.py"
         },
         "commit_status": "CAPCUT_STATIC_VALIDATED"
       }
@@ -454,7 +454,7 @@
         "SPEAKER_A10",
         "STATE_CAPTION",
         "A11_SFX",
-        "A12_UNUSED",
+        "A12_BGM",
         "SCREEN"
       ],
       "repeat": true,
@@ -513,7 +513,7 @@
       ]
     },
     "assembly": {
-      "template": "shrt white",
+      "template": "shrt_white_base_v2",
       "new_tracks": false,
       "new_tools": false,
       "a10_authority": "source.mp4",
@@ -590,7 +590,7 @@
         "validators": [
           "scripts/validate_prebuild.py",
           "scripts/validate_build_inputs.py",
-          "scripts/validate_capcut_project.py",
+          "scripts/validate_v2_contract_project.py",
           "scripts/validate_postbuild.py"
         ],
         "required_prerequisites": [

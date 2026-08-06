@@ -16,7 +16,7 @@ Before invoking the builder, verify all of the following in one probe and report
 4. clean visual media, manifest, and receipt agree with the original source and approved evidence;
 5. audio lock, caption lock, final SRT, duration, and cue list agree;
 6. build manifest binds the same episode, source, clean visual, and root-template hash;
-7. the exact `shrt white` root ZIP exists locally and passes its declared hash;
+7. the exact immutable `shrt_white_base_v2` root ZIP exists locally and passes the SHA declared by its root and layout contracts;
 8. edit-lock ownership is valid and CapCut is closed;
 9. required track roles are discoverable from the template;
 10. the final target path does not contain an abandoned partial build.
@@ -52,7 +52,7 @@ This prevents a mid-build exception from leaving a folder that makes every retry
 
 - The Git skill package may intentionally exclude CapCut ZIP/media assets. Skill installation is not template installation. Verify the external template asset before Stage 01-07 work.
 - Resolve tracks by stable role/name plus structural checks. Do not depend on raw numeric indexes such as `tracks[9]`; template reordering must fail with a clear track-mapping error, not mutate the wrong lane.
-- Keep this skill's `shrt white` authority independent. Do not borrow another production lane's template or validator to make a build pass.
+- Keep this skill's `shrt_white_base_v2` authority independent. Do not borrow another production lane's template or validator to make a build pass.
 
 ## Required integration test
 
