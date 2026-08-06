@@ -140,6 +140,9 @@
     "vmake_submit_after_source_identity": true,
     "vmake_candidate_integrity_only": true,
     "vmake_visual_quality_authority_user": true,
+    "clean_source_types": ["VMAKE", "USER_PROVIDED", "SOURCE_PROVISIONAL"],
+    "clean_source_technical_fields": ["sha256", "duration_us", "width", "height", "frame_count"],
+    "source_mp4_clean_video_rename_forbidden": true,
     "vmake_nonblocking_source_provisional_allowed": true,
     "source_provisional_video_asset_key": "source_video",
     "source_provisional_report_required": true,
@@ -429,6 +432,10 @@
     "ROOT_REQUIRED_TRACK_MISSING": "a REQUIRED root track is absent after the CapCut project was saved",
     "ROOT_REQUIRED_TRACK_SEGMENT_COUNT_MISMATCH": "a REQUIRED root track segment count differs from its segment_rule",
     "ROOT_SCREEN_WHITE_REFERENCE_MISSING": "SCREEN_WHITE does not reference transparent_center_white_1080x1920.png",
-    "ROOT_TEXT_STYLE_MISMATCH": "a populated root text track differs from the contract absolute style values and tolerances"
+    "ROOT_TEXT_STYLE_MISMATCH": "a populated root text track differs from the contract absolute style values and tolerances",
+    "E_CLEAN_SOURCE_TYPE": "clean source type must be VMAKE, USER_PROVIDED, or SOURCE_PROVISIONAL",
+    "E_CLEAN_MEDIA_BINDING": "clean media SHA-256, duration, resolution, or frame count does not match the actual file",
+    "E_SOURCE_AS_CLEAN_VIDEO": "source.mp4 must not be renamed and presented as clean_video.mp4",
+    "E_SOURCE_PROVISIONAL_BINDING": "SOURCE_PROVISIONAL must keep the original source path and SHA-256 binding"
   }
 }

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +40,50 @@ def _coalesced_clip_count(clips: list[dict]) -> int:
     return groups
 
 
+def _probe_video(path: Path) -> dict | None:
+    try:
+        completed = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
+                "-show_entries", "stream=width,height,nb_read_frames:format=duration",
+                "-of", "json", str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode:
+            return None
+        payload = json.loads(completed.stdout)
+        stream = payload["streams"][0]
+        measured = {
+            "duration_us": round(float(payload["format"]["duration"]) * 1_000_000),
+            "width": int(stream["width"]),
+            "height": int(stream["height"]),
+            "frame_count": int(stream["nb_read_frames"]),
+        }
+        return measured if all(value > 0 for value in measured.values()) else None
+    except (OSError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def _media_binding_valid(section: dict, path: Path, sha_field: str) -> bool:
+    declared_sha = section.get(sha_field)
+    measured = _probe_video(path) if path.is_file() and not path.is_symlink() else None
+    return bool(
+        measured
+        and isinstance(declared_sha, str)
+        and len(declared_sha) == 64
+        and sha256_file(path).lower() == declared_sha.lower()
+        and all(
+            isinstance(section.get(field), int)
+            and not isinstance(section.get(field), bool)
+            and section[field] == measured[field]
+            for field in ("duration_us", "width", "height", "frame_count")
+        )
+    )
+
+
 def _manifest_errors(manifest: object) -> tuple[list[dict], dict | None]:
     if not isinstance(manifest, dict):
         return [_error("E_MANIFEST_INVALID", field="root")], None
@@ -70,11 +116,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     source_path = Path(source.get("path", "")).resolve()
     source_sha = source.get("sha256")
     source_duration = source.get("duration_us")
-    if (
-        not source_path.is_file() or not isinstance(source_sha, str) or len(source_sha) != 64
-        or sha256_file(source_path).lower() != source_sha.lower()
-        or not isinstance(source_duration, int) or isinstance(source_duration, bool) or source_duration <= 0
-    ):
+    if not _media_binding_valid(source, source_path, "sha256"):
         errors.append(_error("E_MANIFEST_INVALID", field="source"))
     root_zip = Path(template.get("root_zip_path", "")).resolve()
     root_sha = template.get("root_zip_sha256")
@@ -85,14 +127,26 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     ):
         errors.append(_error("E_MANIFEST_INVALID", field="template"))
 
-    receipt_path = Path(vmake.get("receipt_path", "")).resolve()
+    clean_source_type = vmake.get("source_type", "VMAKE")
     output_path = Path(vmake.get("output_path", "")).resolve()
+    output_sha = vmake.get("output_sha256")
+    if clean_source_type not in {"VMAKE", "USER_PROVIDED", "SOURCE_PROVISIONAL"}:
+        errors.append(_error("E_CLEAN_SOURCE_TYPE", actual=clean_source_type))
+    if not _media_binding_valid(vmake, output_path, "output_sha256"):
+        errors.append(_error("E_CLEAN_MEDIA_BINDING"))
+    if str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower():
+        errors.append(_error("E_CLEAN_MEDIA_BINDING", detail="source_origin"))
+    if isinstance(source_duration, int) and isinstance(vmake.get("duration_us"), int):
+        if abs(vmake["duration_us"] - source_duration) > 50_000:
+            errors.append(_error("E_CLEAN_MEDIA_BINDING", detail="duration"))
+
+    receipt_path = Path(vmake.get("receipt_path", "")).resolve()
     try:
         receipt = read_json(receipt_path)
     except (OSError, ValueError, TypeError):
         receipt = None
     binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
-    if (
+    if clean_source_type == "VMAKE" and (
         not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
         or not vmake.get("final_download") or not receipt.get("final_download")
         or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
@@ -101,11 +155,18 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         or receipt.get("uploaded_source_sha256", "").lower() != str(vmake.get("input_sha256", "")).lower()
         or receipt.get("downloaded_output_sha256", "").lower() != str(vmake.get("output_sha256", "")).lower()
         or str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower()
-        or not output_path.is_file() or output_path.is_symlink()
-        or sha256_file(output_path).lower() != str(vmake.get("output_sha256", "")).lower()
         or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
     ):
         errors.append(_error("E_VMAKE_BINDING"))
+    if clean_source_type == "USER_PROVIDED" and (
+        output_path == source_path or str(output_sha).lower() == str(source_sha).lower()
+    ):
+        code = "E_SOURCE_AS_CLEAN_VIDEO" if output_path.name.casefold() == "clean_video.mp4" else "E_CLEAN_MEDIA_BINDING"
+        errors.append(_error(code))
+    if clean_source_type == "SOURCE_PROVISIONAL" and (
+        output_path != source_path or str(output_sha).lower() != str(source_sha).lower()
+    ):
+        errors.append(_error("E_SOURCE_PROVISIONAL_BINDING"))
 
     clips = urakkai.get("video_clips")
     target_duration = urakkai.get("target_duration_us")
@@ -183,7 +244,16 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
                 != target_range[1] - target_range[0]
             ):
                 errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
-    return result(errors, {"build_manifest_path": str(path), "episode_id": payload["episode_id"]})
+    evidence = {
+        "build_manifest_path": str(path),
+        "episode_id": payload["episode_id"],
+        "clean_source_type": clean_source_type,
+        "provisional": clean_source_type == "SOURCE_PROVISIONAL",
+        "deferred_replacements": (
+            ["CLEAN_SOURCE_SWAP_NONBLOCKING"] if clean_source_type == "SOURCE_PROVISIONAL" else []
+        ),
+    }
+    return result(errors, evidence)
 
 
 def main() -> int:
