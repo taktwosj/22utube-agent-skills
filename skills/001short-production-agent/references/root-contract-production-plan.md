@@ -36,6 +36,27 @@ Do not hand-author CapCut IDs in an episode plan. Generate the contract from the
 
 Each root project gets its own contract. Never borrow or fall back to anchors from another root profile.
 
+### `shrt_white_base_v1` 12-track role map
+
+This table is the human-readable projection of `shrt_white_base_v1_layout_contract_v1.json`. Track identity is anchored by the contract's root archive SHA-256, `track_id`, and `type`; the array index and role are supporting lookup clues. `UNDETERMINED` must not be treated as optional or required without the episode audio/content policy.
+
+| index | track_id | type | 역할 | requirement | segment 규칙 | 참조 자산 |
+|---:|---|---|---|---|---|---|
+| 0 | `87074004-5895-4963-A536-91A8D163149E` | `video` | `VIDEO` | `REQUIRED` | 근본 1개; target start `0`, duration `550000` | `나의 사전 설정25##CC3DC1AC-43DD-4e50-A877-08F300BE9329`; 회차별 placeholder video material |
+| 1 | `D08A03AF-328A-4bc7-B0BC-27FF6DFFDA1E` | `effect` | `SCREEN_EFFECT` | `REQUIRED` | 근본 1개; target start `0`, duration `3000000` | 미러링 effect `7399472757014007046` |
+| 2 | `D434E862-E960-4c18-BE6A-E7778F98657C` | `video` | `SCREEN_WHITE` | `REQUIRED` | 근본 1개; target start `0`, duration `20850000` | `transparent_center_white_1080x1920.png` (`##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/Resources/media/transparent_center_white_1080x1920.png`) |
+| 3 | `5DF23088-4DF6-4eb2-95B3-B5A40DD6EAB8` | `text` | `STATE` | `UNDETERMINED` | 근본 1개; target start `5250000`, duration `3000000` | placeholder `(상황설명)` |
+| 4 | `4FEF3E81-010E-417f-8BA6-EBCCF4C7133C` | `text` | `A10_TEXT` | `UNDETERMINED` | 근본 1개; target start `2600000`, duration `3000000` | placeholder `"화자발언"` |
+| 5 | `1C649FC9-0312-4d8d-A1EA-3093B9B8EB1B` | `text` | `A9_TEXT` | `UNDETERMINED` | 근본 1개; target start `0`, duration `3000000` | placeholder `TTS` |
+| 6 | `D44CF2E1-D024-417e-B972-DFF5A15231AE` | `text` | `T2` | `UNDETERMINED` | 근본 1개; target start `0`, duration `3000000` | placeholder `T2` |
+| 7 | `FBBECFF2-12F3-4291-BD22-43D1B7A68944` | `text` | `T1` | `UNDETERMINED` | 근본 1개; target start `0`, duration `3000000` | placeholder `T1` |
+| 8 | `3CFF23A4-974F-4071-926C-25668E59B759` | `audio` | `A9` | `UNDETERMINED` | 근본 1개; duration `716666` | 오디오 소재명 미채집; timing만 계약에 기록됨 |
+| 9 | `40CF81E0-3E59-4900-966C-6514EEAA7D14` | `audio` | `A10` | `UNDETERMINED` | 근본 1개; start `2600000`, duration `750000` | 오디오 소재명 미채집; timing만 계약에 기록됨 |
+| 10 | `20812C0B-5B18-44e8-A3E0-4837AD25408B` | `audio` | `A11` | `UNDETERMINED` | 근본 1개; start `5250000`, duration `3500000` | 오디오 소재명 미채집; timing만 계약에 기록됨 |
+| 11 | `ABFBB04B-6CCF-45a6-B134-DBEFC749C31F` | `audio` | `A12` | `UNDETERMINED` | 근본 1개; duration `48133333` | 오디오 소재명 미채집; timing만 계약에 기록됨 |
+
+The role order must remain identical to `ROLE_BY_TRACK` in `scripts/build_episode_capcut.py`: `VIDEO`, `SCREEN_EFFECT`, `SCREEN_WHITE`, `STATE`, `A10_TEXT`, `A9_TEXT`, `T2`, `T1`, `A9`, `A10`, `A11`, `A12`.
+
 ## Production plan
 
 Stage 05 compiles the approved human matrix into a machine plan. Every placement must contain enough information to execute without inference:
