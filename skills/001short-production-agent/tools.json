@@ -64,6 +64,7 @@
       "file": "approved_timeline.json",
       "schema": "schemas/approved_timeline.schema.json",
       "schema_version": "approved-timeline-v1",
+      "compiler": "scripts/compile_approved_timeline.py",
       "required": ["episode_id", "source_fingerprint", "segments"],
       "segment_required": ["segment_id", "timeline_order", "role", "start", "duration", "source_ref"]
     },

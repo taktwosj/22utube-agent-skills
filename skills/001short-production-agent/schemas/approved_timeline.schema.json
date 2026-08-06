@@ -25,5 +25,12 @@
       }
     }
   },
+  "allOf": [
+    {"properties": {"segments": {"contains": {"type": "object", "required": ["role"], "properties": {"role": {"const": "STATE"}}}}}},
+    {"properties": {"segments": {"contains": {"type": "object", "required": ["role"], "properties": {"role": {"const": "A9"}}}}}},
+    {"properties": {"segments": {"contains": {"type": "object", "required": ["role"], "properties": {"role": {"const": "A9_TEXT"}}}}}},
+    {"properties": {"segments": {"contains": {"type": "object", "required": ["role"], "properties": {"role": {"const": "T1"}}}}}},
+    {"properties": {"segments": {"contains": {"type": "object", "required": ["role"], "properties": {"role": {"const": "T2"}}}}}}
+  ],
   "additionalProperties": true
 }

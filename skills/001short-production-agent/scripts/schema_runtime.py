@@ -17,6 +17,9 @@ TYPE_MAP = {
 
 def validate_schema(instance: Any, schema: dict, path: str = "$") -> list[str]:
     errors: list[str] = []
+    for index, subschema in enumerate(schema.get("allOf", [])):
+        if isinstance(subschema, dict):
+            errors.extend(validate_schema(instance, subschema, f"{path}.allOf[{index}]"))
     expected = schema.get("type")
     if expected:
         allowed = TYPE_MAP.get(expected)
@@ -38,6 +41,12 @@ def validate_schema(instance: Any, schema: dict, path: str = "$") -> list[str]:
     if isinstance(instance, list):
         if len(instance) < schema.get("minItems", 0):
             errors.append(f"{path}: array is too short")
+        contains_schema = schema.get("contains")
+        if isinstance(contains_schema, dict) and not any(
+            not validate_schema(value, contains_schema, f"{path}[{index}]")
+            for index, value in enumerate(instance)
+        ):
+            errors.append(f"{path}: no item matches contains")
         item_schema = schema.get("items")
         if isinstance(item_schema, dict):
             for index, value in enumerate(instance):
