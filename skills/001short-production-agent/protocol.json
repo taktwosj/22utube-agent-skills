@@ -101,7 +101,27 @@
     "fallback_model": "gpt-5.6-sol",
     "fallback_effort": "low",
     "fallback_on_claude_failure": true,
-    "evidence_path": "20_script/external-review.json"
+    "evidence_path": "20_script/external-review.json",
+    "rubric": "references/mara-urakkai-review-rubric.md",
+    "rubric_verdict_required": true,
+    "verdicts": [
+      "PASS_CANDIDATE",
+      "REVISE_REQUIRED",
+      "WAIT_SOURCE_RECHECK",
+      "REJECTED_MARA_INSUFFICIENT"
+    ],
+    "verdict_advances_episode": false,
+    "fact_fields": [
+      "SOURCE_OBSERVATION",
+      "CREATIVE_URAKKAI",
+      "FICTIONAL_RECONSTRUCTION"
+    ],
+    "invention_allowed": true,
+    "audio_policies": [
+      "TTS_ONLY_MUTE_SOURCE",
+      "A10_RETAINED_SYNC"
+    ],
+    "audio_policy_declaration_required": true
   },
   "invariants": {
     "single_active_lane": true,
@@ -387,6 +407,9 @@
     "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH": "used A10 source/target ranges do not exactly match VIDEO",
     "VMAKE_DIRECT_INSERT_ASSET_INVALID": "VIDEO must use the canonical VMake clean_video asset",
     "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT": "urakkai review must complete exactly one creator-machine review before user approval",
+    "URAKKAI_REVIEW_RUBRIC_MISSING": "stage 04 review evidence lacks a mara rubric verdict",
+    "URAKKAI_FACT_BOUNDARY_VIOLATION": "invented relationship, motive, or identity recorded as source fact",
+    "URAKKAI_AUDIO_POLICY_UNDECLARED": "urakkai design declares neither TTS_ONLY_MUTE_SOURCE nor A10_RETAINED_SYNC",
     "SOURCE_FILE_EVIDENCE_MISSING": "completion report lacks verified source file evidence",
     "SOURCE_FILE_EVIDENCE_INVALID": "source file evidence does not match the actual file",
     "VMAKE_FINAL_DOWNLOAD_EVIDENCE_MISSING": "completion report lacks actual VMake final download evidence",

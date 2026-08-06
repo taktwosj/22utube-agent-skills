@@ -268,6 +268,78 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         for field in ("source_file_evidence", "vmake_final_download", "capcut_visual_confirmation"):
             self.assertIn(field, protocol["completion_report"]["required_fields"])
 
+    def test_stage04_mara_rubric_verdict_and_audio_policy_contract(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        review = protocol["urakkai_review_loop"]
+        rubric = SKILL / review["rubric"]
+
+        self.assertEqual(review["rubric"], "references/mara-urakkai-review-rubric.md")
+        self.assertTrue(rubric.is_file())
+        self.assertIs(review["rubric_verdict_required"], True)
+        self.assertIs(review["verdict_advances_episode"], False)
+        self.assertIs(review["invention_allowed"], True)
+        self.assertEqual(
+            review["verdicts"],
+            [
+                "PASS_CANDIDATE",
+                "REVISE_REQUIRED",
+                "WAIT_SOURCE_RECHECK",
+                "REJECTED_MARA_INSUFFICIENT",
+            ],
+        )
+        self.assertEqual(
+            review["fact_fields"],
+            ["SOURCE_OBSERVATION", "CREATIVE_URAKKAI", "FICTIONAL_RECONSTRUCTION"],
+        )
+        self.assertEqual(
+            review["audio_policies"],
+            ["TTS_ONLY_MUTE_SOURCE", "A10_RETAINED_SYNC"],
+        )
+        self.assertIs(review["audio_policy_declaration_required"], True)
+
+        for code in (
+            "URAKKAI_REVIEW_RUBRIC_MISSING",
+            "URAKKAI_FACT_BOUNDARY_VIOLATION",
+            "URAKKAI_AUDIO_POLICY_UNDECLARED",
+        ):
+            self.assertIn(code, protocol["errors"])
+
+        rubric_text = rubric.read_text(encoding="utf-8")
+        for marker in (
+            "MARA_MESSAGE",
+            "FICTIONAL_RECONSTRUCTION",
+            "TTS_ONLY_MUTE_SOURCE",
+            "A10_RETAINED_SYNC",
+            "REJECTED_MARA_INSUFFICIENT",
+        ):
+            self.assertIn(marker, rubric_text)
+
+        contract_text = (
+            SKILL / "references" / "stage04-external-review-contract.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("mara-urakkai-review-rubric.md", contract_text)
+        self.assertIn("WAIT_USER_URAKKAI_APPROVAL", contract_text)
+
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["urakkai_review_loop"]["rubric_verdict_required"] = False
+        self.assertIn(
+            "PROTOCOL_URAKKAI_REVIEW_GATE:rubric_verdict_required",
+            module.validate_protocol_document(broken),
+        )
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["urakkai_review_loop"]["verdict_advances_episode"] = True
+        self.assertIn(
+            "PROTOCOL_URAKKAI_REVIEW_GATE:verdict_advances_episode",
+            module.validate_protocol_document(broken),
+        )
+        broken = json.loads(json.dumps(protocol, ensure_ascii=False))
+        broken["urakkai_review_loop"]["audio_policies"] = ["TTS_ONLY_MUTE_SOURCE"]
+        self.assertIn(
+            "PROTOCOL_URAKKAI_REVIEW_GATE:audio_policies",
+            module.validate_protocol_document(broken),
+        )
+
     def test_vmake_direct_insert_and_creator_machine_urakkai_review_contract(self):
         module = load_validator()
         protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))

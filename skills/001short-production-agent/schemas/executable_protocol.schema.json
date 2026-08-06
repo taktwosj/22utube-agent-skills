@@ -168,7 +168,15 @@
         "fallback_model",
         "fallback_effort",
         "fallback_on_claude_failure",
-        "evidence_path"
+        "evidence_path",
+        "rubric",
+        "rubric_verdict_required",
+        "verdicts",
+        "verdict_advances_episode",
+        "fact_fields",
+        "invention_allowed",
+        "audio_policies",
+        "audio_policy_declaration_required"
       ],
       "properties": {
         "enabled_for": {
@@ -209,6 +217,42 @@
         },
         "evidence_path": {
           "const": "20_script/external-review.json"
+        },
+        "rubric": {
+          "const": "references/mara-urakkai-review-rubric.md"
+        },
+        "rubric_verdict_required": {
+          "const": true
+        },
+        "verdicts": {
+          "const": [
+            "PASS_CANDIDATE",
+            "REVISE_REQUIRED",
+            "WAIT_SOURCE_RECHECK",
+            "REJECTED_MARA_INSUFFICIENT"
+          ]
+        },
+        "verdict_advances_episode": {
+          "const": false
+        },
+        "fact_fields": {
+          "const": [
+            "SOURCE_OBSERVATION",
+            "CREATIVE_URAKKAI",
+            "FICTIONAL_RECONSTRUCTION"
+          ]
+        },
+        "invention_allowed": {
+          "const": true
+        },
+        "audio_policies": {
+          "const": [
+            "TTS_ONLY_MUTE_SOURCE",
+            "A10_RETAINED_SYNC"
+          ]
+        },
+        "audio_policy_declaration_required": {
+          "const": true
         }
       },
       "additionalProperties": false
