@@ -472,7 +472,19 @@
       "review_runner": "current_local_runtime",
       "approval_authority": "user",
       "fallback": "Codex CLI gpt-5.6-sol at low effort",
-      "evidence": "20_script/external-review.json"
+      "evidence": "20_script/external-review.json",
+      "rubric": "references/mara-urakkai-review-rubric.md",
+      "verdicts": [
+        "PASS_CANDIDATE",
+        "REVISE_REQUIRED",
+        "WAIT_SOURCE_RECHECK",
+        "REJECTED_MARA_INSUFFICIENT"
+      ],
+      "verdict_advances_episode": false,
+      "audio_policies": [
+        "TTS_ONLY_MUTE_SOURCE",
+        "A10_RETAINED_SYNC"
+      ]
     },
     "vmake": {
       "trigger": "SOURCE_OCR_VERIFIED",

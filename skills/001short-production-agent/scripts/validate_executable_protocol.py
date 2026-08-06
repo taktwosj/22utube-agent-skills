@@ -102,6 +102,26 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             "fallback_effort": "low",
             "fallback_on_claude_failure": True,
             "evidence_path": "20_script/external-review.json",
+            "rubric": "references/mara-urakkai-review-rubric.md",
+            "rubric_verdict_required": True,
+            "verdicts": [
+                "PASS_CANDIDATE",
+                "REVISE_REQUIRED",
+                "WAIT_SOURCE_RECHECK",
+                "REJECTED_MARA_INSUFFICIENT",
+            ],
+            "verdict_advances_episode": False,
+            "fact_fields": [
+                "SOURCE_OBSERVATION",
+                "CREATIVE_URAKKAI",
+                "FICTIONAL_RECONSTRUCTION",
+            ],
+            "invention_allowed": True,
+            "audio_policies": [
+                "TTS_ONLY_MUTE_SOURCE",
+                "A10_RETAINED_SYNC",
+            ],
+            "audio_policy_declaration_required": True,
         }
         if review.get("review_loop_count") != 1:
             errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
@@ -221,6 +241,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("vocal_stem_manifest"),
         session_handoff.get("validator"),
         session_handoff.get("template"),
+        review.get("rubric"),
         "tools.json",
     ]
     for relative in required_paths:

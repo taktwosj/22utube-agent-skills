@@ -2,6 +2,8 @@
 
 Load only for Stage 04 and only for `URAKKAI`. Run one creator-machine review before a user decision; never turn it into automatic approval.
 
+Load `references/mara-urakkai-review-rubric.md` together with this file. That rubric is the review criteria and output format; this file is the execution, authority, and evidence contract. A Stage 04 review that reports no rubric verdict fails with `URAKKAI_REVIEW_RUBRIC_MISSING`.
+
 ## Execution and authority
 
 1. The Mac mini producer creates the candidate and calls Claude CLI with Claude Opus 5 / Low.
@@ -29,13 +31,27 @@ Create the hook through the current situation. Do not invent a twist, conclusion
 
 Urakkai is an entertaining re-story, not a documentary transcript. The user may deliberately add a playful premise, emotional framing, hook, reversal, or imagined inner thought when it makes the visible situation more engaging. For example, a father and son walking can open with a warm “remember mom” premise, then land on the father briefly looking at a passing runner. The written story may connect these beats even when the source never literally states that message.
 
-Keep two fields separate in the blueprint:
+Keep three fields separate in the blueprint:
 
 - `SOURCE_OBSERVATION`: only what is visibly/audibly evidenced.
 - `CREATIVE_URAKKAI`: the added story, narration, hook, emotional interpretation, or comic reversal.
+- `FICTIONAL_RECONSTRUCTION`: relationships, motives, identities, or background the source never confirms.
+
+Inventing a family tie, a prior promise, a job, or a purpose is allowed and must not be penalized on its own. The single failure condition is recording invented material as source fact, which fails with `URAKKAI_FACT_BOUNDARY_VIOLATION`.
 
 Creative copy may be witty, exaggerated, or fictional, but must not present an unverified real-world identity, crime, medical/legal claim, relationship, or defamatory allegation as fact. It should make the moment fun, not pretend to report a real event. The Stage 04 reviewer evaluates whether the creative premise is clear, funny, and aligned with the user's requested tone; it must not rewrite the draft back into a sterile literal description.
 
+## Audio policy declaration
+
+Every reviewed draft must declare exactly one audio policy, and the reviewer must confirm it:
+
+- `TTS_ONLY_MUTE_SOURCE`: every VIDEO muted, new A9 TTS required, A10/A11/A12 empty.
+- `A10_RETAINED_SYNC`: original speaker audio retained through a verified external vocal stem, VIDEO muted, A10 synchronized with the VIDEO source/target ranges, A12 empty.
+
+A draft that mixes original voice and new TTS without stem evidence, or that declares neither policy, fails with `URAKKAI_AUDIO_POLICY_UNDECLARED`.
+
 ## Review result
 
-Report: `present_scene`, `emotional_hook`, `rewrite_or_keep`, and `approval_status=WAIT_USER_URAKKAI_APPROVAL`. Each user correction reuses this same stage and reports again.
+Report: `verdict`, `present_scene`, `emotional_hook`, `rewrite_or_keep`, and `approval_status=WAIT_USER_URAKKAI_APPROVAL`.
+
+`verdict` is one of `PASS_CANDIDATE`, `REVISE_REQUIRED`, `WAIT_SOURCE_RECHECK`, `REJECTED_MARA_INSUFFICIENT`. Record it in `20_script/external-review.json` alongside the rubric item table and the P0–P4 must-fix list. `PASS_CANDIDATE` is a recommendation only; it never advances the episode by itself, and the state stays `WAIT_USER_URAKKAI_APPROVAL` under every verdict. Each user correction reuses this same stage and reports again.
