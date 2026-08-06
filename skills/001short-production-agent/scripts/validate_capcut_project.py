@@ -4,7 +4,7 @@ import argparse
 import json
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
 from capcut_model import (
@@ -31,6 +31,9 @@ BUILD_SCHEMA = SKILL_ROOT / "schemas" / "build_contract.schema.json"
 SNAPSHOT_SCHEMA = SKILL_ROOT / "schemas" / "structure_snapshot.schema.json"
 EVIDENCE_SCHEMA = SKILL_ROOT / "schemas" / "capcut_project_evidence.schema.json"
 DESIGN_LOCK_EVIDENCE_SCHEMA = SKILL_ROOT / "schemas" / "design_lock_evidence.schema.json"
+ROOT_ARCHIVE_SHA256_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+ROOT_SEGMENT_COUNT_RE = re.compile(r"세그먼트\s*(\d+)개")
+SCREEN_WHITE_ASSET = "transparent_center_white_1080x1920.png"
 
 
 def _error(code: str, **detail: Any) -> dict:
@@ -60,6 +63,269 @@ def _range(segment: dict) -> tuple[int, int, int] | None:
     if start < 0 or duration <= 0:
         return None
     return start, duration, start + duration
+
+
+def _numeric_matches(actual: Any, expected: Any, tolerance: Any) -> bool:
+    if not isinstance(actual, (int, float)) or isinstance(actual, bool):
+        return False
+    if not isinstance(expected, (int, float)) or isinstance(expected, bool):
+        return actual == expected
+    allowed = tolerance if isinstance(tolerance, (int, float)) and not isinstance(tolerance, bool) else 0
+    return abs(float(actual) - float(expected)) <= float(allowed)
+
+
+def _rich_style(material: dict) -> dict:
+    content = material.get("content")
+    if not isinstance(content, str):
+        return {}
+    try:
+        payload = json.loads(content)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    styles = payload.get("styles")
+    return styles[0] if isinstance(styles, list) and styles and isinstance(styles[0], dict) else {}
+
+
+def _text_style_observations(material: dict, segment: dict) -> dict[str, Any]:
+    rich_style = _rich_style(material)
+    strokes = rich_style.get("strokes")
+    stroke = strokes[0] if isinstance(strokes, list) and strokes and isinstance(strokes[0], dict) else None
+    stroke_content = stroke.get("content", {}) if isinstance(stroke, dict) else {}
+    stroke_solid = stroke_content.get("solid", {}) if isinstance(stroke_content, dict) else {}
+    clip = segment.get("clip") if isinstance(segment.get("clip"), dict) else {}
+    transform = clip.get("transform") if isinstance(clip.get("transform"), dict) else {}
+    return {
+        "font_size": material.get("font_size"),
+        "text_color_hex": material.get("text_color"),
+        "alignment": material.get("alignment"),
+        "letter_spacing": material.get("letter_spacing"),
+        "line_spacing": material.get("line_spacing"),
+        "italic": rich_style.get("italic", False),
+        "italic_degree": material.get("italic_degree"),
+        "border_color_hex": material.get("border_color"),
+        "border_width": material.get("border_width"),
+        "fixed_width": material.get("fixed_width"),
+        "fixed_height": material.get("fixed_height"),
+        "line_max_width": material.get("line_max_width"),
+        "clip_transform_raw.x": transform.get("x"),
+        "clip_transform_raw.y": transform.get("y"),
+        "shadow.has_shadow": material.get("has_shadow"),
+        "shadow.shadow_color": material.get("shadow_color"),
+        "shadow.shadow_alpha": material.get("shadow_alpha"),
+        "shadow.shadow_smoothing": material.get("shadow_smoothing"),
+        "shadow.shadow_distance": material.get("shadow_distance"),
+        "shadow.shadow_angle": material.get("shadow_angle"),
+        "background_plate.background_style": material.get("background_style"),
+        "background_plate.background_color": material.get("background_color"),
+        "background_plate.background_width": material.get("background_width"),
+        "background_plate.background_height": material.get("background_height"),
+        "stroke": None if stroke is None else True,
+        "stroke.render_type": stroke_content.get("render_type") if isinstance(stroke_content, dict) else None,
+        "stroke.color_rgb": stroke_solid.get("color") if isinstance(stroke_solid, dict) else None,
+        "stroke.width": stroke.get("width") if isinstance(stroke, dict) else None,
+    }
+
+
+def _expected_text_style_values(style: dict) -> dict[str, Any]:
+    values = {
+        field: style[field]
+        for field in (
+            "font_size",
+            "text_color_hex",
+            "alignment",
+            "letter_spacing",
+            "line_spacing",
+            "italic",
+            "italic_degree",
+            "border_color_hex",
+            "border_width",
+            "fixed_width",
+            "fixed_height",
+            "line_max_width",
+        )
+        if field in style
+    }
+    transform = style.get("clip_transform_raw")
+    if isinstance(transform, dict):
+        for axis in ("x", "y"):
+            if axis in transform:
+                values[f"clip_transform_raw.{axis}"] = transform[axis]
+    for group in ("shadow", "background_plate"):
+        nested = style.get(group)
+        if isinstance(nested, dict):
+            for field, value in nested.items():
+                if field != "note":
+                    values[f"{group}.{field}"] = value
+    if "stroke" in style:
+        stroke = style["stroke"]
+        values["stroke"] = None if stroke is None else True
+        if isinstance(stroke, dict):
+            if "render_type" in stroke:
+                values["stroke.render_type"] = stroke["render_type"]
+            color = stroke.get("color_rgb", stroke.get("color_rgb_0_1"))
+            if color is not None:
+                values["stroke.color_rgb"] = color
+            if "width" in stroke:
+                values["stroke.width"] = stroke["width"]
+    return values
+
+
+def _style_tolerance(field: str, tolerances: dict) -> Any:
+    if field == "font_size":
+        return tolerances.get("font_size")
+    # The contract explicitly says the raw CapCut transform-to-pixel formula is
+    # not determined. Do not apply pixel tolerances to relative/raw values.
+    return None
+
+
+def _style_value_matches(actual: Any, expected: Any, tolerance: Any) -> bool:
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(_style_value_matches(a, e, tolerance) for a, e in zip(actual, expected))
+        )
+    if isinstance(expected, (int, float)) and not isinstance(expected, bool):
+        return _numeric_matches(actual, expected, tolerance)
+    return actual == expected
+
+
+def validate_root_layout_contract(
+    model, contract: dict, root_archive_sha256: str | None
+) -> list[dict]:
+    """Validate the saved CapCut project against the immutable root layout contract."""
+    archive_sha256 = contract.get("archive_sha256")
+    expected_tracks = contract.get("tracks")
+    text_styles = contract.get("text_styles")
+    tolerances = contract.get("tolerances")
+    if (
+        not isinstance(archive_sha256, str)
+        or ROOT_ARCHIVE_SHA256_RE.fullmatch(archive_sha256) is None
+        or not isinstance(expected_tracks, list)
+        or not isinstance(text_styles, dict)
+        or not isinstance(tolerances, dict)
+    ):
+        return [_error("ROOT_LAYOUT_CONTRACT_INVALID")]
+
+    errors: list[dict] = []
+    if (
+        not isinstance(root_archive_sha256, str)
+        or root_archive_sha256.casefold() != archive_sha256.casefold()
+    ):
+        errors.append(
+            _error(
+                "ROOT_ARCHIVE_SHA_MISMATCH",
+                expected=archive_sha256,
+                actual=root_archive_sha256,
+            )
+        )
+
+    actual_tracks = {
+        (root_archive_sha256, track.get("id"), track.get("type")): track
+        for track in model.tracks
+        if isinstance(track, dict)
+        and isinstance(track.get("id"), str)
+        and isinstance(track.get("type"), str)
+    }
+    materials = {
+        row.get("id"): row
+        for row in iter_materials(model.materials)
+        if isinstance(row.get("id"), str)
+    }
+    for expected_track in expected_tracks:
+        if not isinstance(expected_track, dict):
+            errors.append(_error("ROOT_LAYOUT_CONTRACT_INVALID"))
+            continue
+        track_id = expected_track.get("track_id")
+        track_type = expected_track.get("type")
+        role = expected_track.get("role")
+        requirement = expected_track.get("requirement")
+        identity = {
+            "archive_sha256": archive_sha256,
+            "track_id": track_id,
+            "type": track_type,
+        }
+        actual_track = actual_tracks.get((archive_sha256, track_id, track_type))
+        if actual_track is None:
+            if requirement == "REQUIRED":
+                errors.append(_error("ROOT_REQUIRED_TRACK_MISSING", role=role, identity=identity))
+            if role == "SCREEN_WHITE":
+                errors.append(
+                    _error("ROOT_SCREEN_WHITE_REFERENCE_MISSING", role=role, identity=identity, asset=SCREEN_WHITE_ASSET)
+                )
+            continue
+
+        segments = actual_track.get("segments")
+        actual_segments = segments if isinstance(segments, list) else []
+        if requirement == "REQUIRED":
+            segment_rule = expected_track.get("segment_rule")
+            match = ROOT_SEGMENT_COUNT_RE.search(segment_rule) if isinstance(segment_rule, str) else None
+            if match is None:
+                errors.append(_error("ROOT_LAYOUT_CONTRACT_INVALID", role=role, field="segment_rule"))
+            else:
+                expected_count = int(match.group(1))
+                if len(actual_segments) != expected_count:
+                    errors.append(
+                        _error(
+                            "ROOT_REQUIRED_TRACK_SEGMENT_COUNT_MISMATCH",
+                            role=role,
+                            identity=identity,
+                            expected=expected_count,
+                            actual=len(actual_segments),
+                        )
+                    )
+
+        if role == "SCREEN_WHITE":
+            referenced = False
+            for segment in actual_segments:
+                if not isinstance(segment, dict):
+                    continue
+                material = materials.get(segment.get("material_id"))
+                if not isinstance(material, dict):
+                    continue
+                raw_path = material.get("path") or material.get("media_path")
+                normalized = PurePosixPath(raw_path.replace("\\", "/")) if isinstance(raw_path, str) else None
+                if (
+                    normalized is not None
+                    and len(normalized.parts) >= 3
+                    and tuple(part.casefold() for part in normalized.parts[-3:])
+                    == ("resources", "media", SCREEN_WHITE_ASSET.casefold())
+                ):
+                    referenced = True
+                    break
+            if not referenced:
+                errors.append(
+                    _error("ROOT_SCREEN_WHITE_REFERENCE_MISSING", role=role, identity=identity, asset=SCREEN_WHITE_ASSET)
+                )
+
+        style = text_styles.get(role)
+        if track_type != "text" or not actual_segments or not isinstance(style, dict):
+            continue
+        expected_values = _expected_text_style_values(style)
+        for segment in actual_segments:
+            if not isinstance(segment, dict):
+                continue
+            material = materials.get(segment.get("material_id"))
+            if not isinstance(material, dict):
+                errors.append(
+                    _error("ROOT_TEXT_STYLE_MISMATCH", role=role, segment_id=segment.get("id"), field="material")
+                )
+                continue
+            observed_values = _text_style_observations(material, segment)
+            for field, expected in expected_values.items():
+                actual = observed_values.get(field)
+                if not _style_value_matches(actual, expected, _style_tolerance(field, tolerances)):
+                    errors.append(
+                        _error(
+                            "ROOT_TEXT_STYLE_MISMATCH",
+                            role=role,
+                            segment_id=segment.get("id"),
+                            field=field,
+                            expected=expected,
+                            actual=actual,
+                        )
+                    )
+    return errors
 
 
 def validate_timeline(model, contract: dict) -> list[dict]:
@@ -626,6 +892,7 @@ def validate_capcut_project(
     build_contract_path: Path,
     evidence_path: Path | None = None,
     approved_evidence_root_path: Path | None = None,
+    root_layout_contract_path: Path | None = None,
 ) -> dict:
     project_path = Path(project_path).resolve()
     structure_snapshot_path = Path(structure_snapshot_path).resolve()
@@ -750,6 +1017,23 @@ def validate_capcut_project(
     except ProjectError as exc:
         return {**result(errors + [_error(exc.code, detail=exc.detail)]), "next_action": "NONE"}
 
+    declared_root_layout = root_layout_contract_path or contract.get("root_layout_contract_path")
+    if declared_root_layout is None:
+        errors.append(_error("ROOT_LAYOUT_CONTRACT_INVALID", detail="root layout contract path missing"))
+    else:
+        try:
+            root_layout_contract = read_json(Path(declared_root_layout).resolve())
+        except (OSError, ValueError, TypeError) as exc:
+            errors.append(_error("ROOT_LAYOUT_CONTRACT_INVALID", detail=str(exc)))
+        else:
+            errors.extend(
+                validate_root_layout_contract(
+                    model,
+                    root_layout_contract,
+                    contract.get("root_archive_sha256"),
+                )
+            )
+
     mirror_result = validate_id_mirrors(project_path)
     errors.extend(mirror_result.get("errors", []))
     observed_ids = mirror_result.get("evidence", {})
@@ -859,6 +1143,7 @@ def main() -> int:
     parser.add_argument("--build-contract", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--evidence-root", type=Path, required=True)
+    parser.add_argument("--root-layout-contract", type=Path)
     args = parser.parse_args()
     payload = validate_capcut_project(
         args.project,
@@ -866,6 +1151,7 @@ def main() -> int:
         args.build_contract,
         args.evidence,
         approved_evidence_root_path=args.evidence_root,
+        root_layout_contract_path=args.root_layout_contract,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0 if payload["status"] == "PASS" else 1

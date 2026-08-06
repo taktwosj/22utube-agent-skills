@@ -423,6 +423,12 @@
     "CAPCUT_VISUAL_CONFIRMATION_MISSING": "completion report lacks actual CapCut screen confirmation",
     "CAPCUT_VISUAL_CONFIRMATION_INVALID": "CapCut screen or draft readback evidence is invalid",
     "RENDER_EVIDENCE_MISSING": "render/upload claim lacks MP4 evidence",
-    "RENDER_EVIDENCE_INVALID": "render MP4 evidence does not match the actual file"
+    "RENDER_EVIDENCE_INVALID": "render MP4 evidence does not match the actual file",
+    "ROOT_LAYOUT_CONTRACT_INVALID": "root layout contract is missing required identity or layout fields",
+    "ROOT_ARCHIVE_SHA_MISMATCH": "build root archive SHA-256 does not match the root layout contract",
+    "ROOT_REQUIRED_TRACK_MISSING": "a REQUIRED root track is absent after the CapCut project was saved",
+    "ROOT_REQUIRED_TRACK_SEGMENT_COUNT_MISMATCH": "a REQUIRED root track segment count differs from its segment_rule",
+    "ROOT_SCREEN_WHITE_REFERENCE_MISSING": "SCREEN_WHITE does not reference transparent_center_white_1080x1920.png",
+    "ROOT_TEXT_STYLE_MISMATCH": "a populated root text track differs from the contract absolute style values and tolerances"
   }
 }

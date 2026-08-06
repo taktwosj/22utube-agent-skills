@@ -164,6 +164,8 @@ def _bind_portable_root_contract(config: dict) -> dict | None:
         "template_profile": resolved["template_profile"],
         "archive_sha256": resolved["archive_sha256"],
     }
+    layout_contract = Path(resolved["archive"]).parent / f"{resolved['template_profile']}_layout_contract_v1.json"
+    config["_resolved_root_contract"]["layout_contract_path"] = str(layout_contract.resolve())
     return resolved
 
 
@@ -999,6 +1001,10 @@ def _build_episode_once(config: dict) -> dict:
             for index, cue in enumerate(config["state_cues"], start=1)
         ],
     }
+    resolved_root = config.get("_resolved_root_contract")
+    if isinstance(resolved_root, dict) and resolved_root.get("layout_contract_path"):
+        contract["root_layout_contract_path"] = resolved_root["layout_contract_path"]
+        contract["root_archive_sha256"] = resolved_root["archive_sha256"]
     _write_json(contract_path, contract)
     inputs = validate_build_inputs.validate_build_inputs(
         pre["caption_lock"], pre["final_srt"], contract_path, pre["approved_timeline"]
