@@ -73,14 +73,15 @@ def add_final_evidence(report: dict, root: Path) -> None:
 
 
 class ExecutableProtocolContractTest(unittest.TestCase):
-    def test_skill_and_workflow_mandate_executable_protocol(self):
+    def test_thin_skill_router_and_workflow_mandate_executable_protocol(self):
         skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
         tools = json.loads((SKILL / "tools.json").read_text(encoding="utf-8"))
-        self.assertIn("## Executable Protocol (Mandatory)", skill_text)
-        self.assertIn("Load `protocol.json` before mode routing", skill_text)
+        self.assertIn("## Load order", skill_text)
+        self.assertIn("`workflow.json`, episode state, and `protocol.json`", skill_text)
+        self.assertIn("## Minimal executable protocol", skill_text)
         self.assertIn("STOP_PROTOCOL_CONFLICT", skill_text)
-        self.assertIn("UPLOAD_METADATA_MISSING", skill_text)
+        self.assertIn("scripts/validate_executable_protocol.py --plan <path>", skill_text)
         self.assertIn("protocol.json", workflow["common"])
         self.assertEqual(workflow["executable_protocol"]["path"], "protocol.json")
         self.assertEqual(
@@ -174,14 +175,13 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             module.validate_skill_contract(SKILL, broken),
         )
 
-    def test_self_check_catches_dynamic_review_loop_contract_mismatch(self):
+    def test_self_check_catches_router_and_workflow_contract_mismatch(self):
         module = load_validator()
         self.assertIsNotNone(module, "validate_executable_protocol.py must exist")
         protocol = module.load_protocol(PROTOCOL)
         mismatched_protocol = copy.deepcopy(protocol)
         mismatched_protocol["urakkai_review_loop"]["review_loop_count"] = 2
         errors = module.validate_skill_contract(SKILL, mismatched_protocol)
-        self.assertIn("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH", errors)
         self.assertIn("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH", errors)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -190,8 +190,8 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             skill_path = copied_skill / "SKILL.md"
             skill_path.write_text(
                 skill_path.read_text(encoding="utf-8").replace(
-                    "Stage 04의 검토 개선 loop는 정확히 1회 실행한다.",
-                    "Stage 04의 검토 개선 loop는 정확히 2회 실행한다.",
+                    "## Minimal executable protocol",
+                    "## Removed protocol contract",
                     1,
                 ),
                 encoding="utf-8",
@@ -253,7 +253,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             row["placements"][1]["source_range_us"] = source_range
         self.assertIn("URAKKAI_FAKE_SPLIT", module.validate_production_plan(fake, protocol))
 
-    def test_urakkai_tts_only_requires_muted_video_empty_a10_and_a9(self):
+    def test_urakkai_tts_only_requires_muted_video_empty_a10_a9_and_allows_a11_a12(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
         fixture = SKILL / "tests" / "fixtures" / "urakkai_tts_only.pass.json"
@@ -276,6 +276,18 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             row["placements"] = [placement for placement in row["placements"] if placement["anchor"] != "A9"]
         self.assertIn("URAKKAI_TTS_ONLY_A9_REQUIRED", module.validate_production_plan(no_tts, protocol))
 
+        with_sfx_and_bgm = json.loads(json.dumps(valid))
+        with_sfx_and_bgm["timeline"][0]["placements"].append({
+            "anchor": "A11", "operation": "clone_template_segment", "asset_key": "sfx_wow",
+            "target_range_us": [0, 1_000_000], "volume": 1,
+        })
+        for row in with_sfx_and_bgm["timeline"]:
+            row["placements"].append({
+                "anchor": "A12", "operation": "clone_template_segment", "asset_key": "bgm",
+                "target_range_us": row["target_range_us"], "volume": 1,
+            })
+        self.assertEqual(module.validate_production_plan(with_sfx_and_bgm, protocol), [])
+
     def test_protocol_declares_final_shorts_hard_gates(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -284,6 +296,14 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIs(urakkai.get("fake_split_forbidden"), True)
         self.assertIs(urakkai.get("approved_final_order_required"), True)
         self.assertEqual(urakkai.get("allowed_audio_policies"), ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"])
+        for key in (
+            "v2_video_muted",
+            "v2_a9_seed_muted",
+            "v2_a10_seed_muted",
+            "v2_a11_sfx_normal_volume",
+            "v2_a12_bgm_normal_volume",
+        ):
+            self.assertIs(protocol["invariants"].get(key), True)
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
         self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")
         self.assertEqual(clean_only.get("original_audio_duration"), "FULL_LENGTH")
@@ -397,8 +417,8 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertEqual(stage04["pass"], "WAIT_USER_URAKKAI_APPROVAL")
         self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 1)
         self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK")
-        self.assertIn("VMake Direct-Insert Contract", skill_text)
-        self.assertIn("Urakkai Editorial Authority", skill_text)
+        self.assertIn("## Compatibility", skill_text)
+        self.assertIn("current-stage direct link", skill_text)
 
         broken = json.loads(json.dumps(protocol, ensure_ascii=False))
         broken["invariants"]["vmake_direct_insert_required"] = False
@@ -440,15 +460,10 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         module = load_validator()
         protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
         invariants = protocol["invariants"]
-        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
 
         self.assertIs(invariants.get("urakkai_final_duration_independent_from_source"), True)
         self.assertIs(invariants.get("clean_visual_duration_matches_source_before_edit"), True)
         self.assertIs(invariants.get("clean_only_full_source_duration_required"), True)
-        self.assertIn(
-            "원본 전체 길이와 최종 프로젝트 전체 길이를 같게 강제하지 않는다",
-            skill_text,
-        )
 
         broken = copy.deepcopy(protocol)
         broken["invariants"]["urakkai_final_duration_independent_from_source"] = False

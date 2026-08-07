@@ -8,7 +8,7 @@
   "total_duration_us": 3000000,
   "original_order": ["1", "2", "3"],
   "order_signature": ["3", "1", "2"],
-  "cleared_anchors": ["A10", "A10_TEXT", "A11", "A12"],
+  "cleared_anchors": ["A10", "A10_TEXT"],
   "timeline": [
     {
       "segment_key": "3",

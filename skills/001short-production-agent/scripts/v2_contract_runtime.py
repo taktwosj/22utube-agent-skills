@@ -30,6 +30,7 @@ SUPPORTED_OPERATIONS = frozenset(
     }
 )
 SFX_SEED_BY_KIND = {"TRANSITION": 1, "REVERSAL": 2, "WOW": 3}
+DRAFT_PATH_PREFIX = re.compile(r"^(##_draftpath_placeholder_[^#]+_##)/Resources/")
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -57,6 +58,16 @@ def _materials(value: Any):
     elif isinstance(value, list):
         for child in value:
             yield from _materials(child)
+
+
+def _draft_path_prefix(payload: dict[str, Any]) -> str:
+    for material in _materials(payload.get("materials", {})):
+        for key in ("path", "media_path"):
+            value = material.get(key)
+            match = DRAFT_PATH_PREFIX.match(value.replace("\\", "/")) if isinstance(value, str) else None
+            if match:
+                return match.group(1)
+    raise ValueError("V2_DRAFT_PATH_PLACEHOLDER_MISSING")
 
 
 def _material_parent(value: Any, material_id: str) -> list[dict[str, Any]] | None:
@@ -205,6 +216,12 @@ def validate_plan_document(plan: dict[str, Any]) -> list[str]:
             errors.append(
                 f"V2_A11_SFX_MAPPING_INVALID:{placement.get('placement_id')}"
             )
+        if placement.get("anchor") in {"A9", "A10"}:
+            anchor = placement["anchor"]
+            if placement.get("operation") != "preserve_muted_seed":
+                errors.append(f"V2_MUTED_SEED_OPERATION_INVALID:{anchor}")
+            if placement.get("volume") != 0:
+                errors.append(f"V2_MUTED_SEED_AUDIBLE:{anchor}")
     policies = plan.get("lane_policies", {})
     for lane in ("VIDEO", "A9", "A10"):
         rows = sorted(
@@ -322,6 +339,7 @@ def _apply_document(
 ) -> None:
     duration = plan["total_duration_us"]
     payload["duration"] = duration
+    draft_prefix = _draft_path_prefix(payload)
     track_by_id = {track.get("id"): track for track in payload["tracks"] if isinstance(track, dict)}
     role_contract = {row["role"]: row for row in layout["tracks"]}
     material_map = {
@@ -347,6 +365,10 @@ def _apply_document(
             operation = placement.get("operation")
             if operation not in SUPPORTED_OPERATIONS:
                 raise ValueError(f"V2_OPERATION_UNSUPPORTED:{operation}")
+            if anchor in {"A9", "A10"} and (
+                operation != "preserve_muted_seed" or placement.get("volume") != 0
+            ):
+                raise ValueError(f"V2_MUTED_SEED_INVALID:{anchor}:{placement.get('placement_id')}")
             if operation in {"omit", "clear"}:
                 continue
             seed_index = int(placement.get("sfx_seed", 1)) - 1
@@ -395,7 +417,7 @@ def _apply_document(
                 material["id"] = material_id
                 material["role"] = anchor
                 material["desc"] = f"001short v2 {anchor}"
-                material["path"] = f"##_draftpath_placeholder_v2_##/Resources/media/{name}"
+                material["path"] = f"{draft_prefix}/Resources/media/{name}"
                 material["duration"] = end - start
                 if anchor == "VIDEO":
                     material["type"] = "video"
@@ -450,6 +472,11 @@ def validate_project(
     track_by_id = {row.get("id"): row for row in root.get("tracks", []) if isinstance(row, dict)}
     if len(track_by_id) != 15:
         errors.append("V2_TRACK_COUNT_INVALID")
+    try:
+        draft_prefix = _draft_path_prefix(root)
+    except ValueError:
+        draft_prefix = ""
+        errors.append("V2_DRAFT_PATH_PLACEHOLDER_MISSING")
     material_map = {
         row.get("id"): row for row in _materials(root.get("materials", {})) if isinstance(row.get("id"), str)
     }
@@ -470,6 +497,8 @@ def validate_project(
                 errors.append(f"V2_LIVE_MATERIAL_MISSING:{segment.get('id')}")
             if role == "VIDEO" and segment.get("volume") != 0:
                 errors.append("V2_VIDEO_VOLUME_INVALID")
+            if role in {"A9", "A10"} and segment.get("volume") != 0:
+                errors.append(f"V2_MUTED_SEED_READBACK_INVALID:{role}")
             if role == "A11_SFX" and segment.get("volume") != 1:
                 errors.append("V2_A11_SFX_VOLUME_INVALID")
         if role in {"A10_TEXT_WHITE", "A10_TEXT_YELLOW"}:
@@ -528,7 +557,7 @@ def validate_project(
         if placement.get("operation") == "replace_media_and_range":
             material = material_map.get(segment.get("material_id"), {})
             media_path = material.get("path") if isinstance(material, dict) else None
-            prefix = "##_draftpath_placeholder_v2_##/Resources/media/"
+            prefix = f"{draft_prefix}/Resources/media/"
             if not isinstance(media_path, str) or not media_path.startswith(prefix):
                 errors.append(f"V2_MEDIA_PATH_NOT_PORTABLE:{placement_id}")
             else:

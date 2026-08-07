@@ -1,13 +1,21 @@
 # YouTube Shorts source acquisition
 
-Use this reference in Stage 01 when a Shorts URL is the analysis authority.
+Use this reference in Stage 01 to normalize an accepted intake origin into the canonical OneDrive episode root. Accepted origins are a Google Drive folder/file, a YouTube Shorts URL, or a user-designated Desktop local folder. The final working, assembly, and validation root is always `C:\Users\arajun\OneDrive\22utube\22factory_20260628\0000shrt\<YYMMDD_short-title_source-id>`.
+
+## Accepted origins and canonical receipt
+
+Normalize the selected source as `00_input/source.mp4` under the canonical OneDrive root, then create immutable `90_workflow/onedrive_intake_receipt.json`. Record `origin_type`, `origin_locator`, canonical source URL and ID when applicable, `input_relative_path`, SHA-256, measured duration, and storage policy. Do not mutate the normalized source after receipt creation; replace it only through a new receipt and Stage 01 revalidation.
+
+- Google Drive folder/file: record the read-only locator, visible file identity, and copied-file SHA-256. Drive is optional intake only; never write, share, or upload there.
+- YouTube Shorts URL: record the canonical Shorts/watch URL, video ID, extractor metadata readback, and copied/downloaded-file SHA-256.
+- User-designated Desktop local folder: record the exact user-designated locator, selected file name, and copied-file SHA-256. Do not infer another Desktop file.
 
 ## Durable acquisition sequence
 
 Keep metadata, media, subtitle, and audio extraction independent so one optional request cannot block the whole episode.
 
-1. Inspect compact metadata first. Persist only fields needed by the episode: video ID, title, channel, duration, dimensions, FPS, language, upload date, and selected format.
-2. Download the source video without subtitle flags and preserve it as immutable analysis authority.
+1. Resolve the accepted origin with the origin-specific identity evidence above. For a YouTube URL, inspect compact metadata first and persist only fields needed by the episode: video ID, title, channel, duration, dimensions, FPS, language, upload date, and selected format.
+2. Copy or download the selected source to the canonical OneDrive root without subtitle flags and preserve it as immutable analysis authority.
 3. Request the original-language automatic subtitle separately. Prefer the exact original track such as `en-orig` instead of broad selectors such as `en.*` when the extractor exposes multiple translated/generated variants.
 4. Extract an analysis WAV with ffmpeg.
 5. Write ffprobe data and SHA-256 for source video, subtitle, WAV, and metadata.

@@ -8,7 +8,7 @@ Use the actual `workflow.json`, episode state, and listed evidence. Never infer 
 
 | Current evidence / lock | Internal stage | Load exactly this MD | Stop if missing |
 |---|---|---|---|
-| Source identity, readback metadata, measured duration, or read-only Drive-grid receipt is absent or changing | 1. Original | [original-capcut-grid.md](../templates/original-capcut-grid.md) | `WAIT_ORIGINAL_GRID_EVIDENCE` |
+| Canonical OneDrive intake receipt, source identity, readback metadata, or measured duration is absent or changing | 1. Original | [original-capcut-grid.md](../templates/original-capcut-grid.md) | `WAIT_ORIGINAL_INTAKE_EVIDENCE` |
 | Original grid is complete and final order, copy, speaker policy, caption timing, STATE/SFX, or user approval is unresolved | 2. Urakkai | [urakkai-production-grid.md](../templates/urakkai-production-grid.md) | the selected table's `WAIT_*` / `URAKKAI_STRUCTURE_UNCHANGED` |
 | Approved timeline and production plan are locked, or static CapCut creation / Stage 09 visual handoff is current | 3. CapCut assembly | [capcut-assembly-grid.md](../templates/capcut-assembly-grid.md) | the selected table's `WAIT_*` / `FAIL_*` |
 
@@ -18,7 +18,7 @@ If no row uniquely applies, stop `WAIT_STAGE_SELECTION`. Do not load two stage t
 
 | From | Required locked output | To | Acceptance |
 |---|---|---|---|
-| 1. Original | `20_script/original-capcut-grid.md`: source identity, metadata, measured duration, read-only Drive receipt, and evidence rows | 2. Urakkai | Original grid handoff table is complete. |
+| 1. Original | `20_script/original-capcut-grid.md`: canonical OneDrive intake receipt, source identity, metadata, measured duration, and evidence rows | 2. Urakkai | Original grid handoff table is complete. |
 | 2. Urakkai | `20_script/URAKKAI_PRODUCTION_GRID.md`, approved timeline, and production plan | 3. CapCut assembly | User approval is explicit; every 15-role placement and all effect/SFX choices are recorded. |
 | 3. CapCut assembly | Static project receipt and separate visual-handoff status | Stage 09 user review | Static PASS is not visual PASS; retain `WAIT_USER_STAGE09_VISUAL_CHECK` until user evidence exists. |
 
@@ -40,7 +40,9 @@ If no row uniquely applies, stop `WAIT_STAGE_SELECTION`. Do not load two stage t
 - Use exactly one STATE effect lane per cue: `FLICKER_RAVE`, `GLITCH_SHAKE`, or `LASER_CUT`. Record each SFX choice in the approved timeline before build.
 - Prepare `Resources/media` plus a manifest, then default to user manual relink. Do not automate editor relink.
 - Build only in unique staging. Regenerate the draft path prefix from the root UUID, reject unresolved placeholders, validate first, then atomically promote. On failure remove staging only.
-- Drive-grid verification is read-only. Do not modify, share, upload, or create Drive content under this workflow.
+- The canonical final working, assembly, and validation root is `C:\Users\arajun\OneDrive\22utube\22factory_20260628\0000shrt\<YYMMDD_short-title_source-id>`. Intake may originate from a Google Drive folder/file, a YouTube Shorts URL, or a user-designated Desktop local folder; normalize every accepted origin into that root before Stage 01.
+- Require an immutable `90_workflow/onedrive_intake_receipt.json` before Stage 01 handoff. It records the origin type and locator, source URL/ID when applicable, `00_input/source.mp4` relative path, SHA-256, measured duration, and storage policy. A changed source requires a new receipt and revalidation.
+- Google Drive is an optional read-only intake origin, never a mandatory Stage 01 gate. Do not modify, share, upload, or create Drive content under this workflow.
 
 ## Compatibility references
 

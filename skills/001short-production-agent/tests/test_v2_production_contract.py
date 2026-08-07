@@ -210,7 +210,13 @@ def _write_v2_fixture(root: Path) -> tuple[Path, Path, Path]:
                     }
                 )
             elif track_type == "video":
-                materials["videos"].append({"id": material_id, "type": "video", "path": "seed.mp4"})
+                materials["videos"].append(
+                    {
+                        "id": material_id,
+                        "type": "video",
+                        "path": "##_draftpath_placeholder_fixture_##/Resources/media/seed.mp4",
+                    }
+                )
             elif track_type == "effect":
                 materials["effects"].append({"id": material_id, "type": "effect"})
             else:
@@ -505,6 +511,59 @@ class V2ProductionContractTests(unittest.TestCase):
             self.assertNotEqual(rejected.returncode, 0)
             self.assertIn("V2_PRIMARY_SPEAKER_ROUTE_INVALID", rejected.stdout)
 
+    def test_v2_rejects_audible_non_seed_audio_operations(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            contract, _layout, assets = _write_v2_fixture(root)
+            timeline = root / "approved_timeline.json"
+            output = root / "production_plan.json"
+            timeline.write_text(json.dumps(_approved_timeline()), encoding="utf-8")
+            compiled = _run(
+                "compile_production_plan.py",
+                "--approved-timeline",
+                timeline,
+                "--output",
+                output,
+            )
+            self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
+            valid_plan = json.loads(output.read_text(encoding="utf-8"))
+
+            for anchor in ("A9", "A10"):
+                with self.subTest(anchor=anchor):
+                    plan = copy.deepcopy(valid_plan)
+                    placement = next(
+                        item
+                        for row in plan["timeline"]
+                        for item in row["placements"]
+                        if item["anchor"] == anchor
+                    )
+                    placement["operation"] = "clone_template_segment"
+                    placement["volume"] = 1
+                    output.write_text(json.dumps(plan), encoding="utf-8")
+
+                    rejected = _run("validate_executable_protocol.py", "--plan", output)
+
+                    self.assertNotEqual(rejected.returncode, 0)
+                    self.assertIn(f"V2_MUTED_SEED_OPERATION_INVALID:{anchor}", rejected.stdout)
+
+                    blocked_build = _run(
+                        "build_v2_contract_project.py",
+                        "--production-plan",
+                        output,
+                        "--root-contract",
+                        contract,
+                        "--workspace-root",
+                        root,
+                        "--asset-manifest",
+                        assets,
+                        "--output-project",
+                        root / f"output-{anchor}",
+                        "--receipt",
+                        root / f"receipt-{anchor}.json",
+                    )
+                    self.assertNotEqual(blocked_build.returncode, 0)
+                    self.assertIn("V2_PRODUCTION_PLAN_SCHEMA_INVALID", blocked_build.stdout)
+
     def test_duplicate_segment_ids_and_wrong_sfx_mapping_are_rejected(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -633,6 +692,16 @@ class V2ProductionContractTests(unittest.TestCase):
             readback = json.loads(validated.stdout)
             self.assertEqual(readback["status"], "PASS")
             self.assertEqual(readback["readback"]["A10_TEXT_UNASSIGNED"], [])
+            content = json.loads((output / "draft_content.json").read_text(encoding="utf-8"))
+            video_track = next(track for track in content["tracks"] if track["id"] == "track-video")
+            video_material_id = video_track["segments"][0]["material_id"]
+            video_material = next(
+                item for item in content["materials"]["videos"] if item["id"] == video_material_id
+            )
+            self.assertEqual(
+                video_material["path"],
+                "##_draftpath_placeholder_fixture_##/Resources/media/clean_video.mp4",
+            )
 
             content_path = output / "draft_content.json"
             content = json.loads(content_path.read_text(encoding="utf-8"))
@@ -897,7 +966,7 @@ class V2ProductionContractTests(unittest.TestCase):
             self.assertNotIn("role", result_material)
             self.assertNotIn("desc", result_material)
 
-    def test_live_a9_a10_are_audible_while_only_seeds_are_muted(self):
+    def test_a9_a10_timeline_rows_compile_as_muted_seeds(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             contract, layout, assets = _write_v2_fixture(root)
@@ -941,8 +1010,10 @@ class V2ProductionContractTests(unittest.TestCase):
                 for row in payload["timeline"]
                 for item in row["placements"]
             }
-            self.assertEqual(placements["A9_LIVE"]["volume"], 1)
-            self.assertEqual(placements["A10_LIVE"]["volume"], 1)
+            self.assertEqual(placements["A9_LIVE"]["operation"], "preserve_muted_seed")
+            self.assertEqual(placements["A10_LIVE"]["operation"], "preserve_muted_seed")
+            self.assertEqual(placements["A9_LIVE"]["volume"], 0)
+            self.assertEqual(placements["A10_LIVE"]["volume"], 0)
             self.assertNotIn("A9_SEED", placements)
             self.assertNotIn("A10_SEED", placements)
 
@@ -965,8 +1036,26 @@ class V2ProductionContractTests(unittest.TestCase):
             self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
             content = json.loads((output / "draft_content.json").read_text(encoding="utf-8"))
             tracks = {track["id"]: track for track in content["tracks"]}
-            self.assertEqual(tracks["track-a9"]["segments"][0]["volume"], 1)
-            self.assertEqual(tracks["track-a10"]["segments"][0]["volume"], 1)
+            self.assertEqual(tracks["track-a9"]["segments"][0]["volume"], 0)
+            self.assertEqual(tracks["track-a10"]["segments"][0]["volume"], 0)
+
+            tracks["track-a9"]["segments"][0]["volume"] = 1
+            for content_path in (
+                output / "draft_content.json",
+                output / "Timelines" / content["main_timeline_id"] / "draft_content.json",
+            ):
+                content_path.write_text(json.dumps(content), encoding="utf-8")
+            rejected_readback = _run(
+                "validate_v2_contract_project.py",
+                "--project",
+                output,
+                "--production-plan",
+                plan,
+                "--layout-contract",
+                layout,
+            )
+            self.assertNotEqual(rejected_readback.returncode, 0)
+            self.assertIn("V2_MUTED_SEED_READBACK_INVALID:A9", rejected_readback.stdout)
 
     @unittest.skipUnless(os.environ.get("SHORTS_V2_AUTHORITY_DIR"), "external v2 authority not configured")
     def test_actual_immutable_v2_root_roundtrip(self):

@@ -112,6 +112,16 @@
           "then": {"required": ["asset_key", "source_range_us", "volume"]}
         },
         {
+          "if": {"properties": {"anchor": {"enum": ["A9", "A10"]}}},
+          "then": {
+            "required": ["operation", "volume"],
+            "properties": {
+              "operation": {"const": "preserve_muted_seed"},
+              "volume": {"const": 0}
+            }
+          }
+        },
+        {
           "if": {"properties": {"anchor": {"enum": ["T1", "T2", "A9_TEXT", "A10_TEXT", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "STATE", "STATE_EFFECT_1", "STATE_EFFECT_2", "STATE_EFFECT_3"]}}},
           "then": {"required": ["text"]}
         }

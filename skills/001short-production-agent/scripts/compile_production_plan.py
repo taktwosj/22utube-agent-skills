@@ -106,7 +106,12 @@ def _placement(row: dict[str, Any], total_duration_us: int, primary_speaker_id: 
             sfx_seed=SFX_SEED[kind],
             volume=1,
         )
-    elif role in {"A9", "A10", "A12"}:
+    elif role in {"A9", "A10"}:
+        placement.update(
+            operation="preserve_muted_seed",
+            volume=0,
+        )
+    elif role == "A12":
         asset_key = row.get("asset_key")
         source_range = row.get("source_range_us")
         if not isinstance(asset_key, str) or not _valid_range(source_range):

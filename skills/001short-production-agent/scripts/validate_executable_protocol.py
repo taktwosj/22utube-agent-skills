@@ -4,11 +4,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
+
+SCRIPTS_ROOT = Path(__file__).resolve().parent
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from schema_runtime import validate_schema
 
@@ -206,6 +209,11 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
         "completion_report_requires_upload_metadata",
+        "v2_video_muted",
+        "v2_a9_seed_muted",
+        "v2_a10_seed_muted",
+        "v2_a11_sfx_normal_volume",
+        "v2_a12_bgm_normal_volume",
     )
     if not isinstance(invariants, dict):
         errors.append("PROTOCOL_INVARIANTS")
@@ -274,27 +282,16 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     if skill_path.is_file():
         skill_text = skill_path.read_text(encoding="utf-8")
         for token in [
-            "## Executable Protocol (Mandatory)",
+            "## Load order",
+            "`workflow.json`, episode state, and `protocol.json`",
+            "## Minimal executable protocol",
             "STOP_PROTOCOL_CONFLICT",
-            "URAKKAI_STRUCTURE_UNCHANGED",
-            "UPLOAD_METADATA_MISSING",
-            "PUBLIC_UPLOAD_NOT_APPROVED",
-            "## New Session Handoff Bootstrap",
-            "scripts/validate_conversation_handoff.py",
-            "HANDOFF_SECRET_MATERIAL_FORBIDDEN",
+            "scripts/validate_executable_protocol.py --plan <path>",
+            "WAIT_*",
+            "FAIL_*",
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
-        review_contract = re.search(
-            r"Stage 04의 검토 개선 loop는 정확히 (\d+)회 실행한다\.", skill_text
-        )
-        if (
-            not isinstance(review_loop_count, int)
-            or isinstance(review_loop_count, bool)
-            or review_contract is None
-            or int(review_contract.group(1)) != review_loop_count
-        ):
-            errors.append("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH")
 
     workflow_path = root / str(authority.get("state_machine", "workflow.json"))
     if workflow_path.is_file():
@@ -513,7 +510,9 @@ def _validate_v2_production_plan(plan: Dict[str, Any]) -> List[str]:
         if not rows:
             errors.append(f"V2_MUTED_SEED_MISSING:{anchor}")
         for placement in rows:
-            if placement.get("operation") == "preserve_muted_seed" and placement.get("volume") != 0:
+            if placement.get("operation") != "preserve_muted_seed":
+                errors.append(f"V2_MUTED_SEED_OPERATION_INVALID:{anchor}")
+            if placement.get("volume") != 0:
                 errors.append(f"V2_MUTED_SEED_AUDIBLE:{anchor}")
     a12 = by_anchor.get("A12", [])
     if len(a12) != 1 or a12[0].get("target_range_us") != [0, duration] or a12[0].get("volume") != 1:
@@ -681,10 +680,8 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 errors.append("URAKKAI_TTS_ONLY_VIDEO_NOT_MUTED")
             if not tts:
                 errors.append("URAKKAI_TTS_ONLY_A9_REQUIRED")
-            if _segments(tracks, "A11") or _segments(tracks, "A12"):
-                errors.append("URAKKAI_TTS_ONLY_FORBIDDEN_AUDIO_PRESENT")
             cleared = set(plan.get("cleared_anchors", []))
-            if not {"A10", "A11", "A12"}.issubset(cleared):
+            if "A10" not in cleared:
                 errors.append("URAKKAI_TTS_ONLY_CLEAR_ANCHOR_MISSING")
         return errors
 

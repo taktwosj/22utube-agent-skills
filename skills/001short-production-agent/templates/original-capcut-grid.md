@@ -1,44 +1,23 @@
-# Original grid
+# 원본 캡컷 표 — <episode_id>
 
-> Stage 02 authority. Copy this file to `20_script/original-capcut-grid.md`. Do not fill the installed template with an episode ID, actual URL, actual person, or actual time.
+`ORIGINAL_CAPCUT_GRID_REQUIRED_ROWS`
 
-## Supporting references
+> 원본을 CapCut 근본 세로줄로 번역한다. 이 표는 우라까이·실제 TTS WAV·CapCut 조립을 확정하지 않는다.
 
-- [Production orchestrator](../references/production-orchestrator.md)
-- [Source acquisition](../references/youtube-source-acquisition.md)
-- [Structure blueprint reporting](../references/structure-blueprint-reporting.md)
-
-## Inputs and next stage
-
-| Item | Record | Rule |
+| 줄 / 원본 역할 | <source 구간 1> | <source 구간 2> |
 |---|---|---|
-| Source identity | `<source URL / local path / content fingerprint>` | Bind the original and local file 1:1. |
-| Metadata readback | `<title / channel / published value / retrieval time>` | Record only visible source metadata. |
-| Measured duration | `<ffprobe duration>` | Use a local measurement, never an estimate. |
-| Drive-grid receipt | `<read-only URL / visible scope / checked time / row count / result>` | Verify Drive in read-only mode. Do not modify, share, or upload. |
-| Next-stage input | `20_script/original-capcut-grid.md` | This is the sole original-source input to the Stage 03 urakkai grid. |
+| VIDEO | <실제로 보이는 화면·행동·전환> | <실제로 보이는 화면·행동·전환> |
+| T1 | <원본 title·상단 문구 / 미확정 — 제목 evidence 필요> | <원본 title·상단 문구 / 미확정 — 제목 evidence 필요> |
+| T2 | <원본 title·상단 문구 / 미확정 — 제목 evidence 필요> | <원본 title·상단 문구 / 미확정 — 제목 evidence 필요> |
+| A9 TTS 재현 대본 | <원본 작가 나레이션 / 해당 없음 — 원본 작가 나레이션 없음> | <원본 작가 나레이션 / 해당 없음 — 원본 작가 나레이션 없음> |
+| A9_TEXT TTS 표시문구 | <A9과 같은 원문, 한 줄 15자 이하 줄바꿈> | <A9과 같은 원문, 한 줄 15자 이하 줄바꿈> |
+| A10 작가 나레이션 | <source range + 작가 해설 / 해당 없음 — 원본 작가 나레이션 없음> | <source range + 작가 해설 / 해당 없음 — 원본 작가 나레이션 없음> |
+| A10 화자발언 1 | <source range + 발화 / 화자발언 1 (인물 미확정)> | <source range + 발화 / 화자발언 1 (인물 미확정)> |
+| A10 화자발언 2 | <source range + 발화 / 해당 없음 — 이 구간 화자 차례 없음> | <source range + 발화 / 해당 없음 — 이 구간 화자 차례 없음> |
+| A10 화자발언 3 | <source range + 발화 / 해당 없음 — 이 구간 화자 차례 없음> | <source range + 발화 / 해당 없음 — 이 구간 화자 차례 없음> |
+| STATE 상황설명문구 | <현재 행동·감정·관계의 짧은 비문장 문구> | <현재 행동·감정·관계의 짧은 비문장 문구> |
+| A11 | <효과음·현장음 / 해당 없음 — 원본에서 들리지 않음> | <효과음·현장음 / 해당 없음 — 원본에서 들리지 않음> |
+| A12 | <BGM / 해당 없음 — 원본에서 들리지 않음> | <BGM / 해당 없음 — 원본에서 들리지 않음> |
+| SCREEN | <상단·중간·하단·워터마크와 evidence 유형> | <상단·중간·하단·워터마크와 evidence 유형> |
 
-## Observable source grid
-
-> Split time columns at observed changes in picture, text, speech, or sound. Mark uncertainty as `UNVERIFIED` with its evidence. This record does not decide final TTS or CapCut assembly.
-
-| Role / source range | `<source range 1>` | `<source range 2>` |
-|---|---|---|
-| VIDEO | `<visible action / framing / transition>` | `<visible action / framing / transition>` |
-| T1 | `<observed title or title-evidence status>` | `<observed title or title-evidence status>` |
-| T2 | `<observed subtitle or title-evidence status>` | `<observed subtitle or title-evidence status>` |
-| A9 narration evidence | `<spoken narration or explicit absence with evidence>` | `<spoken narration or explicit absence with evidence>` |
-| A10 speaker / dialogue | `<source range + literal or verified summary + speaker status>` | `<source range + literal or verified summary + speaker status>` |
-| STATE observation | `<visible present action / emotion / relationship>` | `<visible present action / emotion / relationship>` |
-| A11 / A12 observation | `<heard SFX or BGM, or explicit absence with evidence>` | `<heard SFX or BGM, or explicit absence with evidence>` |
-| SCREEN | `<baked-in text / watermark / position / style evidence>` | `<baked-in text / watermark / position / style evidence>` |
-
-## Stage 03 handoff
-
-| Required before handoff | Value |
-|---|---|
-| Source identity, metadata, and measured duration recorded | `<PASS / missing item>` |
-| Drive-grid read-only receipt recorded | `<PASS / missing item>` |
-| Every source range has a VIDEO row and applicable evidence rows | `<PASS / missing ranges>` |
-| Uncertain identity or audio marked without guessing | `<PASS / missing evidence>` |
-| Stop condition | `WAIT_ORIGINAL_GRID_EVIDENCE` until every required row and receipt is complete. |
+규칙: bare `없음`, `비움`, `UNVERIFIED`만 쓰지 않는다. 실제 부재에는 source 근거를, 미확정에는 재확인할 evidence를 함께 쓴다.
