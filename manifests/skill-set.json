@@ -3,7 +3,7 @@
   "version": "2026.07.14",
   "source_of_truth": "git",
   "active_shorts_script_authority": "skills/001short-production-agent/SKILL.md",
-  "onedrive_role": "production-data-only",
+  "onedrive_role": "git-source-and-immutable-release-distribution",
   "skills": [
 
     {

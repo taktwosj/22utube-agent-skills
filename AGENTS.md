@@ -191,9 +191,10 @@ next:
 
 ## 12. 공용 스킬 정본과 런타임 연결
 
-- 공용 스킬의 유일한 정본은 `<factory-root>\agent-skills\skills`이다. Codex·Claude·Hermes는 이 정본을 직접 참조한다.
-- `<factory-root>`는 각 장비에서 명시적으로 전달하는 로컬 공장 루트다. 사용자명이나 특정 드라이브 경로를 지침·스크립트에 고정하지 않는다.
-- Codex 대상은 `$HOME/.codex/skills`, Claude 대상은 `$HOME/.claude/skills`, Hermes 대상은 Windows `$LOCALAPPDATA/Hermes/skills/22utube`, macOS·Linux `$HOME/.hermes/skills/22utube`다.
-- 한 번에 manifest 관리 스킬 하나만 연결한다. 기존 대상은 timestamp backup 후 junction 또는 symbolic link로 교체하며, resolved-path readback·source/destination `SKILL.md` SHA-256·존재하는 configurable self-check가 모두 통과해야 `PASS`다. manifest 밖 이름과 runtime 소유 system/plugin 이름·경로는 연결하지 않는다.
-- 연결은 `scripts/link-managed-skill.ps1 -FactoryRoot <factory-root> -SkillName <name> -Target <codex|claude|hermes>`를 사용한다. 실제 반영 전 `-DryRun`으로 source·destination·backup을 확인한다.
+- 편집 정본은 `<factory-root>\agent-skills\skills`이지만 runtime은 이를 직접 참조하지 않는다.
+- clean Git commit만 `scripts/skill_release.py publish`로 `<factory-root>\agent-skills-runtime\releases\<full-commit>`에 발행한다. `manifest.json`, 모든 파일 SHA-256, `READY`, `active.json`이 정본 증거다.
+- 각 장비는 `activate`로 release를 machine-local verified cache에 검증 복사한 뒤 Codex·Claude·Hermes의 manifest 관리 스킬만 그 cache에 연결한다. Git·OneDrive 경로와 runtime 전체 root는 연결하지 않는다.
+- Codex 대상은 `$HOME/.codex/skills`, Claude 대상은 `$HOME/.claude/skills`, Hermes 대상은 Windows `$LOCALAPPDATA/Hermes/skills/22utube`, macOS·Linux `$HOME/.hermes/skills/22utube`다. 기존 대상은 timestamp backup한다.
+- `verify`는 local active pointer, manifest·파일 hash, `SKILL.md`, runtime link가 local verified cache release를 가리키는지 확인한다. system/plugin 이름·경로는 금지한다.
+- `scripts/link-managed-skill.ps1`의 Git 직접 연결은 격리된 개발 runtime에서 `-DevOnly`로만 허용하며 production 배포에 쓰지 않는다.
 - 런타임 연결 변경은 운영 환경 변경이다. 제9항의 사용자 승인을 받은 별도 작업에서만 실행한다.

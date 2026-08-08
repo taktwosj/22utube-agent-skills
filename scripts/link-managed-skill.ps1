@@ -11,10 +11,18 @@ param(
   [switch]$AllowTestRuntimeRoot,
   [string]$BackupRoot = '',
   [string]$SelfCheckRelativePath = 'scripts/self-check.ps1',
+  [switch]$DevOnly,
   [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $DevOnly) {
+  throw 'Production direct repo links are disabled. Pass -DevOnly only for an isolated development runtime.'
+}
+if (-not $RuntimeRoot) {
+  throw '-DevOnly requires an explicit -RuntimeRoot. Official/default runtime roots are forbidden.'
+}
 
 function Test-IsWindowsHost {
   return [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
@@ -44,6 +52,19 @@ function Get-DefaultBackupRoot([string]$TargetName, [string]$ResolvedRuntimeRoot
       return Join-Path $HOME '.hermes/skills_backups'
     }
   }
+}
+
+function Test-IsEqualOrDescendant([string]$CandidatePath, [string]$RootPath) {
+  $candidate = [System.IO.Path]::GetFullPath($CandidatePath).TrimEnd('\', '/')
+  $root = [System.IO.Path]::GetFullPath($RootPath).TrimEnd('\', '/')
+  $comparison = if (Test-IsWindowsHost) {
+    [System.StringComparison]::OrdinalIgnoreCase
+  } else {
+    [System.StringComparison]::Ordinal
+  }
+  if ([string]::Equals($candidate, $root, $comparison)) { return $true }
+  $rootPrefix = $root + [System.IO.Path]::DirectorySeparatorChar
+  return $candidate.StartsWith($rootPrefix, $comparison)
 }
 
 $protectedSkillNames = @(
@@ -93,6 +114,18 @@ $resolvedBackupRoot = if ($BackupRoot) {
   [System.IO.Path]::GetFullPath($BackupRoot)
 } else {
   [System.IO.Path]::GetFullPath((Get-DefaultBackupRoot $Target $resolvedRuntimeRoot))
+}
+$officialRuntimeRoots = @(
+  [System.IO.Path]::GetFullPath((Get-DefaultRuntimeRoot 'codex')),
+  [System.IO.Path]::GetFullPath((Get-DefaultRuntimeRoot 'claude')),
+  [System.IO.Path]::GetFullPath((Get-DefaultRuntimeRoot 'hermes'))
+)
+foreach ($officialRoot in $officialRuntimeRoots) {
+  foreach ($candidate in @($resolvedRuntimeRoot, $resolvedBackupRoot)) {
+    if (Test-IsEqualOrDescendant $candidate $officialRoot) {
+      throw "Official/default runtime root is forbidden; official runtime root descendants are also forbidden: candidate=$candidate official=$officialRoot"
+    }
+  }
 }
 $destination = [System.IO.Path]::GetFullPath((Join-Path $resolvedRuntimeRoot $SkillName))
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'

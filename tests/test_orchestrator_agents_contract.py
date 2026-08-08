@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FACTORY_ROOT = ROOT.parent
+FACTORY_ROOT = ROOT.parent.parent if ROOT.parent.name == "worktrees" else ROOT.parent
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell")
 
 
@@ -59,7 +59,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
         self.assertIn('shutil.which("pwsh") or shutil.which("powershell")', text)
         self.assertNotIn('"power' + 'shell.exe"', text)
 
-    def test_repo_agents_keeps_compact_orchestrator_and_runtime_link_contract(self):
+    def test_repo_agents_keeps_compact_orchestrator_and_verified_release_contract(self):
         agents_path = ROOT / "AGENTS.md"
         self.assertTrue(agents_path.is_file(), "repo-root AGENTS.md must exist")
 
@@ -73,14 +73,14 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
         self.assertIn("동일 Scope에는 작업자 한 명만 배정한다.", text)
         self.assertIn("`$1caveman + $task-owner`", text)
         self.assertIn("commit·push", text)
-        self.assertIn(r"<factory-root>\agent-skills\skills", text)
+        self.assertIn(r"<factory-root>\agent-skills-runtime\releases", text)
         self.assertIn("Codex", text)
         self.assertIn("Claude", text)
         self.assertIn("Hermes", text)
         self.assertIn("backup", text.lower())
-        self.assertIn("readback", text.lower())
-        self.assertIn("SHA-256", text)
-        self.assertIn("self-check", text)
+        self.assertIn("manifest", text.lower())
+        self.assertIn("READY", text)
+        self.assertIn("verified cache", text)
         self.assertIn("system/plugin", text)
 
     def test_link_helper_dry_run_reports_paths_without_replacing_target(self):
@@ -104,6 +104,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -151,6 +152,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -212,6 +214,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -247,6 +250,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -275,6 +279,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -294,14 +299,49 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
             self.assertNotEqual(protected_path.returncode, 0)
             self.assertIn("runtime-owned system/plugin path", protected_path.stdout + protected_path.stderr)
 
-    def test_readme_documents_scoped_managed_skill_links(self):
+    def test_readme_documents_verified_release_cli(self):
         text = (ROOT / "README.md").read_text(encoding="utf-8")
 
-        self.assertNotIn("Copy install only; symlink install is not supported.", text)
-        self.assertIn("scripts/link-managed-skill.ps1", text)
-        self.assertIn("one manifest-managed skill", text)
-        self.assertIn("whole runtime-root links", text)
-        self.assertIn("system/plugin", text)
+        self.assertIn("scripts/skill_release.py publish", text)
+        self.assertIn("scripts/skill_release.py activate", text)
+        self.assertIn("scripts/skill_release.py verify", text)
+        self.assertIn("local verified cache", text)
+        self.assertIn("development-only", text)
+
+    def test_link_helper_is_blocked_for_production_without_dev_switch(self):
+        script = ROOT / "scripts" / "link-managed-skill.ps1"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            factory = temp / "factory"
+            write_managed_skill(factory)
+            environment = dict(os.environ)
+            environment.pop("AGENT_SKILLS_TEST_RUNTIME_OVERRIDE", None)
+
+            completed = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-FactoryRoot",
+                    str(factory),
+                    "-SkillName",
+                    "demo-skill",
+                    "-Target",
+                    "codex",
+                    "-DryRun",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=environment,
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("Production direct repo links are disabled", completed.stdout + completed.stderr)
 
     def test_runtime_root_override_requires_switch_and_test_environment(self):
         if POWERSHELL is None:
@@ -319,6 +359,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -348,6 +389,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(script),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",
@@ -371,6 +413,89 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                 "test-only",
                 missing_environment_guard.stdout + missing_environment_guard.stderr,
             )
+
+    def test_dev_link_helper_refuses_official_default_runtime_root(self):
+        script = ROOT / "scripts" / "link-managed-skill.ps1"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            factory = Path(temp_dir) / "factory"
+            write_managed_skill(factory)
+            default_runtime = Path.home() / ".codex" / "skills"
+
+            completed = subprocess.run(
+                [
+                    POWERSHELL,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(script),
+                    "-DevOnly",
+                    "-FactoryRoot",
+                    str(factory),
+                    "-SkillName",
+                    "demo-skill",
+                    "-Target",
+                    "codex",
+                    "-RuntimeRoot",
+                    str(default_runtime),
+                    "-AllowTestRuntimeRoot",
+                    "-DryRun",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("Official/default runtime root is forbidden", completed.stdout + completed.stderr)
+
+    def test_dev_link_helper_refuses_nested_official_runtime_and_backup_paths(self):
+        script = ROOT / "scripts" / "link-managed-skill.ps1"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp = Path(temp_dir)
+            factory = temp / "factory"
+            write_managed_skill(factory)
+            official_codex = Path.home() / ".codex" / "skills"
+            commands = [
+                [
+                    "-RuntimeRoot", str(official_codex / "isolated-test"),
+                    "-BackupRoot", str(temp / "backups"),
+                ],
+                [
+                    "-RuntimeRoot", str(temp / "runtime"),
+                    "-BackupRoot", str(official_codex / "backups" / "isolated-test"),
+                ],
+            ]
+            for extra in commands:
+                with self.subTest(extra=extra):
+                    completed = subprocess.run(
+                        [
+                            POWERSHELL,
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(script),
+                            "-DevOnly",
+                            "-FactoryRoot",
+                            str(factory),
+                            "-SkillName",
+                            "demo-skill",
+                            "-Target",
+                            "codex",
+                            *extra,
+                            "-AllowTestRuntimeRoot",
+                            "-DryRun",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+
+                    self.assertNotEqual(completed.returncode, 0)
+                    self.assertIn("official runtime root", (completed.stdout + completed.stderr).lower())
 
     def test_verifier_accepts_manifest_owned_link_without_marker(self):
         helper = ROOT / "scripts" / "link-managed-skill.ps1"
@@ -428,6 +553,7 @@ class OrchestratorAgentsContractTests(unittest.TestCase):
                     "Bypass",
                     "-File",
                     str(helper),
+                    "-DevOnly",
                     "-FactoryRoot",
                     str(factory),
                     "-SkillName",

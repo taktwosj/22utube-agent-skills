@@ -4,13 +4,12 @@ Git source of truth for 22utube/11utube production skills and selected personal 
 
 ## Roles
 
-- Git repo: official skill source under `skills/<skill>`.
-- Codex runtime: copy installed to `$HOME/.codex/skills`.
-- Claude runtime: copy installed to `$HOME/.claude/skills`.
-- Hermes runtime: copy installed to `%LOCALAPPDATA%/Hermes/skills/22utube` on Windows and `$HOME/.hermes/skills/22utube` on macOS/default Unix hosts.
-- OneDrive: lightweight production handoff data only, including manifests, reports, scripts, captions, CapCut draft manifests/snapshots/restore notes, and upload copy.
+- Git repo: editable source under `skills/<skill>`.
+- OneDrive release store: immutable commit-pinned releases under sibling `agent-skills-runtime`.
+- Each machine: a local verified cache under `%LOCALAPPDATA%/22utube/agent-skills-runtime` on Windows or `${XDG_CACHE_HOME:-$HOME/.cache}/22utube/agent-skills-runtime` on macOS/Unix.
+- Codex, Claude, and Hermes: per-skill links into the local verified cache, never into Git or OneDrive.
 
-Runtime folders are install targets, not edit targets. Edit skills in this repo, then run install/update/verify.
+Runtime folders and release folders are not edit targets. Edit skills in Git, publish a clean commit, then activate and verify it on each machine.
 
 ## Managed Skill Set
 
@@ -69,79 +68,35 @@ restore notes unless an explicit handoff package is requested.
 Current general Shorts production authority is
 `skills/001short-production-agent/SKILL.md`.
 
-## First Install
+## Publish A Release
 
-Windows:
+Publishing refuses a dirty repository. `release_id` is the full Git commit, and `active.json` is updated only after the immutable release, manifest, hashes, and `READY` marker validate.
 
-```powershell
-git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\install.ps1" -Target all
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target all
+```text
+python -B scripts/skill_release.py publish --dry-run
+python -B scripts/skill_release.py publish
 ```
 
-macOS:
+## Activate On Home, Office, Or Mac Mini
 
-```bash
-git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
-bash "$HOME/agent-skills/scripts/install.sh" --target all
-bash "$HOME/agent-skills/scripts/verify.sh" --target all
+Run from the same OneDrive factory repo after the published `active.json` and release have synced. Activation validates before and after copying to the machine-local cache, backs up replaced runtime destinations, then creates per-skill runtime links.
+
+```text
+python -B scripts/skill_release.py activate --target all --dry-run
+python -B scripts/skill_release.py activate --target all
+python -B scripts/skill_release.py verify --target all
 ```
 
-## Update
-
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target all -Prune
-```
-
-macOS:
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target all --prune
-```
-
-## Strict Claude Match
-
-Claude CLI should not keep old 22utube production skills beside the Git-managed
-set. Use strict mode to make Claude's runtime match `manifests/skill-set.json`
-exactly:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target claude -Prune -Strict
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
-```
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target claude --prune --strict
-bash "$HOME/agent-skills/scripts/verify.sh" --target claude --strict
-```
-
-Strict mode moves unmanaged skill folders with `SKILL.md` into the configured
-backup folder as `DISABLED_<skill>_<timestamp>`. It does not delete them.
-
-Use dry-run before prune:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target all -Prune -DryRun
-```
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
-```
+Add `--self-check` to `verify` when per-skill self-check execution is wanted.
 
 ## Safety Rules
 
-- Bulk install/update keeps copy semantics. `scripts/link-managed-skill.ps1` links one manifest-managed skill at a time; whole runtime-root links and system/plugin paths are forbidden.
-- `update` refuses dirty worktrees.
-- `git pull` uses `--ff-only`.
-- Automatic stash is not supported.
-- `--only` and `--prune` cannot be combined.
-- `--only` and strict mode cannot be combined.
-- Prune removes only folders with a managed marker file.
-- Strict mode disables any unmanaged skill folder under the selected target.
+- Only enabled skills in `manifests/skill-set.json` are published.
+- Runtime links must resolve inside the local verified cache release. Whole runtime-root links, mutable Git/OneDrive targets, and system/plugin names or paths are forbidden.
+- Existing immutable releases and local cache releases are never mutated; mismatched content is refused.
 - Existing runtime folders are backed up before overwrite.
-- `verify` failure makes update fail.
+- Test-only root overrides require `AGENT_SKILLS_TEST_ROOT_OVERRIDE=1`.
+- `scripts/link-managed-skill.ps1` is development-only and requires `-DevOnly` outside its isolated test harness. It is not a production activation path.
 
 ## Verification Status
 
@@ -152,8 +107,8 @@ minimum live check required on another Windows PC or the Mac mini.
 
 - `docs/work-report-2026-06-29-draft-fast-final-lock.md`: latest cleanup report
   for DRAFT_FAST / FINAL_LOCK, Korean text gate, and CapCut report rules.
-- `docs/git-down-guide.md`: copy-paste update guide for office Windows and Mac
-  mini.
+- `docs/git-down-guide.md`: verified publish/activate guide for Home Windows,
+  Office Windows, and Mac mini.
 
 ## Telegram Hermes
 

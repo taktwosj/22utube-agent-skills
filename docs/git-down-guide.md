@@ -1,115 +1,65 @@
-# Git Down Guide
+# Verified Skill Release Guide
 
-Use this guide on the office Windows PC and Mac mini to receive the official
-22utube skill set from Git.
+Use this procedure for Home Windows, Office Windows, and Mac mini. Runtime folders never link to the mutable Git checkout or OneDrive release store.
 
-Repo:
+## 1. Publish Once From The Clean Authority
 
-```text
-https://github.com/taktwosj/22utube-agent-skills.git
-```
-
-Minimum required implementation commit:
+Run inside `<factory-root>/agent-skills` after the approved skill changes are committed and the worktree is clean.
 
 ```text
-3ca5107 Split draft fast and final lock gates
+python -B scripts/skill_release.py publish --dry-run
+python -B scripts/skill_release.py publish
 ```
 
-## Office Windows
-
-First install:
-
-```powershell
-git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
-cd "$HOME\agent-skills"
-powershell -ExecutionPolicy Bypass -File scripts\update.ps1 -Target all -Strict
-powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target all -Strict
-```
-
-Existing repo update:
-
-```powershell
-cd "$HOME\agent-skills"
-git pull --ff-only
-powershell -ExecutionPolicy Bypass -File scripts\update.ps1 -Target all -Strict
-powershell -ExecutionPolicy Bypass -File scripts\verify.ps1 -Target all -Strict
-```
-
-Expected result:
+On macOS, use `python3` when `python` is unavailable. Publish creates the sibling store below and updates its central pointer only after validation succeeds.
 
 ```text
-VERIFY PASS warnings=0
-Codex marker source_commit = 3ca5107 or newer
-Claude marker source_commit = 3ca5107 or newer
-Hermes marker source_commit = 3ca5107 or newer
+<factory-root>/agent-skills-runtime/
+  active.json
+  releases/<full-git-commit>/
+    manifest.json
+    READY
+    skills/<enabled-skill>/...
 ```
 
-## Mac Mini
+Wait for OneDrive to finish syncing `active.json` and the referenced immutable release before activating another machine.
 
-First install:
+## 2. Activate Each Machine
 
-```bash
-git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
-cd "$HOME/agent-skills"
-bash scripts/update.sh --target all --strict
-bash scripts/verify.sh --target all --strict
-```
-
-Existing repo update:
-
-```bash
-cd "$HOME/agent-skills"
-git pull --ff-only
-bash scripts/update.sh --target all --strict
-bash scripts/verify.sh --target all --strict
-```
-
-Expected result:
+Run inside the synced `<factory-root>/agent-skills` checkout on Home Windows, Office Windows, and Mac mini.
 
 ```text
-VERIFY PASS warnings=0
-Codex marker source_commit = 3ca5107 or newer
-Claude marker source_commit = 3ca5107 or newer
-Hermes marker source_commit = 3ca5107 or newer
+python -B scripts/skill_release.py activate --target all --dry-run
+python -B scripts/skill_release.py activate --target all
+python -B scripts/skill_release.py verify --target all
 ```
 
-## Optional Telegram Hermes Check
+Activation validates the central release, copies it into the machine-local verified cache, validates the copy, backs up replaced per-skill runtime destinations, and links only manifest-owned skills. The local `active.json` changes after every requested runtime link passes readback.
 
-Windows:
-
-```powershell
-cd "$HOME\agent-skills"
-powershell -ExecutionPolicy Bypass -File scripts\telegram-hermes-doctor.ps1
-```
-
-Mac mini:
-
-```bash
-cd "$HOME/agent-skills"
-bash scripts/telegram-hermes-doctor.sh
-```
-
-Do not print tokens, chat IDs, cookies, API keys, sessions, or auth files.
-
-## What This Installs
-
-The Git-managed skill set is installed into:
+Default local cache:
 
 ```text
-Codex  -> ~/.codex/skills
-Claude -> ~/.claude/skills
-Hermes -> ~/.hermes/skills/22utube on macOS
-Hermes -> %LOCALAPPDATA%\Hermes\skills\22utube on Windows
+Windows: %LOCALAPPDATA%/22utube/agent-skills-runtime
+macOS:   ${XDG_CACHE_HOME:-$HOME/.cache}/22utube/agent-skills-runtime
 ```
 
-The install scripts copy official Git skills into runtime folders and write
-managed marker files. Runtime folders are not edit targets.
-
-## Current Shorts Factory Rule
+Runtime destinations:
 
 ```text
-DRAFT_FAST is default.
-FINAL_LOCK runs only when explicitly requested.
-Official CapCut template defaults are black and insta white.
-Korean mojibake in draft_content.json is a KOREAN_TEXT_FAST_GATE failure.
+Codex:  $HOME/.codex/skills/<skill>
+Claude: $HOME/.claude/skills/<skill>
+Hermes Windows: $LOCALAPPDATA/Hermes/skills/22utube/<skill>
+Hermes macOS:   $HOME/.hermes/skills/22utube/<skill>
 ```
+
+## 3. Pass Criteria
+
+```text
+PUBLISH PASS
+ACTIVATE PASS
+VERIFY PASS
+```
+
+`verify` must confirm the local active pointer, manifest SHA, every payload hash, `SKILL.md`, immutable seal, and every runtime link target. Add `--self-check` only when per-skill self-check execution is wanted.
+
+Do not use `install.ps1`, `install.sh`, `update.ps1`, `update.sh`, or `link-managed-skill.ps1` for production activation. The direct link helper is restricted to explicitly guarded isolated development roots.
