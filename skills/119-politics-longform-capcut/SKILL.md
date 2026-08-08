@@ -28,21 +28,31 @@ description: Use only when a political-longform request explicitly contains CapC
 중 하나 이상이다. 없는 제작 미디어는 승인 뒤 수집·생성할 수 있다. 직접 경로는 110·111,
 외부검토 영수증, lock, review packet, 업로드 패키지에 의존하지 않는다.
 
-## 승인 뒤 병렬 실행
+## 승인 뒤 선택적 병렬 실행
 
-대본 승인 뒤 A–D를 병렬 실행한다. 각 작업자는 자기 출력만 쓰며 다른 작업의 state나
-산출물을 수정하지 않는다.
+대본 승인 뒤 A와 D는 항상 시작한다. 사용자가 나레이션·TTS·별도 오디오를 명시적으로
+요청했을 때만 B를 시작하고, 이미지·그래픽을 명시적으로 요청했을 때만 C를 시작한다.
+활성 작업은 병렬 실행하며 각 작업자는 자기 출력만 쓴다.
 
 | 작업 | 읽을 문서 | 독점 출력 |
 |---|---|---|
 | A 출처·SRT·다운로드·로컬 컷 | `source-media.md` | source media와 source captions |
-| B 나레이션·정렬·SRT | `narration.md` | narration media와 narration SRT |
-| C 지원되는 시각 자산 | `visual-assets.md` | episode `Resources` 자산 |
+| B 나레이션·정렬·SRT | 명시 요청 시에만 `narration.md` | narration media와 narration SRT |
+| C 지원되는 시각 자산 | 명시 요청 시에만 `visual-assets.md` | episode `Resources` 자산 |
 | D 근본·target·CapCut 종료 준비 | `capcut-assembly.md`의 준비 절 | 읽기 결과와 공식 resolver 출력 |
 
-A–D는 서로의 미완성 결과를 정본으로 쓰지 않는다. 모두 끝난 뒤 join owner 한 명만 실제
-산출물을 `episode_cards.json`으로 합친다. `episode_cards.json`이 유일한 join이다. 그 뒤
+A와 D, 그리고 요청되어 활성화된 B/C는 서로의 미완성 결과를 정본으로 쓰지 않는다.
+요청되지 않은 B/C는 `NOT_REQUESTED` 또는 `NOT_APPLICABLE`이며 join이 기다리지 않는다.
+join owner 한 명은 A/D와 활성 B/C의 실제 산출물만 `episode_cards.json`으로 합친다. 기본
+빌드는 source video의 embedded audio와 사용 가능한 source footage·editable text overlay로
+진행한다. 별도 요청이 없으면 챕터 1→2→3→4의 `SOURCE_VIDEO`를 t=0부터 연속 배치하며
+intro·image·narration은 넣지 않는다. narration audio/SRT나 episode image가 없어도 멈추지 않는다. 이후
 `capcut-assembly.md`에 따라 build → relink → readback → visual 순서로 계속한다.
+목표 조합은 `SOURCE_VIDEO=VIDEO+SOURCE`, `NARRATION_VIDEO=VIDEO+NARRATION`,
+`CHAPTER_CARD=IMAGE+SILENT`, `NARRATION_IMAGE=IMAGE+NARRATION`이다. `VIDEO+SILENT`와
+`IMAGE+SOURCE`는 별도 구현 전에는 지원한다고 말하지 않는다. lower 선택은 `SRT`,
+`COMMENTARY_2LINE`, `NONE`이며 audio에 맞춰 기존 builder mode에 매핑한다. C는 image,
+B는 narration을 선택한 경우에만 활성화한다.
 
 ## 핵심 불변식
 
@@ -54,6 +64,7 @@ A–D는 서로의 미완성 결과를 정본으로 쓰지 않는다. 모두 끝
   portable root, cards, 상대경로 보고서와 해시만 둔다.
 - 사용자 프로필 절대경로, `%LOCALAPPDATA%`, cache 경로를 portable JSON에 직렬화하지 않는다.
 - ASR cue는 편집 컷을 정하지 않는다. 실제 컷에서 자막만 split 또는 clamp한다.
+- 요청되지 않은 narration audio/SRT와 episode image는 제작 필수 입력이 아니다.
 - 업로드·썸네일은 사용자가 명시적으로 요청한 별도 단계다.
 
 ## 실패와 재개
@@ -61,14 +72,16 @@ A–D는 서로의 미완성 결과를 정본으로 쓰지 않는다. 모두 끝
 활성 단계의 API·media·schema·continuity·alignment·builder·readback·relink·visual 검사에서
 구체적 기술 실패가 발생했을 때만 멈춘다. `첫 실패 재현 → 원인 최소 수정 → 같은 검사 재실행`으로 처리한다. 성공한
 단계는 다시 읽거나 실행하지 않고, 실제 산출물에서 실패한 단계 하나만 재개한다.
+요청되지 않은 B/C의 누락·무효는 실패가 아니며 resume-map 재개 대상으로 삼지 않는다.
+나중에 B/C가 명시 요청되면 성공한 A/D를 다시 하지 않고 해당 작업만 추가한다.
 재개점이 불명확할 때만 [resume-map.md](references/resume-map.md)를 읽는다.
 
 ## 단계 문서
 
 - 대본: [direct-script.md](references/direct-script.md)
 - 출처 미디어: [source-media.md](references/source-media.md)
-- 나레이션: [narration.md](references/narration.md)
-- 시각 자산: [visual-assets.md](references/visual-assets.md)
+- 나레이션(명시 요청 시): [narration.md](references/narration.md)
+- 시각 자산(명시 요청 시): [visual-assets.md](references/visual-assets.md)
 - 조립·검증: [capcut-assembly.md](references/capcut-assembly.md)
 - 재개 선택: [resume-map.md](references/resume-map.md)
 - 기존 Stage 2 전용: [legacy-stage2.md](references/legacy-stage2.md)
@@ -86,4 +99,6 @@ A–D는 서로의 미완성 결과를 정본으로 쓰지 않는다. 모두 끝
 
 `MEDIA_RELINK=PASS`와 `VISUAL_GATE=PASS`가 모두 있어야 CapCut 제작 완료다. 정적 JSON
 검사는 화면 승인이 아니다. `MP4`와 `UPLOAD`는 각각 요청받아 실행한 경우에만
-`PASS`로 보고하며, 실행하지 않았으면 `NOT RUN`이다.
+`PASS`로 보고하며, 실행하지 않았으면 `NOT RUN`이다. B/C 결과는 해당 작업을 요청받았을
+때만 완료 보고에 포함하며, 요청되지 않은 B/C의 부재는 `MEDIA_RELINK`나 `VISUAL_GATE`를
+막지 않는다.

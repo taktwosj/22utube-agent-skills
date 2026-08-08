@@ -47,19 +47,34 @@ def find_final_placeholders(value: Any, path: str = "$") -> list[str]:
 def expected_media(build: dict[str, Any]) -> list[dict[str, Any]]:
     records = build.get("media")
     if isinstance(records, dict):
-        return [
-            {
+        expected: list[dict[str, Any]] = []
+        for card_id, record in records.items():
+            expected.append({
                 "card_id": card_id,
+                "asset_role": "primary_visual",
+                "material_group": "videos",
                 "filename": record["filename"],
                 "sha256": record["sha256"],
                 "requested_offline_path": record.get("offline_path"),
                 "storage": record.get("storage"),
-            }
-            for card_id, record in records.items()
-        ]
+            })
+            narration_audio = record.get("narration_audio")
+            if isinstance(narration_audio, dict):
+                expected.append({
+                    "card_id": card_id,
+                    "asset_role": "narration_audio",
+                    "material_group": "audios",
+                    "filename": narration_audio["filename"],
+                    "sha256": narration_audio["sha256"],
+                    "requested_offline_path": narration_audio.get("offline_path"),
+                    "storage": narration_audio.get("storage"),
+                })
+        return expected
     return [
         {
             "card_id": None,
+            "asset_role": "primary_visual",
+            "material_group": "videos",
             "filename": build.get("media_filename", "C003_S03_chapter_video.mp4"),
             "sha256": build["media_sha256"],
             "requested_offline_path": build["requested_offline_path"],
@@ -97,10 +112,12 @@ def readback_media(
 ) -> tuple[list[dict[str, Any]], bool]:
     results: list[dict[str, Any]] = []
     for expected in expected_media(build):
+        materials = document.get("materials", {}).get(expected["material_group"], [])
         matches = [
             item
-            for item in document["materials"]["videos"]
+            for item in materials
             if item.get("material_name") == expected["filename"]
+            or item.get("name") == expected["filename"]
             or Path(item.get("path", "")).name == expected["filename"]
         ]
         material = matches[0] if len(matches) == 1 else None
@@ -118,6 +135,8 @@ def readback_media(
         results.append(
             {
                 "card_id": expected["card_id"],
+                "asset_role": expected["asset_role"],
+                "filename": expected["filename"],
                 "storage": expected["storage"],
                 "before_path": f"CAPCUT_RELINK_PLACEHOLDER/{expected['filename']}",
                 "after_path": f"{public_folder}/{actual_path.name}" if actual_path else None,

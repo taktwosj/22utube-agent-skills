@@ -1,6 +1,8 @@
 # 나레이션
 
-대본 승인 뒤 B 작업자 한 명이 수행한다. 입력은 승인 대본의 나레이션 문장이다. 출력은
+사용자가 나레이션·TTS·별도 오디오를 명시적으로 요청했을 때만 이 문서를 읽고 B 작업자
+한 명이 수행한다. 요청하지 않았으면 `NOT_REQUESTED` 또는 `NOT_APPLICABLE`이며 join은
+기다리지 않는다. 기본 빌드는 source video의 embedded audio를 사용한다. 입력은 승인 대본의 나레이션 문장이다. 출력은
 이 회차의 narration audio/video와 narration SRT뿐이다. source, Resources, root, target,
 CapCut draft, `episode_cards.json`을 수정하지 않는다.
 
@@ -21,4 +23,9 @@ CapCut draft, `episode_cards.json`을 수정하지 않는다.
 다시 실행한다. 정상인 합성 파일은 재생성하지 않는다. 실제 narration media와 SRT가
 재개점이며 별도 receipt나 checkpoint를 만들지 않는다.
 
+B가 명시 요청되어 활성 상태일 때만 narration media/SRT 누락·무효가 기술 중단 사유다.
+나중에 요청되면 성공한 A/D를 다시 하지 않고 B만 추가한다.
+
 완료 시 join owner에게 실제 경로, duration, SHA-256, SRT cue만 전달한다.
+B 산출물 완료만으로 narration card 지원을 `PASS` 처리하지 않는다. 해당 target mode의 builder
+구현과 검증 증거가 확인되어야 조립 지원을 `PASS`로 보고한다.

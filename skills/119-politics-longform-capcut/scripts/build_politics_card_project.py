@@ -25,6 +25,9 @@ from root_bundle import ResolvedRoot, resolve_active_root
 
 
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
+PUBLIC_LOWER_MODES = {"SRT", "COMMENTARY_2LINE", "NONE"}
+AUDIO_DURATION_TOLERANCE_US = 250_000
+NARRATION_MOTION_PROFILES = {"NONE", "SLOW_ZOOM_IN", "SLOW_ZOOM_OUT", "SUBTLE_PAN"}
 CARD_TYPES = {
     "INTRO",
     "CHAPTER_CARD",
@@ -86,11 +89,14 @@ def capture_presentation_contract(
             for card in cards
             if card.get("card_type") == "SOURCE_VIDEO"
         }
-        lower_texts = {
-            str(card.get("lower_text", ""))
-            for card in cards
-            if card.get("lower_mode", "NONE") != "NONE"
-        }
+        lower_texts = set()
+        for card in cards:
+            mode = card.get("lower_mode", "NONE")
+            if mode == "VIDEO100_EXPLAINER":
+                lower_texts.add(str(card.get("lower_text", "")))
+            elif mode in {"SOURCE_TTS", "NARRATION_TTS"}:
+                field = "source_srt_file" if mode == "SOURCE_TTS" else "narration_srt_file"
+                lower_texts.update(cue_text for _, _, cue_text in _srt_cues(Path(card[field])))
 
     sources = [
         _presentation_row(document, material, segment)
@@ -210,6 +216,130 @@ def probe_media(path: Path) -> dict[str, int | bool]:
         "width": int(video["width"]),
         "height": int(video["height"]),
         "has_audio": any(stream.get("codec_type") == "audio" for stream in data.get("streams", [])),
+    }
+
+
+def probe_duration(path: Path) -> int:
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return round(float(json.loads(result.stdout)["format"]["duration"]) * MICROS)
+
+
+def _require_file_sha(card: dict[str, Any], file_field: str, sha_field: str, error: str) -> Path:
+    value = Path(str(card.get(file_field, ""))).resolve()
+    expected = str(card.get(sha_field, "")).upper()
+    if not value.is_file() or not expected or sha256(value).upper() != expected:
+        raise RuntimeError(error)
+    return value
+
+
+def _srt_timestamp(value: str) -> int:
+    hours, minutes, seconds = value.replace(",", ".").split(":")
+    return round((int(hours) * 3600 + int(minutes) * 60 + float(seconds)) * MICROS)
+
+
+def _srt_ranges(path: Path) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        if " --> " not in line:
+            continue
+        start, end = (part.strip() for part in line.split(" --> ", 1))
+        ranges.append((_srt_timestamp(start), _srt_timestamp(end)))
+    return ranges
+
+
+def _srt_cues(path: Path) -> list[tuple[int, int, str]]:
+    cues: list[tuple[int, int, str]] = []
+    blocks = path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").split("\n\n")
+    for block in blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        timing_index = next((index for index, line in enumerate(lines) if " --> " in line), None)
+        if timing_index is None:
+            continue
+        start, end = (part.strip() for part in lines[timing_index].split(" --> ", 1))
+        text = "\n".join(lines[timing_index + 1 :]).strip()
+        if text:
+            cues.append((_srt_timestamp(start), _srt_timestamp(end), text))
+    return cues
+
+
+def validate_narration_contract(cards_doc: dict[str, Any]) -> dict[str, Any]:
+    """Validate locked narration assets before any CapCut mutation."""
+    cards = cards_doc.get("cards")
+    if not isinstance(cards, list):
+        raise RuntimeError("CARDS_REQUIRED")
+    editorial_duration = sum(
+        int(card.get("target_duration_us", 0))
+        for card in cards
+        if card.get("card_type") != "INTRO"
+        and not (card.get("card_type") == "CHAPTER_CARD" and not card.get("narration_audio_file"))
+    )
+    intervals: dict[str, list[tuple[int, int]]] = {}
+    for card in cards:
+        kind = card.get("card_type")
+        if kind not in {"NARRATION_IMAGE", "NARRATION_VIDEO"}:
+            continue
+        card_id = str(card.get("card_id", "?"))
+        target_start = int(card.get("target_start_us", -1))
+        target_duration = int(card.get("target_duration_us", 0))
+        audio = _require_file_sha(card, "narration_audio_file", "narration_audio_sha256", "NARRATION_AUDIO_SHA256_INVALID")
+        audio_start = int(card.get("audio_start_us", 0))
+        audio_duration = int(card.get("audio_duration_us", probe_duration(audio)))
+        audio_total = probe_duration(audio)
+        if audio_start < 0 or audio_duration <= 0 or audio_start + audio_duration > audio_total + AUDIO_DURATION_TOLERANCE_US:
+            raise RuntimeError(f"NARRATION_AUDIO_RANGE_INVALID:{card_id}")
+        if abs(target_duration - audio_duration) > AUDIO_DURATION_TOLERANCE_US:
+            raise RuntimeError("NARRATION_AUDIO_TARGET_DURATION_INVALID")
+        srt = _require_file_sha(card, "narration_srt_file", "narration_srt_sha256", "NARRATION_SRT_SHA256_INVALID")
+        srt_ranges = _srt_ranges(srt)
+        if not srt_ranges:
+            raise RuntimeError("SRT_CUES_REQUIRED")
+        card_end = target_start + target_duration
+        if any(start < target_start or end > card_end or end <= start for start, end in srt_ranges):
+            raise RuntimeError("NARRATION_SRT_RANGE_INVALID")
+        if kind == "NARRATION_IMAGE":
+            image = _require_file_sha(card, "image_file", "image_sha256", "IMAGE_SHA256_INVALID")
+            width, height = image_size(image)
+            if width * 9 != height * 16:
+                raise RuntimeError("NARRATION_IMAGE_16_9_REQUIRED")
+            if card.get("motion_profile") not in NARRATION_MOTION_PROFILES:
+                raise RuntimeError("NARRATION_IMAGE_MOTION_PROFILE_INVALID")
+        else:
+            video = _require_file_sha(card, "video_file", "video_sha256", "NARRATION_VIDEO_SHA256_INVALID")
+            video_start = int(card.get("video_start_us", -1))
+            video_duration = int(card.get("video_duration_us", 0))
+            video_total = int(probe_media(video)["duration_us"])
+            if video_start < 0 or video_duration <= 0 or video_start + video_duration > video_total + AUDIO_DURATION_TOLERANCE_US:
+                raise RuntimeError("NARRATION_VIDEO_RANGE_INVALID")
+            if abs(target_duration - video_duration) > AUDIO_DURATION_TOLERANCE_US:
+                raise RuntimeError("NARRATION_VIDEO_TARGET_DURATION_INVALID")
+            if card.get("source_audio_mode") != "MUTE":
+                raise RuntimeError("FAIL_DUPLICATE_AUDIO")
+        intervals.setdefault(str(card["narration_audio_sha256"]).upper(), []).append((audio_start, audio_start + audio_duration))
+    narration_duration = 0
+    for ranges in intervals.values():
+        end = -1
+        for start, stop in sorted(ranges):
+            if start > end:
+                narration_duration += stop - start
+                end = stop
+            elif stop > end:
+                narration_duration += stop - end
+                end = stop
+    if editorial_duration <= 0:
+        raise RuntimeError("EDITORIAL_DURATION_REQUIRED")
+    ratio = narration_duration / editorial_duration
+    override = bool(cards_doc.get("narration_ratio_override"))
+    return {
+        "status": "PASS",
+        "editorial_duration_us": editorial_duration,
+        "narration_duration_us": narration_duration,
+        "narration_ratio": ratio,
+        "override": override,
     }
 
 
@@ -381,29 +511,78 @@ def clone_media(
     document["tracks"].insert(insert_after, track)
 
 
+def clone_narration_audio(
+    document: dict[str, Any], record: dict[str, Any], target_start: int, target_duration: int
+) -> None:
+    audio = record["narration_audio"]
+    material_id = uid()
+    document["materials"].setdefault("audios", []).append({
+        "id": material_id, "music_id": material_id, "unique_id": "", "type": "extract_music",
+        "name": audio["filename"], "material_name": audio["filename"],
+        "duration": int(audio["duration_us"]), "path": audio["offline_path"],
+        "category_name": "local", "wave_points": [], "local_material_id": uid().lower(),
+    })
+    segment = {
+        "id": uid(), "material_id": material_id,
+        "source_timerange": {"start": int(audio["source_start"]), "duration": int(audio["source_duration"])},
+        "target_timerange": {"start": target_start, "duration": target_duration},
+        "speed": 1.0, "volume": 1.0, "last_nonzero_volume": 1.0,
+        "extra_material_refs": [], "keyframe_refs": [], "common_keyframes": [], "visible": True,
+    }
+    track = next((row for row in document["tracks"] if row.get("type") == "audio" and row.get("name") == "A_NARRATION"), None)
+    if track is None:
+        track = {"id": uid(), "name": "A_NARRATION", "type": "audio", "segments": []}
+        document["tracks"].append(track)
+    track["segments"].append(segment)
+
+
 def normalize_cards(cards_doc: dict[str, Any]) -> tuple[list[dict[str, Any]], int]:
     cards = cards_doc.get("cards")
     if not isinstance(cards, list) or not cards:
         raise RuntimeError("CARDS_REQUIRED")
-    ordered = sorted(cards, key=lambda card: int(card["target_start_us"]))
+    ordered = sorted(copy.deepcopy(cards), key=lambda card: int(card["target_start_us"]))
     cursor = 0
     for card in ordered:
         card_type = card.get("card_type")
         start = int(card.get("target_start_us", -1))
         duration = int(card.get("target_duration_us", 0))
         lower_mode = card.get("lower_mode", "NONE")
+        if lower_mode == "SRT":
+            if card_type == "SOURCE_VIDEO":
+                lower_mode = "SOURCE_TTS"
+            elif card_type in {"NARRATION_IMAGE", "NARRATION_VIDEO"}:
+                lower_mode = "NARRATION_TTS"
+            else:
+                raise RuntimeError(f"SILENT_SRT_INVALID:{card.get('card_id', '?')}")
+        elif lower_mode == "COMMENTARY_2LINE":
+            lower_mode = "VIDEO100_EXPLAINER"
+        card["lower_mode"] = lower_mode
         if card_type not in CARD_TYPES or start != cursor or duration <= 0:
             raise RuntimeError(f"CARD_TIMELINE_INVALID:{card.get('card_id', '?')}")
         if lower_mode not in LOWER_MODES:
             raise RuntimeError(f"CARD_LOWER_MODE_INVALID:{card.get('card_id', '?')}")
         if card_type == "CHAPTER_CARD" and lower_mode != "NONE":
             raise RuntimeError("CHAPTER_CARD_REQUIRES_LOWER_NONE")
-        if lower_mode != "NONE" and not str(card.get("lower_text", "")).strip():
+        if lower_mode == "VIDEO100_EXPLAINER" and not str(card.get("lower_text", "")).strip():
             raise RuntimeError(f"LOWER_TEXT_REQUIRED:{card.get('card_id', '?')}")
+        if lower_mode == "SOURCE_TTS":
+            srt = _require_file_sha(card, "source_srt_file", "source_srt_sha256", "SOURCE_SRT_SHA256_INVALID")
+            ranges = _srt_ranges(srt)
+            if not _srt_cues(srt):
+                raise RuntimeError("SRT_CUES_REQUIRED")
+            if any(cue_start < start or cue_end > start + duration or cue_end <= cue_start for cue_start, cue_end in ranges):
+                raise RuntimeError(f"SOURCE_SRT_RANGE_INVALID:{card.get('card_id', '?')}")
+        if lower_mode == "NARRATION_TTS":
+            srt = _require_file_sha(card, "narration_srt_file", "narration_srt_sha256", "NARRATION_SRT_SHA256_INVALID")
+            if not _srt_cues(srt):
+                raise RuntimeError("SRT_CUES_REQUIRED")
         cursor += duration
     first = ordered[0]
-    if first.get("card_type") != "INTRO" or int(first["target_duration_us"]) != 5 * MICROS:
-        raise RuntimeError("INTRO_MUST_BE_FIRST_5_SECONDS")
+    if first.get("card_type") == "INTRO":
+        if int(first["target_duration_us"]) != 5 * MICROS:
+            raise RuntimeError("INTRO_MUST_BE_FIRST_5_SECONDS")
+    elif first.get("card_type") != "SOURCE_VIDEO":
+        raise RuntimeError("FIRST_CARD_MUST_BE_SOURCE_VIDEO_OR_INTRO")
     for card in ordered:
         if card["card_type"] == "CHAPTER_CARD" and not card.get("narration_audio") and int(card["target_duration_us"]) != 3 * MICROS:
             raise RuntimeError("SILENT_CHAPTER_MUST_BE_3_SECONDS")
@@ -414,7 +593,8 @@ def copy_card_media(cards: list[dict[str, Any]], media_dir: Path, episode_id: st
     media_dir.mkdir(parents=True)
     records: dict[str, dict[str, Any]] = {}
     for card in cards:
-        field = "source_file" if card["card_type"] in {"SOURCE_VIDEO", "NARRATION_VIDEO"} else "image_file"
+        kind = card["card_type"]
+        field = {"SOURCE_VIDEO": "source_file", "NARRATION_VIDEO": "video_file"}.get(kind, "image_file")
         if field not in card:
             continue
         source = Path(card[field]).resolve()
@@ -440,14 +620,20 @@ def copy_card_media(cards: list[dict[str, Any]], media_dir: Path, episode_id: st
             info = dict(probe_media(target))
             info["kind"] = "video"
             storage = "relink"
-        if card["card_type"] in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
-            start = int(card.get("source_start_us", 0))
-            duration = int(card.get("source_duration_us", card["target_duration_us"]))
+        expected_sha_field = {"SOURCE_VIDEO": "source_sha256", "NARRATION_VIDEO": "video_sha256"}.get(kind, "image_sha256")
+        expected_sha = str(card.get(expected_sha_field, "")).upper()
+        if not expected_sha or sha256(source).upper() != expected_sha:
+            raise RuntimeError(f"CARD_MEDIA_SHA256_INVALID:{card['card_id']}")
+        if kind in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
+            start_field = "source_start_us" if kind == "SOURCE_VIDEO" else "video_start_us"
+            duration_field = "source_duration_us" if kind == "SOURCE_VIDEO" else "video_duration_us"
+            start = int(card.get(start_field, 0))
+            duration = int(card.get(duration_field, card["target_duration_us"]))
             if start < 0 or duration <= 0 or start + duration > int(info["duration_us"]):
                 raise RuntimeError(f"SOURCE_RANGE_INVALID:{card['card_id']}")
         else:
             start, duration = 0, int(card["target_duration_us"])
-        records[card["card_id"]] = {
+        record = {
             "file": str(target),
             "filename": filename,
             "sha256": sha256(target),
@@ -457,6 +643,32 @@ def copy_card_media(cards: list[dict[str, Any]], media_dir: Path, episode_id: st
             "source_duration": duration,
             **info,
         }
+        if kind == "NARRATION_VIDEO":
+            record["source_audio_mode"] = str(card.get("source_audio_mode", ""))
+        if kind in {"NARRATION_IMAGE", "NARRATION_VIDEO"}:
+            audio = _require_file_sha(card, "narration_audio_file", "narration_audio_sha256", "NARRATION_AUDIO_SHA256_INVALID")
+            audio_filename = f"{card['card_id']}_{audio.name}"
+            audio_target = media_dir / audio_filename
+            if audio_target.exists():
+                raise RuntimeError(f"MEDIA_NAME_COLLISION:{audio_filename}")
+            shutil.copy2(audio, audio_target)
+            audio_total = probe_duration(audio_target)
+            audio_start = int(card.get("audio_start_us", 0))
+            audio_duration = int(card.get("audio_duration_us", card["target_duration_us"]))
+            if audio_start < 0 or audio_duration <= 0 or audio_start + audio_duration > audio_total + AUDIO_DURATION_TOLERANCE_US:
+                raise RuntimeError(f"NARRATION_AUDIO_RANGE_INVALID:{card['card_id']}")
+            record["narration_audio"] = {
+                "file": str(audio_target),
+                "filename": audio_filename,
+                "sha256": sha256(audio_target),
+                "offline_path": f"C:/__CAPCUT_RELINK_REQUIRED__/{episode_id}/Media/{audio_filename}",
+                "storage": "relink",
+                "source_start": audio_start,
+                "source_duration": audio_duration,
+                "duration_us": audio_total,
+                "kind": "audio",
+            }
+        records[card["card_id"]] = record
     return records
 
 
@@ -499,14 +711,13 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             trial_track, trial_segment = segment_for(document, material["id"])
             remove_segment(trial_track, trial_segment)
 
-    intro_duration = int(cards[0]["target_duration_us"])
+    has_intro = cards[0]["card_type"] == "INTRO"
+    intro_duration = int(cards[0]["target_duration_us"]) if has_intro else 0
     main_ui_start = next(
         int(card["target_start_us"])
-        for card in cards[1:]
+        for card in cards
         if card["card_type"] != "CHAPTER_CARD"
     )
-    set_material_text(text_intro, str(cards[0].get("text", cards[0].get("intro_text", ""))))
-    set_range(intro_segment, 0, intro_duration)
     set_range(cta_segment, main_ui_start, total - main_ui_start)
     videos = document["materials"]["videos"]
     intro_video = next(item for item in videos if item.get("type") == "video")
@@ -518,8 +729,15 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
     photo_track, photo_segment = next(
         (track, segment) for track in video_tracks for segment in track.get("segments", []) if segment.get("material_id") == photo_video["id"]
     )
-    set_range(intro_video_segment, 0, intro_duration)
-    intro_video_segment["source_timerange"] = {"start": 0, "duration": intro_duration}
+    if has_intro:
+        set_material_text(text_intro, str(cards[0].get("text", cards[0].get("intro_text", ""))))
+        set_range(intro_segment, 0, intro_duration)
+        set_range(intro_video_segment, 0, intro_duration)
+        intro_video_segment["source_timerange"] = {"start": 0, "duration": intro_duration}
+        intro_video_track["segments"] = [intro_video_segment]
+    else:
+        remove_segment(intro_track, intro_segment)
+        intro_video_track["segments"] = []
     photo_video["duration"] = total
     set_range(photo_segment, intro_duration, total - intro_duration)
     photo_segment["source_timerange"] = {"start": 0, "duration": total - intro_duration}
@@ -541,7 +759,8 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             if 0 < start < total:
                 set_range(segment, start, total - start)
 
-    for card_index, card in enumerate(cards[1:], start=1):
+    first_visual_index = 1 if has_intro else 0
+    for card_index, card in enumerate(cards[first_visual_index:], start=first_visual_index):
         start, duration = int(card["target_start_us"]), int(card["target_duration_us"])
         kind = card["card_type"]
         lower_mode = card.get("lower_mode", "NONE")
@@ -565,7 +784,7 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
         elif kind in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
             if record is None:
                 raise RuntimeError(f"VIDEO_REQUIRED:{card['card_id']}")
-            clone_media(document, intro_video, intro_video_segment, None, target_track=intro_video_track, kind="video", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=int(record["source_start"]), source_duration=int(record["source_duration"]), media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=bool(record["has_audio"]))
+            clone_media(document, intro_video, intro_video_segment, None, target_track=intro_video_track, kind="video", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=int(record["source_start"]), source_duration=int(record["source_duration"]), media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=bool(record["has_audio"]) if kind == "SOURCE_VIDEO" else False)
             if kind == "SOURCE_VIDEO":
                 channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
                 if not channel or not date:
@@ -579,7 +798,13 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             pass
         else:
             raise RuntimeError(f"CARD_TYPE_UNSUPPORTED:{kind}")
-        if lower_mode != "NONE":
+        if kind in {"NARRATION_IMAGE", "NARRATION_VIDEO"}:
+            clone_narration_audio(document, record, start, duration)
+        if lower_mode in {"SOURCE_TTS", "NARRATION_TTS"}:
+            srt_field = "source_srt_file" if lower_mode == "SOURCE_TTS" else "narration_srt_file"
+            for cue_start, cue_end, cue_text in _srt_cues(Path(card[srt_field])):
+                clone_text(document, text_lower, lower_segment, lower_track, cue_text, cue_start, cue_end - cue_start)
+        elif lower_mode == "VIDEO100_EXPLAINER":
             clone_text(document, text_lower, lower_segment, lower_track, str(card["lower_text"]), start, duration)
 
     trim_all_tracks_to_duration(document, total)
@@ -739,6 +964,10 @@ def main() -> int:
     if not episode_id or not project_name or Path(project_name).name != project_name:
         raise RuntimeError("EPISODE_OR_PROJECT_NAME_INVALID")
     cards, total = normalize_cards(cards_doc)
+    if any(card["card_type"] in {"NARRATION_IMAGE", "NARRATION_VIDEO"} for card in cards):
+        narration_doc = copy.deepcopy(cards_doc)
+        narration_doc["cards"] = cards
+        validate_narration_contract(narration_doc)
     final_root = args.capcut_root / project_name
     meta_path = args.capcut_root / "root_meta_info.json"
     if not meta_path.is_file():
