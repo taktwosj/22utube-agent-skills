@@ -132,7 +132,7 @@ bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
 
 ## Safety Rules
 
-- Copy install only; symlink install is not supported.
+- Bulk install/update keeps copy semantics. `scripts/link-managed-skill.ps1` links one manifest-managed skill at a time; whole runtime-root links and system/plugin paths are forbidden.
 - `update` refuses dirty worktrees.
 - `git pull` uses `--ff-only`.
 - Automatic stash is not supported.

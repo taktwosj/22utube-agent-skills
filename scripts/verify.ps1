@@ -1,7 +1,8 @@
 param(
   [ValidateSet("repo", "all", "codex", "claude", "hermes")]
   [string]$Target = "repo",
-  [switch]$Strict
+  [switch]$Strict,
+  [string]$LinkSelfCheckRelativePath = "scripts/self-check.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -242,7 +243,83 @@ function Get-TargetSkillPath($TargetConfig, [string]$SkillName) {
   return Join-Path $root $SkillName
 }
 
-function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName, [string]$SourceCommit) {
+function Get-DirectoryLinkTarget([string]$Path) {
+  $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+  if (-not $item -or -not ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+    return $null
+  }
+  $targetValue = @($item.Target)[0]
+  if (-not $targetValue) { return $null }
+  if (-not [System.IO.Path]::IsPathRooted($targetValue)) {
+    $targetValue = Join-Path (Split-Path -Parent $Path) $targetValue
+  }
+  return [System.IO.Path]::GetFullPath($targetValue)
+}
+
+function Test-ManagedSkillLink(
+  [string]$RepoRoot,
+  [string]$TargetName,
+  [string]$SkillName,
+  [string]$Destination,
+  [string]$SelfCheckRelativePath,
+  [ref]$Handled
+) {
+  $Handled.Value = $false
+  $sourcePath = [System.IO.Path]::GetFullPath((Join-Path (Join-Path $RepoRoot "skills") $SkillName))
+  $linkTarget = Get-DirectoryLinkTarget $Destination
+  if (-not $linkTarget) { return }
+  $Handled.Value = $true
+
+  $comparison = if (Test-IsWindowsHost) {
+    [System.StringComparison]::OrdinalIgnoreCase
+  } else {
+    [System.StringComparison]::Ordinal
+  }
+  if (-not [string]::Equals($sourcePath.TrimEnd('\', '/'), $linkTarget.TrimEnd('\', '/'), $comparison)) {
+    Add-Error "link target mismatch target=$TargetName skill=$SkillName expected=$sourcePath actual=$linkTarget"
+    return
+  }
+
+  $sourceSkillFile = Join-Path $sourcePath "SKILL.md"
+  $destinationSkillFile = Join-Path $Destination "SKILL.md"
+  $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceSkillFile).Hash
+  $destinationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $destinationSkillFile).Hash
+  if ($sourceHash -ne $destinationHash) {
+    Add-Error "linked SKILL.md hash mismatch target=$TargetName skill=$SkillName source=$sourceHash target_hash=$destinationHash"
+    return
+  }
+  Write-Output "LINK PASS target=$TargetName skill=$SkillName source=$sourcePath destination=$Destination"
+  Write-Output "SHA256 target=$TargetName skill=$SkillName source=$sourceHash target_hash=$destinationHash"
+
+  $selfCheckPath = [System.IO.Path]::GetFullPath((Join-Path $Destination $SelfCheckRelativePath))
+  $destinationPrefix = [System.IO.Path]::GetFullPath($Destination).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+  if (-not $selfCheckPath.StartsWith($destinationPrefix, $comparison)) {
+    Add-Error "link self-check escapes managed skill target=$TargetName skill=$SkillName path=$SelfCheckRelativePath"
+    return
+  }
+  if (Test-Path -LiteralPath $selfCheckPath -PathType Leaf) {
+    if ([System.IO.Path]::GetExtension($selfCheckPath) -ne ".ps1") {
+      Add-Error "link self-check must be PowerShell target=$TargetName skill=$SkillName path=$SelfCheckRelativePath"
+      return
+    }
+    $powerShellExe = (Get-Process -Id $PID).Path
+    Push-Location -LiteralPath $Destination
+    try {
+      & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File $selfCheckPath
+      if ($LASTEXITCODE -ne 0) {
+        Add-Error "link self-check failed target=$TargetName skill=$SkillName exit=$LASTEXITCODE"
+        return
+      }
+    } finally {
+      Pop-Location
+    }
+    Write-Output "SELF_CHECK PASS target=$TargetName skill=$SkillName path=$SelfCheckRelativePath"
+  } else {
+    Write-Output "SELF_CHECK SKIP target=$TargetName skill=$SkillName path=$SelfCheckRelativePath"
+  }
+}
+
+function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName, [string]$SourceCommit, [string]$LinkSelfCheckRelativePath) {
   $targetConfig = $Targets.targets.$TargetName
   if (-not $targetConfig) {
     Add-Error "missing target config: $TargetName"
@@ -259,6 +336,11 @@ function Test-Target($RepoRoot, $SkillSet, $Targets, [string]$TargetName, [strin
     $markerPath = Join-Path $dest $targetConfig.state_file
     if (-not (Test-Path -LiteralPath $skillFile)) {
       Add-Error "missing target SKILL.md target=$TargetName skill=$($skill.name)"
+      continue
+    }
+    $linkHandled = $false
+    Test-ManagedSkillLink $RepoRoot $TargetName $skill.name $dest $LinkSelfCheckRelativePath ([ref]$linkHandled)
+    if ($linkHandled) {
       continue
     }
     if (-not (Test-Path -LiteralPath $markerPath)) {
@@ -315,7 +397,7 @@ $sourceCommit = Get-SourceCommit $repoRoot
 Test-Repo $repoRoot $skillSet $targets
 Test-UnittestSuite $repoRoot
 foreach ($targetName in Get-SelectedTargets $Target) {
-  Test-Target $repoRoot $skillSet $targets $targetName $sourceCommit
+  Test-Target $repoRoot $skillSet $targets $targetName $sourceCommit $LinkSelfCheckRelativePath
   if ($Strict) {
     Test-StrictTarget $skillSet $targets $targetName
   }
