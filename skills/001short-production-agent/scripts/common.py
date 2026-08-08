@@ -127,3 +127,8 @@ def inspect_write_target(
     except OSError:
         return "PATH_UNSAFE"
     return None
+
+
+def meaningful_text_length(text: str) -> int:
+    """Canonical STATE budget: ignore whitespace, count all visible punctuation."""
+    return len("".join(str(text).split()))

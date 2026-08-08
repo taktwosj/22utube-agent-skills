@@ -130,6 +130,9 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
     role_files: dict[str, dict] = {}
     for role_file in audio_lock.get("role_files", []):
         role = role_file["role"]
+        if role == "A12":
+            errors.append({"code": "AUDIO_CAPTION_A12_RESERVED_EMPTY"})
+            continue
         if role in role_files:
             errors.append({"code": "AUDIO_CAPTION_ROLE_DUPLICATE", "role": role})
             continue

@@ -70,6 +70,7 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
     materials = _material_map(content.get("materials", {}))
     actual_video: list[dict] = []
     actual_a10: list[dict] = []
+    actual_a12: list[dict] = []
     for track in content["tracks"]:
         for segment in track.get("segments", []) if isinstance(track, dict) else []:
             if not isinstance(segment, dict):
@@ -79,9 +80,19 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
                 actual_video.append(segment)
             elif role == "A10":
                 actual_a10.append(segment)
+            elif role in {"A12", "A12_RESERVED_EMPTY"}:
+                actual_a12.append(segment)
     actual_video.sort(key=lambda row: (_range(row, "target_timerange") or [10**30])[0])
     expected = sorted(manifest["urakkai"]["video_clips"], key=lambda row: row["target_range_us"][0])
     errors: list[dict] = []
+    if actual_a12:
+        errors.append(_error("E_DRAFT_MISMATCH", detail="a12_reserved_empty"))
+    if manifest["visual_asset_mode"] == "SOURCE_VIDEO_PROVISIONAL":
+        expected_video_sha = manifest["source"]["sha256"]
+        expected_video_detail = "source_media"
+    else:
+        expected_video_sha = manifest["vmake"]["output_sha256"]
+        expected_video_detail = "vmake_media"
     if len(actual_video) != len(expected):
         errors.append(_error("E_DRAFT_MISMATCH", detail="video_count"))
     for actual, planned in zip(actual_video, expected):
@@ -94,8 +105,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
             continue
         material = materials.get(actual.get("material_id"))
         asset = _asset(project, material.get("path") if isinstance(material, dict) else None)
-        if not isinstance(material, dict) or material.get("type") != "video" or asset is None or not asset.is_file() or sha256_file(asset).lower() != manifest["vmake"]["output_sha256"].lower():
-            errors.append(_error("E_DRAFT_MISMATCH", clip_id=planned["clip_id"], detail="vmake_media"))
+        if not isinstance(material, dict) or material.get("type") != "video" or asset is None or not asset.is_file() or sha256_file(asset).lower() != expected_video_sha.lower():
+            errors.append(_error("E_DRAFT_MISMATCH", clip_id=planned["clip_id"], detail=expected_video_detail))
     audio_by_clip = {row["clip_id"]: row for row in manifest["source_audio"] if row.get("mode") in {"on", "duck"}}
     if len(actual_a10) != len(audio_by_clip):
         errors.append(_error("E_DRAFT_MISMATCH", detail="a10_count"))

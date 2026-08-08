@@ -28,6 +28,13 @@ def validate_vocal_stem(manifest_path: Path) -> dict:
     allowed = resolved_declared_path(manifest_path, manifest["capcut_allowed_audio_path"])
     if not source.is_file() or sha256_file(source) != manifest["source_sha256"]:
         errors.append({"code": "VOCAL_STEM_SOURCE_INVALID"})
+        source_duration_us = None
+    else:
+        source_duration_us, _ = _probe_audio(source)
+        if source_duration_us is None or abs(source_duration_us - manifest["source_duration_us"]) > 100_000:
+            errors.append({"code": "VOCAL_STEM_SOURCE_DURATION_MISMATCH"})
+    if vocals.name != "vocals.wav" or allowed.name != "vocals.wav":
+        errors.append({"code": "VOCAL_STEM_CANONICAL_FILENAME_REQUIRED"})
     if not vocals.is_file() or sha256_file(vocals) != manifest["vocals_sha256"]:
         errors.append({"code": "VOCAL_STEM_VOCALS_FILE_INVALID"})
     elif allowed != vocals:
@@ -38,7 +45,7 @@ def validate_vocal_stem(manifest_path: Path) -> dict:
             errors.append({"code": "VOCAL_STEM_DURATION_MISMATCH"})
         if manifest["vocals_codec"].casefold() not in codecs:
             errors.append({"code": "VOCAL_STEM_CODEC_MISMATCH"})
-        if abs(manifest["vocals_duration_us"] - manifest["source_duration_us"]) > 100_000:
+        if duration_us is not None and source_duration_us is not None and abs(duration_us - source_duration_us) > 100_000:
             errors.append({"code": "VOCAL_STEM_SOURCE_DURATION_MISMATCH"})
     residual_value = manifest.get("residual_reference_path")
     residual_sha = manifest.get("residual_reference_sha256")
@@ -51,6 +58,8 @@ def validate_vocal_stem(manifest_path: Path) -> dict:
         "a10_audio_path": str(vocals),
         "a12_policy": manifest["a12_policy"],
         "human_listen_qc_required": manifest["human_listen_qc_required"],
+        "human_listen_qc_status": "NOT_VERIFIED",
+        "audio_quality_status": "NOT_VERIFIED",
     })
 
 

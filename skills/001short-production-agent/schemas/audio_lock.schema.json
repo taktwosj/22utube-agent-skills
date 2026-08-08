@@ -23,7 +23,7 @@
         "type": "object",
         "required": ["role", "audio_path", "audio_sha256", "measured_duration_us", "audio_codec", "ffprobe_verified"],
         "properties": {
-          "role": {"type": "string", "enum": ["A9", "A10", "A11", "A12"]},
+          "role": {"type": "string", "enum": ["A9", "A10", "A11"]},
           "audio_path": {"type": "string", "minLength": 1},
           "audio_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
           "measured_duration_us": {"type": "integer"},

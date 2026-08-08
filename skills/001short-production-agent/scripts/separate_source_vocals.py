@@ -19,6 +19,20 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(command, capture_output=True, text=True, check=False)
 
 
+def classify_demucs_failure(detail: str) -> str:
+    normalized = detail.casefold()
+    environment_markers = (
+        "access is denied", "permission denied", "winerror 5", "modulenotfounderror",
+        "no module named", "importerror", "cannot find the file", "not recognized as",
+        "failed to create process", "launcher",
+    )
+    return (
+        "DEMUCS_EXECUTION_ENVIRONMENT_FAILED"
+        if any(marker in normalized for marker in environment_markers)
+        else "DEMUCS_PROCESSING_FAILED"
+    )
+
+
 def _demucs_version(command: list[str]) -> str | None:
     probe = (
         "import tempfile; from pathlib import Path; import torch, torchaudio, demucs; "
@@ -110,7 +124,7 @@ def separate(source: Path, output_dir: Path, episode_id: str, *, model: str, pyt
         raw_residual = demucs_output / "no_vocals.wav"
         if separated.returncode != 0 or not raw_vocals.is_file() or not raw_residual.is_file():
             detail = (separated.stderr or separated.stdout).strip()[-1000:]
-            raise RuntimeError(f"DEMUCS_SEPARATION_FAILED:{detail}")
+            raise RuntimeError(f"{classify_demucs_failure(detail)}:{detail}")
         vocals = output_dir / "vocals.wav"
         residual = output_dir / "no_vocals.wav"
         for raw, target in ((raw_vocals, vocals), (raw_residual, residual)):

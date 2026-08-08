@@ -18,6 +18,7 @@ W_FLASH = {
     "request_id": "", "resource_id": "6724845376098013708",
     "source_platform": 1, "task_id": "", "third_resource_id": "6724845376098013708",
     "type": "transition", "video_path": "",
+    "role": "SCREEN_EFFECT", "desc": "001short approved W Flash transition",
 }
 
 
@@ -72,9 +73,15 @@ def _ensure_ref_material(materials: dict, segment: dict, group: str, kind: str, 
     row = next((index[ref][1] for ref in refs if ref in index and index[ref][0] == group
                 and index[ref][1].get("type") == kind), None)
     if row is None:
-        row = {"id": _id(f"{segment.get('id')}/{group}/{kind}"), "type": kind}
+        row = {
+            "id": _id(f"{segment.get('id')}/{group}/{kind}"), "type": kind,
+            "role": segment.get("role", "SCREEN_EFFECT"),
+            "desc": f"001short approved {kind}",
+        }
         materials[group].append(row)
         refs.append(row["id"])
+    row.setdefault("role", segment.get("role", "SCREEN_EFFECT"))
+    row.setdefault("desc", f"001short approved {kind}")
     row.update(data)
     return row
 

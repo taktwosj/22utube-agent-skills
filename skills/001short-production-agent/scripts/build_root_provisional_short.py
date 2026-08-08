@@ -1,4 +1,8 @@
+"""DEV_ONLY legacy helper; not registered in tools.json production paths."""
+
 from __future__ import annotations
+
+DEV_ONLY = True
 
 import argparse
 import hashlib

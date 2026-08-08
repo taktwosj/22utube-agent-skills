@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from common import inspect_write_target, read_json, resolved_declared_path, result, sha256_file, write_json
+from common import inspect_write_target, meaningful_text_length, read_json, resolved_declared_path, result, sha256_file, write_json
 from schema_runtime import validate_schema
 
 
@@ -12,6 +12,82 @@ SCHEMA = Path(__file__).resolve().parents[1] / "schemas" / "design_handoff.schem
 SOURCE_SCHEMA = SCHEMA.with_name("source_identity.schema.json")
 TIMELINE_SCHEMA = SCHEMA.with_name("approved_timeline.schema.json")
 EVIDENCE_SCHEMA = SCHEMA.with_name("design_lock_evidence.schema.json")
+
+LEGAL_ROLES = {
+    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "T1", "T2", "A9", "A9_TEXT",
+    "A10", "A10_TEXT", "STATE", "A11", "A12",
+}
+
+
+def validate_role_contract(timeline: dict) -> list[dict]:
+    errors: list[dict] = []
+    rows = timeline.get("segments", []) if isinstance(timeline, dict) else []
+    for role in ("T1", "T2"):
+        matches = [row for row in rows if row.get("role") == role]
+        if len(matches) != 1 or not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():
+            errors.append({"code": "TITLE_TEXT_REQUIRED", "role": role})
+        elif matches[0].get("content_type") != "TITLE":
+            errors.append({"code": "TITLE_CONTENT_TYPE_INVALID", "role": role})
+
+    primary = timeline.get("primary_speaker_id")
+    for row in rows:
+        role, content_type = row.get("role"), row.get("content_type")
+        segment_id = row.get("segment_id")
+        if role not in LEGAL_ROLES:
+            errors.append({"code": "ROLE_ANCHOR_INVALID", "segment_id": segment_id})
+        if role == "A12":
+            errors.append({"code": "A12_RESERVED_EMPTY", "segment_id": segment_id})
+        if content_type == "SPEAKER" and role != "A10_TEXT":
+            errors.append({"code": "SPEAKER_ROLE_MISMATCH", "segment_id": segment_id})
+        if content_type in {"SITUATION", "STATE"} and role != "STATE":
+            errors.append({"code": "STATE_ROLE_MISMATCH", "segment_id": segment_id})
+        if role == "A10_TEXT":
+            speaker = str(row.get("speaker_id", "")).strip()
+            if content_type != "SPEAKER" or row.get("caption_role") != "A10_TEXT":
+                errors.append({"code": "SPEAKER_ROLE_MISMATCH", "segment_id": segment_id})
+            elif speaker.upper() in {"", "UNKNOWN", "UNASSIGNED"}:
+                errors.append({"code": "SPEAKER_ID_UNASSIGNED", "segment_id": segment_id})
+            elif not isinstance(primary, str) or not primary.strip():
+                errors.append({"code": "PRIMARY_SPEAKER_ID_REQUIRED", "segment_id": segment_id})
+            else:
+                expected = "WHITE" if speaker == primary else "YELLOW"
+                if row.get("color_role") != expected:
+                    errors.append({"code": "SPEAKER_COLOR_ROLE_MISMATCH", "segment_id": segment_id})
+        if role == "STATE":
+            if content_type not in {"SITUATION", "STATE"} or row.get("caption_role") != "STATE":
+                errors.append({"code": "STATE_ROLE_MISMATCH", "segment_id": segment_id})
+            text = row.get("text")
+            if not isinstance(text, str) or not text.strip():
+                errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
+            elif meaningful_text_length(text) > 8:
+                errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
+            if row.get("state_effect") not in {"FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"}:
+                errors.append({"code": "STATE_EFFECT_REQUIRED", "segment_id": segment_id})
+
+    a9_rows = [row for row in rows if row.get("role") == "A9"]
+    a9_text_rows = [row for row in rows if row.get("role") == "A9_TEXT"]
+    for role, paired in (("A9", a9_rows), ("A9_TEXT", a9_text_rows)):
+        cue_ids = [row.get("cue_id") for row in paired]
+        duplicates = {cue_id for cue_id in cue_ids if cue_id is not None and cue_ids.count(cue_id) > 1}
+        for cue_id in sorted(duplicates, key=str):
+            errors.append({"code": "A9_TEXT_CUE_DUPLICATE", "role": role, "cue_id": cue_id})
+    a9 = {row.get("cue_id"): row for row in a9_rows}
+    a9_text = {row.get("cue_id"): row for row in a9_text_rows}
+    if set(a9) != set(a9_text) or None in a9 or None in a9_text:
+        errors.append({"code": "A9_TEXT_PAIRING_MISMATCH"})
+    for cue_id in sorted(set(a9) & set(a9_text), key=str):
+        sound, text = a9[cue_id], a9_text[cue_id]
+        if (
+            sound.get("content_type") != "TTS"
+            or text.get("content_type") != "TTS"
+            or text.get("caption_role") != "A9_TEXT"
+            or (sound.get("start"), sound.get("duration")) != (text.get("start"), text.get("duration"))
+            or sound.get("text") != text.get("text")
+        ):
+            errors.append({"code": "A9_TEXT_PAIRING_MISMATCH", "cue_id": cue_id})
+    if timeline.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE" and not a9:
+        errors.append({"code": "A9_TEXT_REQUIRED_FOR_TTS_ONLY"})
+    return errors
 
 
 def validate_handoff(
@@ -44,6 +120,10 @@ def validate_handoff(
         errors.append({"code": "DESIGN_LOCK_SOURCE_SCHEMA", "detail": source_schema_errors})
     if timeline_schema_errors:
         errors.append({"code": "DESIGN_LOCK_TIMELINE_SCHEMA", "detail": timeline_schema_errors})
+    if errors:
+        return result(errors)
+
+    errors.extend(validate_role_contract(timeline))
     if errors:
         return result(errors)
 

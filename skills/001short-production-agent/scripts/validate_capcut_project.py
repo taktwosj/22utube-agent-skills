@@ -17,13 +17,14 @@ from capcut_model import (
     validate_materials,
     validate_structure,
 )
-from capcut_io import iter_timeline_json
+from capcut_io import iter_primary_draft_documents, iter_timeline_json
 from clone_and_sync import hash_project_core, template_fingerprint_sha256, validate_id_mirrors
 from common import inspect_write_target, manifest_sha256, read_json, result, sha256_file, write_json
 from schema_runtime import validate_schema
 from validate_design_lock import validate_handoff
 from validate_audio_caption import validate_audio_caption
 from validate_build_inputs import validate_build_inputs
+from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, LOGICAL_ROLE_BY_TRACK, STATE_TRACK_BY_EFFECT, TRACK_INDEX
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -39,14 +40,73 @@ def _error(code: str, **detail: Any) -> dict:
 
 def _segments(model) -> list[dict]:
     rows: list[dict] = []
-    for track in model.tracks:
+    for track_index, track in enumerate(model.tracks):
         track_id = track.get("id")
         for segment in track.get("segments", []):
             if isinstance(segment, dict):
                 row = dict(segment)
                 row["_actual_track_id"] = track_id
+                row["_actual_track_index"] = track_index
                 rows.append(row)
     return rows
+
+
+def validate_v2_role_routing(model, contract: dict) -> list[dict]:
+    if len(model.tracks) != len(LOGICAL_ROLE_BY_TRACK):
+        return [_error("V2_TRACK_LAYOUT_MISMATCH", observed=len(model.tracks))]
+    errors: list[dict] = []
+    materials = {
+        row.get("id"): row for row in iter_materials(model.materials)
+        if isinstance(row.get("id"), str)
+    }
+    if any(row.get("role") in {"A12", "A12_RESERVED_EMPTY"} for row in materials.values()):
+        errors.append(_error("A12_MATERIAL_FORBIDDEN"))
+    for segment in _segments(model):
+        index = segment["_actual_track_index"]
+        expected = LOGICAL_ROLE_BY_TRACK[index]
+        if index == A12_INDEX or segment.get("role") != expected:
+            errors.append(_error(
+                "V2_ROLE_TRACK_MISMATCH", segment_id=segment.get("id"),
+                role=segment.get("role"), track_index=index,
+            ))
+    role_text = contract.get("approved_role_text", {})
+    for role in ("T1", "T2"):
+        index = TRACK_INDEX[role]
+        segments = model.tracks[index].get("segments", [])
+        material = materials.get(segments[0].get("material_id")) if len(segments) == 1 else None
+        text, valid = _rich_text(material) if isinstance(material, dict) else (None, False)
+        if not valid or text != role_text.get(role):
+            errors.append(_error("TITLE_TEXT_AUTHORITY_MISMATCH", role=role))
+    declared = contract.get("approved_segment_text", {})
+    actual_captions = {
+        row.get("id"): row for row in _segments(model)
+        if row.get("role") in {"A9_TEXT", "A10_TEXT", "STATE"}
+    }
+    if set(actual_captions) != set(declared):
+        errors.append(_error("CAPTION_SEGMENT_AUTHORITY_MISMATCH", detail="segment_set"))
+    for segment_id in sorted(set(actual_captions) & set(declared)):
+        segment, expected = actual_captions[segment_id], declared[segment_id]
+        material = materials.get(segment.get("material_id"))
+        text, valid = _rich_text(material) if isinstance(material, dict) else (None, False)
+        timerange = _range(segment)
+        if (
+            not valid or text != expected.get("text")
+            or segment.get("role") != expected.get("role")
+            or timerange is None
+            or (timerange[0], timerange[1]) != (expected.get("start"), expected.get("duration"))
+            or (
+                expected.get("role") == "A10_TEXT"
+                and segment.get("_actual_track_index")
+                != A10_TEXT_TRACK_BY_COLOR.get(expected.get("color_role"))
+            )
+            or (
+                expected.get("role") == "STATE"
+                and segment.get("_actual_track_index")
+                != STATE_TRACK_BY_EFFECT.get(expected.get("state_effect"))
+            )
+        ):
+            errors.append(_error("CAPTION_SEGMENT_AUTHORITY_MISMATCH", segment_id=segment_id))
+    return errors
 
 
 def _range(segment: dict) -> tuple[int, int, int] | None:
@@ -547,7 +607,7 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
         return [_error("DESIGN_LOCK_EVIDENCE_INVALID", field="episode_id")], None
     approved_timeline = read_json(timeline_path)
     approved_rows = sorted(
-        approved_timeline.get("segments", []), key=lambda row: row.get("timeline_order", 0)
+        approved_timeline.get("segments", []), key=lambda row: (row.get("start", 0), row.get("segment_id", ""))
     )
     contract_rows = contract.get("timeline", [])
     if (
@@ -556,7 +616,7 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
         or len(approved_rows) != len(contract_rows)
         or any(
             any(approved.get(field) != planned.get(field) for field in ("segment_id", "role", "start", "duration"))
-            for approved, planned in zip(approved_rows, contract_rows)
+            for approved, planned in zip(approved_rows, sorted(contract_rows, key=lambda row: (row.get("start", 0), row.get("segment_id", ""))))
         )
     ):
         return [_error("DESIGN_LOCK_TIMELINE_AUTHORITY_MISMATCH")], approved_timeline
@@ -644,9 +704,23 @@ def validate_capcut_project(
     except (OSError, ValueError, TypeError) as exc:
         return {**result([_error("BUILD_CONTRACT_SCHEMA", detail=str(exc))]), "next_action": "NONE"}
     contract_schema_errors = validate_schema(contract, build_schema)
+    if isinstance(contract.get("root_contract_path"), str) and Path(contract["root_contract_path"]).is_absolute():
+        contract_schema_errors.append("$.root_contract_path: workspace-relative path required")
     if contract_schema_errors or not contract.get("source_core_sha256"):
         return {
             **result([_error("BUILD_CONTRACT_SCHEMA", detail=contract_schema_errors)]),
+            "next_action": "NONE",
+        }
+    visual_tuple = (
+        contract.get("visual_asset_mode"), contract.get("video_asset_key"),
+        contract.get("upload_ready"),
+    )
+    if visual_tuple not in {
+        ("SOURCE_VIDEO_PROVISIONAL", "source_video", False),
+        ("CLEAN_VISUAL_READY", "clean_video", True),
+    }:
+        return {
+            **result([_error("BUILD_CONTRACT_VISUAL_MODE_MISMATCH")]),
             "next_action": "NONE",
         }
     snapshot_schema_errors = validate_schema(snapshot, snapshot_schema)
@@ -764,7 +838,7 @@ def validate_capcut_project(
         "track_order": snapshot.get("track_order"),
         "tracks": snapshot.get("tracks"),
     }
-    for mirror_file, mirror_content in iter_timeline_json(project_path):
+    for mirror_file, mirror_content in iter_primary_draft_documents(project_path):
         if mirror_file == project_path / "draft_content.json":
             continue
         if not is_full_content_timeline_mirror(mirror_content, mirror_file):
@@ -788,6 +862,7 @@ def validate_capcut_project(
     for relative in sorted(_referenced_media_paths(model, project_path) - declared_assets):
         errors.append(_error("MATERIAL_ASSET_NOT_REQUIRED", path=relative))
     errors.extend(validate_timeline(model, contract))
+    errors.extend(validate_v2_role_routing(model, contract))
     errors.extend(validate_visible_text(model, contract))
     errors.extend(validate_subtitle_binding(model, contract))
 
