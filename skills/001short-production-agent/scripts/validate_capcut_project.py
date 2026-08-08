@@ -39,12 +39,13 @@ def _error(code: str, **detail: Any) -> dict:
 
 def _segments(model) -> list[dict]:
     rows: list[dict] = []
-    for track in model.tracks:
+    for track_index, track in enumerate(model.tracks):
         track_id = track.get("id")
         for segment in track.get("segments", []):
             if isinstance(segment, dict):
                 row = dict(segment)
                 row["_actual_track_id"] = track_id
+                row["_actual_track_index"] = track_index
                 rows.append(row)
     return rows
 
@@ -150,6 +151,60 @@ def validate_timeline(model, contract: dict) -> list[dict]:
             or _range(left) != _range(right)
         ):
             errors.append(_error("PARALLEL_PAIR_MISMATCH", pair=pair))
+    return errors
+
+
+def validate_v2_role_routing(model, contract: dict) -> list[dict]:
+    if contract.get("track_layout_version") != "shrt_white_base_v2":
+        return [_error("V2_TRACK_LAYOUT_REQUIRED")]
+    if len(model.tracks) != 15:
+        return [_error("V2_TRACK_COUNT_INVALID")]
+    expected = {
+        row.get("segment_id"): row
+        for row in contract.get("timeline", [])
+        if isinstance(row, dict) and row.get("role") in {"T1", "T2", "A10_TEXT", "STATE"}
+    }
+    actual = {
+        row.get("id"): row for row in _segments(model)
+        if isinstance(row.get("id"), str)
+    }
+    materials = {
+        row.get("id"): row for row in iter_materials(model.materials)
+        if isinstance(row.get("id"), str)
+    }
+    errors: list[dict] = []
+    state_tracks = {"FLICKER_RAVE": 3, "GLITCH_SHAKE": 4, "LASER_CUT": 5}
+    speaker_tracks = {"WHITE": 6, "YELLOW": 7}
+    title_tracks = {"T1": 10, "T2": 9}
+    approved_titles = contract.get("approved_title_text", {})
+    for segment_id, planned in expected.items():
+        segment = actual.get(segment_id)
+        if segment is None:
+            continue
+        role = planned["role"]
+        track_index = segment.get("_actual_track_index")
+        if role in title_tracks:
+            if track_index != title_tracks[role]:
+                errors.append(_error("TITLE_TRACK_MISMATCH", segment_id=segment_id, role=role))
+            material = materials.get(segment.get("material_id"), {})
+            text, _ = _rich_text(material)
+            if not isinstance(approved_titles.get(role), str) or not approved_titles[role] or text != approved_titles[role]:
+                errors.append(_error("TITLE_TEXT_MISMATCH", segment_id=segment_id, role=role))
+        elif role == "A10_TEXT":
+            if track_index != speaker_tracks.get(planned.get("color_role")):
+                errors.append(_error("A10_TEXT_TRACK_MISMATCH", segment_id=segment_id))
+            if (
+                segment.get("role") != "A10_TEXT"
+                or segment.get("caption_role") != "A10_TEXT"
+                or segment.get("speaker_id") != planned.get("speaker_id")
+                or segment.get("color_role") != planned.get("color_role")
+            ):
+                errors.append(_error("A10_TEXT_ROLE_MISMATCH", segment_id=segment_id))
+        elif role == "STATE":
+            if track_index != state_tracks.get(planned.get("state_effect")):
+                errors.append(_error("STATE_TRACK_MISMATCH", segment_id=segment_id))
+            if segment.get("role") != "STATE" or segment.get("caption_role") != "STATE":
+                errors.append(_error("STATE_ROLE_MISMATCH", segment_id=segment_id))
     return errors
 
 
@@ -788,6 +843,7 @@ def validate_capcut_project(
     for relative in sorted(_referenced_media_paths(model, project_path) - declared_assets):
         errors.append(_error("MATERIAL_ASSET_NOT_REQUIRED", path=relative))
     errors.extend(validate_timeline(model, contract))
+    errors.extend(validate_v2_role_routing(model, contract))
     errors.extend(validate_visible_text(model, contract))
     errors.extend(validate_subtitle_binding(model, contract))
 

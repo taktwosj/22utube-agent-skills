@@ -66,7 +66,7 @@ def _add_full_duration_a12(
         raise RuntimeError("ROOT_A12_TEMPLATE_MIRROR_MISMATCH")
     prefix = build_episode_capcut._draft_path_prefix(project)
     for (_, template_payload), (target_path, target_payload) in zip(template_documents, target_documents):
-        template_track = template_payload["tracks"][11]
+        template_track = template_payload["tracks"][14]
         if not template_track.get("segments"):
             raise RuntimeError("ROOT_A12_TEMPLATE_SEGMENT_MISSING")
         template_segment = template_track["segments"][0]
@@ -76,7 +76,7 @@ def _add_full_duration_a12(
         if not isinstance(material, dict):
             raise RuntimeError("ROOT_A12_TEMPLATE_MATERIAL_MISSING")
         build_episode_capcut._populate_full_duration_audio(
-            target_payload["tracks"][11], template_segment, material,
+            target_payload["tracks"][14], template_segment, material,
             portable_path=build_episode_capcut._portable_resource_path(prefix, f"Resources/media/{resource_name}"),
             duration_us=duration_us, role="A12", segment_id=segment_id,
         )
@@ -100,25 +100,25 @@ def _validate_root_timeline(
         if not isinstance(payload, dict) or not isinstance(payload.get("tracks"), list):
             continue
         tracks = payload["tracks"]
-        if len(tracks) != 12:
-            continue
+        if len(tracks) != 15:
+            raise RuntimeError("ROOT_V2_TRACK_COUNT_INVALID")
         checked += 1
         tts_only = audio_policy == "TTS_ONLY_MUTE_SOURCE"
         expected_counts = (
-            {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: len(tts_cues), 6: 1, 7: 1, 8: len(tts_cues), 9: 0, 10: len(a11_placements), 11: int(has_a12_bgm)}
+            {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: len(tts_cues), 9: 1, 10: 1, 11: len(tts_cues), 12: 0, 13: len(a11_placements), 14: int(has_a12_bgm)}
             if tts_only
-            else {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 0, 9: 0, 10: len(a11_placements), 11: int(has_a12_bgm)}
+            else {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 1, 10: 1, 11: 0, 12: 0, 13: len(a11_placements), 14: int(has_a12_bgm)}
         )
         for index, expected in expected_counts.items():
             if len(tracks[index].get("segments", [])) != expected:
                 raise RuntimeError(f"ROOT_TRACK_SEGMENT_COUNT_INVALID:{index}")
-        for index in (1, 2, 6, 7):
+        for index in (1, 2, 9, 10):
             segment = tracks[index]["segments"][0]
             target = segment.get("target_timerange", {})
             if target.get("start") != 0 or target.get("duration") != duration_us:
                 raise RuntimeError(f"ROOT_FIXED_RANGE_INVALID:{index}")
         materials = {row.get("id"): row for row in build_episode_capcut._materials(payload.get("materials", {}))}
-        expected_text = {6: title2, 7: title1}
+        expected_text = {9: title2, 10: title1}
         for index, text in expected_text.items():
             material = materials.get(tracks[index]["segments"][0].get("material_id"), {})
             actual = build_episode_capcut._material_text(material)
@@ -128,7 +128,7 @@ def _validate_root_timeline(
             if video.get("volume") != 0.0:
                 raise RuntimeError("ROOT_VIDEO_NOT_MUTED")
         if tts_only:
-            for cue, a9, caption in zip(tts_cues, tracks[8]["segments"], tracks[5]["segments"]):
+            for cue, a9, caption in zip(tts_cues, tracks[11]["segments"], tracks[8]["segments"]):
                 expected_range = {"start": cue["target_start_us"], "duration": cue["target_duration_us"]}
                 if a9.get("target_timerange") != expected_range or caption.get("target_timerange") != expected_range:
                     raise RuntimeError("ROOT_A9_TEXT_TIME_MAPPING_INVALID")
@@ -137,14 +137,14 @@ def _validate_root_timeline(
                 material = materials.get(caption.get("material_id"), {})
                 if build_episode_capcut._material_text(material) != cue["text"]:
                     raise RuntimeError("ROOT_A9_TEXT_INVALID")
-        for placement, segment in zip(a11_placements, tracks[10]["segments"]):
+        for placement, segment in zip(a11_placements, tracks[13]["segments"]):
             if segment.get("target_timerange") != {"start": placement["target_range_us"][0], "duration": placement["target_range_us"][1] - placement["target_range_us"][0]}:
                 raise RuntimeError("ROOT_A11_TIME_MAPPING_INVALID")
             if segment.get("volume") != 1.0:
                 raise RuntimeError("ROOT_A11_NOT_NORMAL_VOLUME")
         if not has_a12_bgm:
             raise RuntimeError("ROOT_A12_BGM_REQUIRED")
-        segment = tracks[11]["segments"][0]
+        segment = tracks[14]["segments"][0]
         expected = {"start": 0, "duration": duration_us}
         if segment.get("target_timerange") != expected or segment.get("source_timerange") != expected:
             raise RuntimeError("ROOT_A12_FULL_DURATION_INVALID")
@@ -154,7 +154,7 @@ def _validate_root_timeline(
         raise RuntimeError("ROOT_TIMELINE_MIRROR_MISSING")
     return {
         "root_and_mirrors_checked": checked,
-        "track_layout": 12,
+        "track_layout": 15,
         "video_segments": clip_count,
         "a9_segments": len(tts_cues) if audio_policy == "TTS_ONLY_MUTE_SOURCE" else 0,
         "a10_segments": 0,

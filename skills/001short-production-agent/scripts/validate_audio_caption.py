@@ -136,8 +136,27 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
         role_files[role] = role_file
         _validate_audio_file(audio_lock_path, role_file, errors, role=role)
 
+    deferred_a10 = audio_lock.get("a10_separation")
     if audio_lock["audio_source"] == "SOURCE_CLIP":
-        errors.append({"code": "AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN"})
+        if deferred_a10 is None:
+            errors.append({"code": "AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN"})
+        else:
+            a10 = role_files.get("A10")
+            if a10 is None:
+                errors.append({"code": "AUDIO_CAPTION_DEFERRED_A10_MISSING"})
+            elif any(
+                audio_lock.get(field) != a10.get(field)
+                for field in (
+                    "audio_path",
+                    "audio_sha256",
+                    "measured_duration_us",
+                    "audio_codec",
+                    "ffprobe_verified",
+                )
+            ):
+                errors.append({"code": "AUDIO_CAPTION_DEFERRED_A10_PRIMARY_MISMATCH"})
+    elif deferred_a10 is not None:
+        errors.append({"code": "AUDIO_CAPTION_DEFERRED_A10_SOURCE_INVALID"})
 
     if audio_lock["audio_source"] == "SOURCE_VOCAL_STEM":
         manifest_value = audio_lock.get("vocal_stem_manifest_path")
@@ -249,8 +268,12 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
             if actual["end_us"] > audio_lock["measured_duration_us"]:
                 errors.append({"code": "AUDIO_CAPTION_CUE_OUTSIDE_AUDIO", "cue_id": expected.get("cue_id")})
             previous_end = actual["end_us"]
-    return result(errors, {
+    evidence = {
         "episode_id": audio_lock["episode_id"],
         "audio_lock_sha256": sha256_file(audio_lock_path),
         "caption_lock_sha256": sha256_file(caption_lock_path),
-    })
+    }
+    if deferred_a10 is not None:
+        evidence["a10_separation_status"] = deferred_a10["status"]
+        evidence["a10_separation_required_before"] = deferred_a10["required_before"]
+    return result(errors, evidence)

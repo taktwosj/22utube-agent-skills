@@ -13,6 +13,61 @@ SOURCE_SCHEMA = SCHEMA.with_name("source_identity.schema.json")
 TIMELINE_SCHEMA = SCHEMA.with_name("approved_timeline.schema.json")
 EVIDENCE_SCHEMA = SCHEMA.with_name("design_lock_evidence.schema.json")
 
+LEGAL_ROLES = {
+    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "T1", "T2", "A9", "A9_TEXT",
+    "A10", "A10_TEXT", "STATE", "A11", "A12",
+}
+UNASSIGNED_SPEAKERS = {"", "UNKNOWN", "UNASSIGNED"}
+
+
+def validate_role_contract(timeline: dict) -> list[dict]:
+    """Fail closed before FINAL_DESIGN_LOCKED when copy roles are ambiguous."""
+    errors: list[dict] = []
+    rows = timeline.get("segments", []) if isinstance(timeline, dict) else []
+    primary_speaker_id = timeline.get("primary_speaker_id")
+    title_rows = {role: [row for row in rows if row.get("role") == role] for role in ("T1", "T2")}
+    for role, matches in title_rows.items():
+        if len(matches) != 1 or not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():
+            errors.append({"code": "TITLE_TEXT_REQUIRED", "role": role})
+    for row in rows:
+        role = row.get("role")
+        segment_id = row.get("segment_id")
+        if role not in LEGAL_ROLES:
+            errors.append({"code": "ROLE_ANCHOR_INVALID", "segment_id": segment_id, "role": role})
+        text = row.get("text")
+        content_type = row.get("content_type")
+        if content_type == "SPEAKER" and role != "A10_TEXT":
+            errors.append({"code": "SPEAKER_ROLE_MISMATCH", "segment_id": segment_id})
+        if content_type in {"SITUATION", "STATE"} and role != "STATE":
+            errors.append({"code": "STATE_ROLE_MISMATCH", "segment_id": segment_id})
+        if role == "A10_TEXT":
+            if content_type != "SPEAKER" or row.get("caption_role") != "A10_TEXT":
+                errors.append({"code": "SPEAKER_ROLE_MISMATCH", "segment_id": segment_id})
+                continue
+            speaker_id = str(row.get("speaker_id", "")).strip()
+            if speaker_id.upper() in UNASSIGNED_SPEAKERS:
+                errors.append({"code": "SPEAKER_ID_UNASSIGNED", "segment_id": segment_id})
+                continue
+            if not isinstance(primary_speaker_id, str) or not primary_speaker_id.strip():
+                errors.append({"code": "PRIMARY_SPEAKER_ID_REQUIRED", "segment_id": segment_id})
+                continue
+            expected_color = "WHITE" if speaker_id == primary_speaker_id else "YELLOW"
+            if row.get("color_role") != expected_color:
+                errors.append({"code": "SPEAKER_COLOR_ROLE_MISMATCH", "segment_id": segment_id, "expected": expected_color})
+            if not isinstance(text, str) or not text.strip():
+                errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
+        if role == "STATE":
+            if content_type not in {"SITUATION", "STATE"} or row.get("caption_role") != "STATE":
+                errors.append({"code": "STATE_ROLE_MISMATCH", "segment_id": segment_id})
+                continue
+            if not isinstance(text, str) or not text.strip():
+                errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
+            elif len("".join(text.split())) > 8:
+                errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
+            if row.get("state_effect") not in {"FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"}:
+                errors.append({"code": "STATE_EFFECT_REQUIRED", "segment_id": segment_id})
+    return errors
+
 
 def validate_handoff(
     handoff_path: Path,
@@ -44,6 +99,10 @@ def validate_handoff(
         errors.append({"code": "DESIGN_LOCK_SOURCE_SCHEMA", "detail": source_schema_errors})
     if timeline_schema_errors:
         errors.append({"code": "DESIGN_LOCK_TIMELINE_SCHEMA", "detail": timeline_schema_errors})
+    if errors:
+        return result(errors)
+
+    errors.extend(validate_role_contract(timeline))
     if errors:
         return result(errors)
 

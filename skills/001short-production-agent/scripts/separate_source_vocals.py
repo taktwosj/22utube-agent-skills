@@ -65,8 +65,24 @@ def _probe_audio(path: Path) -> tuple[int, str]:
     return duration_us, codec
 
 
+def _execution_environment_wait(exc: OSError) -> dict:
+    return {
+        "status": "WAIT_DEMUCS_EXECUTION_ENVIRONMENT",
+        "engine": "demucs",
+        "model": DEFAULT_MODEL,
+        "python_command": [],
+        "error": "ACCESS_DENIED" if isinstance(exc, PermissionError) else "EXECUTION_ERROR",
+        "detail": str(exc),
+        "nonblocking_route": "A10_CAPCUT_SEPARATION_USER_OVERRIDE",
+        "separation_complete": False,
+    }
+
+
 def _wait_payload() -> dict:
-    command, _ = find_demucs_python()
+    try:
+        command, _ = find_demucs_python()
+    except OSError as exc:
+        return _execution_environment_wait(exc)
     return {
         "status": "PASS" if command else "WAIT_DEMUCS_RUNTIME",
         "engine": "demucs",
@@ -83,7 +99,10 @@ def separate(source: Path, output_dir: Path, episode_id: str, *, model: str, pyt
         raise RuntimeError("SOURCE_AUDIO_INPUT_MISSING")
     if output_dir.exists() and any(output_dir.iterdir()):
         raise RuntimeError("VOCAL_STEM_OUTPUT_EXISTS")
-    command, demucs_version = find_demucs_python(python)
+    try:
+        command, demucs_version = find_demucs_python(python)
+    except OSError as exc:
+        return _execution_environment_wait(exc)
     if command is None:
         return _wait_payload()
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:

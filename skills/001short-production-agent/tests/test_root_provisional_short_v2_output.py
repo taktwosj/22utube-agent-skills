@@ -45,8 +45,8 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
                 documents = [destination / "draft_content.json", destination / "Timelines" / "timeline" / "draft_content.json"]
                 for document in documents:
                     document.parent.mkdir(parents=True, exist_ok=True)
-                    tracks = [{"segments": []} for _ in range(12)]
-                    tracks[11]["segments"] = [{"id": "template-a12", "material_id": "m-a12", "target_timerange": {"start": 0, "duration": 1}, "source_timerange": {"start": 0, "duration": 1}}]
+                    tracks = [{"segments": []} for _ in range(15)]
+                    tracks[14]["segments"] = [{"id": "template-a12", "material_id": "m-a12", "target_timerange": {"start": 0, "duration": 1}, "source_timerange": {"start": 0, "duration": 1}}]
                     document.write_text(json.dumps({"tracks": tracks, "materials": {"items": [{"id": "m-a12", "type": "music", "path": "##_draftpath_placeholder_test_##/Resources/media/template.wav"}]}}), encoding="utf-8")
                 (destination / "draft_meta_info.json").write_text(json.dumps({"draft_id": "template"}), encoding="utf-8")
 
@@ -58,11 +58,11 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
                 approved = json.loads(Path(config["approved_timeline_path"]).read_text(encoding="utf-8"))["segments"]
                 (working / "Resources" / "media").mkdir(parents=True, exist_ok=True)
                 for document, payload in builder.build_episode_capcut._documents(working):
-                    tracks = [{"segments": []} for _ in range(12)]
+                    tracks = [{"segments": []} for _ in range(15)]
                     materials = [{"id": "m-a12", "type": "music", "path": "##_draftpath_placeholder_test_##/Resources/media/template.wav"}]
                     for row in approved:
                         role = row["role"]
-                        index = {"VIDEO": 0, "SCREEN_EFFECT": 1, "SCREEN_WHITE": 2, "T2": 6, "T1": 7, "A11": 10}.get(role)
+                        index = {"VIDEO": 0, "SCREEN_EFFECT": 1, "SCREEN_WHITE": 2, "T2": 9, "T1": 10, "A11": 13}.get(role)
                         if index is None:
                             continue
                         segment = {"id": row["segment_id"], "role": role, "target_timerange": {"start": row["start"], "duration": row["duration"]}}
@@ -81,6 +81,7 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
             evidence, capcut_root, report = root / "evidence", root / "capcut", root / "report.json"
             capcut_root.mkdir()
             argv = ["build_root_provisional_short.py", "--workspace-root", str(root), "--root-contract", str(root / "contract.json"), "--assembly-input", str(assembly), "--source-video", str(source), "--sfx-audio", str(sfx), "--bgm-audio", str(bgm), "--episode-evidence-root", str(evidence), "--episode-id", "EP", "--title1", "title", "--title2", "sub", "--capcut-root", str(capcut_root), "--project-name", "project", "--report", str(report)]
+            output = io.StringIO()
             with patch.object(builder, "_capcut_open", return_value=False), \
                  patch.object(builder.resolve_shorts_capcut_root, "resolve_root_contract", return_value={"archive": str(template)}), \
                  patch.object(builder.build_episode_capcut, "_extract_template", side_effect=extract_template), \
@@ -92,15 +93,15 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
                  patch.object(builder.validate_capcut_polish_profile, "validate_project", return_value={"status": "PASS", "errors": []}), \
                  patch.object(builder.build_episode_capcut, "_prepare_cloud_project", return_value={}), \
                  patch.object(builder.build_episode_capcut, "_register_capcut_project", return_value=None), \
-                 patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()):
-                self.assertEqual(builder.main(), 0)
+                 patch.object(sys, "argv", argv), redirect_stdout(output):
+                self.assertEqual(builder.main(), 0, output.getvalue())
             for document in (capcut_root / "project" / "draft_content.json", capcut_root / "project" / "Timelines" / "timeline" / "draft_content.json"):
                 tracks = json.loads(document.read_text(encoding="utf-8"))["tracks"]
                 self.assertEqual(tracks[0]["segments"][0]["volume"], 0.0)
-                self.assertEqual(tracks[8]["segments"], [])
-                self.assertEqual(tracks[9]["segments"], [])
-                self.assertEqual(tracks[10]["segments"][0]["volume"], 1.0)
-                self.assertEqual(tracks[11]["segments"][0]["volume"], 1.0)
+                self.assertEqual(tracks[11]["segments"], [])
+                self.assertEqual(tracks[12]["segments"], [])
+                self.assertEqual(tracks[13]["segments"][0]["volume"], 1.0)
+                self.assertEqual(tracks[14]["segments"][0]["volume"], 1.0)
 
     def test_cli_rejects_missing_required_bgm_audio(self):
         builder = load_root_builder()
@@ -126,15 +127,15 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
                     {"id": "t1", "type": "text", "content": json.dumps({"text": "title", "styles": [{"range": [0, 5]}]})},
                 ]
             }
-            tracks = [{"segments": []} for _ in range(12)]
+            tracks = [{"segments": []} for _ in range(15)]
             tracks[0]["segments"] = [{"id": "video", "role": "VIDEO", "volume": 0.0, "target_timerange": {"start": 0, "duration": 1_000}}]
-            for index, material_id in ((1, "screen-effect"), (2, "screen-white"), (6, "t2"), (7, "t1")):
+            for index, material_id in ((1, "screen-effect"), (2, "screen-white"), (9, "t2"), (10, "t1")):
                 tracks[index]["segments"] = [{"id": f"fixed-{index}", "material_id": material_id, "target_timerange": {"start": 0, "duration": 1_000}}]
-            tracks[10]["segments"] = [
+            tracks[13]["segments"] = [
                 {"id": "a11-1", "role": "A11", "volume": 1.0, "target_timerange": {"start": 100, "duration": 100}},
                 {"id": "a11-2", "role": "A11", "volume": 1.0, "target_timerange": {"start": 500, "duration": 50}},
             ]
-            tracks[11]["segments"] = [{"id": "A12_BGM_FULL", "role": "A12", "volume": 1.0, "target_timerange": {"start": 0, "duration": 1_000}, "source_timerange": {"start": 0, "duration": 1_000}}]
+            tracks[14]["segments"] = [{"id": "A12_BGM_FULL", "role": "A12", "volume": 1.0, "target_timerange": {"start": 0, "duration": 1_000}, "source_timerange": {"start": 0, "duration": 1_000}}]
             payload = {"tracks": tracks, "materials": materials}
             for path in (project / "draft_content.json", mirror / "draft_content.json"):
                 path.write_text(json.dumps(payload), encoding="utf-8")
@@ -143,18 +144,18 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
                 "a11_placements": [{"target_range_us": [100, 200]}, {"target_range_us": [500, 550]}],
                 "has_a12_bgm": True,
             }
-            payload["tracks"][10]["segments"][0]["volume"] = 0.0
+            payload["tracks"][13]["segments"][0]["volume"] = 0.0
             for path in (project / "draft_content.json", mirror / "draft_content.json"):
                 path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "ROOT_A11_NOT_NORMAL_VOLUME"):
                 builder._validate_root_timeline(project, 1_000, 1, "title", "sub", **kwargs)
-            payload["tracks"][10]["segments"][0]["volume"] = 1.0
-            payload["tracks"][11]["segments"][0]["volume"] = 0.0
+            payload["tracks"][13]["segments"][0]["volume"] = 1.0
+            payload["tracks"][14]["segments"][0]["volume"] = 0.0
             for path in (project / "draft_content.json", mirror / "draft_content.json"):
                 path.write_text(json.dumps(payload), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "ROOT_A12_NOT_NORMAL_VOLUME"):
                 builder._validate_root_timeline(project, 1_000, 1, "title", "sub", **kwargs)
-            payload["tracks"][11]["segments"][0]["volume"] = 1.0
+            payload["tracks"][14]["segments"][0]["volume"] = 1.0
             for path in (project / "draft_content.json", mirror / "draft_content.json"):
                 path.write_text(json.dumps(payload), encoding="utf-8")
             result = builder._validate_root_timeline(

@@ -7,6 +7,7 @@
     "schema_version": {"type": "string", "const": "approved-timeline-v1"},
     "episode_id": {"type": "string", "minLength": 1},
     "source_fingerprint": {"type": "string", "minLength": 1},
+    "primary_speaker_id": {"type": "string", "minLength": 1},
     "segments": {
       "type": "array",
       "minItems": 1,
@@ -19,7 +20,13 @@
           "role": {"type": "string", "minLength": 1},
           "start": {"type": "integer"},
           "duration": {"type": "integer"},
-          "source_ref": {"type": "string", "minLength": 1}
+          "source_ref": {"type": "string", "minLength": 1},
+          "text": {"type": "string"},
+          "content_type": {"enum": ["TITLE", "SPEAKER", "SITUATION", "STATE", "TTS"]},
+          "caption_role": {"enum": ["A9_TEXT", "A10_TEXT", "STATE"]},
+          "speaker_id": {"type": "string", "minLength": 1},
+          "color_role": {"enum": ["WHITE", "YELLOW"]},
+          "state_effect": {"enum": ["FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"]}
         },
         "additionalProperties": true
       }

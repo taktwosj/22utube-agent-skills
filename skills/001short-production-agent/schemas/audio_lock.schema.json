@@ -16,6 +16,17 @@
     "tts_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
     "vocal_stem_manifest_path": {"type": "string", "minLength": 1},
     "vocal_stem_manifest_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "a10_separation": {
+      "type": "object",
+      "required": ["override", "method", "status", "required_before"],
+      "properties": {
+        "override": {"type": "string", "const": "A10_CAPCUT_SEPARATION_USER_OVERRIDE"},
+        "method": {"type": "string", "const": "CAPCUT_BUILT_IN_VOCAL_SEPARATION"},
+        "status": {"type": "string", "const": "DEFERRED_TO_STAGE08"},
+        "required_before": {"type": "string", "const": "USER_APPROVED_AND_RENDER"}
+      },
+      "additionalProperties": false
+    },
     "ffprobe_verified": {"type": "boolean", "const": true},
     "role_files": {
       "type": "array",

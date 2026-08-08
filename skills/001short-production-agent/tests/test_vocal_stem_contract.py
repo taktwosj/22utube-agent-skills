@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -17,6 +18,7 @@ if str(SCRIPTS) not in sys.path:
 from validate_audio_caption import validate_audio_caption
 from validate_vocal_stem import validate_vocal_stem
 import rebind_existing_draft_vocal_stem as existing_rebind
+import separate_source_vocals as separator
 
 
 def sha256(path: Path) -> str:
@@ -36,6 +38,14 @@ def make_wav(path: Path) -> int:
 
 
 class VocalStemContractTest(unittest.TestCase):
+    def test_demucs_access_denied_is_nonblocking_execution_environment_wait(self):
+        with patch.object(separator, "_run", side_effect=PermissionError("Access is denied")):
+            payload = separator._wait_payload()
+
+        self.assertEqual(payload["status"], "WAIT_DEMUCS_EXECUTION_ENVIRONMENT")
+        self.assertEqual(payload["error"], "ACCESS_DENIED")
+        self.assertEqual(payload["nonblocking_route"], "A10_CAPCUT_SEPARATION_USER_OVERRIDE")
+
     def _fixture(self, root: Path) -> tuple[Path, Path, Path]:
         source = root / "source.wav"
         vocals = root / "vocals.wav"
@@ -134,6 +144,65 @@ class VocalStemContractTest(unittest.TestCase):
             result = validate_audio_caption(audio_lock, caption)
             self.assertEqual(result["status"], "FAIL")
             self.assertIn("AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN", {row["code"] for row in result["errors"]})
+
+    def test_audio_lock_accepts_exact_deferred_capcut_separation_override(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, _, _ = self._fixture(root)
+            duration = round(float(subprocess.run([
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=nw=1:nk=1", str(source),
+            ], check=True, capture_output=True, text=True).stdout.strip()) * 1_000_000)
+            audio_lock = root / "audio_lock.json"
+            audio_lock.write_text(json.dumps({
+                "schema_version": "001short-audio-lock-v3",
+                "episode_id": "SH_VOCAL_TEST",
+                "status": "PASS",
+                "audio_source": "SOURCE_CLIP",
+                "audio_path": source.name,
+                "audio_sha256": sha256(source),
+                "measured_duration_us": duration,
+                "audio_codec": "pcm_s16le",
+                "ffprobe_verified": True,
+                "a10_separation": {
+                    "override": "A10_CAPCUT_SEPARATION_USER_OVERRIDE",
+                    "method": "CAPCUT_BUILT_IN_VOCAL_SEPARATION",
+                    "status": "DEFERRED_TO_STAGE08",
+                    "required_before": "USER_APPROVED_AND_RENDER",
+                },
+                "role_files": [{
+                    "role": "A10",
+                    "audio_path": source.name,
+                    "audio_sha256": sha256(source),
+                    "measured_duration_us": duration,
+                    "audio_codec": "pcm_s16le",
+                    "ffprobe_verified": True,
+                }],
+            }), encoding="utf-8")
+            srt = root / "final.srt"
+            srt.write_text("1\n00:00:00,000 --> 00:00:00,200\ntest\n", encoding="utf-8")
+            caption = root / "caption_lock.json"
+            caption.write_text(json.dumps({
+                "schema_version": "001short-caption-lock-v1",
+                "episode_id": "SH_VOCAL_TEST",
+                "status": "PASS",
+                "audio_lock_path": audio_lock.name,
+                "audio_lock_sha256": sha256(audio_lock),
+                "final_srt_path": srt.name,
+                "final_srt_sha256": sha256(srt),
+                "final_cue_count": 1,
+                "cues": [{"cue_id": "1", "start_us": 0, "end_us": 200000, "text": "test"}],
+                "all_cues_within_measured_audio": True,
+                "no_overlap_verified": True,
+            }), encoding="utf-8")
+
+            validation = validate_audio_caption(audio_lock, caption)
+
+            self.assertEqual(validation["status"], "PASS")
+            self.assertEqual(
+                validation["evidence"]["a10_separation_status"],
+                "DEFERRED_TO_STAGE08",
+            )
 
     def test_existing_draft_rebinds_only_portable_a10_to_vocal_stem(self):
         with tempfile.TemporaryDirectory() as temporary:

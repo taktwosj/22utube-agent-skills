@@ -23,13 +23,20 @@ class BgmA12BuilderTest(unittest.TestCase):
             audio = root / "audio.wav"
             clean_video.write_bytes(b"video")
             audio.write_bytes(b"audio")
-            roles = ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE", "A10_TEXT", "A9_TEXT", "T2", "T1", "A9", "A10", "A11", "A12"]
+            roles = [
+                "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
+                "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
+                "A9", "A10", "A11", "A12",
+            ]
             materials = []
             tracks = []
             for index, track_role in enumerate(roles):
                 material_id = f"m-{track_role}"
                 material = {"id": material_id, "type": "music", "path": "##_draftpath_placeholder_test_##/Resources/media/template.wav"}
-                if track_role in {"STATE", "T1", "T2", "A9_TEXT"}:
+                if track_role in {
+                    "STATE_FLICKER", "STATE_GLITCH", "STATE_LASER", "A10_TEXT_WHITE",
+                    "A10_TEXT_YELLOW", "T1", "T2", "A9_TEXT",
+                }:
                     material.update({"type": "text", "content": json.dumps({"text": "old", "styles": [{"range": [0, 3]}]})})
                 materials.append(material)
                 tracks.append({"segments": [{
@@ -53,7 +60,16 @@ class BgmA12BuilderTest(unittest.TestCase):
             else:
                 segment_specs.insert(0, ("a12", "A12", 0, 1_000))
             timeline.write_text(json.dumps({"episode_id": "EP", "segments": [
-                {"segment_id": segment_id, "timeline_order": index, "role": segment_role, "start": start, "duration": duration, "source_ref": "source"}
+                {
+                    "segment_id": segment_id, "timeline_order": index, "role": segment_role,
+                    "start": start, "duration": duration, "source_ref": "source",
+                    **({"text": "one"} if segment_role == "T1" else {}),
+                    **({"text": "two"} if segment_role == "T2" else {}),
+                    **({
+                        "text": "cue", "content_type": "SITUATION", "caption_role": "STATE",
+                        "state_effect": "FLICKER_RAVE",
+                    } if segment_role == "STATE" else {}),
+                }
                 for index, (segment_id, segment_role, start, duration) in enumerate(segment_specs, start=1)
             ]}), encoding="utf-8")
             config = {
@@ -78,30 +94,30 @@ class BgmA12BuilderTest(unittest.TestCase):
     def test_normalize_source_readback_mutes_v2_base_tracks_and_keeps_a11_sfx(self):
         tracks = self._normalize_v2_audio("A11")
         self.assertEqual(tracks[0]["segments"][0]["volume"], 0.0)
-        self.assertEqual(tracks[8]["segments"], [])
-        self.assertEqual(tracks[9]["segments"], [])
+        self.assertEqual(tracks[11]["segments"], [])
+        self.assertEqual(tracks[12]["segments"], [])
         self.assertEqual(
-            [(segment["id"], segment["target_timerange"]) for segment in tracks[10]["segments"]],
+            [(segment["id"], segment["target_timerange"]) for segment in tracks[13]["segments"]],
             [("a11-1", {"start": 100, "duration": 100}), ("a11-2", {"start": 500, "duration": 50})],
         )
 
     def test_normalize_source_readback_keeps_a12_as_one_full_duration_segment(self):
         tracks = self._normalize_v2_audio("A12")
         self.assertEqual(tracks[0]["segments"][0]["volume"], 0.0)
-        self.assertEqual(tracks[8]["segments"], [])
-        self.assertEqual(tracks[9]["segments"], [])
-        self.assertEqual(len(tracks[11]["segments"]), 1)
-        self.assertEqual(tracks[11]["segments"][0]["id"], "a12")
-        self.assertEqual(tracks[11]["segments"][0]["role"], "A12")
-        self.assertEqual(tracks[11]["segments"][0]["target_timerange"], {"start": 0, "duration": 1_000})
-        self.assertEqual(tracks[11]["segments"][0]["source_timerange"], {"start": 0, "duration": 1_000})
+        self.assertEqual(tracks[11]["segments"], [])
+        self.assertEqual(tracks[12]["segments"], [])
+        self.assertEqual(len(tracks[14]["segments"]), 1)
+        self.assertEqual(tracks[14]["segments"][0]["id"], "a12")
+        self.assertEqual(tracks[14]["segments"][0]["role"], "A12")
+        self.assertEqual(tracks[14]["segments"][0]["target_timerange"], {"start": 0, "duration": 1_000})
+        self.assertEqual(tracks[14]["segments"][0]["source_timerange"], {"start": 0, "duration": 1_000})
 
     def test_normalize_source_readback_keeps_approved_a9_tts_at_normal_volume(self):
         tracks = self._normalize_v2_audio("A9")
-        self.assertEqual(len(tracks[8]["segments"]), 1)
-        self.assertEqual(tracks[8]["segments"][0]["role"], "A9")
-        self.assertEqual(tracks[8]["segments"][0]["volume"], 1.0)
-        self.assertEqual(tracks[8]["segments"][0]["last_nonzero_volume"], 1.0)
+        self.assertEqual(len(tracks[11]["segments"]), 1)
+        self.assertEqual(tracks[11]["segments"][0]["role"], "A9")
+        self.assertEqual(tracks[11]["segments"][0]["volume"], 1.0)
+        self.assertEqual(tracks[11]["segments"][0]["last_nonzero_volume"], 1.0)
 
     def test_normal_a11_placements_survive_to_track_readback(self):
         self.assertTrue(hasattr(builder, "_populate_audio_placements"))
