@@ -5,7 +5,7 @@
   "required": [
     "schema_version", "episode_id", "source_identity_path", "source_identity_sha256",
     "design_lock_evidence_path", "design_lock_evidence_sha256", "clean_source_path",
-    "clean_source_sha256", "expected_duration_us", "expected_width", "expected_height"
+    "clean_source_sha256", "clean_source_origin", "expected_duration_us", "expected_width", "expected_height"
   ],
   "properties": {
     "schema_version": {"type": "string", "const": "001short-clean-visual-manifest-v1"},
@@ -16,9 +16,18 @@
     "design_lock_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
     "clean_source_path": {"type": "string", "minLength": 1},
     "clean_source_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "clean_source_origin": {"enum": ["AGENT_PRIMARY_CLEAN_SOURCE", "USER_FALLBACK_CLEAN_SOURCE"]},
+    "fallback_reason": {"enum": ["VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE", "VMAKE_ACQUISITION_ISSUE", "VMAKE_VERIFICATION_ISSUE"]},
     "expected_duration_us": {"type": "integer", "minimum": 1},
     "expected_width": {"type": "integer", "minimum": 1},
     "expected_height": {"type": "integer", "minimum": 1}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"clean_source_origin": {"const": "USER_FALLBACK_CLEAN_SOURCE"}}},
+      "then": {"required": ["fallback_reason"]},
+      "else": {"not": {"required": ["fallback_reason"]}}
+    }
+  ],
   "additionalProperties": false
 }

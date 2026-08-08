@@ -118,29 +118,19 @@ class ParallelContractTests(unittest.TestCase):
         self.assertIn("SOURCE_PROVISIONAL_RENDER", interim["allows"])
         self.assertEqual(interim["quality_authority"], "user")
 
-    def test_stage08_postbuild_checks_are_read_only_and_stage09_is_serial(self):
+    def test_stage08_postbuild_checks_are_read_only_and_stage09_is_user_manual_only(self):
         postbuild = self.contract["fanout"]["stage08_postbuild"]
         self.assertEqual(postbuild["mode"], "read_only_validation")
         self.assertLessEqual(postbuild["workers"], self.contract["max_workers"])
         self.assertTrue(postbuild["immutable_snapshot_required"])
 
         stage09 = self.contract["stage09"]
-        self.assertEqual(stage09["mode"], "strict_serial")
-        self.assertEqual(stage09["max_workers"], 1)
+        self.assertEqual(stage09["mode"], "user_manual_only")
+        self.assertEqual(stage09["max_workers"], 0)
         self.assertFalse(stage09["fanout"])
-        self.assertEqual(
-            stage09["router_args"],
-            [
-                "--stage09-review-evidence",
-                "--stage09-review-sha256",
-                "--approved-evidence-root",
-                "--capcut-evidence",
-                "--capcut-sha256",
-                "--render",
-                "--render-sha256",
-                "--evidence",
-            ],
-        )
+        self.assertEqual(stage09["state_writer"], "user_only")
+        self.assertEqual(stage09["sequence"], ["WAIT_USER_CAPCUT_CHECK"])
+        self.assertEqual(stage09["router_args"], [])
 
     def test_runtime_guides_require_transcript_evidence_and_verified_gui_escalation(self):
         parallel = GUIDE.read_text(encoding="utf-8")

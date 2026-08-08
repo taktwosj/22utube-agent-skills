@@ -13,6 +13,7 @@
     "production_modes",
     "urakkai_review_loop",
     "invariants",
+    "manual_finalization",
     "anchors",
     "stages",
     "completion_report",
@@ -315,6 +316,46 @@
           "const": true
         }
       }
+    },
+    "manual_finalization": {
+      "type": "object",
+      "required": [
+        "automation_terminal_state",
+        "clean_source_policy",
+        "user_only_actions",
+        "source_video_provisional_next_action",
+        "stage08_clean_swap_route"
+      ],
+      "properties": {
+        "automation_terminal_state": {"const": "WAIT_USER_CAPCUT_CHECK"},
+        "clean_source_policy": {
+          "type": "object",
+          "required": ["primary", "fallback", "fallback_reasons", "sequence"],
+          "properties": {
+            "primary": {"const": "AGENT_PRIMARY_CLEAN_SOURCE"},
+            "fallback": {"const": "USER_FALLBACK_CLEAN_SOURCE"},
+            "fallback_reasons": {"const": ["VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE", "VMAKE_ACQUISITION_ISSUE", "VMAKE_VERIFICATION_ISSUE"]},
+            "sequence": {
+              "const": [
+                "VMAKE_SUBMIT_FIRST",
+                "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+                "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "user_only_actions": {
+          "const": [
+            "capcut_visual_review_and_refinement",
+            "render",
+            "upload"
+          ]
+        },
+        "source_video_provisional_next_action": {"const": "CLEAN_SOURCE_SWAP_NONBLOCKING"},
+        "stage08_clean_swap_route": {"const": "scripts/build_episode_capcut.py --swap-provisional-video-only"}
+      },
+      "additionalProperties": false
     },
     "stages": {
       "type": "array",

@@ -12,6 +12,30 @@
   "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"],
   "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt"],
   "a12_policy": "EMPTY",
+  "manual_finalization": {
+    "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
+    "clean_source_policy": {
+      "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
+      "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+      "fallback_reasons": [
+        "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+        "VMAKE_ACQUISITION_ISSUE",
+        "VMAKE_VERIFICATION_ISSUE"
+      ],
+      "sequence": [
+        "VMAKE_SUBMIT_FIRST",
+        "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+        "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY"
+      ]
+    },
+    "stage08_clean_swap_route": "scripts/build_episode_capcut.py --swap-provisional-video-only",
+    "user_only_actions": [
+      "capcut_visual_review_and_refinement",
+      "render",
+      "upload"
+    ],
+    "source_video_provisional_next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING"
+  },
   "authority": {
     "policy": "SKILL.md",
     "machine_contract": "protocol.json",
@@ -284,19 +308,10 @@
     },
     {
       "id": "09",
-      "name": "REOPEN_RENDER_REVIEW",
+      "name": "USER_MANUAL_FINALIZATION",
       "requires_state": "CAPCUT_STATIC_VALIDATED",
-      "produces": [
-        "60_exports/render_validation.json",
-        "60_upload/upload_info.json",
-        "90_reports/completion_report.json"
-      ],
-      "validators": [
-        "scripts/validate_postbuild.py",
-        "scripts/validate_render.py",
-        "python3 scripts/validate_executable_protocol.py --completion-report {episode_root}/90_reports/completion_report.json"
-      ],
-      "pass_state": "WAIT_UPLOAD_APPROVAL"
+      "produces": [],
+      "pass_state": "WAIT_USER_CAPCUT_CHECK"
     }
   ],
   "completion_report": {

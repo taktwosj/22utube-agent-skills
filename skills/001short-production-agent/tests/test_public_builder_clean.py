@@ -18,10 +18,33 @@ for path in (SCRIPTS, TESTS):
 import build_episode_capcut as builder
 import validate_clean_visual
 import validate_design_lock
+import validate_prebuild
 from test_public_builder_provisional import media, sha, template_archive, write
 
 
 class PublicBuilderCleanTest(unittest.TestCase):
+    def test_prebuild_accepts_validated_user_fallback_without_vmake_receipt(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "source.mp4"; source.write_bytes(b"source")
+            clean = root / "user-clean.mp4"; clean.write_bytes(b"user-clean")
+            archive = root / "root.zip"; archive.write_bytes(b"root")
+            manifest = root / "build_manifest.json"
+            write(manifest, {
+                "schema_version": "001short-build-manifest-v1", "episode_id": "EP",
+                "visual_asset_mode": "CLEAN_VISUAL_READY",
+                "source": {"path": str(source), "sha256": sha(source), "duration_us": 2_000_000},
+                "template": {"root_name": "shrt white", "root_zip_path": str(archive), "root_zip_sha256": sha(archive)},
+                "clean_source": {
+                    "origin": "USER_FALLBACK_CLEAN_SOURCE",
+                    "fallback_reason": "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+                    "output_path": str(clean), "output_sha256": sha(clean),
+                },
+                "urakkai": {"production_type": "URAKKAI", "target_duration_us": 2_000_000, "reorder_required": True, "locked_permutation": ["V2", "V1"], "video_clips": [{"clip_id": "V2", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]},
+                "source_audio": [{"clip_id": "V2", "mode": "on", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "mode": "on", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}],
+            })
+            self.assertEqual(validate_prebuild.validate_prebuild(manifest)["status"], "PASS")
+
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "media tools required")
     def test_public_builder_finishes_with_real_clean_vmake_chain(self):
         with tempfile.TemporaryDirectory() as td:
@@ -70,13 +93,13 @@ class PublicBuilderCleanTest(unittest.TestCase):
             write(state, {"episode_id": "EP", "current_stage": "08", "status": "AUDIO_CAPTION_VALIDATED", "audio_lock_path": str(audio_lock), "audio_lock_sha256": sha(audio_lock), "caption_lock_path": str(caption), "caption_lock_sha256": sha(caption)})
 
             clean_manifest = clean_root / "clean_visual_manifest.json"
-            write(clean_manifest, {"schema_version": "001short-clean-visual-manifest-v1", "episode_id": "EP", "source_identity_path": str(identity), "source_identity_sha256": sha(identity), "design_lock_evidence_path": str(evidence), "design_lock_evidence_sha256": sha(evidence), "clean_source_path": clean_video.name, "clean_source_sha256": sha(clean_video), "expected_duration_us": 2_000_000, "expected_width": 1080, "expected_height": 1920})
+            write(clean_manifest, {"schema_version": "001short-clean-visual-manifest-v1", "episode_id": "EP", "source_identity_path": str(identity), "source_identity_sha256": sha(identity), "design_lock_evidence_path": str(evidence), "design_lock_evidence_sha256": sha(evidence), "clean_source_path": clean_video.name, "clean_source_sha256": sha(clean_video), "clean_source_origin": "AGENT_PRIMARY_CLEAN_SOURCE", "expected_duration_us": 2_000_000, "expected_width": 1080, "expected_height": 1920})
             clean_receipt = clean_root / "clean_visual_receipt.json"
             self.assertEqual(validate_clean_visual.validate_clean_visual(clean_manifest, identity, evidence, clean_receipt, clean_root)["status"], "PASS")
             vmake_receipt = clean_root / "vmake_receipt.json"
             write(vmake_receipt, {"provider": "vmake", "run_id": "run", "job_id": "job", "uploaded_source_sha256": sha(source), "downloaded_output_sha256": sha(clean_video), "final_download": True})
             build_manifest = episode / "build_manifest.json"
-            write(build_manifest, {"schema_version": "001short-build-manifest-v1", "episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "source": {"path": str(source), "sha256": sha(source), "duration_us": 2_000_000}, "template": {"root_name": "shrt white", "root_zip_path": str(archive), "root_zip_sha256": sha(archive)}, "vmake": {"receipt_path": str(vmake_receipt), "output_path": str(clean_video), "run_id": "run", "job_id": "job", "input_sha256": sha(source), "output_sha256": sha(clean_video), "final_download": True}, "urakkai": {"production_type": "URAKKAI", "target_duration_us": 2_000_000, "reorder_required": True, "locked_permutation": ["V2", "V1"], "video_clips": [{"clip_id": "V2", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]}, "source_audio": [{"clip_id": "V2", "mode": "on", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "mode": "on", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]})
+            write(build_manifest, {"schema_version": "001short-build-manifest-v1", "episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "source": {"path": str(source), "sha256": sha(source), "duration_us": 2_000_000}, "template": {"root_name": "shrt white", "root_zip_path": str(archive), "root_zip_sha256": sha(archive)}, "clean_source": {"origin": "AGENT_PRIMARY_CLEAN_SOURCE", "output_path": str(clean_video), "output_sha256": sha(clean_video)}, "vmake": {"receipt_path": str(vmake_receipt), "output_path": str(clean_video), "run_id": "run", "job_id": "job", "input_sha256": sha(source), "output_sha256": sha(clean_video), "final_download": True}, "urakkai": {"production_type": "URAKKAI", "target_duration_us": 2_000_000, "reorder_required": True, "locked_permutation": ["V2", "V1"], "video_clips": [{"clip_id": "V2", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]}, "source_audio": [{"clip_id": "V2", "mode": "on", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "mode": "on", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]})
             config = {"episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "clean_video": str(clean_video), "clean_asset_root": str(clean_root), "clean_evidence_root": str(clean_root), "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "audio_policy": "A10_RETAINED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
@@ -87,10 +110,10 @@ class PublicBuilderCleanTest(unittest.TestCase):
             self.assertFalse((normalized_root / "Resources" / "media" / "source.mp4").exists())
             self.assertEqual(result["status"], "CAPCUT_STATIC_VALIDATED")
             self.assertEqual(result["visual_asset_mode"], "CLEAN_VISUAL_READY")
-            self.assertTrue(result["upload_ready"])
+            self.assertFalse(result["upload_ready"])
             report = json.loads((episode / "50_capcut_project" / "build_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "CAPCUT_STATIC_VALIDATED")
-            self.assertTrue(report["upload_ready"])
+            self.assertFalse(report["upload_ready"])
             self.assertEqual(Path(report["project_path"]), root / "capcut" / "project")
             self.assertEqual(Path(report["media_source_path"]), clean_video.resolve())
             self.assertEqual(json.loads(state.read_text(encoding="utf-8"))["current_stage"], "09")

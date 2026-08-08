@@ -18,6 +18,30 @@
     "self_check_required": true,
     "conflict_error": "STOP_PROTOCOL_CONFLICT"
   },
+  "manual_finalization": {
+    "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
+    "clean_source_policy": {
+      "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
+      "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+      "fallback_reasons": [
+        "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+        "VMAKE_ACQUISITION_ISSUE",
+        "VMAKE_VERIFICATION_ISSUE"
+      ],
+      "sequence": [
+        "VMAKE_SUBMIT_FIRST",
+        "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+        "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY"
+      ]
+    },
+    "stage08_clean_swap_route": "scripts/build_episode_capcut.py --swap-provisional-video-only",
+    "user_only_actions": [
+      "capcut_visual_review_and_refinement",
+      "render",
+      "upload"
+    ],
+    "source_video_provisional_next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING"
+  },
   "session_bootstrap": {
     "trigger": "new_session_with_001_conversation_handoff_json",
     "env_file": "$HOME/.hermes/.env",
@@ -54,12 +78,12 @@
         "{episode_root}/30_audio_srt/caption_lock.json",
         "{episode_root}/30_audio_srt/final.srt"
       ],
-      "08": "{episode_root}/50_capcut_project/static_validation.json",
-      "09": "{episode_root}/60_exports/render_validation.json"
+      "08": "{episode_root}/50_capcut_project/static_validation.json"
     },
     "update_state_after_pass_only": true
   },
   "completion_gate": {
+    "manual_only": true,
     "report_path": "{episode_root}/90_reports/completion_report.json",
     "validator": "python3 scripts/validate_executable_protocol.py --completion-report {episode_root}/90_reports/completion_report.json",
     "validator_pass_required": true,
@@ -318,29 +342,14 @@
       }
     },
     "stage09": {
-      "mode": "strict_serial",
-      "max_workers": 1,
+      "mode": "user_manual_only",
+      "max_workers": 0,
       "fanout": false,
-      "state_writer": "coordinator_only",
+      "state_writer": "user_only",
       "sequence": [
-        "WAIT_USER_CAPCUT_CHECK",
-        "USER_VISUAL_CHECKED",
-        "WAIT_CAPCUT_CLOSE_FOR_REVALIDATION",
-        "CAPCUT_POST_OPEN_REVALIDATED",
-        "USER_APPROVED",
-        "RENDER_VALIDATED",
-        "WAIT_UPLOAD_APPROVAL"
+        "WAIT_USER_CAPCUT_CHECK"
       ],
-      "router_args": [
-        "--stage09-review-evidence",
-        "--stage09-review-sha256",
-        "--approved-evidence-root",
-        "--capcut-evidence",
-        "--capcut-sha256",
-        "--render",
-        "--render-sha256",
-        "--evidence"
-      ]
+      "router_args": []
     }
   },
   "production_stages": [
@@ -404,15 +413,7 @@
     {
       "id": "09",
       "file": "steps/09-user-review-render.md",
-      "pass": "RENDER_VALIDATED",
-      "required_evidence": [
-        "USER_VISUAL_CHECKED",
-        "CAPCUT_POST_OPEN_REVALIDATED",
-        "USER_APPROVED"
-      ],
-      "checks": [
-        "references/checks/render.md"
-      ]
+      "pass": "WAIT_USER_CAPCUT_CHECK"
     }
   ],
   "blueprint_frontend": {
@@ -600,10 +601,7 @@
       },
       "09": {
         "reference": "references/checks/render.md",
-        "validator": "scripts/validate_render.py",
-        "completion_validator": "python3 scripts/validate_executable_protocol.py --completion-report {episode_root}/90_reports/completion_report.json",
-        "review_evidence_schema": "schemas/stage09_review_evidence.schema.json",
-        "output_evidence_policy": "approved_root_safe_new_file_only"
+        "manual_only": true
       }
     }
   },

@@ -20,6 +20,8 @@ def _contracts():
     protocol = read_json(PROTOCOL)
     checks = {}
     for stage, route in flow["validation"]["checks"].items():
+        if route.get("manual_only") is True:
+            continue
         validators = route.get("validators") or [route["validator"]]
         checks[stage] = tuple(Path(v).stem.removeprefix("validate_") for v in validators)
     stages = {row["id"]: row for row in protocol["stages"]}
@@ -176,7 +178,14 @@ def main() -> int:
     try:
         if not _canonical_state_path(state_path):
             raise ValueError("CANONICAL_STATE_PATH_REQUIRED")
-        state = read_json(state_path); stage = resolve_stage(state)
+        state = read_json(state_path)
+        raw_stage = str(state.get("current_stage", state.get("stage", ""))).strip()
+        declared_stage = raw_stage.zfill(2) if raw_stage.isdigit() else raw_stage[:2]
+        if declared_stage == "09":
+            if a.stage is not None and a.stage != declared_stage:
+                return _emit({"status": "FAIL", "errors": [{"code": "CALLER_STAGE_MISMATCH", "canonical_stage": declared_stage, "caller_stage": a.stage}], "evidence": {}, "stage_complete": False})
+            return _emit({"status": "WAIT", "errors": [{"code": "MANUAL_FINALIZATION_REQUIRED"}], "evidence": {}, "stage": declared_stage, "next_action": "WAIT_USER_CAPCUT_CHECK", "stage_complete": False})
+        stage = resolve_stage(state)
     except (OSError, ValueError, TypeError) as exc:
         return _emit({"status": "FAIL", "errors": [{"code": "STATE_INVALID", "detail": str(exc)}], "evidence": {}, "stage_complete": False})
     if a.stage is not None and a.stage != stage:

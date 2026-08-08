@@ -50,6 +50,32 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_A12_POLICY")
     if protocol.get("anchors", {}).get("A10") != "validated Demucs source vocal stem only":
         errors.append("PROTOCOL_A10_AUTHORITY")
+    expected_manual_finalization = {
+        "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
+        "clean_source_policy": {
+            "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
+            "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+            "fallback_reasons": [
+                "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+                "VMAKE_ACQUISITION_ISSUE",
+                "VMAKE_VERIFICATION_ISSUE",
+            ],
+            "sequence": [
+                "VMAKE_SUBMIT_FIRST",
+                "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+                "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY",
+            ],
+        },
+        "stage08_clean_swap_route": "scripts/build_episode_capcut.py --swap-provisional-video-only",
+        "user_only_actions": [
+            "capcut_visual_review_and_refinement",
+            "render",
+            "upload",
+        ],
+        "source_video_provisional_next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING",
+    }
+    if protocol.get("manual_finalization") != expected_manual_finalization:
+        errors.append("PROTOCOL_MANUAL_FINALIZATION_POLICY")
 
     session_handoff = protocol.get("session_handoff")
     expected_session_handoff = {
@@ -135,6 +161,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_STAGE07_OUTPUTS")
     elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
+    elif stages[8].get("produces") != [] or "validators" in stages[8]:
+        errors.append("PROTOCOL_STAGE09_MANUAL_TERMINAL")
 
     completion = protocol.get("completion_report")
     required_completion = [
@@ -308,6 +336,18 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_FIELDS_MISMATCH")
             if workflow.get("completion_gate", {}).get("validator_pass_required") is not True:
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_GATE_DISABLED")
+            if workflow.get("manual_finalization") != protocol.get("manual_finalization"):
+                errors.append("PROTOCOL_WORKFLOW_MANUAL_FINALIZATION_MISMATCH")
+            stage09 = workflow.get("parallel_execution", {}).get("stage09", {})
+            if stage09.get("sequence") != ["WAIT_USER_CAPCUT_CHECK"]:
+                errors.append("PROTOCOL_WORKFLOW_STAGE09_AUTOMATION_NOT_STOPPED")
+            stages = {row.get("id"): row for row in workflow.get("production_stages", []) if isinstance(row, dict)}
+            if stages.get("09", {}).get("pass") != "WAIT_USER_CAPCUT_CHECK":
+                errors.append("PROTOCOL_WORKFLOW_STAGE09_MANUAL_WAIT_MISSING")
+            if workflow.get("validation", {}).get("checks", {}).get("09") != {
+                "reference": "references/checks/render.md", "manual_only": True,
+            }:
+                errors.append("PROTOCOL_WORKFLOW_STAGE09_MANUAL_ROUTER_MISSING")
             bootstrap = workflow.get("session_bootstrap", {})
             if bootstrap.get("env_file") != session_handoff.get("env_file"):
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_ENV_MISMATCH")

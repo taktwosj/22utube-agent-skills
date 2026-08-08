@@ -91,8 +91,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
         expected_video_sha = manifest["source"]["sha256"]
         expected_video_detail = "source_media"
     else:
-        expected_video_sha = manifest["vmake"]["output_sha256"]
-        expected_video_detail = "vmake_media"
+        expected_video_sha = manifest["clean_source"]["output_sha256"]
+        expected_video_detail = "clean_source_media"
     if len(actual_video) != len(expected):
         errors.append(_error("E_DRAFT_MISMATCH", detail="video_count"))
     for actual, planned in zip(actual_video, expected):

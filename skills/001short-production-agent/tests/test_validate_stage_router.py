@@ -1,7 +1,9 @@
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -51,6 +53,37 @@ class ValidateStageRouterTest(unittest.TestCase):
             with patch.object(sys, "argv", argv), patch.object(validate_stage, "_receipt_error", side_effect=receipt), patch.object(validate_stage, "_run", return_value={"status": "PASS", "errors": [], "evidence": {}}):
                 self.assertEqual(validate_stage.main(), 0)
             self.assertEqual(seen, ["design_lock", "audio_lock", "caption_lock"])
+
+    def test_stage09_manual_terminal_does_not_dispatch_render_or_create_evidence(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = Path(td) / "episode"; workflow = episode / "90_workflow"; workflow.mkdir(parents=True)
+            state_path = workflow / "state.json"
+            state_path.write_text(
+                json.dumps({
+                    "episode_id": "EP", "current_stage": "09",
+                    "status": "CAPCUT_STATIC_VALIDATED",
+                    "next_action": "WAIT_USER_CAPCUT_CHECK",
+                }),
+                encoding="utf-8",
+            )
+            render = episode / "60_exports" / "render.mp4"
+            evidence = episode / "60_exports" / "render_validation.json"
+            stdout = io.StringIO()
+            with (
+                patch.object(sys, "argv", [
+                    "validate_stage.py", "--state", str(state_path),
+                    "--render", str(render), "--evidence", str(evidence),
+                ]),
+                patch.object(validate_stage, "_receipt_error", return_value=None),
+                patch.object(validate_stage, "_run", return_value={"status": "PASS", "errors": [], "evidence": {}}) as run,
+                redirect_stdout(stdout),
+            ):
+                self.assertEqual(validate_stage.main(), 3)
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(payload["status"], "WAIT")
+            self.assertEqual(payload["errors"][0]["code"], "MANUAL_FINALIZATION_REQUIRED")
+            run.assert_not_called()
+            self.assertFalse(evidence.exists())
 
     def test_noncanonical_state_path_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:

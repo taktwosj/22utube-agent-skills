@@ -92,8 +92,11 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "python3 scripts/validate_executable_protocol.py --plan {episode_root}/20_script/production_plan.json",
         )
         self.assertEqual(
-            workflow["validation"]["checks"]["09"]["completion_validator"],
-            "python3 scripts/validate_executable_protocol.py --completion-report {episode_root}/90_reports/completion_report.json",
+            workflow["validation"]["checks"]["09"],
+            {
+                "reference": "references/checks/render.md",
+                "manual_only": True,
+            },
         )
         self.assertEqual(
             workflow["completion_gate"]["validator"],
@@ -155,6 +158,67 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 "sources",
                 "public_upload_status",
             ],
+        )
+
+    def test_manual_finalization_stops_automation_after_static_capcut(self):
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
+        expected_policy = {
+            "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
+            "clean_source_policy": {
+                "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
+                "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+                "fallback_reasons": [
+                    "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+                    "VMAKE_ACQUISITION_ISSUE",
+                    "VMAKE_VERIFICATION_ISSUE",
+                ],
+                "sequence": [
+                    "VMAKE_SUBMIT_FIRST",
+                    "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+                    "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY",
+                ],
+            },
+            "stage08_clean_swap_route": "scripts/build_episode_capcut.py --swap-provisional-video-only",
+            "user_only_actions": [
+                "capcut_visual_review_and_refinement",
+                "render",
+                "upload",
+            ],
+            "source_video_provisional_next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING",
+        }
+        self.assertEqual(protocol.get("manual_finalization"), expected_policy)
+        self.assertEqual(workflow.get("manual_finalization"), expected_policy)
+        self.assertEqual(
+            workflow["parallel_execution"]["stage09"]["sequence"],
+            ["WAIT_USER_CAPCUT_CHECK"],
+        )
+        self.assertEqual(
+            next(stage for stage in workflow["production_stages"] if stage["id"] == "09")["pass"],
+            "WAIT_USER_CAPCUT_CHECK",
+        )
+        stage09 = next(stage for stage in protocol["stages"] if stage["id"] == "09")
+        self.assertEqual(stage09["produces"], [])
+        self.assertNotIn("validators", stage09)
+
+        vmake_lane = workflow["parallel_execution"]["fanout"]["after_source_identity_verified"]
+        self.assertEqual(vmake_lane["lanes"][0]["id"], "vmake_submit")
+        self.assertIn("02", vmake_lane["nonblocking_next_stages"])
+        self.assertEqual(
+            workflow["assembly_visual"],
+            "vmake_submit_after_source_identity_nonblocking_source_provisional_then_clean_swap",
+        )
+        self.assertEqual(
+            workflow["interim_capcut"]["on_clean_arrival"],
+            "replace_existing_VIDEO_asset_only_keep_project_structure",
+        )
+
+        validator = load_validator()
+        broken = copy.deepcopy(protocol)
+        broken["manual_finalization"] = {**expected_policy, "user_only_actions": ["render"]}
+        self.assertIn(
+            "PROTOCOL_MANUAL_FINALIZATION_POLICY",
+            validator.validate_protocol_document(broken),
         )
 
     def test_cross_file_self_check_catches_missing_schema(self):

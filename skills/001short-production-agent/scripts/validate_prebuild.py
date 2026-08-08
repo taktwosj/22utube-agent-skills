@@ -65,11 +65,12 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     template = payload["template"]
     visual_mode = payload["visual_asset_mode"]
     vmake = payload.get("vmake")
+    clean_source = payload.get("clean_source")
     urakkai = payload["urakkai"]
     if (
         visual_mode not in {"CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"}
         or not isinstance(source, dict) or not isinstance(template, dict) or not isinstance(urakkai, dict)
-        or (visual_mode == "CLEAN_VISUAL_READY" and not isinstance(vmake, dict))
+        or (visual_mode == "CLEAN_VISUAL_READY" and not isinstance(clean_source, dict))
     ):
         return result([_error("E_MANIFEST_INVALID", field="sections")])
     source_path = Path(source.get("path", "")).resolve()
@@ -91,28 +92,59 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         errors.append(_error("E_MANIFEST_INVALID", field="template"))
 
     if visual_mode == "CLEAN_VISUAL_READY":
-        assert isinstance(vmake, dict)
-        receipt_path = Path(vmake.get("receipt_path", "")).resolve()
-        output_path = Path(vmake.get("output_path", "")).resolve()
-        try:
-            receipt = read_json(receipt_path)
-        except (OSError, ValueError, TypeError):
-            receipt = None
-        binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
+        assert isinstance(clean_source, dict)
+        origin = clean_source.get("origin")
+        output_path = Path(clean_source.get("output_path", "")).resolve()
+        output_sha = clean_source.get("output_sha256")
         if (
-            not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
-            or not vmake.get("final_download") or not receipt.get("final_download")
-            or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
-            or receipt.get("run_id") != vmake.get("run_id")
-            or receipt.get("job_id") != vmake.get("job_id")
-            or receipt.get("uploaded_source_sha256", "").lower() != str(vmake.get("input_sha256", "")).lower()
-            or receipt.get("downloaded_output_sha256", "").lower() != str(vmake.get("output_sha256", "")).lower()
-            or str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower()
+            origin not in {"AGENT_PRIMARY_CLEAN_SOURCE", "USER_FALLBACK_CLEAN_SOURCE"}
+            or not isinstance(output_sha, str) or len(output_sha) != 64
             or not output_path.is_file() or output_path.is_symlink()
-            or sha256_file(output_path).lower() != str(vmake.get("output_sha256", "")).lower()
-            or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
+            or sha256_file(output_path).lower() != output_sha.lower()
+            or output_sha.lower() == str(source_sha).lower()
         ):
-            errors.append(_error("E_VMAKE_BINDING"))
+            errors.append(_error("E_CLEAN_SOURCE_BINDING"))
+        if origin == "USER_FALLBACK_CLEAN_SOURCE":
+            if clean_source.get("fallback_reason") not in {
+                "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+                "VMAKE_ACQUISITION_ISSUE",
+                "VMAKE_VERIFICATION_ISSUE",
+            }:
+                errors.append(_error("E_USER_FALLBACK_REASON"))
+            if vmake is not None:
+                errors.append(_error("E_USER_FALLBACK_VMAKE_RECEIPT_FORBIDDEN"))
+        elif origin == "AGENT_PRIMARY_CLEAN_SOURCE":
+            if "fallback_reason" in clean_source:
+                errors.append(_error("E_AGENT_PRIMARY_FALLBACK_REASON_FORBIDDEN"))
+            if not isinstance(vmake, dict):
+                errors.append(_error("E_VMAKE_BINDING"))
+                vmake = None
+        if not isinstance(vmake, dict):
+            vmake = None
+        if vmake is not None:
+            receipt_path = Path(vmake.get("receipt_path", "")).resolve()
+            vmake_output_path = Path(vmake.get("output_path", "")).resolve()
+            try:
+                receipt = read_json(receipt_path)
+            except (OSError, ValueError, TypeError):
+                receipt = None
+            binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
+            if (
+                not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
+                or not vmake.get("final_download") or not receipt.get("final_download")
+                or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
+                or receipt.get("run_id") != vmake.get("run_id")
+                or receipt.get("job_id") != vmake.get("job_id")
+                or receipt.get("uploaded_source_sha256", "").lower() != str(vmake.get("input_sha256", "")).lower()
+                or receipt.get("downloaded_output_sha256", "").lower() != str(vmake.get("output_sha256", "")).lower()
+                or str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower()
+                or vmake_output_path != output_path
+                or str(vmake.get("output_sha256", "")).lower() != str(output_sha).lower()
+                or not vmake_output_path.is_file() or vmake_output_path.is_symlink()
+                or sha256_file(vmake_output_path).lower() != str(vmake.get("output_sha256", "")).lower()
+                or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
+            ):
+                errors.append(_error("E_VMAKE_BINDING"))
 
     clips = urakkai.get("video_clips")
     target_duration = urakkai.get("target_duration_us")

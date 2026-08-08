@@ -199,7 +199,7 @@ def resolve_visual_input(config: dict) -> dict:
             "video_input_path": video,
             "video_input_sha256": _sha(video),
             "resource_name": "clean_video.mp4",
-            "upload_ready": True,
+            "upload_ready": False,
         }
     raise ValueError(f"VISUAL_ASSET_MODE_INVALID:{mode}")
 
@@ -1010,10 +1010,10 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         if video_input != Path(stored_evidence["source_media_path"]).resolve():
             raise RuntimeError("STAGE08_SOURCE_PROVISIONAL_AUTHORITY_MISMATCH")
     else:
-        vmake = build_manifest.get("vmake", {})
+        clean_source = build_manifest.get("clean_source", {})
         if (
-            Path(vmake.get("output_path", "")).resolve() != video_input
-            or str(vmake.get("output_sha256", "")).lower() != _sha(video_input).lower()
+            Path(clean_source.get("output_path", "")).resolve() != video_input
+            or str(clean_source.get("output_sha256", "")).lower() != _sha(video_input).lower()
         ):
             raise RuntimeError("STAGE08_BUILD_MANIFEST_AUTHORITY_MISMATCH")
         clean_root = Path(config.get("clean_asset_root", episode / "40_assets_used")).resolve()
@@ -1027,6 +1027,7 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         if not clean_manifest.is_file() or not clean_receipt.is_file():
             raise RuntimeError("STAGE06_EVIDENCE_MISSING")
         clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
+        clean_manifest_payload = read_json(clean_manifest)
         stored_clean_receipt = read_json(clean_receipt)
         expected_receipt = clean.get("evidence", {})
         if clean["status"] != "PASS" or stored_clean_receipt.get("status") != "PASS" or any(
@@ -1034,13 +1035,21 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
             for field in expected_receipt
         ):
             raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
+        if (
+            clean_manifest_payload.get("clean_source_origin") != clean_source.get("origin")
+            or clean_manifest_payload.get("fallback_reason") != clean_source.get("fallback_reason")
+            or clean_manifest_payload.get("clean_source_sha256", "").lower()
+            != str(clean_source.get("output_sha256", "")).lower()
+        ):
+            raise RuntimeError("STAGE06_CLEAN_SOURCE_ORIGIN_MISMATCH")
 
     state_path = Path(config["state_path"]).resolve()
     state = read_json(state_path)
-    if state.get("episode_id") != episode_id or state.get("status") != "AUDIO_CAPTION_VALIDATED":
+    expected_state = "CAPCUT_STATIC_VALIDATED" if config.get("_clean_swap_from_provisional") else "AUDIO_CAPTION_VALIDATED"
+    if state.get("episode_id") != episode_id or state.get("status") != expected_state:
         raise RuntimeError(
-            "STAGE07_STATE_INVALID:"
-            f"expected episode_id={episode_id} status=AUDIO_CAPTION_VALIDATED,"
+            "STAGE08_STATE_INVALID:"
+            f"expected episode_id={episode_id} status={expected_state},"
             f" got episode_id={state.get('episode_id')} status={state.get('status')}"
         )
     audio_lock = resolved_declared_path(state_path, state.get("audio_lock_path", ""))
@@ -1322,6 +1331,22 @@ def _assert_optional_edit_lock(config: dict) -> None:
         raise RuntimeError("EDIT_LOCK_EPISODE_MISMATCH")
 
 
+def _assert_clean_swap_lock(config: dict, target: Path) -> None:
+    raw_path = config.get("edit_lock_path")
+    if not isinstance(raw_path, str) or not raw_path:
+        raise RuntimeError("CLEAN_SWAP_EDIT_LOCK_REQUIRED")
+    path = Path(raw_path).resolve()
+    if not path.is_file():
+        raise RuntimeError("CLEAN_SWAP_EDIT_LOCK_MISSING")
+    payload = read_json(path)
+    if (
+        payload.get("episode_id") != config["episode_id"]
+        or payload.get("action") != "STAGE08_VIDEO_ONLY_SWAP"
+        or Path(payload.get("project_path", "")).resolve() != target.resolve()
+    ):
+        raise RuntimeError("CLEAN_SWAP_EDIT_LOCK_INVALID")
+
+
 def _assert_capcut_closed_for_target(target: Path) -> None:
     if os.name != "nt":
         return
@@ -1339,6 +1364,152 @@ def _assert_capcut_closed_for_target(target: Path) -> None:
     active = completed.stdout.casefold()
     if '"capcut.exe"' in active or '"lveditor.exe"' in active:
         raise RuntimeError("CAPCUT_PROCESS_OPEN")
+
+
+def _replace_video_material_only(target: Path, clean_video: Path, duration_us: int) -> None:
+    media = target / "Resources" / "media"
+    media.mkdir(parents=True, exist_ok=True)
+    resource_name = "clean_video.mp4"
+    shutil.copy2(clean_video, media / resource_name)
+    dimensions = _video_dimensions(clean_video)
+    changed = 0
+    for path, payload in _documents(target):
+        tracks = payload["tracks"]
+        if len(tracks) != len(ROLE_BY_TRACK):
+            raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
+        material_map = {
+            row.get("id"): row for row in _materials(payload.get("materials", {}))
+            if isinstance(row.get("id"), str)
+        }
+        video_ids = {
+            segment.get("material_id") for segment in tracks[TRACK_INDEX["VIDEO"]].get("segments", [])
+            if isinstance(segment.get("material_id"), str)
+        }
+        if not video_ids:
+            raise RuntimeError("CLEAN_SWAP_VIDEO_MATERIAL_MISSING")
+        prefix = _draft_path_prefix(target)
+        for material_id in video_ids:
+            material = material_map.get(material_id)
+            if material is None:
+                raise RuntimeError("CLEAN_SWAP_VIDEO_MATERIAL_MISSING")
+            _set_media(
+                material, media_type="video",
+                portable_path=_portable_resource_path(prefix, f"Resources/media/{resource_name}"),
+                role="VIDEO", duration_us=duration_us, dimensions=dimensions,
+            )
+            changed += 1
+        _write_json(path, payload)
+    if changed == 0:
+        raise RuntimeError("CLEAN_SWAP_VIDEO_MATERIAL_MISSING")
+    provisional_resource = media / "source.mp4"
+    if provisional_resource.is_file():
+        provisional_resource.unlink()
+
+
+def swap_provisional_video_only(config: dict) -> dict:
+    _ensure_media_tools()
+    _validate_config(config)
+    if config["visual_asset_mode"] != "CLEAN_VISUAL_READY":
+        raise RuntimeError("CLEAN_SWAP_CLEAN_VISUAL_REQUIRED")
+    target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
+    if not target.is_dir():
+        raise RuntimeError("CLEAN_SWAP_PROVISIONAL_PROJECT_MISSING")
+    _assert_clean_swap_lock(config, target)
+    _assert_capcut_closed_for_target(target)
+    episode = Path(config["episode_root"]).resolve()
+    build_root = episode / "50_capcut_project"
+    snapshot_path = build_root / "structure_snapshot.json"
+    contract_path = build_root / "build_contract.json"
+    state_path = Path(config["state_path"]).resolve()
+    state = read_json(state_path)
+    if (
+        state.get("episode_id") != config["episode_id"]
+        or state.get("status") != "CAPCUT_STATIC_VALIDATED"
+        or state.get("visual_asset_mode") != "SOURCE_VIDEO_PROVISIONAL"
+        or state.get("next_action") != "WAIT_USER_CAPCUT_CHECK"
+    ):
+        raise RuntimeError("CLEAN_SWAP_PROVISIONAL_STATE_REQUIRED")
+    contract = read_json(contract_path)
+    if (
+        contract.get("visual_asset_mode") != "SOURCE_VIDEO_PROVISIONAL"
+        or contract.get("video_asset_key") != "source_video"
+        or contract.get("upload_ready") is not False
+        or Path(contract.get("working_project_path", "")).resolve() != target
+    ):
+        raise RuntimeError("CLEAN_SWAP_PROVISIONAL_CONTRACT_REQUIRED")
+    config["_clean_swap_from_provisional"] = True
+    try:
+        pre = _stage_prerequisites(config, episode, [])
+    finally:
+        config.pop("_clean_swap_from_provisional", None)
+    clean_video = Path(pre["video_input"]).resolve()
+    _replace_video_material_only(target, clean_video, config["duration_us"])
+    contract.update({
+        "visual_asset_mode": "CLEAN_VISUAL_READY",
+        "video_asset_key": "clean_video",
+        "video_input_path": str(clean_video),
+        "video_input_sha256": _sha(clean_video),
+        "upload_ready": False,
+        "build_manifest_path": str(Path(config["build_manifest_path"]).resolve()),
+        "build_manifest_sha256": _sha(Path(config["build_manifest_path"]).resolve()),
+    })
+    contract["required_asset_paths"] = [
+        "Resources/media/clean_video.mp4" if path.endswith("/source.mp4") else path
+        for path in contract["required_asset_paths"]
+    ]
+    contract["build_inputs_receipt_sha256"] = "0" * 64
+    _write_json(contract_path, contract)
+    inputs = validate_build_inputs.validate_build_inputs(
+        Path(contract["caption_lock_path"]), Path(contract["final_srt_path"]), contract_path,
+        Path(contract["approved_timeline_path"]),
+    )
+    if inputs["status"] != "PASS":
+        raise RuntimeError(f"CLEAN_SWAP_INPUTS:{inputs}")
+    receipt_path = Path(contract["build_inputs_receipt_path"])
+    _write_json(receipt_path, inputs)
+    contract["build_inputs_receipt_sha256"] = _sha(receipt_path)
+    _write_json(contract_path, contract)
+    _prepare_cloud_project(
+        target, project_name=config["project_name"], capcut_root=target.parent,
+        draft_id=contract["draft_id"], duration_us=config["duration_us"],
+    )
+    evidence_root = build_root / "evidence"
+    capcut_evidence = evidence_root / "capcut_project_evidence.json"
+    if capcut_evidence.exists():
+        if not capcut_evidence.is_file() or capcut_evidence.parent.resolve() != evidence_root.resolve():
+            raise RuntimeError("UNSAFE_PREVIOUS_CAPCUT_EVIDENCE")
+        capcut_evidence.unlink()
+    checked = validate_capcut_project.validate_capcut_project(
+        target, snapshot_path, contract_path, capcut_evidence, evidence_root
+    )
+    if checked["status"] != "PASS":
+        raise RuntimeError(f"CLEAN_SWAP_VALIDATE:{checked}")
+    postbuild = validate_postbuild.validate_postbuild(Path(config["build_manifest_path"]), target)
+    if postbuild["status"] != "PASS":
+        raise RuntimeError(f"CLEAN_SWAP_POSTBUILD:{postbuild}")
+    state.update({
+        "current_stage": "09", "status": "CAPCUT_STATIC_VALIDATED",
+        "visual_asset_mode": "CLEAN_VISUAL_READY", "video_asset_key": "clean_video",
+        "upload_ready": False, "stage09_user_approval": "NOT_RUN",
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    })
+    report_path = build_root / "build_report.json"
+    _write_json(report_path, {
+        "episode_id": config["episode_id"], "status": "CAPCUT_STATIC_VALIDATED",
+        "current_stage": "09", "project_name": config["project_name"],
+        "project_path": str(target), "media_source_path": str(clean_video),
+        "visual_asset_mode": "CLEAN_VISUAL_READY", "video_asset_key": "clean_video",
+        "upload_ready": False, "capcut_evidence_path": str(capcut_evidence),
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    })
+    _write_json(state_path, state)
+    return {
+        "status": "CAPCUT_STATIC_VALIDATED", "current_stage": "09", "stage08_validation": "PASS",
+        "visual_asset_mode": "CLEAN_VISUAL_READY", "upload_ready": False,
+        "project_path": str(target), "capcut_evidence_path": str(capcut_evidence),
+        "media_source_path": str(clean_video), "build_report_path": str(report_path),
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    }
 
 
 def build_episode(config: dict) -> dict:
@@ -1360,8 +1531,10 @@ def build_episode(config: dict) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--swap-provisional-video-only", action="store_true")
     args = parser.parse_args()
-    payload = build_episode(json.loads(args.config.read_text(encoding="utf-8")))
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    payload = swap_provisional_video_only(config) if args.swap_provisional_video_only else build_episode(config)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 

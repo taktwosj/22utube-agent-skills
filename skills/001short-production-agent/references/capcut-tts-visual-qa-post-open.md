@@ -83,11 +83,9 @@ GROUP_A hash와 GROUP_B hash가 서로 달라도 정상일 수 있다. 정본 ma
 CAPCUT_BUILD_CREATED
 CAPCUT_STATIC_VALIDATED
 WAIT_USER_CAPCUT_CHECK
-USER_VISUAL_CHECKED
-WAIT_CAPCUT_CLOSE_FOR_REVALIDATION
-CAPCUT_POST_OPEN_REVALIDATED
-USER_APPROVED
 ```
+
+`AGENT_PRIMARY_CLEAN_SOURCE` and `USER_FALLBACK_CLEAN_SOURCE` VIDEO-only swap/reassembly remain Stage08 work. After `WAIT_USER_CAPCUT_CHECK`, CapCut visual refinement/approval, render, and upload are user-only; no Stage09 router may create render evidence or advance those states.
 
 - 에이전트의 구조·프리뷰 검수는 사용자 최종 시각 승인을 대신하지 않는다.
 - 클라우드 목록 노출은 콘텐츠 QA PASS가 아니다.

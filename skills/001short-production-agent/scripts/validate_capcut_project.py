@@ -740,7 +740,7 @@ def validate_capcut_project(
     )
     if visual_tuple not in {
         ("SOURCE_VIDEO_PROVISIONAL", "source_video", False),
-        ("CLEAN_VISUAL_READY", "clean_video", True),
+        ("CLEAN_VISUAL_READY", "clean_video", False),
     }:
         return {
             **result([_error("BUILD_CONTRACT_VISUAL_MODE_MISMATCH")]),

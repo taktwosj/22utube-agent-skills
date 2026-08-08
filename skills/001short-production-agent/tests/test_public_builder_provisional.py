@@ -211,6 +211,38 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(Path(report["media_source_path"]), source.resolve())
             self.assertEqual(json.loads(state.read_text(encoding="utf-8"))["current_stage"], "09")
 
+            clean_root = episode / "40_assets_used"; clean_root.mkdir()
+            clean_video = clean_root / "clean_video.mp4"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=1080x1920:r=30:d=2", "-y", str(clean_video)], check=True)
+            clean_manifest = clean_root / "clean_visual_manifest.json"
+            write(clean_manifest, {"schema_version": "001short-clean-visual-manifest-v1", "episode_id": "EP", "source_identity_path": str(identity), "source_identity_sha256": sha(identity), "design_lock_evidence_path": str(evidence), "design_lock_evidence_sha256": sha(evidence), "clean_source_path": clean_video.name, "clean_source_sha256": sha(clean_video), "clean_source_origin": "AGENT_PRIMARY_CLEAN_SOURCE", "expected_duration_us": 2_000_000, "expected_width": 1080, "expected_height": 1920})
+            import validate_clean_visual
+            clean_receipt = clean_root / "clean_visual_receipt.json"
+            self.assertEqual(validate_clean_visual.validate_clean_visual(clean_manifest, identity, evidence, clean_receipt, clean_root)["status"], "PASS")
+            vmake_receipt = clean_root / "vmake_receipt.json"
+            write(vmake_receipt, {"provider": "vmake", "run_id": "run", "job_id": "job", "uploaded_source_sha256": sha(source), "downloaded_output_sha256": sha(clean_video), "final_download": True})
+            clean_build_manifest = json.loads(build_manifest.read_text(encoding="utf-8"))
+            clean_build_manifest.update({
+                "visual_asset_mode": "CLEAN_VISUAL_READY",
+                "clean_source": {"origin": "AGENT_PRIMARY_CLEAN_SOURCE", "output_path": str(clean_video), "output_sha256": sha(clean_video)},
+                "vmake": {"receipt_path": str(vmake_receipt), "output_path": str(clean_video), "run_id": "run", "job_id": "job", "input_sha256": sha(source), "output_sha256": sha(clean_video), "final_download": True},
+            })
+            write(build_manifest, clean_build_manifest)
+            edit_lock = episode / "90_workflow" / "clean_swap_lock.json"
+            write(edit_lock, {"episode_id": "EP", "action": "STAGE08_VIDEO_ONLY_SWAP", "project_path": str(root / "capcut" / "project")})
+            before_nonvideo = json.loads((root / "capcut" / "project" / "draft_content.json").read_text(encoding="utf-8"))["tracks"][1:]
+            swap_config = {**config, "visual_asset_mode": "CLEAN_VISUAL_READY", "clean_video": str(clean_video), "clean_asset_root": str(clean_root), "clean_evidence_root": str(clean_root), "edit_lock_path": str(edit_lock)}
+            with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(builder, "_register_capcut_project", return_value=None):
+                swapped = builder.swap_provisional_video_only(swap_config)
+            after = json.loads((root / "capcut" / "project" / "draft_content.json").read_text(encoding="utf-8"))
+            self.assertEqual(after["tracks"][1:], before_nonvideo)
+            self.assertEqual(after["tracks"][14]["segments"], [])
+            self.assertTrue((root / "capcut" / "project" / "Resources" / "media" / "clean_video.mp4").is_file())
+            self.assertFalse((root / "capcut" / "project" / "Resources" / "media" / "source.mp4").exists())
+            self.assertEqual(swapped["status"], "CAPCUT_STATIC_VALIDATED")
+            self.assertEqual(swapped["next_action"], "WAIT_USER_CAPCUT_CHECK")
+            self.assertFalse(swapped["upload_ready"])
+
 
 if __name__ == "__main__":
     unittest.main()
