@@ -313,19 +313,28 @@ class PoliticsRelinkReadbackContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ReadbackFixture(Path(temporary))
             fixture.write_project(base_document(fixture.media))
+            build = fixture.portable_builder_report()
+            public_media_folder = build["media_folder_to_select"]
 
-            result = fixture.run_readback(
-                fixture.portable_builder_report(), media_dir=fixture.media_dir
-            )
+            result = fixture.run_readback(build, media_dir=fixture.media_dir)
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            report = json.loads(fixture.report.read_text(encoding="utf-8"))
+            serialized_report = fixture.report.read_text(encoding="utf-8")
+            report = json.loads(serialized_report)
             self.assertEqual(report["status"], "MEDIA_RELINKED", report)
             self.assertEqual(report["MEDIA_RELINK"], "PASS", report)
             self.assertEqual(report["MEDIA_RESOLUTION"], "PASS", report)
+            self.assertTrue(report["media_relink"]["persisted"], report)
+            self.assertEqual(report["media_relink"]["media_sha256"], fixture.media_sha256)
+            self.assertNotIn(
+                str(fixture.media_dir.resolve()), serialized_report.replace("\\\\", "\\")
+            )
             self.assertEqual(
-                Path(report["media_relink"]["expected_media_folder"]),
-                fixture.media_dir.resolve(),
+                report["media_relink"]["expected_media_folder"], public_media_folder
+            )
+            self.assertEqual(
+                report["media_relink"]["after_path"],
+                f"{public_media_folder}/{fixture.media.name}",
             )
 
     def test_portable_builder_report_without_private_media_dir_fails_closed(self):

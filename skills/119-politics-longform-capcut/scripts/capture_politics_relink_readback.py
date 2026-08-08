@@ -90,7 +90,10 @@ def resolve_expected_media_dir(build: dict[str, Any], media_dir: Path | None) ->
 
 
 def readback_media(
-    document: dict[str, Any], build: dict[str, Any], expected_folder: Path
+    document: dict[str, Any],
+    build: dict[str, Any],
+    expected_folder: Path,
+    public_folder: str,
 ) -> tuple[list[dict[str, Any]], bool]:
     results: list[dict[str, Any]] = []
     for expected in expected_media(build):
@@ -116,13 +119,13 @@ def readback_media(
             {
                 "card_id": expected["card_id"],
                 "storage": expected["storage"],
-                "before_path": expected["requested_offline_path"],
-                "after_path": str(actual_path) if actual_path else None,
+                "before_path": f"CAPCUT_RELINK_PLACEHOLDER/{expected['filename']}",
+                "after_path": f"{public_folder}/{actual_path.name}" if actual_path else None,
                 "media_sha256": expected["sha256"],
                 "capcut_material_name_after": material.get("material_name", "") if material else None,
                 "capcut_duration_us_after": material.get("duration") if material else None,
                 "persisted": persisted,
-                "expected_media_folder": str(expected_folder),
+                "expected_media_folder": public_folder,
                 "selected_folder_matches": folder_matches,
             }
         )
@@ -284,7 +287,7 @@ def main() -> int:
             "schema": "politics-longform-capcut-relink-readback.v1",
             "status": status,
             "kind": build.get("kind", "POLITICS_CAPCUT_CARD_PROJECT"),
-            "project": str(root),
+            "project": f"LOCAL_CAPCUT_DRAFT/{root.name}",
             "PROJECT_BUILD": "WAIT",
             "STATIC_STRUCTURE": "WAIT",
             "MEDIA_RELINK": "WAIT" if status.startswith("WAIT_") else "FAIL",
@@ -301,7 +304,17 @@ def main() -> int:
         json_write(args.report, report)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 1
-    media_rows, media_persisted = readback_media(document, build, expected_media_dir)
+    media_folder_reference = str(build["media_folder_to_select"]).replace("\\", "/")
+    public_media_folder = (
+        media_folder_reference
+        if media_folder_reference.startswith("LOCAL_MEDIA_FOLDER/")
+        else "/".join(
+            ["LOCAL_MEDIA_FOLDER", expected_media_dir.parent.name, expected_media_dir.name]
+        )
+    )
+    media_rows, media_persisted = readback_media(
+        document, build, expected_media_dir, public_media_folder
+    )
     placeholders = find_final_placeholders(document)
     expected_presentation = copy.deepcopy(
         build.get("static_validation", {}).get("presentation_contract")
@@ -342,7 +355,7 @@ def main() -> int:
     media_summary: dict[str, Any] = {
         "items": media_rows,
         "persisted": media_persisted,
-        "expected_media_folder": str(expected_media_dir),
+        "expected_media_folder": public_media_folder,
         "selected_folder_matches": bool(media_rows) and all(
             item["selected_folder_matches"] for item in media_rows
         ),
@@ -354,7 +367,7 @@ def main() -> int:
         "schema": "politics-longform-capcut-relink-readback.v1",
         "status": status,
         "kind": build.get("kind", "POLITICS_CAPCUT_CARD_PROJECT"),
-        "project": str(root),
+        "project": f"LOCAL_CAPCUT_DRAFT/{root.name}",
         "draft_mirror_sha256": hashes.pop(),
         "PROJECT_BUILD": "PASS" if project_build else "FAIL",
         "STATIC_STRUCTURE": "PASS" if static_structure else "FAIL",
