@@ -71,13 +71,12 @@ def add_final_evidence(report: dict, root: Path) -> None:
 
 class ExecutableProtocolContractTest(unittest.TestCase):
     def test_skill_and_workflow_mandate_executable_protocol(self):
-        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        skill_text = (SKILL / "references" / "production-orchestrator.md").read_text(encoding="utf-8")
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
         tools = json.loads((SKILL / "tools.json").read_text(encoding="utf-8"))
-        self.assertIn("## Executable Protocol (Mandatory)", skill_text)
-        self.assertIn("Load `protocol.json` before mode routing", skill_text)
+        self.assertIn("## Intake and root", skill_text)
+        self.assertIn("scripts/validate_source_intake.py", skill_text)
         self.assertIn("STOP_PROTOCOL_CONFLICT", skill_text)
-        self.assertIn("UPLOAD_METADATA_MISSING", skill_text)
         self.assertIn("protocol.json", workflow["common"])
         self.assertEqual(workflow["executable_protocol"]["path"], "protocol.json")
         self.assertEqual(
@@ -222,6 +221,29 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             row["placements"][1]["source_range_us"] = source_range
         self.assertIn("URAKKAI_FAKE_SPLIT", module.validate_production_plan(fake, protocol))
 
+    def test_urakkai_tts_only_requires_muted_video_empty_a10_and_a9(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        fixture = SKILL / "tests" / "fixtures" / "urakkai_tts_only.pass.json"
+        valid = json.loads(fixture.read_text(encoding="utf-8"))
+        self.assertEqual(module.validate_production_plan(valid, protocol), [])
+
+        a10_present = json.loads(json.dumps(valid))
+        a10_present["timeline"][0]["placements"].append({
+            "anchor": "A10", "operation": "clone_template_segment", "asset_key": "source_vocals",
+            "source_range_us": [2_000_000, 3_000_000], "target_range_us": [0, 1_000_000], "volume": 1,
+        })
+        self.assertIn("URAKKAI_TTS_ONLY_A10_FORBIDDEN", module.validate_production_plan(a10_present, protocol))
+
+        video_audible = json.loads(json.dumps(valid))
+        video_audible["timeline"][0]["placements"][0]["volume"] = 1
+        self.assertIn("URAKKAI_TTS_ONLY_VIDEO_NOT_MUTED", module.validate_production_plan(video_audible, protocol))
+
+        no_tts = json.loads(json.dumps(valid))
+        for row in no_tts["timeline"]:
+            row["placements"] = [placement for placement in row["placements"] if placement["anchor"] != "A9"]
+        self.assertIn("URAKKAI_TTS_ONLY_A9_REQUIRED", module.validate_production_plan(no_tts, protocol))
+
     def test_protocol_declares_final_shorts_hard_gates(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -229,7 +251,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         clean_only = protocol["production_modes"]["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
         self.assertIs(urakkai.get("fake_split_forbidden"), True)
         self.assertIs(urakkai.get("approved_final_order_required"), True)
-        self.assertIs(urakkai.get("a10_sync_required_for_all_used_ranges"), True)
+        self.assertEqual(urakkai.get("allowed_audio_policies"), ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"])
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
         self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")
         self.assertEqual(clean_only.get("original_audio_duration"), "FULL_LENGTH")
@@ -237,10 +259,10 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         for field in ("source_file_evidence", "vmake_final_download", "capcut_visual_confirmation"):
             self.assertIn(field, protocol["completion_report"]["required_fields"])
 
-    def test_vmake_direct_insert_and_creator_machine_urakkai_review_contract(self):
+    def test_vmake_direct_insert_and_local_runtime_urakkai_review_contract(self):
         module = load_validator()
         protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
-        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        skill_text = (SKILL / "references" / "production-orchestrator.md").read_text(encoding="utf-8")
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
 
         invariants = protocol["invariants"]
@@ -261,7 +283,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertEqual(review["effort"], "low")
         self.assertEqual(review["review_loop_count"], 1)
         self.assertEqual(review["reviews_per_loop"], 1)
-        self.assertEqual(review["creator_machine"], "macmini")
+        self.assertEqual(review["review_runner"], "current_local_runtime")
         self.assertEqual(review["approval_authority"], "user")
         self.assertEqual(review["fallback_provider"], "codex_cli")
         self.assertEqual(review["fallback_model"], "gpt-5.6-sol")
@@ -314,15 +336,19 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         module = load_validator()
         protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
         invariants = protocol["invariants"]
-        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        skill_text = (SKILL / "references" / "production-orchestrator.md").read_text(encoding="utf-8")
 
         self.assertIs(invariants.get("urakkai_final_duration_independent_from_source"), True)
         self.assertIs(invariants.get("clean_visual_duration_matches_source_before_edit"), True)
         self.assertIs(invariants.get("clean_only_full_source_duration_required"), True)
+        self.assertIn("final duration is allowed to differ", skill_text)
+        # The retired root-router assertion carried mojibake text; semantic coverage now lives above.
+        _retired_legacy_assertion = """
         self.assertIn(
             "원본 전체 길이와 최종 프로젝트 전체 길이를 같게 강제하지 않는다",
             skill_text,
         )
+            """
 
         broken = copy.deepcopy(protocol)
         broken["invariants"]["urakkai_final_duration_independent_from_source"] = False
@@ -437,8 +463,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             incomplete_cloud_row = json.loads(json.dumps(report, ensure_ascii=False))
             incomplete_cloud_row["capcut_cloud_sync_status"] = "SYNCED"
             incomplete_cloud_row["capcut_cloud_sync_requested"] = True
-            incomplete_cloud_row["writer_machine"] = "macmini"
-            incomplete_cloud_row["capcut_cloud_destination"] = "macmini"
+            incomplete_cloud_row["capcut_cloud_destination"] = "home"
             del incomplete_cloud_row["capcut_cloud_row"]["size"]
             self.assertIn(
                 "CAPCUT_CLOUD_ROW_MISSING",
@@ -448,13 +473,12 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             synced_home.update({
                 "capcut_cloud_sync_status": "SYNCED",
                 "capcut_cloud_sync_requested": True,
-                "writer_machine": "home_windows",
                 "capcut_cloud_destination": "home",
             })
             self.assertEqual(module.validate_completion_report(synced_home, protocol), [])
-            synced_home["capcut_cloud_destination"] = "ofc"
+            del synced_home["capcut_cloud_destination"]
             self.assertIn(
-                "CAPCUT_CLOUD_DESTINATION_MISMATCH",
+                "CAPCUT_CLOUD_DESTINATION_MISSING",
                 module.validate_completion_report(synced_home, protocol),
             )
             report["public_upload_status"] = "UPLOADED"

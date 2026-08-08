@@ -1,16 +1,10 @@
-"""Validate the required Paperclip task receipt before a 001 episode starts."""
+"""Validate an optional Paperclip tracking receipt for a 001 episode."""
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
 from pathlib import Path
-
-REQUIRED = {
-    "company": "쇼츠팩토리 P0", "active_writer_machine": "macmini",
-    "coordinator": "P0-총괄", "producer": "P0-제작", "verifier": "P0-검증",
-}
-
 
 def validate(entry_path: Path, episode_id: str, skill_root: Path) -> dict:
     try:
@@ -20,9 +14,6 @@ def validate(entry_path: Path, episode_id: str, skill_root: Path) -> dict:
     errors = []
     if entry.get("episode_id") != episode_id:
         errors.append({"code": "PAPERCLIP_ENTRY_EPISODE_MISMATCH"})
-    for field, expected in REQUIRED.items():
-        if entry.get(field) != expected:
-            errors.append({"code": "PAPERCLIP_ENTRY_FIELD_INVALID", "field": field, "expected": expected})
     if not isinstance(entry.get("paperclip_issue_id"), str) or not entry["paperclip_issue_id"].strip():
         errors.append({"code": "PAPERCLIP_ISSUE_MISSING"})
     expected_sha = hashlib.sha256((skill_root / "SKILL.md").read_bytes()).hexdigest()

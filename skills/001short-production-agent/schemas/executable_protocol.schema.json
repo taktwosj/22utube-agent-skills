@@ -97,7 +97,7 @@
             "minimum_video_segments",
             "fake_split_forbidden",
             "approved_final_order_required",
-            "a10_sync_required_for_all_used_ranges"
+            "allowed_audio_policies"
           ],
           "properties": {
             "meaningful_reorder_required": {
@@ -113,8 +113,13 @@
             "approved_final_order_required": {
               "const": true
             },
-            "a10_sync_required_for_all_used_ranges": {
-              "const": true
+            "allowed_audio_policies": {
+              "type": "array",
+              "uniqueItems": true,
+              "minItems": 2,
+              "items": {
+                "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]
+              }
             }
           },
           "additionalProperties": true
@@ -162,7 +167,7 @@
         "effort",
         "review_loop_count",
         "reviews_per_loop",
-        "creator_machine",
+        "review_runner",
         "approval_authority",
         "fallback_provider",
         "fallback_model",
@@ -189,8 +194,8 @@
         "reviews_per_loop": {
           "const": 1
         },
-        "creator_machine": {
-          "const": "macmini"
+        "review_runner": {
+          "const": "current_local_runtime"
         },
         "approval_authority": {
           "const": "user"
@@ -238,7 +243,7 @@
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_sync_explicit_request_required",
-        "capcut_cloud_destination_by_writer_machine_required",
+        "capcut_cloud_destination_explicit_request_required",
         "capcut_cloud_row_readback_required_when_requested",
         "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
@@ -300,7 +305,7 @@
         "capcut_cloud_sync_explicit_request_required": {
           "const": true
         },
-        "capcut_cloud_destination_by_writer_machine_required": {
+        "capcut_cloud_destination_explicit_request_required": {
           "const": true
         },
         "capcut_cloud_row_readback_required_when_requested": {

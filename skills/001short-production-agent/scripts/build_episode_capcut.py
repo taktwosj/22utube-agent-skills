@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import hashlib
 import json
 import os
 import re
@@ -30,8 +29,9 @@ import validate_postbuild
 import validate_prebuild
 import validate_clean_visual
 import validate_design_lock
+import resolve_shorts_capcut_root
 from capcut_io import iter_timeline_json
-from common import manifest_sha256, resolved_declared_path
+from common import manifest_sha256, resolved_declared_path, sha256_file
 
 
 ROLE_BY_TRACK = [
@@ -46,7 +46,7 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha256_file(path)
 
 
 def _materials(value: Any) -> Iterator[dict]:
@@ -138,7 +138,36 @@ def _normalize_paths(value: Any, project: Path, draft_prefix: str) -> None:
             _normalize_paths(child, project, draft_prefix)
 
 
+def _bind_portable_root_contract(config: dict) -> dict | None:
+    raw_contract = config.get("root_contract_path")
+    if raw_contract is None:
+        return None
+    raw_workspace = config.get("workspace_root")
+    profile = config.get("root_profile")
+    if not isinstance(raw_workspace, str) or not raw_workspace.strip():
+        raise ValueError("ROOT_CONTRACT_WORKSPACE_ROOT_MISSING")
+    if not isinstance(profile, str) or not profile.strip():
+        raise ValueError("ROOT_CONTRACT_PROFILE_MISSING")
+    workspace_root = Path(raw_workspace).resolve()
+    candidate = Path(str(raw_contract))
+    contract_path = candidate if candidate.is_absolute() else workspace_root / candidate
+    resolved = resolve_shorts_capcut_root.resolve_root_contract(
+        workspace_root, profile, contract_path
+    )
+    declared = config.get("template_zip")
+    if declared is not None and Path(str(declared)).resolve() != Path(resolved["archive"]):
+        raise ValueError("ROOT_CONTRACT_TEMPLATE_MISMATCH")
+    config["template_zip"] = resolved["archive"]
+    config["_resolved_root_contract"] = {
+        "profile": resolved["profile"],
+        "template_profile": resolved["template_profile"],
+        "archive_sha256": resolved["archive_sha256"],
+    }
+    return resolved
+
+
 def _validate_config(config: dict) -> None:
+    _bind_portable_root_contract(config)
     required = (
         "episode_id", "clean_video", "duration_us", "T1", "T2", "state_cues",
         "project_name", "template_zip", "episode_root", "work_root", "local_capcut_root",
@@ -148,7 +177,7 @@ def _validate_config(config: dict) -> None:
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
-    if config.get("audio_role", "A10") not in {"A10", "A12"}:
+    if config.get("audio_role", "A10") not in {None, "A10", "A11", "A12"}:
         raise ValueError("AUDIO_ROLE_INVALID")
     duration = config["duration_us"]
     if not isinstance(duration, int) or duration <= 0:
@@ -268,7 +297,36 @@ def _populate_full_duration_audio(
     segment["role"] = role
     segment["target_timerange"] = {"start": 0, "duration": duration_us}
     segment["source_timerange"] = {"start": 0, "duration": duration_us}
+    segment["volume"] = 1.0
+    segment["last_nonzero_volume"] = 1.0
     track["segments"] = [segment]
+
+
+def _populate_audio_placements(
+    track: dict, template_segment: dict, material: dict, *, portable_path: str,
+    role: str, placements: list[dict],
+) -> None:
+    if not placements:
+        raise RuntimeError(f"{role}_PLACEMENTS_REQUIRED")
+    _set_media(
+        material, media_type="audio", portable_path=portable_path, role=role,
+        duration_us=max(row["source_range_us"][1] for row in placements),
+    )
+    segments = []
+    for placement in placements:
+        source_start, source_end = placement["source_range_us"]
+        target_start, target_end = placement["target_range_us"]
+        if source_end <= source_start or target_end <= target_start:
+            raise RuntimeError(f"{role}_PLACEMENT_RANGE_INVALID")
+        segment = copy.deepcopy(template_segment)
+        segment["id"] = placement["segment_id"]
+        segment["role"] = role
+        segment["target_timerange"] = {"start": target_start, "duration": target_end - target_start}
+        segment["source_timerange"] = {"start": source_start, "duration": source_end - source_start}
+        segment["volume"] = 1.0
+        segment["last_nonzero_volume"] = 1.0
+        segments.append(segment)
+    track["segments"] = segments
 
 
 def _scrub_windows_cache_paths(value: object) -> int:
@@ -404,7 +462,7 @@ def _material_text(material: dict) -> str | None:
 
 
 def _normalize_source(
-    project: Path, config: dict, audio_source: Path, build_manifest: dict
+    project: Path, config: dict, audio_source: Path | None, build_manifest: dict
 ) -> list[dict]:
     duration = config["duration_us"]
     approved = _approved_rows(config)
@@ -412,9 +470,15 @@ def _normalize_source(
     media = project / "Resources" / "media"
     media.mkdir(parents=True, exist_ok=True)
     shutil.copy2(Path(config["clean_video"]), media / "clean_video.mp4")
-    audio_suffix = audio_source.suffix.lower() or ".wav"
-    audio_name = f"source_audio{audio_suffix}"
-    shutil.copy2(audio_source, media / audio_name)
+    tts_only = config.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE"
+    audio_name = ""
+    audio_role = config.get("audio_role", "A10")
+    if audio_role in {"A10", "A11", "A12"}:
+        if audio_source is None:
+            raise RuntimeError("SOURCE_AUDIO_REQUIRED")
+        audio_suffix = audio_source.suffix.lower() or ".wav"
+        audio_name = f"source_audio{audio_suffix}"
+        shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)
 
     root_rows: list[dict] = []
@@ -436,15 +500,36 @@ def _normalize_source(
                     material["role"] = role
                     material["desc"] = f"001short production {role}"
 
-        a12_template_segment = None
-        a12_material = None
-        if config.get("audio_role", "A10") == "A12":
-            if not tracks[11].get("segments"):
-                raise RuntimeError("PINNED_A12_TEMPLATE_SEGMENT_MISSING")
-            a12_template_segment = copy.deepcopy(tracks[11]["segments"][0])
-            a12_material = material_map.get(a12_template_segment.get("material_id"))
-            if a12_material is None:
-                raise RuntimeError("PINNED_A12_TEMPLATE_MATERIAL_MISSING")
+        special_template_segment = None
+        special_material = None
+        special_track_index = {"A11": 10, "A12": 11}.get(audio_role)
+        if special_track_index is not None:
+            if not tracks[special_track_index].get("segments"):
+                raise RuntimeError(f"PINNED_{audio_role}_TEMPLATE_SEGMENT_MISSING")
+            special_template_segment = copy.deepcopy(tracks[special_track_index]["segments"][0])
+            special_material = material_map.get(special_template_segment.get("material_id"))
+            if special_material is None:
+                raise RuntimeError(f"PINNED_{audio_role}_TEMPLATE_MATERIAL_MISSING")
+
+        a9_text_template_segment = None
+        a9_text_template_material = None
+        a9_text_parent = None
+        a9_template_segment = None
+        a9_template_material = None
+        a9_parent = None
+        if tts_only:
+            if not tracks[5].get("segments") or not tracks[8].get("segments"):
+                raise RuntimeError("PINNED_A9_TEMPLATE_SEGMENT_MISSING")
+            a9_text_template_segment = copy.deepcopy(tracks[5]["segments"][0])
+            a9_template_segment = copy.deepcopy(tracks[8]["segments"][0])
+            a9_text_template_material = material_map.get(a9_text_template_segment.get("material_id"))
+            a9_template_material = material_map.get(a9_template_segment.get("material_id"))
+            if a9_text_template_material is None or a9_template_material is None:
+                raise RuntimeError("PINNED_A9_TEMPLATE_MATERIAL_MISSING")
+            a9_text_parent = _material_parent(payload["materials"], a9_text_template_material["id"])
+            a9_parent = _material_parent(payload["materials"], a9_template_material["id"])
+            if a9_text_parent is None or a9_parent is None:
+                raise RuntimeError("PINNED_A9_MATERIAL_CONTAINER_MISSING")
 
         # Existing template lanes only: no track is added.
         for index in (4, 5, 8, 10, 11):
@@ -477,6 +562,9 @@ def _normalize_source(
                 "start": clip["source_range_us"][0],
                 "duration": clip["source_range_us"][1] - clip["source_range_us"][0],
             }
+            if tts_only or audio_role in {"A11", "A12"}:
+                video_segment["volume"] = 0.0
+                video_segment["last_nonzero_volume"] = 0.0
             video_segments.append(video_segment)
         tracks[0]["segments"] = video_segments
 
@@ -528,38 +616,132 @@ def _normalize_source(
             state_segments.append(segment)
         state_track["segments"] = state_segments
 
-        base_a10_segment = tracks[9]["segments"][0]
-        a10_material = material_map[base_a10_segment["material_id"]]
-        _set_media(
-            a10_material, media_type="audio",
-            portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
-            role="A10", duration_us=duration,
-        )
-        a10_segments = []
-        for audio_index, audio_plan in enumerate(build_manifest["source_audio"]):
-            if audio_plan.get("mode") not in {"on", "duck"}:
-                continue
-            capcut_source_range = audio_plan.get("capcut_source_range_us", audio_plan["source_range_us"])
-            a10_segment = copy.deepcopy(base_a10_segment)
-            a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
-            a10_segment["role"] = "A10"
-            a10_segment["target_timerange"] = {
-                "start": audio_plan["target_range_us"][0],
-                "duration": audio_plan["target_range_us"][1] - audio_plan["target_range_us"][0],
-            }
-            a10_segment["source_timerange"] = {
-                "start": capcut_source_range[0],
-                "duration": capcut_source_range[1] - capcut_source_range[0],
-            }
-            a10_segments.append(a10_segment)
-        tracks[9]["segments"] = a10_segments
+        if tts_only:
+            assert a9_text_template_segment is not None and a9_text_template_material is not None
+            assert a9_text_parent is not None and a9_template_segment is not None
+            assert a9_template_material is not None and a9_parent is not None
+            captions, tts_segments = [], []
+            cues = config.get("tts_cues")
+            if not isinstance(cues, list) or not cues:
+                raise RuntimeError("TTS_CUES_REQUIRED")
+            for cue_index, cue in enumerate(cues):
+                cue_id = str(cue.get("cue_id") or f"TTS_{cue_index + 1:02d}")
+                text = cue.get("text")
+                audio_path = Path(str(cue.get("audio_path", "")))
+                resource_name = str(cue.get("resource_name") or f"tts_{cue_index + 1:02d}.wav")
+                start_us, end_us = cue.get("target_range_us", [None, None])
+                if (
+                    not isinstance(text, str) or not text.strip() or not audio_path.is_file()
+                    or not isinstance(start_us, int) or not isinstance(end_us, int) or end_us <= start_us
+                ):
+                    raise RuntimeError(f"TTS_CUE_INVALID:{cue_id}")
+                tts_row = approved_by_id.get(_approved_id(config, approved, "A9", cue_index))
+                text_row = approved_by_id.get(_approved_id(config, approved, "A9_TEXT", cue_index))
+                if (
+                    tts_row is None or text_row is None or tts_row.get("start") != start_us
+                    or text_row.get("start") != start_us or tts_row.get("duration") != end_us - start_us
+                    or text_row.get("duration") != end_us - start_us
+                ):
+                    raise RuntimeError(f"TTS_CUE_AUTHORITY_MISMATCH:{cue_id}")
+                shutil.copy2(audio_path, media / resource_name)
+                text_material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:a9-text:{document_index}:{cue_index}"))
+                audio_material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:a9-audio:{document_index}:{cue_index}"))
+                text_material = copy.deepcopy(a9_text_template_material)
+                audio_material = copy.deepcopy(a9_template_material)
+                text_material["id"] = text_material_id
+                audio_material["id"] = audio_material_id
+                _set_text(text_material, text, "A9_TEXT")
+                _set_media(
+                    audio_material, media_type="audio",
+                    portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{resource_name}"),
+                    role="A9", duration_us=end_us - start_us,
+                )
+                a9_text_parent.append(text_material)
+                a9_parent.append(audio_material)
+                material_map[text_material_id] = text_material
+                material_map[audio_material_id] = audio_material
+                caption = copy.deepcopy(a9_text_template_segment)
+                caption["id"] = _approved_id(config, approved, "A9_TEXT", cue_index)
+                caption["material_id"] = text_material_id
+                caption["role"] = "A9_TEXT"
+                caption["target_timerange"] = {"start": start_us, "duration": end_us - start_us}
+                sound = copy.deepcopy(a9_template_segment)
+                sound["id"] = _approved_id(config, approved, "A9", cue_index)
+                sound["material_id"] = audio_material_id
+                sound["role"] = "A9"
+                sound["target_timerange"] = {"start": start_us, "duration": end_us - start_us}
+                sound["source_timerange"] = {"start": 0, "duration": end_us - start_us}
+                sound["volume"] = 1.0
+                sound["last_nonzero_volume"] = 1.0
+                captions.append(caption)
+                tts_segments.append(sound)
+            tracks[5]["segments"] = captions
+            tracks[8]["segments"] = tts_segments
+            tracks[9]["segments"] = []
+        elif audio_role == "A10":
+            base_a10_segment = tracks[9]["segments"][0]
+            a10_material = material_map[base_a10_segment["material_id"]]
+            _set_media(
+                a10_material, media_type="audio",
+                portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
+                role="A10", duration_us=duration,
+            )
+            a10_segments = []
+            for audio_index, audio_plan in enumerate(build_manifest["source_audio"]):
+                if audio_plan.get("mode") not in {"on", "duck"}:
+                    continue
+                capcut_source_range = audio_plan.get("capcut_source_range_us", audio_plan["source_range_us"])
+                a10_segment = copy.deepcopy(base_a10_segment)
+                a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
+                a10_segment["role"] = "A10"
+                a10_segment["target_timerange"] = {
+                    "start": audio_plan["target_range_us"][0],
+                    "duration": audio_plan["target_range_us"][1] - audio_plan["target_range_us"][0],
+                }
+                a10_segment["source_timerange"] = {
+                    "start": capcut_source_range[0],
+                    "duration": capcut_source_range[1] - capcut_source_range[0],
+                }
+                a10_segments.append(a10_segment)
+            tracks[9]["segments"] = a10_segments
+        else:
+            tracks[9]["segments"] = []
 
-        if config.get("audio_role", "A10") == "A12":
-            assert a12_template_segment is not None and a12_material is not None
+        if audio_role == "A11":
+            assert special_template_segment is not None and special_material is not None
+            placements = config.get("audio_placements")
+            if not isinstance(placements, list):
+                raise RuntimeError("A11_PLACEMENTS_REQUIRED")
+            normalized_placements = []
+            for index, placement in enumerate(placements):
+                if not isinstance(placement, dict):
+                    raise RuntimeError("A11_PLACEMENT_INVALID")
+                segment_id = _approved_id(config, approved, "A11", index)
+                approved_row = approved_by_id.get(segment_id)
+                source_range = placement.get("source_range_us")
+                target_range = placement.get("target_range_us")
+                if (
+                    not isinstance(source_range, list) or len(source_range) != 2
+                    or not isinstance(target_range, list) or len(target_range) != 2
+                    or approved_row is None or approved_row.get("start") != target_range[0]
+                    or approved_row.get("duration") != target_range[1] - target_range[0]
+                ):
+                    raise RuntimeError(f"A11_PLACEMENT_AUTHORITY_MISMATCH:{segment_id}")
+                normalized_placements.append({"segment_id": segment_id, "source_range_us": source_range, "target_range_us": target_range})
+            _populate_audio_placements(
+                tracks[10], special_template_segment, special_material,
+                portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
+                role="A11", placements=normalized_placements,
+            )
+        elif audio_role == "A12":
+            assert special_template_segment is not None and special_material is not None
+            approved_row = approved_by_id.get(_approved_id(config, approved, "A12"))
+            if approved_row is None or approved_row.get("start") != 0 or approved_row.get("duration") != duration:
+                raise RuntimeError("A12_FULL_DURATION_AUTHORITY_MISMATCH")
             _populate_full_duration_audio(
                 tracks[11],
-                a12_template_segment,
-                a12_material,
+                special_template_segment,
+                special_material,
                 portable_path=_portable_resource_path(
                     draft_prefix, f"Resources/media/{audio_name}"
                 ),
@@ -959,9 +1141,6 @@ def _assert_optional_edit_lock(config: dict) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("episode_id") != config["episode_id"]:
         raise RuntimeError("EDIT_LOCK_EPISODE_MISMATCH")
-    expected_writer = config.get("active_writer_machine")
-    if expected_writer and payload.get("active_writer_machine") != expected_writer:
-        raise RuntimeError("EDIT_LOCK_WRITER_MISMATCH")
 
 
 def _assert_capcut_closed_for_target(target: Path) -> None:
