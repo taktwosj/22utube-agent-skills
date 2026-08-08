@@ -22,6 +22,7 @@ LEGAL_ROLES = {
 # the builder swaps text without touching font size, so CapCut neither shrinks
 # nor wraps.  These are the measured per-line budgets before text leaves frame.
 MAX_LINE_LENGTH_BY_ROLE = {"T1": 10, "T2": 12, "A10_TEXT": 16, "A9_TEXT": 16}
+FULL_SPAN_ROLES = ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT")
 
 
 def _overlong_line(text: str, limit: int) -> str | None:
@@ -31,9 +32,35 @@ def _overlong_line(text: str, limit: int) -> str | None:
     return None
 
 
-def validate_role_contract(timeline: dict) -> list[dict]:
+def validate_role_contract(timeline: dict, expected_duration: int | None = None) -> list[dict]:
     errors: list[dict] = []
     rows = timeline.get("segments", []) if isinstance(timeline, dict) else []
+    video_ends = [
+        row["start"] + row["duration"]
+        for row in rows
+        if row.get("role") == "VIDEO"
+        and isinstance(row.get("start"), int) and not isinstance(row.get("start"), bool)
+        and isinstance(row.get("duration"), int) and not isinstance(row.get("duration"), bool)
+        and row["start"] >= 0 and row["duration"] > 0
+    ]
+    timeline_total = max(video_ends, default=0)
+    if expected_duration is not None and timeline_total != expected_duration:
+        errors.append({
+            "code": "FULL_SPAN_ANCHOR_INVALID", "role": "VIDEO",
+            "expected_duration": expected_duration, "observed_duration": timeline_total,
+        })
+    for role in FULL_SPAN_ROLES:
+        matches = [row for row in rows if row.get("role") == role]
+        if (
+            timeline_total <= 0 or len(matches) != 1
+            or matches[0].get("start") != 0
+            or matches[0].get("duration") != timeline_total
+        ):
+            errors.append({
+                "code": "FULL_SPAN_ANCHOR_INVALID", "role": role,
+                "expected_start": 0, "expected_duration": timeline_total,
+                "observed_count": len(matches),
+            })
     for role in ("T1", "T2"):
         matches = [row for row in rows if row.get("role") == role]
         if len(matches) != 1 or not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():
@@ -79,7 +106,7 @@ def validate_role_contract(timeline: dict) -> list[dict]:
             text = row.get("text")
             if not isinstance(text, str) or not text.strip():
                 errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
-            elif meaningful_text_length(text) > 8:
+            elif _overlong_line(text, 8) is not None:
                 errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
             if row.get("state_effect") not in {"FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"}:
                 errors.append({"code": "STATE_EFFECT_REQUIRED", "segment_id": segment_id})

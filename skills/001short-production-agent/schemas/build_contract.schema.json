@@ -94,7 +94,23 @@
     "primary_timeline_roles": {"type": "array", "minItems": 1, "items": {"type": "string"}},
     "authorized_gaps": {"type": "array"},
     "authorized_overlaps": {"type": "array"},
-    "parallel_pairs": {"type": "array"}
+    "parallel_pairs": {"type": "array"},
+    "subtitle_roles": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": ["STATE", "A10_TEXT", "A9_TEXT"]}
+    },
+    "caption_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["segment_id", "cue_id", "role"],
+        "properties": {
+          "segment_id": {"type": "string", "minLength": 1},
+          "cue_id": {"type": "string", "minLength": 1},
+          "role": {"enum": ["STATE", "A10_TEXT", "A9_TEXT"]}
+        },
+        "additionalProperties": false
+      }
+    }
   },
   "additionalProperties": true
 }

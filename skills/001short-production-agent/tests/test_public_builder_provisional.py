@@ -148,7 +148,7 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             write(audio_lock, {"schema_version": "001short-audio-lock-v3", "episode_id": "EP", "status": "PASS", "audio_source": "SOURCE_VOCAL_STEM", **audio_file, "vocal_stem_manifest_path": vocal_manifest.name, "vocal_stem_manifest_sha256": sha(vocal_manifest), "role_files": [{"role": "A10", **audio_file}]})
             srt = episode / "final.srt"; srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nhello\n", encoding="utf-8")
             caption = episode / "caption_lock.json"
-            write(caption, {"schema_version": "001short-caption-lock-v1", "episode_id": "EP", "status": "PASS", "audio_lock_path": audio_lock.name, "audio_lock_sha256": sha(audio_lock), "final_srt_path": srt.name, "final_srt_sha256": sha(srt), "final_cue_count": 1, "cues": [{"cue_id": "1", "start_us": 0, "end_us": 1_000_000, "text": "hello"}], "all_cues_within_measured_audio": True, "no_overlap_verified": True})
+            write(caption, {"schema_version": "001short-caption-lock-v1", "episode_id": "EP", "status": "PASS", "audio_lock_path": audio_lock.name, "audio_lock_sha256": sha(audio_lock), "final_srt_path": srt.name, "final_srt_sha256": sha(srt), "final_cue_count": 1, "cues": [{"cue_id": "1", "start_us": 0, "end_us": 1_000_000, "text": "hello", "layer": "A10_TEXT", "caption_role": "A10_TEXT"}], "all_cues_within_measured_audio": True, "no_overlap_verified": True})
             state = episode / "90_workflow" / "state.json"
             write(state, {"episode_id": "EP", "current_stage": "08", "status": "AUDIO_CAPTION_VALIDATED", "audio_lock_path": str(audio_lock), "audio_lock_sha256": sha(audio_lock), "caption_lock_path": str(caption), "caption_lock_sha256": sha(caption)})
             build_manifest = episode / "build_manifest.json"
@@ -207,6 +207,8 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(report["status"], "CAPCUT_STATIC_VALIDATED")
             self.assertEqual(report["visual_asset_mode"], "SOURCE_VIDEO_PROVISIONAL")
             self.assertFalse(report["upload_ready"])
+            self.assertEqual(Path(report["project_path"]), root / "capcut" / "project")
+            self.assertEqual(Path(report["media_source_path"]), source.resolve())
             self.assertEqual(json.loads(state.read_text(encoding="utf-8"))["current_stage"], "09")
 
 

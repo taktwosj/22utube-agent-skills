@@ -226,7 +226,7 @@ def validate_state_cues(config: dict, timeline: dict) -> None:
             or cue["start_us"] < previous_end
             or cue["end_us"] <= cue["start_us"]
             or cue["end_us"] > duration
-            or meaningful_text_length(cue["text"]) > 8
+            or any(meaningful_text_length(line) > 8 for line in cue["text"].splitlines())
             or cue.get("text") != row.get("text")
             or cue["start_us"] != row.get("start")
             or cue["end_us"] - cue["start_us"] != row.get("duration")
@@ -263,6 +263,34 @@ def validate_tts_cues(config: dict, timeline: dict) -> None:
             raise ValueError("TTS_CUE_PLAN_AUTHORITY_MISMATCH")
 
 
+def build_caption_bindings(config: dict, caption_lock_path: Path) -> list[dict]:
+    caption = read_json(caption_lock_path)
+    cues = caption.get("cues", [])
+    rows = [
+        row for row in _approved_rows(config)
+        if row.get("role") in {"STATE", "A10_TEXT", "A9_TEXT"}
+    ]
+    bindings: list[dict] = []
+    used_cues: set[str] = set()
+    for row in rows:
+        role = row["role"]
+        matches = [
+            cue for cue in cues
+            if cue.get("layer") == role
+            and cue.get("text") == row.get("text")
+            and cue.get("start_us") == row.get("start")
+            and cue.get("end_us") == row.get("start") + row.get("duration")
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
+        cue_id = str(matches[0].get("cue_id"))
+        if not cue_id or cue_id in used_cues:
+            raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
+        used_cues.add(cue_id)
+        bindings.append({"segment_id": row["segment_id"], "cue_id": cue_id, "role": role})
+    return bindings
+
+
 def assert_a12_empty(segments: list[dict]) -> None:
     if any(row.get("role") in {"A12", "A12_RESERVED_EMPTY"} for row in segments):
         raise RuntimeError("A12_RESERVED_EMPTY")
@@ -288,6 +316,9 @@ def _validate_config(config: dict) -> None:
     if not isinstance(duration, int) or duration <= 0:
         raise ValueError("DURATION_INVALID")
     timeline = read_json(Path(config["approved_timeline_path"]).resolve())
+    role_errors = validate_design_lock.validate_role_contract(timeline, expected_duration=duration)
+    if role_errors:
+        raise ValueError(f"APPROVED_TIMELINE_ROLE_CONTRACT:{role_errors}")
     if (
         config["audio_policy"] not in {"A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"}
         or timeline.get("audio_policy") != config["audio_policy"]
@@ -622,12 +653,12 @@ def _normalize_source(
 
         for role in ("SCREEN_EFFECT", "SCREEN_WHITE"):
             index = TRACK_INDEX[role]
-            if not any(row.get("role") == role for row in approved):
-                tracks[index]["segments"] = []
-                continue
+            matches = [row for row in approved if row.get("role") == role]
+            if len(matches) != 1:
+                raise RuntimeError(f"FULL_SPAN_ANCHOR_INVALID:{role}")
             segment = tracks[index]["segments"][0]
-            segment["id"] = _approved_id(config, approved, role)
-            row = approved_by_id[segment["id"]]
+            row = matches[0]
+            segment["id"] = row["segment_id"]
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
 
         # The pinned white-frame material arrives from CapCut with an online
@@ -1185,14 +1216,7 @@ def _build_episode_once(config: dict) -> dict:
         "primary_timeline_roles": ["VIDEO"], "authorized_gaps": [],
         "authorized_overlaps": [], "parallel_pairs": [],
         "subtitle_roles": ["STATE", "A9_TEXT", "A10_TEXT"],
-        "caption_bindings": [
-            {
-                "segment_id": cue.get("segment_id")
-                or _approved_id(config, _approved_rows(config), "STATE", index - 1),
-                "cue_id": cue.get("cue_id", str(index)),
-            }
-            for index, cue in enumerate(config["state_cues"], start=1)
-        ],
+        "caption_bindings": build_caption_bindings(config, pre["caption_lock"]),
     }
     _write_json(contract_path, contract)
     inputs = validate_build_inputs.validate_build_inputs(
@@ -1244,6 +1268,7 @@ def _build_episode_once(config: dict) -> dict:
         "episode_id": config["episode_id"], "status": "CAPCUT_STATIC_VALIDATED",
         "current_stage": "09", "project_name": config["project_name"],
         "project_path": str(target),
+        "media_source_path": str(pre["video_input"]),
         "visual_asset_mode": state["visual_asset_mode"],
         "video_asset_key": state["video_asset_key"],
         "upload_ready": state["upload_ready"],
@@ -1256,6 +1281,7 @@ def _build_episode_once(config: dict) -> dict:
         "status": state["status"], "current_stage": "09", "stage08_validation": "PASS",
         "visual_asset_mode": state["visual_asset_mode"], "upload_ready": state["upload_ready"],
         "project_path": str(target), "capcut_evidence_path": str(capcut_evidence),
+        "media_source_path": str(pre["video_input"]),
         "build_report_path": str(report_path), "next_action": "WAIT_USER_CAPCUT_CHECK",
     }
 

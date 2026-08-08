@@ -61,6 +61,18 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
     }
     if any(row.get("role") in {"A12", "A12_RESERVED_EMPTY"} for row in materials.values()):
         errors.append(_error("A12_MATERIAL_FORBIDDEN"))
+    video_ends = [
+        row.get("end")
+        for row in contract.get("timeline", [])
+        if row.get("role") == "VIDEO" and isinstance(row.get("end"), int)
+    ]
+    timeline_total = max(video_ends, default=0)
+    for role in ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT"):
+        index = TRACK_INDEX[role]
+        segments = model.tracks[index].get("segments", [])
+        timerange = _range(segments[0]) if len(segments) == 1 else None
+        if timeline_total <= 0 or timerange is None or timerange[:2] != (0, timeline_total):
+            errors.append(_error("FULL_SPAN_ANCHOR_MISMATCH", role=role))
     for segment in _segments(model):
         index = segment["_actual_track_index"]
         expected = LOGICAL_ROLE_BY_TRACK[index]
@@ -309,13 +321,18 @@ def validate_subtitle_binding(model, contract: dict) -> list[dict]:
     if declared_bindings is not None:
         if not isinstance(declared_bindings, list):
             return [_error("SUBTITLE_BINDING_INVALID")]
+        used_cue_ids: set[str] = set()
         for binding in declared_bindings:
             if (
                 not isinstance(binding, dict)
                 or not isinstance(binding.get("segment_id"), str)
                 or binding.get("cue_id") is None
+                or binding.get("role") not in {"STATE", "A10_TEXT", "A9_TEXT"}
+                or str(binding.get("cue_id")) in used_cue_ids
+                or binding["segment_id"] in binding_by_segment
             ):
                 return [_error("SUBTITLE_BINDING_INVALID")]
+            used_cue_ids.add(str(binding["cue_id"]))
             binding_by_segment[binding["segment_id"]] = binding
     declared_roles = contract.get("subtitle_roles")
     if declared_roles is None:
@@ -336,22 +353,26 @@ def validate_subtitle_binding(model, contract: dict) -> list[dict]:
         binding = binding_by_segment.get(segment.get("id"))
         if binding is None and role not in subtitle_roles:
             continue
+        if binding is None:
+            errors.append(_error("SUBTITLE_BINDING_CUE_MISSING", segment_id=segment.get("id")))
+            continue
         material = materials.get(segment.get("material_id"))
         if not isinstance(material, dict):
             errors.append(_error("SUBTITLE_BINDING_MATERIAL_MISSING", segment_id=segment.get("id")))
             continue
         text, rich_valid = _rich_text(material)
         target_range = _range(segment)
-        if binding is not None:
-            cue = cues_by_id.get(str(binding["cue_id"]))
-            if cue is None:
-                errors.append(_error("SUBTITLE_BINDING_CUE_MISSING", segment_id=segment.get("id")))
-                continue
-            expected_text = cue.get("text")
-            expected_timing = (cue.get("start_us"), cue.get("end_us"))
-        else:
-            expected_text = None
-            expected_timing = None
+        cue = cues_by_id.get(str(binding["cue_id"]))
+        if cue is None:
+            errors.append(_error("SUBTITLE_BINDING_CUE_MISSING", segment_id=segment.get("id")))
+            continue
+        if binding.get("role") != role or cue.get("layer") != role:
+            errors.append(_error(
+                "SUBTITLE_BINDING_LAYER_MISMATCH", segment_id=segment.get("id"),
+                segment_role=role, cue_layer=cue.get("layer"),
+            ))
+        expected_text = cue.get("text")
+        expected_timing = (cue.get("start_us"), cue.get("end_us"))
         if (
             not rich_valid
             or not isinstance(text, str)

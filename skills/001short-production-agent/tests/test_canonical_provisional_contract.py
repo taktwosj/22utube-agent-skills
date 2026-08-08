@@ -1,5 +1,6 @@
 import copy
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -133,11 +134,117 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             "duration_us": 1_000_000, "state_cues": [], "T1": "첫 줄", "T2": "둘째 줄",
         }
         timeline = {"segments": [
-            {"role": "T1", "text": "첫 줄", "content_type": "TITLE"},
-            {"role": "T2", "text": "둘째 줄", "content_type": "TITLE"},
+            {"role": "VIDEO", "start": 0, "duration": 1_000_000},
+            {"role": "T1", "start": 0, "duration": 1_000_000, "text": "첫 줄", "content_type": "TITLE"},
+            {"role": "T2", "start": 0, "duration": 1_000_000, "text": "둘째 줄", "content_type": "TITLE"},
+            {"role": "SCREEN_EFFECT", "start": 0, "duration": 1_000_000},
+            {"role": "SCREEN_WHITE", "start": 0, "duration": 1_000_000},
         ]}
         self.assertEqual(validate_design_lock.validate_role_contract(timeline), [])
         builder.validate_state_cues(config, timeline)
+
+    def test_full_span_anchor_rows_are_required(self):
+        valid = [
+            {"segment_id": "V", "role": "VIDEO", "start": 0, "duration": 1_000_000},
+            {"segment_id": "T1", "role": "T1", "start": 0, "duration": 1_000_000,
+             "text": "title", "content_type": "TITLE"},
+            {"segment_id": "T2", "role": "T2", "start": 0, "duration": 1_000_000,
+             "text": "subtitle", "content_type": "TITLE"},
+            {"segment_id": "FX", "role": "SCREEN_EFFECT", "start": 0, "duration": 1_000_000},
+            {"segment_id": "WHITE", "role": "SCREEN_WHITE", "start": 0, "duration": 1_000_000},
+        ]
+        self.assertEqual(validate_design_lock.validate_role_contract({"segments": valid}), [])
+        cases = {
+            "missing": [row for row in valid if row["role"] != "SCREEN_EFFECT"],
+            "partial": [dict(row, duration=500_000) if row["role"] == "T1" else row for row in valid],
+            "duplicate": valid + [dict(valid[-1], segment_id="WHITE2")],
+        }
+        for name, rows in cases.items():
+            with self.subTest(name=name):
+                errors = validate_design_lock.validate_role_contract({"segments": rows})
+                self.assertIn("FULL_SPAN_ANCHOR_INVALID", {row["code"] for row in errors})
+
+    def test_caption_line_too_long_is_rejected(self):
+        timeline = {"segments": [
+            {"segment_id": "V", "role": "VIDEO", "start": 0, "duration": 1_000_000},
+            {"segment_id": "T1", "role": "T1", "start": 0, "duration": 1_000_000,
+             "text": "12345678901", "content_type": "TITLE"},
+            {"segment_id": "T2", "role": "T2", "start": 0, "duration": 1_000_000,
+             "text": "subtitle", "content_type": "TITLE"},
+            {"segment_id": "FX", "role": "SCREEN_EFFECT", "start": 0, "duration": 1_000_000},
+            {"segment_id": "WHITE", "role": "SCREEN_WHITE", "start": 0, "duration": 1_000_000},
+        ]}
+        errors = validate_design_lock.validate_role_contract(timeline)
+        self.assertIn("CAPTION_LINE_TOO_LONG", {row["code"] for row in errors})
+
+    def test_design_lock_cli_relock_overwrites_only_when_flagged(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            media = root / "source.mp4"; media.write_bytes(b"source")
+            identity = root / "source_identity.json"
+            identity.write_text(json.dumps({
+                "schema_version": "source-identity-v1", "episode_id": "EP",
+                "source_id": "SRC", "source_fingerprint": "fp",
+                "media_path": media.name,
+                "media_sha256": hashlib.sha256(media.read_bytes()).hexdigest(),
+            }), encoding="utf-8")
+            segments = [
+                {"segment_id": "V", "timeline_order": 0, "role": "VIDEO", "start": 0,
+                 "duration": 1_000_000, "source_ref": "SRC"},
+                {"segment_id": "T1", "timeline_order": 1, "role": "T1", "start": 0,
+                 "duration": 1_000_000, "source_ref": "SRC", "text": "title", "content_type": "TITLE"},
+                {"segment_id": "T2", "timeline_order": 2, "role": "T2", "start": 0,
+                 "duration": 1_000_000, "source_ref": "SRC", "text": "subtitle", "content_type": "TITLE"},
+                {"segment_id": "FX", "timeline_order": 3, "role": "SCREEN_EFFECT", "start": 0,
+                 "duration": 1_000_000, "source_ref": "SRC"},
+                {"segment_id": "WHITE", "timeline_order": 4, "role": "SCREEN_WHITE", "start": 0,
+                 "duration": 1_000_000, "source_ref": "SRC"},
+            ]
+            timeline = root / "approved_timeline.json"
+            timeline.write_text(json.dumps({
+                "schema_version": "approved-timeline-v1", "episode_id": "EP",
+                "source_fingerprint": "fp", "segments": segments,
+            }), encoding="utf-8")
+            digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            handoff = root / "design_handoff.json"
+            handoff.write_text(json.dumps({
+                "schema_version": "tikitaka-design-handoff-v1", "episode_id": "EP", "status": "PASS",
+                "source_identity_path": identity.name, "source_identity_sha256": digest(identity),
+                "timeline_path": timeline.name, "timeline_sha256": digest(timeline),
+                "source_fingerprint": "fp",
+                "approved_timeline_order": [row["segment_id"] for row in segments],
+            }), encoding="utf-8")
+            evidence = root / "design_evidence.json"; evidence.write_text("{}", encoding="utf-8")
+            command = [sys.executable, str(SCRIPTS / "validate_design_lock.py"),
+                       "--handoff", str(handoff), "--source-identity", str(identity),
+                       "--timeline", str(timeline), "--evidence", str(evidence)]
+            blocked = subprocess.run(command, capture_output=True, text=True, check=False)
+            self.assertEqual(blocked.returncode, 1)
+            self.assertIn("DESIGN_LOCK_EVIDENCE_EXISTS", blocked.stdout)
+            relocked = subprocess.run([*command, "--relock"], capture_output=True, text=True, check=False)
+            self.assertEqual(relocked.returncode, 0, relocked.stdout + relocked.stderr)
+            self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["status"], "PASS")
+
+    def test_state_meaningful_limit_is_per_line_in_design_and_builder(self):
+        timeline = {"segments": [
+            {"segment_id": "V1", "role": "VIDEO", "start": 0, "duration": 1_000_000},
+            {"segment_id": "T1", "role": "T1", "start": 0, "duration": 1_000_000,
+             "text": "title", "content_type": "TITLE"},
+            {"segment_id": "T2", "role": "T2", "start": 0, "duration": 1_000_000,
+             "text": "subtitle", "content_type": "TITLE"},
+            {"segment_id": "FX", "role": "SCREEN_EFFECT", "start": 0, "duration": 1_000_000},
+            {"segment_id": "WHITE", "role": "SCREEN_WHITE", "start": 0, "duration": 1_000_000},
+            {"segment_id": "ST1", "role": "STATE", "start": 0, "duration": 500_000,
+             "text": "12345678\nABCDEFGH", "content_type": "STATE", "caption_role": "STATE",
+             "state_effect": "FLICKER_RAVE"},
+        ]}
+        self.assertEqual(validate_design_lock.validate_role_contract(timeline), [])
+        builder.validate_state_cues({
+            "duration_us": 1_000_000,
+            "state_cues": [{"segment_id": "ST1", "cue_id": "1", "start_us": 0,
+                            "end_us": 500_000, "text": "12345678\nABCDEFGH"}],
+        }, timeline)
 
     def test_a12_nonempty_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError, "A12_RESERVED_EMPTY"):
@@ -173,12 +280,19 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         rich = lambda text: json.dumps({"text": text, "styles": [{"range": [0, len(text)]}]})
         tracks = [{"id": f"track-{index}", "segments": []} for index in range(15)]
         materials = {"items": [
+            {"id": "m-video", "type": "video"},
+            {"id": "m-fx", "type": "video_effect"},
+            {"id": "m-white", "type": "photo"},
             {"id": "m-t2", "type": "text", "content": rich("sub")},
             {"id": "m-t1", "type": "text", "content": rich("title")},
             {"id": "m-speaker", "type": "text", "content": rich("hello")},
         ]}
-        tracks[9]["segments"] = [{"id": "T2", "role": "T2", "material_id": "m-t2"}]
-        tracks[10]["segments"] = [{"id": "T1", "role": "T1", "material_id": "m-t1"}]
+        timerange = {"start": 0, "duration": 10}
+        tracks[0]["segments"] = [{"id": "V", "role": "VIDEO", "material_id": "m-video", "target_timerange": timerange}]
+        tracks[1]["segments"] = [{"id": "FX", "role": "SCREEN_EFFECT", "material_id": "m-fx", "target_timerange": timerange}]
+        tracks[2]["segments"] = [{"id": "WHITE", "role": "SCREEN_WHITE", "material_id": "m-white", "target_timerange": timerange}]
+        tracks[9]["segments"] = [{"id": "T2", "role": "T2", "material_id": "m-t2", "target_timerange": timerange}]
+        tracks[10]["segments"] = [{"id": "T1", "role": "T1", "material_id": "m-t1", "target_timerange": timerange}]
         tracks[6]["segments"] = [{"id": "SP1", "role": "A10_TEXT", "material_id": "m-speaker", "target_timerange": {"start": 0, "duration": 10}}]
         model = SimpleNamespace(tracks=tracks, materials=materials)
         contract = {
@@ -186,6 +300,14 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             "approved_segment_text": {
                 "SP1": {"role": "A10_TEXT", "start": 0, "duration": 10, "text": "hello", "color_role": "WHITE"},
             },
+            "timeline": [
+                {"segment_id": "V", "role": "VIDEO", "start": 0, "duration": 10, "end": 10},
+                {"segment_id": "FX", "role": "SCREEN_EFFECT", "start": 0, "duration": 10, "end": 10},
+                {"segment_id": "WHITE", "role": "SCREEN_WHITE", "start": 0, "duration": 10, "end": 10},
+                {"segment_id": "T2", "role": "T2", "start": 0, "duration": 10, "end": 10},
+                {"segment_id": "T1", "role": "T1", "start": 0, "duration": 10, "end": 10},
+                {"segment_id": "SP1", "role": "A10_TEXT", "start": 0, "duration": 10, "end": 10},
+            ],
         }
         self.assertEqual(validate_capcut_project.validate_v2_role_routing(model, contract), [])
         tracks[6]["segments"][0]["role"] = "STATE"
@@ -193,6 +315,43 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         tracks[6]["segments"][0]["role"] = "A10_TEXT"
         tracks[14]["segments"] = [{"id": "bgm", "role": "A12"}]
         self.assertIn("V2_ROLE_TRACK_MISMATCH", {row["code"] for row in validate_capcut_project.validate_v2_role_routing(model, contract)})
+
+    def test_readback_rejects_partial_full_span_anchor(self):
+        rich = lambda text: json.dumps({"text": text, "styles": [{"range": [0, len(text)]}]})
+        tracks = [{"id": f"track-{index}", "segments": []} for index in range(15)]
+        materials = {"items": [
+            {"id": "m-video", "type": "video"},
+            {"id": "m-fx", "type": "video_effect"},
+            {"id": "m-white", "type": "photo"},
+            {"id": "m-t2", "type": "text", "content": rich("sub")},
+            {"id": "m-t1", "type": "text", "content": rich("title")},
+        ]}
+        rows = [
+            (0, "V", "VIDEO", "m-video", 1_000_000),
+            (1, "FX", "SCREEN_EFFECT", "m-fx", 500_000),
+            (2, "WHITE", "SCREEN_WHITE", "m-white", 1_000_000),
+            (9, "T2", "T2", "m-t2", 1_000_000),
+            (10, "T1", "T1", "m-t1", 1_000_000),
+        ]
+        for index, segment_id, role, material_id, duration in rows:
+            tracks[index]["segments"] = [{
+                "id": segment_id, "role": role, "material_id": material_id,
+                "target_timerange": {"start": 0, "duration": duration},
+            }]
+        model = SimpleNamespace(tracks=tracks, materials=materials)
+        contract = {
+            "approved_role_text": {"T1": "title", "T2": "sub"},
+            "approved_segment_text": {},
+            "timeline": [
+                {"segment_id": "V", "role": "VIDEO", "start": 0, "duration": 1_000_000, "end": 1_000_000},
+                {"segment_id": "FX", "role": "SCREEN_EFFECT", "start": 0, "duration": 1_000_000, "end": 1_000_000},
+                {"segment_id": "WHITE", "role": "SCREEN_WHITE", "start": 0, "duration": 1_000_000, "end": 1_000_000},
+                {"segment_id": "T2", "role": "T2", "start": 0, "duration": 1_000_000, "end": 1_000_000},
+                {"segment_id": "T1", "role": "T1", "start": 0, "duration": 1_000_000, "end": 1_000_000},
+            ],
+        }
+        errors = validate_capcut_project.validate_v2_role_routing(model, contract)
+        self.assertIn("FULL_SPAN_ANCHOR_MISMATCH", {row["code"] for row in errors})
 
     def test_duplicate_a9_cue_id_is_rejected(self):
         base = [
@@ -253,6 +412,29 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             },
         }
         self.assertIn("CAPTION_SEGMENT_AUTHORITY_MISMATCH", {row["code"] for row in validate_capcut_project.validate_v2_role_routing(model, contract)})
+
+    def test_readback_rejects_caption_cue_layer_for_different_role(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            caption = root / "caption_lock.json"
+            caption.write_text(json.dumps({
+                "cues": [{"cue_id": "C1", "start_us": 0, "end_us": 10,
+                          "text": "same", "layer": "STATE"}],
+            }), encoding="utf-8")
+            rich = json.dumps({"text": "same", "styles": [{"range": [0, 4]}]})
+            model = SimpleNamespace(
+                tracks=[{"segments": [{
+                    "id": "SP", "role": "A10_TEXT", "material_id": "M",
+                    "target_timerange": {"start": 0, "duration": 10},
+                }]}],
+                materials={"items": [{"id": "M", "type": "text", "content": rich}]},
+            )
+            contract = {
+                "caption_lock_path": str(caption), "subtitle_roles": ["A10_TEXT"],
+                "caption_bindings": [{"segment_id": "SP", "cue_id": "C1", "role": "A10_TEXT"}],
+            }
+            errors = validate_capcut_project.validate_subtitle_binding(model, contract)
+            self.assertIn("SUBTITLE_BINDING_LAYER_MISMATCH", {row["code"] for row in errors})
 
 
 if __name__ == "__main__":

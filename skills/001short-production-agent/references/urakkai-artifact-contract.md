@@ -48,8 +48,8 @@
 
 ## 5. 승인 타임라인에 빠뜨리기 쉬운 행
 
-- `SCREEN_EFFECT`, `SCREEN_WHITE` 행이 없으면 빌더가 **조용히** 해당 템플릿 트랙을 비운다.
-  둘 다 `0`부터 총 길이까지 한 행으로 넣는다
+- `T1`, `T2`, `SCREEN_EFFECT`, `SCREEN_WHITE`는 각각 정확히 한 행이어야 하며,
+  모두 `0`부터 타임라인 총 길이까지 유지한다. 누락·중복·부분 길이는 `FULL_SPAN_ANCHOR_INVALID`다
 - `A10` 행이 없으면 `APPROVED_SEGMENT_ROLE_MISSING:A10`
 
 ## 6. 문구 길이
@@ -78,6 +78,6 @@ CapCut은 자동 축소·줄바꿈을 하지 않는다. 공백 제외 기준 줄
 
 ## 9. 미디어 연결
 
-빌더가 소재를 `<project>\Resources\media\`로 복사하고 `##_draftpath_placeholder_…##`
-상대경로를 심는다. **사용자가 CapCut에서 미디어를 다시 연결할 일이 없다.**
+빌더는 소재 경로를 패키지에 기록하지만, 사용자는 CapCut에서 미디어를 직접 다시 연결한다.
+최종 빌드 보고서는 복사 가능한 `project_path`와 `media_source_path`를 모두 제공해야 한다.
 A10 오디오는 `a10_vocal_stem.<ext>`라는 이름으로 복사되며 내용은 외부에서 분리한 Demucs vocal stem이다.

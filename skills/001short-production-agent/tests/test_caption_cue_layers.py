@@ -30,7 +30,7 @@ CUES = [
 
 
 class CaptionCueLayerTest(unittest.TestCase):
-    def _locks(self, root: Path, cues: list[dict]) -> tuple[Path, Path]:
+    def _locks(self, root: Path, cues: list[dict], srt_text: str = SRT) -> tuple[Path, Path]:
         _, vocals, manifest = vocal_fixtures.VocalStemContractTest()._fixture(root)
         duration = json.loads(manifest.read_text(encoding="utf-8"))["vocals_duration_us"]
         audio_lock = root / "audio_lock.json"
@@ -46,7 +46,7 @@ class CaptionCueLayerTest(unittest.TestCase):
             }],
         }), encoding="utf-8")
         srt = root / "final.srt"
-        srt.write_text(SRT, encoding="utf-8")
+        srt.write_text(srt_text, encoding="utf-8")
         caption = root / "caption_lock.json"
         caption.write_text(json.dumps({
             "schema_version": "001short-caption-lock-v1", "episode_id": "SH_VOCAL_TEST",
@@ -77,6 +77,32 @@ class CaptionCueLayerTest(unittest.TestCase):
             result = validate_audio_caption(audio_lock, caption)
             self.assertEqual(result["status"], "FAIL")
             self.assertIn("AUDIO_CAPTION_CUE_OVERLAP", {row["code"] for row in result["errors"]})
+
+    def test_arbitrary_layer_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            cues = [dict(CUES[0], layer="FAKE_LAYER"), *CUES[1:]]
+            audio_lock, caption = self._locks(Path(temporary), cues)
+            result = validate_audio_caption(audio_lock, caption)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("AUDIO_CAPTION_CAPTION_LOCK_SCHEMA", {row["code"] for row in result["errors"]})
+
+    def test_available_caption_role_must_match_layer(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            cues = [dict(cue) for cue in CUES]
+            cues[1]["caption_role"] = "STATE"
+            audio_lock, caption = self._locks(Path(temporary), cues)
+            result = validate_audio_caption(audio_lock, caption)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("AUDIO_CAPTION_CUE_LAYER_ROLE_MISMATCH", {row["code"] for row in result["errors"]})
+
+    def test_caption_role_without_layer_keeps_legacy_sequence(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            cue = {k: v for k, v in CUES[0].items() if k != "layer"}
+            cue["caption_role"] = "STATE"
+            srt = "ST01\n00:00:00,000 --> 00:00:00,120\n상황 하나\n"
+            cue["text"] = "상황 하나"
+            audio_lock, caption = self._locks(Path(temporary), [cue], srt)
+            self.assertEqual(validate_audio_caption(audio_lock, caption)["status"], "PASS")
 
 
 if __name__ == "__main__":

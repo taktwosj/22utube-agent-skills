@@ -245,6 +245,14 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
         previous_end_by_layer: dict[str, int] = {}
         for expected, actual in zip(caption["cues"], parsed):
             layer = str(expected.get("layer", DEFAULT_CUE_LAYER))
+            caption_role = expected.get("caption_role")
+            if "layer" in expected and caption_role is not None and caption_role != layer:
+                errors.append({
+                    "code": "AUDIO_CAPTION_CUE_LAYER_ROLE_MISMATCH",
+                    "cue_id": expected.get("cue_id"),
+                    "layer": layer,
+                    "caption_role": caption_role,
+                })
             if actual["end_us"] <= actual["start_us"]:
                 errors.append({"code": "AUDIO_CAPTION_CUE_REVERSED", "cue_id": expected.get("cue_id")})
             if any(expected.get(field) != actual.get(field) for field in ("start_us", "end_us", "text")):

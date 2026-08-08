@@ -23,7 +23,8 @@
           "start_us": {"type": "integer"},
           "end_us": {"type": "integer"},
           "text": {"type": "string", "minLength": 1},
-          "layer": {"type": "string", "minLength": 1}
+          "layer": {"enum": ["STATE", "A10_TEXT", "A9_TEXT"]},
+          "caption_role": {"enum": ["STATE", "A10_TEXT", "A9_TEXT"]}
         },
         "additionalProperties": true
       }

@@ -45,9 +45,11 @@ class PublicBuilderCleanTest(unittest.TestCase):
                 {"segment_id": "V1", "timeline_order": 1, "role": "VIDEO", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
                 {"segment_id": "T2", "timeline_order": 2, "role": "T2", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "subtitle", "content_type": "TITLE"},
                 {"segment_id": "T1", "timeline_order": 3, "role": "T1", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "title", "content_type": "TITLE"},
-                {"segment_id": "SP1", "timeline_order": 4, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
-                {"segment_id": "A10-1", "timeline_order": 5, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
-                {"segment_id": "A10-2", "timeline_order": 6, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
+                {"segment_id": "SCR_FX", "timeline_order": 4, "role": "SCREEN_EFFECT", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
+                {"segment_id": "SCR_WHITE", "timeline_order": 5, "role": "SCREEN_WHITE", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
+                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
+                {"segment_id": "A10-1", "timeline_order": 7, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
+                {"segment_id": "A10-2", "timeline_order": 8, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
             ]
             timeline = episode / "approved_timeline.json"
             write(timeline, {"schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": "fp", "audio_policy": "A10_RETAINED_SYNC", "primary_speaker_id": "P1", "segments": rows})
@@ -63,7 +65,7 @@ class PublicBuilderCleanTest(unittest.TestCase):
             write(audio_lock, {"schema_version": "001short-audio-lock-v3", "episode_id": "EP", "status": "PASS", "audio_source": "SOURCE_VOCAL_STEM", **audio_file, "vocal_stem_manifest_path": vocal_manifest.name, "vocal_stem_manifest_sha256": sha(vocal_manifest), "role_files": [{"role": "A10", **audio_file}]})
             srt = episode / "final.srt"; srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nhello\n", encoding="utf-8")
             caption = episode / "caption_lock.json"
-            write(caption, {"schema_version": "001short-caption-lock-v1", "episode_id": "EP", "status": "PASS", "audio_lock_path": audio_lock.name, "audio_lock_sha256": sha(audio_lock), "final_srt_path": srt.name, "final_srt_sha256": sha(srt), "final_cue_count": 1, "cues": [{"cue_id": "1", "start_us": 0, "end_us": 1_000_000, "text": "hello"}], "all_cues_within_measured_audio": True, "no_overlap_verified": True})
+            write(caption, {"schema_version": "001short-caption-lock-v1", "episode_id": "EP", "status": "PASS", "audio_lock_path": audio_lock.name, "audio_lock_sha256": sha(audio_lock), "final_srt_path": srt.name, "final_srt_sha256": sha(srt), "final_cue_count": 1, "cues": [{"cue_id": "1", "start_us": 0, "end_us": 1_000_000, "text": "hello", "layer": "A10_TEXT", "caption_role": "A10_TEXT"}], "all_cues_within_measured_audio": True, "no_overlap_verified": True})
             state = episode / "90_workflow" / "state.json"
             write(state, {"episode_id": "EP", "current_stage": "08", "status": "AUDIO_CAPTION_VALIDATED", "audio_lock_path": str(audio_lock), "audio_lock_sha256": sha(audio_lock), "caption_lock_path": str(caption), "caption_lock_sha256": sha(caption)})
 
@@ -89,6 +91,8 @@ class PublicBuilderCleanTest(unittest.TestCase):
             report = json.loads((episode / "50_capcut_project" / "build_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "CAPCUT_STATIC_VALIDATED")
             self.assertTrue(report["upload_ready"])
+            self.assertEqual(Path(report["project_path"]), root / "capcut" / "project")
+            self.assertEqual(Path(report["media_source_path"]), clean_video.resolve())
             self.assertEqual(json.loads(state.read_text(encoding="utf-8"))["current_stage"], "09")
 
 
