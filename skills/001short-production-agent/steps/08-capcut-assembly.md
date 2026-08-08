@@ -1,4 +1,22 @@
-# 08 CapCut 조립
-`FINAL_DESIGN_LOCKED`와 `AUDIO_CAPTION_VALIDATED` 증거, 편집 잠금, CapCut 종료, 근본 ZIP, 미디어/CFR, 필수 트랙을 먼저 확인한다. 승인 timeline·오디오 입력은 build contract로 고정하고 실제 경로와 SHA-256을 기록한다. 실패하면 오류 경로로 중단한다.
+# 08 CapCut assembly
 
-통과 후 `shrt white` 새 복제본만 조립한다. validator가 working copy의 `draft_content`, meta, Timelines, Resources를 직접 열어 schema·ID mirror·material·geometry·시간순서·media decode를 확인하고 실제 증거를 저장해야 `CAPCUT_STATIC_VALIDATED`다.
+## Load order
+
+1. Use [`scripts/build_episode_capcut.py`](../scripts/build_episode_capcut.py) as the production entrypoint. Do not substitute a helper, old builder, or previous episode draft.
+2. Read the Stage 07 canonical locks from `30_audio_srt/audio_lock.json`, `30_audio_srt/caption_lock.json`, and `30_audio_srt/final.srt`.
+3. Build only against the `shrt_white_base_v2_15` root and its v2 15-track contract.
+4. Read [`references/urakkai-artifact-contract.md`](../references/urakkai-artifact-contract.md) for the manual media-relink handoff and final report fields.
+
+## Build contract
+
+- Accepted visual input modes are `CLEAN_VISUAL_READY` and `SOURCE_VIDEO_PROVISIONAL`. The provisional mode uses the episode source video and must remain reported as provisional; it is not clean or upload-ready evidence.
+- `A12_RESERVED_EMPTY` must remain empty. Do not place BGM, segments, materials, or production-plan rows on A12.
+- A10 authority is the validated external vocals stem required by Stage 07. CapCut built-in vocal separation is forbidden and must not be used as a bypass.
+- Preserve exact approved T1, T2, caption-role, speaker-color, effect, audio, and timing placements. The builder executes the locked plan and does not redesign it.
+- Static validation must read back the root and primary `Timelines/*` draft, material references, ID mirrors, geometry, timing, mute/volume policy, and the 15-track role contract before reporting `CAPCUT_STATIC_VALIDATED`.
+
+## Handoff
+
+The builder may package or record media paths, but it must not promise that relinking is unnecessary. The operator performs the CapCut media relink when required. The final production report must provide both `project_path` and `media_source_path` as copyable paths, following [`references/urakkai-artifact-contract.md`](../references/urakkai-artifact-contract.md).
+
+Load [`references/interim-capcut-project-sync.md`](../references/interim-capcut-project-sync.md) only for an explicit sync request. It is a sync reference, not the default Stage 08 assembly route.
