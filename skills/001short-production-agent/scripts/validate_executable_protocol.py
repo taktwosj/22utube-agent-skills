@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
+from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
@@ -36,6 +37,19 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_OWNER_SKILL")
     if protocol.get("lane") != "general_shorts_production":
         errors.append("PROTOCOL_LANE")
+    expected_tracks = list(CANONICAL_TRACKS)
+    if protocol.get("track_layout") != TRACK_LAYOUT:
+        errors.append("PROTOCOL_TRACK_LAYOUT")
+    if protocol.get("canonical_tracks") != expected_tracks:
+        errors.append("PROTOCOL_CANONICAL_TRACKS")
+    if protocol.get("visual_asset_modes") != ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]:
+        errors.append("PROTOCOL_VISUAL_ASSET_MODES")
+    if protocol.get("stage07_outputs") != ["audio_lock.json", "caption_lock.json", "final.srt"]:
+        errors.append("PROTOCOL_STAGE07_OUTPUTS")
+    if protocol.get("a12_policy") != "EMPTY":
+        errors.append("PROTOCOL_A12_POLICY")
+    if protocol.get("anchors", {}).get("A10") != "validated Demucs source vocal stem only":
+        errors.append("PROTOCOL_A10_AUTHORITY")
 
     session_handoff = protocol.get("session_handoff")
     expected_session_handoff = {
@@ -115,6 +129,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_STAGE_ORDER")
     elif stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
+    elif stages[6].get("produces") != [
+        "30_audio_srt/audio_lock.json", "30_audio_srt/caption_lock.json", "30_audio_srt/final.srt"
+    ]:
+        errors.append("PROTOCOL_STAGE07_OUTPUTS")
     elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
 
@@ -270,7 +288,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             "URL",
             "DESKTOP",
             "A11=SFX",
-            "A12=BGM",
+            "A12=EMPTY",
         ]:
             if token not in orchestrator_text:
                 errors.append(f"PROTOCOL_ORCHESTRATOR_TOKEN_MISSING:{token}")
@@ -297,6 +315,11 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_VALIDATOR_MISMATCH")
             if bootstrap.get("resume_requires_episode_id_and_explicit_request") is not True:
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_RESUME_GATE_DISABLED")
+            if workflow.get("blueprint_frontend", {}).get("assembly", {}).get("a10_authority") != "validated_demucs_source_vocal_stem":
+                errors.append("PROTOCOL_WORKFLOW_A10_AUTHORITY_MISMATCH")
+            interim = workflow.get("interim_capcut", {})
+            if interim.get("a10_anchor") != "A10_VALIDATED_DEMUCS_VOCAL_STEM":
+                errors.append("PROTOCOL_WORKFLOW_A10_ANCHOR_MISMATCH")
         except Exception:
             pass
 
@@ -318,6 +341,18 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_TOOLS_HANDOFF_VALIDATOR_MISMATCH")
             if handoff_tool.get("env_file") != session_handoff.get("env_file"):
                 errors.append("PROTOCOL_TOOLS_HANDOFF_ENV_MISMATCH")
+            mapping = tools.get("capcut_preflight", {}).get("track_mapping", {})
+            if mapping.get("profile") != TRACK_LAYOUT:
+                errors.append("PROTOCOL_TOOLS_TRACK_LAYOUT_MISMATCH")
+            if mapping.get("required") != list(CANONICAL_TRACKS):
+                errors.append("PROTOCOL_TOOLS_TRACKS_MISMATCH")
+            production_ids = [row.get("id") for row in tools.get("production_tools", []) if isinstance(row, dict)]
+            if production_ids != list(CANONICAL_TRACKS):
+                errors.append("PROTOCOL_TOOLS_PRODUCTION_TRACKS_MISMATCH")
+            if tools.get("root_profiles") != ["home_windows", "macmini"]:
+                errors.append("PROTOCOL_TOOLS_ROOT_PROFILES_MISMATCH")
+            if tools.get("template_profile") != "shrt_white_base_v2":
+                errors.append("PROTOCOL_TOOLS_TEMPLATE_PROFILE_MISMATCH")
         except Exception:
             pass
     return errors
@@ -472,11 +507,11 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
 
     invariants = protocol.get("invariants", {})
     if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
-        visual_mode = plan.get("visual_asset_mode", "VMAKE_CLEAN")
+        visual_mode = plan.get("visual_asset_mode", "CLEAN_VISUAL_READY")
         if visual_mode == "SOURCE_VIDEO_PROVISIONAL":
             expected_asset_key = invariants.get("source_provisional_video_asset_key", "source_video")
             error_prefix = "SOURCE_PROVISIONAL_ASSET_INVALID"
-        elif visual_mode == "VMAKE_CLEAN":
+        elif visual_mode == "CLEAN_VISUAL_READY":
             expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
             error_prefix = "VMAKE_DIRECT_INSERT_ASSET_INVALID"
         else:

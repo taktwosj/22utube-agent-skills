@@ -23,41 +23,23 @@ def load_script(name):
 
 
 class V2ReleaseContractTest(unittest.TestCase):
-    def test_normal_audio_roles_are_sfx_and_bgm(self):
+    def test_a11_is_sfx_and_a12_is_reserved_empty(self):
         protocol = json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
         tools = json.loads((SKILL / "tools.json").read_text(encoding="utf-8"))
         builder = load_script("build_episode_capcut")
 
         self.assertEqual(protocol["anchors"]["A11"], "sound effects")
-        self.assertEqual(protocol["anchors"]["A12"], "background music")
+        self.assertEqual(protocol["anchors"]["A12"], "reserved empty")
         roles = {row["id"]: row["role"] for row in tools["production_tools"]}
         self.assertEqual(roles["A11"], "sound effects")
-        self.assertEqual(roles["A12"], "background music")
+        self.assertEqual(roles["A12_RESERVED_EMPTY"], "reserved empty")
         matrix = workflow["blueprint_frontend"]["matrix"]["vertical"]
         self.assertIn("A11_SFX", matrix)
-        self.assertIn("A12_BGM", matrix)
-
-        config = {
-            "episode_id": "EP",
-            "clean_video": "video.mp4",
-            "duration_us": 1,
-            "T1": "one",
-            "T2": "two",
-            "state_cues": [{"text": "cue", "start_us": 0, "end_us": 1}],
-            "project_name": "project",
-            "template_zip": "template.zip",
-            "episode_root": "episode",
-            "work_root": "work",
-            "local_capcut_root": "capcut",
-            "source_identity_path": "source_identity.json",
-            "approved_timeline_path": "timeline.json",
-            "design_handoff_path": "handoff.json",
-            "design_lock_evidence_path": "lock.json",
-            "build_manifest_path": "manifest.json",
-            "audio_role": "A11",
-        }
-        builder._validate_config(config)
+        self.assertIn("A12_UNUSED", matrix)
+        builder.assert_a12_empty([])
+        with self.assertRaisesRegex(RuntimeError, "A12_RESERVED_EMPTY"):
+            builder.assert_a12_empty([{"role": "A12"}])
 
     def test_onedrive_0000shrt_episode_root_contract(self):
         resolver = load_script("resolve_episode_root")

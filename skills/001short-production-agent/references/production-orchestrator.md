@@ -10,7 +10,7 @@ Accepted intake declarations are `GOOGLE_DRIVE`, `URL`, and `DESKTOP`. Do not pe
 
 ## Audio anchors
 
-Normal production semantics are A9=TTS, A10=original speaker/source audio, A11=SFX, A12=BGM. A11/A12 are optional, not globally forbidden. The explicit clean-only and `TTS_ONLY_MUTE_SOURCE` branches declare their empty anchors in the plan and retain their tighter rules.
+Normal production semantics are A9=TTS, A10=validated Demucs source vocal stem, A11=SFX, A12=EMPTY. A11 is optional; A12 is reserved empty in the canonical v2 contract. The explicit clean-only and `TTS_ONLY_MUTE_SOURCE` branches declare their empty anchors in the plan and retain their tighter rules.
 
 ## VMake Direct-Insert Contract
 

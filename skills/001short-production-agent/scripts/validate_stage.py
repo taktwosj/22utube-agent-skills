@@ -29,8 +29,7 @@ def _contracts():
         stage: {
             "pass_state": stages[stage]["pass_state"],
             "next_stage": ordered[ordered.index(stage) + 1]
-            if ordered.index(stage) + 1 < len(ordered)
-            else None,
+            if ordered.index(stage) + 1 < len(ordered) else None,
         }
         for stage in checks
     }
@@ -65,31 +64,30 @@ def resolve_stage(state: dict) -> str:
 
 
 def _entry_state_matches(state: dict, requirement: str) -> bool:
-    visual_suffix = "_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL"
-    if requirement.endswith(visual_suffix):
+    suffix = "_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL"
+    if requirement.endswith(suffix):
         return (
-            state.get("status") == requirement.removesuffix(visual_suffix)
+            state.get("status") == requirement.removesuffix(suffix)
             and state.get("visual_asset_mode")
             in {"CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"}
         )
     return state.get("status") in requirement.split("_OR_")
 
 
+def _canonical_state_path(path: Path) -> bool:
+    return path.name == "state.json" and path.parent.name == "90_workflow"
+
+
 def _state_declared_path(state_path: Path, raw: str) -> Path:
-    declared = Path(raw)
-    if declared.is_absolute():
-        return declared
-    base = state_path.parent
-    if base.name == "90_workflow":
-        base = base.parent
-    return base / declared
+    path = Path(raw)
+    if path.is_absolute():
+        return path
+    return state_path.parent.parent / path
 
 
 def _receipt_error(state, state_path, name):
     path_key, sha_key, schema = RECEIPTS[name]
     raw, expected = state.get(path_key), state.get(sha_key)
-    if name == "design_lock" and not raw:
-        raw = state.get("design_lock_evidence")
     if not isinstance(raw, str) or not raw or not isinstance(expected, str):
         return "WAIT", {"code": "PREREQUISITE_EVIDENCE_MISSING", "receipt": name}
     path = _state_declared_path(state_path, raw)
@@ -153,12 +151,6 @@ def _advance_state(state_path: Path, state: dict, stage: str, args) -> dict:
     advanced = dict(state)
     advanced["current_stage"] = transition["next_stage"]
     advanced["status"] = transition["pass_state"]
-    if not advanced.get("design_lock_evidence_path") and advanced.get(
-        "design_lock_evidence"
-    ):
-        advanced["design_lock_evidence_path"] = str(
-            _state_declared_path(state_path, advanced["design_lock_evidence"]).resolve()
-        )
     if stage == "07":
         for name, path in (("audio_lock", args.audio_lock), ("caption_lock", args.caption_lock)):
             resolved = Path(path).resolve()
@@ -182,6 +174,8 @@ def main() -> int:
     p.add_argument("--advance", action="store_true")
     a = p.parse_args(); state_path = a.state.resolve()
     try:
+        if not _canonical_state_path(state_path):
+            raise ValueError("CANONICAL_STATE_PATH_REQUIRED")
         state = read_json(state_path); stage = resolve_stage(state)
     except (OSError, ValueError, TypeError) as exc:
         return _emit({"status": "FAIL", "errors": [{"code": "STATE_INVALID", "detail": str(exc)}], "evidence": {}, "stage_complete": False})
@@ -194,6 +188,11 @@ def main() -> int:
         if failure := _receipt_error(state, state_path, receipt):
             status, error = failure
             return _emit({"status": status, "errors": [error], "evidence": {}, "stage": stage, "stage_complete": False})
+    if stage in {"08", "09"}:
+        if a.audio_lock is None and isinstance(state.get("audio_lock_path"), str):
+            a.audio_lock = _state_declared_path(state_path, state["audio_lock_path"])
+        if a.caption_lock is None and isinstance(state.get("caption_lock_path"), str):
+            a.caption_lock = _state_declared_path(state_path, state["caption_lock_path"])
     required = STAGE_CHECKS[stage]; selected = (a.check,) if a.check else required
     if any(check not in required for check in selected):
         return _emit({"status": "FAIL", "errors": [{"code": "CHECK_STAGE_MISMATCH", "stage": stage, "check": selected[0]}], "evidence": {}, "stage": stage, "stage_complete": False})
@@ -227,12 +226,7 @@ def main() -> int:
             advanced = _advance_state(state_path, state, stage, a)
         except (OSError, TypeError, ValueError) as exc:
             return _emit({"status": "FAIL", "errors": [{"code": "STATE_ADVANCE_FAILED", "detail": str(exc)}], "evidence": evidence, "stage": stage, "stage_complete": False})
-        evidence["state_transition"] = {
-            "from_stage": stage,
-            "to_stage": advanced["current_stage"],
-            "status": advanced["status"],
-            "state_path": str(state_path),
-        }
+        evidence["state_transition"] = {"from_stage": stage, "to_stage": advanced["current_stage"], "status": advanced["status"], "state_path": str(state_path)}
     return _emit({"status": status, "errors": errors, "evidence": evidence, "stage": stage, "check": a.check or "all", "required_checks": list(required), "completed_checks": completed, "missing_checks": missing, "stage_complete": status == "PASS"})
 
 

@@ -49,7 +49,11 @@
       "04": "{episode_root}/20_script/external-review.md",
       "05": "{episode_root}/20_script/final-blueprint.md",
       "06": "{episode_root}/40_assets_used/clean_visual_manifest.json",
-      "07": "{episode_root}/30_audio_srt/audio_caption_lock.json",
+      "07": [
+        "{episode_root}/30_audio_srt/audio_lock.json",
+        "{episode_root}/30_audio_srt/caption_lock.json",
+        "{episode_root}/30_audio_srt/final.srt"
+      ],
       "08": "{episode_root}/50_capcut_project/static_validation.json",
       "09": "{episode_root}/60_exports/render_validation.json"
     },
@@ -454,7 +458,7 @@
         "SPEAKER_A10",
         "STATE_CAPTION",
         "A11_SFX",
-        "A12_BGM",
+        "A12_UNUSED",
         "SCREEN"
       ],
       "repeat": true,
@@ -504,7 +508,7 @@
       "template": "shrt white",
       "new_tracks": false,
       "new_tools": false,
-      "a10_authority": "source.mp4",
+      "a10_authority": "validated_demucs_source_vocal_stem",
       "capcut_polish_profile": "001short-capcut-polish-v3",
       "capcut_polish_validator": "scripts/validate_capcut_polish_profile.py",
       "source_audio_separation": "external_demucs_vocal_stem_when_a10_is_retained",
@@ -528,8 +532,8 @@
     "purpose": "continue_full_reviewable_source_video_project_without_waiting_for_vmake",
     "video_asset": "00_input/source.mp4",
     "video_volume": 0,
-    "original_audio_anchor": "A10",
-    "original_audio_volume": 1,
+    "a10_anchor": "A10_VALIDATED_DEMUCS_VOCAL_STEM",
+    "a10_volume": 1,
     "status": "SOURCE_VIDEO_PROVISIONAL",
     "does_not_advance": [
       "CLEAN_VISUAL_READY",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import re
@@ -30,15 +31,12 @@ import validate_prebuild
 import validate_clean_visual
 import validate_design_lock
 import resolve_shorts_capcut_root
-from capcut_io import iter_timeline_json
-from common import manifest_sha256, resolved_declared_path, sha256_file
+from capcut_io import iter_primary_draft_documents
+from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path
+from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
-ROLE_BY_TRACK = [
-    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
-    "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
-    "A9", "A10", "A11", "A12",
-]
+ROLE_BY_TRACK = list(CANONICAL_TRACKS)
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -47,7 +45,7 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def _sha(path: Path) -> str:
-    return sha256_file(path)
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _materials(value: Any) -> Iterator[dict]:
@@ -142,7 +140,7 @@ def _normalize_paths(value: Any, project: Path, draft_prefix: str) -> None:
 def _bind_portable_root_contract(config: dict) -> dict | None:
     raw_contract = config.get("root_contract_path")
     if raw_contract is None:
-        return None
+        raise ValueError("ROOT_CONTRACT_PATH_MISSING")
     raw_workspace = config.get("workspace_root")
     profile = config.get("root_profile")
     if not isinstance(raw_workspace, str) or not raw_workspace.strip():
@@ -151,10 +149,14 @@ def _bind_portable_root_contract(config: dict) -> dict | None:
         raise ValueError("ROOT_CONTRACT_PROFILE_MISSING")
     workspace_root = Path(raw_workspace).resolve()
     candidate = Path(str(raw_contract))
-    contract_path = candidate if candidate.is_absolute() else workspace_root / candidate
+    if candidate.is_absolute():
+        raise ValueError("ROOT_CONTRACT_PATH_MUST_BE_WORKSPACE_RELATIVE")
+    contract_path = workspace_root / candidate
     resolved = resolve_shorts_capcut_root.resolve_root_contract(
         workspace_root, profile, contract_path
     )
+    if resolved.get("template_profile") != "shrt_white_base_v2":
+        raise ValueError("ROOT_CONTRACT_V2_PROFILE_REQUIRED")
     declared = config.get("template_zip")
     if declared is not None and Path(str(declared)).resolve() != Path(resolved["archive"]):
         raise ValueError("ROOT_CONTRACT_TEMPLATE_MISMATCH")
@@ -167,27 +169,54 @@ def _bind_portable_root_contract(config: dict) -> dict | None:
     return resolved
 
 
-def _validate_config(config: dict) -> None:
-    _bind_portable_root_contract(config)
-    required = (
-        "episode_id", "clean_video", "duration_us", "T1", "T2", "state_cues",
-        "project_name", "template_zip", "episode_root", "work_root", "local_capcut_root",
-        "source_identity_path", "approved_timeline_path", "design_handoff_path",
-        "design_lock_evidence_path", "build_manifest_path",
-    )
-    missing = [key for key in required if key not in config]
-    if missing:
-        raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
-    if config.get("audio_role", "A10") not in {None, "A10", "A11", "A12"}:
-        raise ValueError("AUDIO_ROLE_INVALID")
-    duration = config["duration_us"]
-    if not isinstance(duration, int) or duration <= 0:
-        raise ValueError("DURATION_INVALID")
-    cues = config["state_cues"]
-    if not isinstance(cues, list) or not cues:
+def resolve_visual_input(config: dict) -> dict:
+    mode = config.get("visual_asset_mode")
+    if mode == "SOURCE_VIDEO_PROVISIONAL":
+        identity_path = Path(config["source_identity_path"]).resolve()
+        identity = read_json(identity_path)
+        video = resolved_declared_path(identity_path, identity["media_path"])
+        expected_sha = identity.get("media_sha256")
+        if not video.is_file() or not isinstance(expected_sha, str) or _sha(video).lower() != expected_sha.lower():
+            raise RuntimeError("SOURCE_PROVISIONAL_SHA_MISMATCH")
+        return {
+            "visual_asset_mode": mode,
+            "video_asset_key": "source_video",
+            "video_input_path": video,
+            "video_input_sha256": expected_sha.lower(),
+            "resource_name": "source.mp4",
+            "upload_ready": False,
+        }
+    if mode == "CLEAN_VISUAL_READY":
+        raw = config.get("clean_video")
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("CLEAN_VIDEO_REQUIRED")
+        video = Path(raw).resolve()
+        if not video.is_file():
+            raise FileNotFoundError("CLEAN_VIDEO_MISSING")
+        return {
+            "visual_asset_mode": mode,
+            "video_asset_key": "clean_video",
+            "video_input_path": video,
+            "video_input_sha256": _sha(video),
+            "resource_name": "clean_video.mp4",
+            "upload_ready": True,
+        }
+    raise ValueError(f"VISUAL_ASSET_MODE_INVALID:{mode}")
+
+
+def validate_state_cues(config: dict, timeline: dict) -> None:
+    cues = config.get("state_cues")
+    if not isinstance(cues, list):
         raise ValueError("STATE_CUES_INVALID")
+    state_rows = sorted(
+        (row for row in timeline.get("segments", []) if row.get("role") == "STATE"),
+        key=lambda row: row.get("timeline_order", 0),
+    )
+    if len(cues) != len(state_rows):
+        raise ValueError("STATE_CUES_TIMELINE_MISMATCH")
     previous_end = 0
-    for cue in cues:
+    duration = config["duration_us"]
+    for index, (cue, row) in enumerate(zip(cues, state_rows), start=1):
         if (
             not isinstance(cue, dict)
             or not isinstance(cue.get("text"), str)
@@ -197,15 +226,107 @@ def _validate_config(config: dict) -> None:
             or cue["start_us"] < previous_end
             or cue["end_us"] <= cue["start_us"]
             or cue["end_us"] > duration
-            or ("cue_id" in cue and (not isinstance(cue["cue_id"], str) or not cue["cue_id"]))
+            or any(meaningful_text_length(line) > 8 for line in cue["text"].splitlines())
+            or cue.get("text") != row.get("text")
+            or cue["start_us"] != row.get("start")
+            or cue["end_us"] - cue["start_us"] != row.get("duration")
+            or str(cue.get("cue_id", index)) != str(row.get("cue_id", index))
         ):
             raise ValueError("STATE_CUES_INVALID")
-        # STATE is a punchy, present-scene cue, not a sentence-sized edit outline.
-        # Spaces and punctuation do not consume the eight Korean-character budget.
-        meaningful = "".join(char for char in cue["text"] if char.isalnum())
-        if len(meaningful) > 8:
-            raise ValueError("STATE_CUE_TOO_LONG")
         previous_end = cue["end_us"]
+
+
+def validate_tts_cues(config: dict, timeline: dict) -> None:
+    if config.get("audio_policy") != "TTS_ONLY_MUTE_SOURCE" and not config.get("tts_cues"):
+        return
+    cues = config.get("tts_cues")
+    if not isinstance(cues, list) or not cues:
+        raise ValueError("TTS_CUES_REQUIRED")
+    audio_rows = {row.get("cue_id"): row for row in timeline.get("segments", []) if row.get("role") == "A9"}
+    text_rows = {row.get("cue_id"): row for row in timeline.get("segments", []) if row.get("role") == "A9_TEXT"}
+    if len(audio_rows) != len(cues) or set(audio_rows) != set(text_rows):
+        raise ValueError("TTS_CUE_PLAN_AUTHORITY_MISMATCH")
+    for cue in cues:
+        cue_id = cue.get("cue_id")
+        sound, caption = audio_rows.get(cue_id), text_rows.get(cue_id)
+        target_range = cue.get("target_range_us")
+        if (
+            sound is None or caption is None
+            or not isinstance(target_range, list) or len(target_range) != 2
+            or cue.get("text") != sound.get("text")
+            or cue.get("text") != caption.get("text")
+            or (sound.get("start"), sound.get("duration"))
+            != (target_range[0], target_range[1] - target_range[0])
+            or (caption.get("start"), caption.get("duration"))
+            != (target_range[0], target_range[1] - target_range[0])
+        ):
+            raise ValueError("TTS_CUE_PLAN_AUTHORITY_MISMATCH")
+
+
+def build_caption_bindings(config: dict, caption_lock_path: Path) -> list[dict]:
+    caption = read_json(caption_lock_path)
+    cues = caption.get("cues", [])
+    rows = [
+        row for row in _approved_rows(config)
+        if row.get("role") in {"STATE", "A10_TEXT", "A9_TEXT"}
+    ]
+    bindings: list[dict] = []
+    used_cues: set[str] = set()
+    for row in rows:
+        role = row["role"]
+        matches = [
+            cue for cue in cues
+            if cue.get("layer") == role
+            and cue.get("text") == row.get("text")
+            and cue.get("start_us") == row.get("start")
+            and cue.get("end_us") == row.get("start") + row.get("duration")
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
+        cue_id = str(matches[0].get("cue_id"))
+        if not cue_id or cue_id in used_cues:
+            raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
+        used_cues.add(cue_id)
+        bindings.append({"segment_id": row["segment_id"], "cue_id": cue_id, "role": role})
+    return bindings
+
+
+def assert_a12_empty(segments: list[dict]) -> None:
+    if any(row.get("role") in {"A12", "A12_RESERVED_EMPTY"} for row in segments):
+        raise RuntimeError("A12_RESERVED_EMPTY")
+
+
+def _validate_config(config: dict) -> None:
+    _bind_portable_root_contract(config)
+    required = (
+        "episode_id", "visual_asset_mode", "audio_policy", "duration_us", "T1", "T2", "state_cues",
+        "project_name", "template_zip", "episode_root", "work_root", "local_capcut_root",
+        "source_identity_path", "approved_timeline_path", "design_handoff_path",
+        "design_lock_evidence_path", "build_manifest_path", "state_path",
+    )
+    missing = [key for key in required if key not in config]
+    if missing:
+        raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
+    canonical_state = Path(config["episode_root"]).resolve() / "90_workflow" / "state.json"
+    if Path(config["state_path"]).resolve() != canonical_state:
+        raise ValueError("CANONICAL_STATE_PATH_REQUIRED")
+    if config.get("audio_role", "A10") not in {"A10", None}:
+        raise ValueError("AUDIO_ROLE_INVALID")
+    duration = config["duration_us"]
+    if not isinstance(duration, int) or duration <= 0:
+        raise ValueError("DURATION_INVALID")
+    timeline = read_json(Path(config["approved_timeline_path"]).resolve())
+    role_errors = validate_design_lock.validate_role_contract(timeline, expected_duration=duration)
+    if role_errors:
+        raise ValueError(f"APPROVED_TIMELINE_ROLE_CONTRACT:{role_errors}")
+    if (
+        config["audio_policy"] not in {"A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"}
+        or timeline.get("audio_policy") != config["audio_policy"]
+    ):
+        raise ValueError("AUDIO_POLICY_TIMELINE_MISMATCH")
+    validate_state_cues(config, timeline)
+    validate_tts_cues(config, timeline)
+    config["_visual_input"] = resolve_visual_input(config)
 
 
 def _approved_rows(config: dict) -> list[dict]:
@@ -214,23 +335,6 @@ def _approved_rows(config: dict) -> list[dict]:
     if timeline.get("episode_id") != config["episode_id"]:
         raise RuntimeError("APPROVED_TIMELINE_EPISODE_MISMATCH")
     return rows
-
-
-def validate_approved_role_rows(config: dict, timeline: dict) -> dict[str, list[dict]]:
-    errors = validate_design_lock.validate_role_contract(timeline)
-    if errors:
-        raise RuntimeError(f"APPROVED_ROLE_CONTRACT:{errors[0]['code']}")
-    rows = sorted(timeline["segments"], key=lambda row: row["timeline_order"])
-    grouped = {
-        role: [row for row in rows if row.get("role") == role]
-        for role in ("T1", "T2", "A10_TEXT", "STATE")
-    }
-    for role in ("T1", "T2"):
-        approved_text = grouped[role][0]["text"]
-        configured_text = config.get(role)
-        if configured_text != approved_text:
-            raise RuntimeError(f"TITLE_TEXT_MISMATCH:{role}")
-    return grouped
 
 
 def _approved_id(config: dict, rows: list[dict], role: str, occurrence: int = 0) -> str:
@@ -265,86 +369,43 @@ def _material_parent(value: Any, material_id: str) -> list[dict] | None:
     return None
 
 
+def _remove_material_ids(value: Any, material_ids: set[str]) -> None:
+    if isinstance(value, list):
+        value[:] = [
+            row for row in value
+            if not (isinstance(row, dict) and row.get("id") in material_ids)
+        ]
+        for child in value:
+            _remove_material_ids(child, material_ids)
+    elif isinstance(value, dict):
+        for child in value.values():
+            _remove_material_ids(child, material_ids)
+
+
 def _documents(project: Path) -> Iterator[tuple[Path, dict]]:
-    seen: set[Path] = set()
-    root = project / "draft_content.json"
-    payload = json.loads(root.read_text(encoding="utf-8"))
-    seen.add(root.resolve())
-    yield root, payload
-    for path, payload in iter_timeline_json(project):
-        if path.resolve() in seen:
-            continue
+    for path, payload in iter_primary_draft_documents(project):
         if isinstance(payload, dict) and isinstance(payload.get("tracks"), list):
-            seen.add(path.resolve())
             yield path, payload
 
 
 def _set_media(
-    material: dict, *, media_type: str, portable_path: str, role: str, duration_us: int
+    material: dict, *, media_type: str, portable_path: str, role: str, duration_us: int,
+    dimensions: tuple[int, int] | None = None,
 ) -> None:
     if media_type == "video":
         material["type"] = "video"
         material["media_path"] = ""
+        # The seed material carries the template's dimensions, not the swapped-in
+        # media's.  Leaving them stale makes CapCut scale the clip against the
+        # wrong intrinsic size, which shows up as a blank or mis-framed preview.
+        if dimensions is not None:
+            material["width"], material["height"] = dimensions
     elif material.get("type") not in {"music", "extract_music"}:
         material["type"] = "music"
     material["role"] = role
     material["desc"] = f"001short production {role}"
     material["path"] = portable_path
     material["duration"] = duration_us
-
-
-def _populate_full_duration_audio(
-    track: dict,
-    template_segment: dict,
-    material: dict,
-    *,
-    portable_path: str,
-    duration_us: int,
-    role: str,
-    segment_id: str,
-) -> None:
-    _set_media(
-        material,
-        media_type="audio",
-        portable_path=portable_path,
-        role=role,
-        duration_us=duration_us,
-    )
-    segment = copy.deepcopy(template_segment)
-    segment["id"] = segment_id
-    segment["role"] = role
-    segment["target_timerange"] = {"start": 0, "duration": duration_us}
-    segment["source_timerange"] = {"start": 0, "duration": duration_us}
-    segment["volume"] = 1.0
-    segment["last_nonzero_volume"] = 1.0
-    track["segments"] = [segment]
-
-
-def _populate_audio_placements(
-    track: dict, template_segment: dict, material: dict, *, portable_path: str,
-    role: str, placements: list[dict],
-) -> None:
-    if not placements:
-        raise RuntimeError(f"{role}_PLACEMENTS_REQUIRED")
-    _set_media(
-        material, media_type="audio", portable_path=portable_path, role=role,
-        duration_us=max(row["source_range_us"][1] for row in placements),
-    )
-    segments = []
-    for placement in placements:
-        source_start, source_end = placement["source_range_us"]
-        target_start, target_end = placement["target_range_us"]
-        if source_end <= source_start or target_end <= target_start:
-            raise RuntimeError(f"{role}_PLACEMENT_RANGE_INVALID")
-        segment = copy.deepcopy(template_segment)
-        segment["id"] = placement["segment_id"]
-        segment["role"] = role
-        segment["target_timerange"] = {"start": target_start, "duration": target_end - target_start}
-        segment["source_timerange"] = {"start": source_start, "duration": source_end - source_start}
-        segment["volume"] = 1.0
-        segment["last_nonzero_volume"] = 1.0
-        segments.append(segment)
-    track["segments"] = segments
 
 
 def _scrub_windows_cache_paths(value: object) -> int:
@@ -483,28 +544,31 @@ def _normalize_source(
     project: Path, config: dict, audio_source: Path | None, build_manifest: dict
 ) -> list[dict]:
     duration = config["duration_us"]
-    timeline = json.loads(Path(config["approved_timeline_path"]).read_text(encoding="utf-8"))
-    approved = sorted(timeline["segments"], key=lambda row: row["timeline_order"])
-    role_rows = validate_approved_role_rows(config, timeline)
+    approved = _approved_rows(config)
     approved_by_id = {row["segment_id"]: row for row in approved}
     media = project / "Resources" / "media"
     media.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(Path(config["clean_video"]), media / "clean_video.mp4")
+    visual = config["_visual_input"]
+    video_input = Path(visual["video_input_path"])
+    video_resource = visual["resource_name"]
+    shutil.copy2(video_input, media / video_resource)
+    video_dimensions = _video_dimensions(video_input)
     tts_only = config.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE"
     audio_name = ""
-    audio_role = config.get("audio_role", "A10")
-    if audio_role in {"A10", "A11", "A12"}:
+    if not tts_only:
         if audio_source is None:
             raise RuntimeError("SOURCE_AUDIO_REQUIRED")
         audio_suffix = audio_source.suffix.lower() or ".wav"
-        audio_name = f"source_audio{audio_suffix}"
+        # This is the externally separated Demucs vocal stem, not the raw
+        # source audio.  Keep that distinction visible in the portable asset.
+        audio_name = f"a10_vocal_stem{audio_suffix}"
         shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)
 
     root_rows: list[dict] = []
     for document_index, (path, payload) in enumerate(_documents(project)):
         tracks = payload["tracks"]
-        if len(tracks) != 15:
+        if len(tracks) != len(ROLE_BY_TRACK):
             raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
         payload["duration"] = duration
         material_map = {
@@ -519,17 +583,15 @@ def _normalize_source(
                 if material is not None:
                     material["role"] = role
                     material["desc"] = f"001short production {role}"
-
-        special_template_segment = None
-        special_material = None
-        special_track_index = {"A11": 13, "A12": 14}.get(audio_role)
-        if special_track_index is not None:
-            if not tracks[special_track_index].get("segments"):
-                raise RuntimeError(f"PINNED_{audio_role}_TEMPLATE_SEGMENT_MISSING")
-            special_template_segment = copy.deepcopy(tracks[special_track_index]["segments"][0])
-            special_material = material_map.get(special_template_segment.get("material_id"))
-            if special_material is None:
-                raise RuntimeError(f"PINNED_{audio_role}_TEMPLATE_MATERIAL_MISSING")
+        seed_segments = {
+            index: copy.deepcopy(track["segments"][0])
+            for index, track in enumerate(tracks)
+            if track.get("segments")
+        }
+        a12_material_ids = {
+            segment.get("material_id") for segment in tracks[A12_INDEX].get("segments", [])
+            if isinstance(segment.get("material_id"), str)
+        }
 
         a9_text_template_segment = None
         a9_text_template_material = None
@@ -538,10 +600,10 @@ def _normalize_source(
         a9_template_material = None
         a9_parent = None
         if tts_only:
-            if not tracks[8].get("segments") or not tracks[11].get("segments"):
+            if not tracks[TRACK_INDEX["A9_TEXT"]].get("segments") or not tracks[TRACK_INDEX["A9"]].get("segments"):
                 raise RuntimeError("PINNED_A9_TEMPLATE_SEGMENT_MISSING")
-            a9_text_template_segment = copy.deepcopy(tracks[8]["segments"][0])
-            a9_template_segment = copy.deepcopy(tracks[11]["segments"][0])
+            a9_text_template_segment = copy.deepcopy(tracks[TRACK_INDEX["A9_TEXT"]]["segments"][0])
+            a9_template_segment = copy.deepcopy(tracks[TRACK_INDEX["A9"]]["segments"][0])
             a9_text_template_material = material_map.get(a9_text_template_segment.get("material_id"))
             a9_template_material = material_map.get(a9_template_segment.get("material_id"))
             if a9_text_template_material is None or a9_template_material is None:
@@ -551,27 +613,18 @@ def _normalize_source(
             if a9_text_parent is None or a9_parent is None:
                 raise RuntimeError("PINNED_A9_MATERIAL_CONTAINER_MISSING")
 
-        text_seeds: dict[int, tuple[dict, dict, list[dict]]] = {}
-        for seed_index in (3, 4, 5, 6, 7):
-            if not tracks[seed_index].get("segments"):
-                raise RuntimeError(f"PINNED_V2_TEXT_SEED_MISSING:{seed_index}")
-            seed_segment = copy.deepcopy(tracks[seed_index]["segments"][0])
-            seed_material = material_map.get(seed_segment.get("material_id"))
-            seed_parent = _material_parent(payload["materials"], seed_segment.get("material_id"))
-            if seed_material is None or seed_parent is None:
-                raise RuntimeError(f"PINNED_V2_TEXT_MATERIAL_MISSING:{seed_index}")
-            text_seeds[seed_index] = (seed_segment, copy.deepcopy(seed_material), seed_parent)
+        # Existing v2 lanes only: no track is added.  Every generated lane is
+        # rebuilt from the approved plan; A12 is always empty.
+        for index in range(3, 15):
+            if index not in (9, 10):
+                tracks[index]["segments"] = []
 
-        # Canonical v2 lanes only: no track is added.
-        for index in (3, 4, 5, 6, 7, 8, 11, 13, 14):
-            tracks[index]["segments"] = []
-
-        base_video_segment = tracks[0]["segments"][0]
+        base_video_segment = tracks[TRACK_INDEX["VIDEO"]]["segments"][0]
         video_material = material_map[base_video_segment["material_id"]]
         _set_media(
             video_material, media_type="video",
-            portable_path=_portable_resource_path(draft_prefix, "Resources/media/clean_video.mp4"),
-            role="VIDEO", duration_us=duration,
+            portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{video_resource}"),
+            role="VIDEO", duration_us=duration, dimensions=video_dimensions,
         )
         video_segments = []
         for clip in sorted(build_manifest["urakkai"]["video_clips"], key=lambda row: row["target_range_us"][0]):
@@ -593,67 +646,125 @@ def _normalize_source(
                 "start": clip["source_range_us"][0],
                 "duration": clip["source_range_us"][1] - clip["source_range_us"][0],
             }
-            if tts_only or audio_role in {"A11", "A12"}:
-                video_segment["volume"] = 0.0
-                video_segment["last_nonzero_volume"] = 0.0
+            video_segment["volume"] = 0.0
+            video_segment["last_nonzero_volume"] = 0.0
             video_segments.append(video_segment)
-        tracks[0]["segments"] = video_segments
+        tracks[TRACK_INDEX["VIDEO"]]["segments"] = video_segments
 
-        for index, role in ((1, "SCREEN_EFFECT"), (2, "SCREEN_WHITE")):
-            if not any(row.get("role") == role for row in approved):
-                tracks[index]["segments"] = []
-                continue
+        for role in ("SCREEN_EFFECT", "SCREEN_WHITE"):
+            index = TRACK_INDEX[role]
+            matches = [row for row in approved if row.get("role") == role]
+            if len(matches) != 1:
+                raise RuntimeError(f"FULL_SPAN_ANCHOR_INVALID:{role}")
             segment = tracks[index]["segments"][0]
-            segment["id"] = _approved_id(config, approved, role)
-            row = approved_by_id[segment["id"]]
+            row = matches[0]
+            segment["id"] = row["segment_id"]
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
 
-        for index, key in ((9, "T2"), (10, "T1")):
+        # The pinned white-frame material arrives from CapCut with an online
+        # cache path.  The template archive already carries its portable copy;
+        # bind that copy explicitly before generic path scrubbing can blank it.
+        white_segments = tracks[TRACK_INDEX["SCREEN_WHITE"]]["segments"]
+        if white_segments:
+            white_resource = "transparent_center_white_1080x1920.png"
+            white_asset = media / white_resource
+            if not white_asset.is_file():
+                raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
+            white_material = material_map[white_segments[0]["material_id"]]
+            white_material["name"] = white_resource
+            white_material["path"] = _portable_resource_path(
+                draft_prefix, f"Resources/media/{white_resource}"
+            )
+            white_material["media_path"] = ""
+            white_material["role"] = "SCREEN_WHITE"
+            white_material["desc"] = "001short production SCREEN_WHITE"
+
+        for key in ("T2", "T1"):
+            index = TRACK_INDEX[key]
             segment = tracks[index]["segments"][0]
             segment["id"] = _approved_id(config, approved, key)
-            _set_text(material_map[segment["material_id"]], role_rows[key][0]["text"], key)
             row = approved_by_id[segment["id"]]
+            if row.get("text") != config[key] or not config[key].strip():
+                raise RuntimeError(f"TITLE_PLAN_AUTHORITY_MISMATCH:{key}")
+            _set_text(material_map[segment["material_id"]], row["text"], key)
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
 
-        state_seed_index = {"FLICKER_RAVE": 3, "GLITCH_SHAKE": 4, "LASER_CUT": 5}
-        for cue_index, row in enumerate(role_rows["STATE"]):
-            seed_index = state_seed_index[row["state_effect"]]
-            base_segment, base_material, parent = text_seeds[seed_index]
-            segment, material = copy.deepcopy(base_segment), copy.deepcopy(base_material)
+        state_templates = {}
+        for effect, index in STATE_TRACK_BY_EFFECT.items():
+            if index not in seed_segments:
+                raise RuntimeError("STATE_TEMPLATE_SEGMENT_MISSING")
+            seed = copy.deepcopy(seed_segments[index])
+            seed_material = material_map.get(seed.get("material_id"))
+            if seed_material is None:
+                raise RuntimeError("STATE_TEMPLATE_MATERIAL_MISSING")
+            parent = _material_parent(payload["materials"], seed_material["id"])
+            if parent is None:
+                raise RuntimeError("STATE_MATERIAL_CONTAINER_MISSING")
+            state_templates[effect] = (index, seed, seed_material, parent)
+        for cue_index, cue in enumerate(config["state_cues"]):
+            segment_id = cue.get("segment_id") or _approved_id(config, approved, "STATE", cue_index)
+            approved_row = approved_by_id.get(segment_id)
+            if (
+                approved_row is None or approved_row.get("role") != "STATE"
+                or approved_row.get("start") != cue["start_us"]
+                or approved_row.get("duration") != cue["end_us"] - cue["start_us"]
+            ):
+                raise RuntimeError(f"STATE_CUE_AUTHORITY_MISMATCH:{segment_id}")
+            effect = approved_row.get("state_effect")
+            if effect not in state_templates:
+                raise RuntimeError(f"STATE_EFFECT_INVALID:{segment_id}")
+            track_index, seed, seed_material, parent = state_templates[effect]
+            segment = copy.deepcopy(seed)
+            material = copy.deepcopy(seed_material)
             material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:state-material:{cue_index}"))
-            segment.update({
-                "id": row["segment_id"], "material_id": material_id, "role": "STATE",
-                "caption_role": "STATE", "content_type": row["content_type"],
-                "target_timerange": {"start": row["start"], "duration": row["duration"]},
-            })
+            segment["id"] = segment_id
+            segment["material_id"] = material_id
+            segment["role"] = "STATE"
+            segment["target_timerange"] = {
+                "start": cue["start_us"], "duration": cue["end_us"] - cue["start_us"]
+            }
             material["id"] = material_id
-            material["caption_role"] = "STATE"
-            material["content_type"] = row["content_type"]
-            _set_text(material, row["text"], "STATE")
+            _set_text(material, cue["text"], "STATE")
+            material["state_effect"] = effect
             parent.append(material)
             material_map[material_id] = material
-            tracks[seed_index]["segments"].append(segment)
+            tracks[track_index]["segments"].append(segment)
 
-        speaker_seed_index = {"WHITE": 6, "YELLOW": 7}
-        for cue_index, row in enumerate(role_rows["A10_TEXT"]):
-            seed_index = speaker_seed_index[row["color_role"]]
-            base_segment, base_material, parent = text_seeds[seed_index]
-            segment, material = copy.deepcopy(base_segment), copy.deepcopy(base_material)
-            material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:a10-text-material:{cue_index}"))
-            segment.update({
-                "id": row["segment_id"], "material_id": material_id, "role": "A10_TEXT",
-                "caption_role": "A10_TEXT", "content_type": "SPEAKER",
-                "speaker_id": row["speaker_id"], "color_role": row["color_role"],
-                "target_timerange": {"start": row["start"], "duration": row["duration"]},
-            })
-            material.update({
-                "id": material_id, "caption_role": "A10_TEXT", "content_type": "SPEAKER",
-                "speaker_id": row["speaker_id"], "color_role": row["color_role"],
-            })
-            _set_text(material, row["text"], "A10_TEXT")
-            parent.append(material)
-            material_map[material_id] = material
-            tracks[seed_index]["segments"].append(segment)
+        # Speaker utterances are generated only on their approved color lane.
+        for color, track_index in A10_TEXT_TRACK_BY_COLOR.items():
+            rows = [row for row in approved if row.get("role") == "A10_TEXT" and row.get("color_role") == color]
+            if not rows:
+                continue
+            original = seed_segments.get(track_index)
+            if original is None:
+                raise RuntimeError(f"A10_TEXT_TEMPLATE_SEGMENT_MISSING:{color}")
+            original_material = material_map.get(original.get("material_id"))
+            if original_material is None:
+                raise RuntimeError(f"A10_TEXT_TEMPLATE_MATERIAL_MISSING:{color}")
+            parent = _material_parent(payload["materials"], original_material["id"])
+            if parent is None:
+                raise RuntimeError(f"A10_TEXT_MATERIAL_CONTAINER_MISSING:{color}")
+            generated = []
+            for row_index, row in enumerate(rows):
+                segment = copy.deepcopy(original)
+                material = copy.deepcopy(original_material)
+                material_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{config['episode_id']}:a10-text:{color}:{document_index}:{row_index}",
+                ))
+                segment.update({
+                    "id": row["segment_id"], "material_id": material_id,
+                    "role": "A10_TEXT",
+                    "target_timerange": {"start": row["start"], "duration": row["duration"]},
+                })
+                material["id"] = material_id
+                _set_text(material, row["text"], "A10_TEXT")
+                material["color_role"] = color
+                material["speaker_id"] = row["speaker_id"]
+                parent.append(material)
+                material_map[material_id] = material
+                generated.append(segment)
+            tracks[track_index]["segments"] = generated
 
         if tts_only:
             assert a9_text_template_segment is not None and a9_text_template_material is not None
@@ -710,26 +821,34 @@ def _normalize_source(
                 sound["role"] = "A9"
                 sound["target_timerange"] = {"start": start_us, "duration": end_us - start_us}
                 sound["source_timerange"] = {"start": 0, "duration": end_us - start_us}
-                sound["volume"] = 1.0
-                sound["last_nonzero_volume"] = 1.0
                 captions.append(caption)
                 tts_segments.append(sound)
-            tracks[8]["segments"] = captions
-            tracks[11]["segments"] = tts_segments
-            tracks[12]["segments"] = []
-        elif audio_role == "A10":
-            base_a10_segment = tracks[12]["segments"][0]
+            tracks[TRACK_INDEX["A9_TEXT"]]["segments"] = captions
+            tracks[TRACK_INDEX["A9"]]["segments"] = tts_segments
+            tracks[TRACK_INDEX["A10"]]["segments"] = []
+        else:
+            # The A10 template seed must be captured before generated lanes are
+            # cleared.  v2 pins A10 at physical track 12.
+            base_a10_segment = seed_segments.get(TRACK_INDEX["A10"])
+            if base_a10_segment is None:
+                raise RuntimeError("PINNED_A10_TEMPLATE_SEGMENT_MISSING")
             a10_material = material_map[base_a10_segment["material_id"]]
             _set_media(
                 a10_material, media_type="audio",
                 portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
                 role="A10", duration_us=duration,
             )
+            a10_material["name"] = audio_name
             a10_segments = []
             for audio_index, audio_plan in enumerate(build_manifest["source_audio"]):
                 if audio_plan.get("mode") not in {"on", "duck"}:
                     continue
-                capcut_source_range = audio_plan.get("capcut_source_range_us", audio_plan["source_range_us"])
+                # A10 plays the reordered stem, whose length equals the final
+                # timeline (STAGE07_AUTHORITY_MISMATCH already enforces that), so
+                # its source range is the target range - not the original media's.
+                capcut_source_range = audio_plan.get(
+                    "capcut_source_range_us", audio_plan["target_range_us"]
+                )
                 a10_segment = copy.deepcopy(base_a10_segment)
                 a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
                 a10_segment["role"] = "A10"
@@ -742,52 +861,11 @@ def _normalize_source(
                     "duration": capcut_source_range[1] - capcut_source_range[0],
                 }
                 a10_segments.append(a10_segment)
-            tracks[12]["segments"] = a10_segments
-        else:
-            tracks[12]["segments"] = []
-
-        if audio_role == "A11":
-            assert special_template_segment is not None and special_material is not None
-            placements = config.get("audio_placements")
-            if not isinstance(placements, list):
-                raise RuntimeError("A11_PLACEMENTS_REQUIRED")
-            normalized_placements = []
-            for index, placement in enumerate(placements):
-                if not isinstance(placement, dict):
-                    raise RuntimeError("A11_PLACEMENT_INVALID")
-                segment_id = _approved_id(config, approved, "A11", index)
-                approved_row = approved_by_id.get(segment_id)
-                source_range = placement.get("source_range_us")
-                target_range = placement.get("target_range_us")
-                if (
-                    not isinstance(source_range, list) or len(source_range) != 2
-                    or not isinstance(target_range, list) or len(target_range) != 2
-                    or approved_row is None or approved_row.get("start") != target_range[0]
-                    or approved_row.get("duration") != target_range[1] - target_range[0]
-                ):
-                    raise RuntimeError(f"A11_PLACEMENT_AUTHORITY_MISMATCH:{segment_id}")
-                normalized_placements.append({"segment_id": segment_id, "source_range_us": source_range, "target_range_us": target_range})
-            _populate_audio_placements(
-                tracks[13], special_template_segment, special_material,
-                portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
-                role="A11", placements=normalized_placements,
-            )
-        elif audio_role == "A12":
-            assert special_template_segment is not None and special_material is not None
-            approved_row = approved_by_id.get(_approved_id(config, approved, "A12"))
-            if approved_row is None or approved_row.get("start") != 0 or approved_row.get("duration") != duration:
-                raise RuntimeError("A12_FULL_DURATION_AUTHORITY_MISMATCH")
-            _populate_full_duration_audio(
-                tracks[14],
-                special_template_segment,
-                special_material,
-                portable_path=_portable_resource_path(
-                    draft_prefix, f"Resources/media/{audio_name}"
-                ),
-                duration_us=duration,
-                role="A12",
-                segment_id=_approved_id(config, approved, "A12"),
-            )
+            tracks[TRACK_INDEX["A10"]]["segments"] = a10_segments
+        tracks[A12_INDEX]["segments"] = []
+        _remove_material_ids(payload["materials"], a12_material_ids)
+        for material_id in a12_material_ids:
+            material_map.pop(material_id, None)
 
         # Keep every retained local template material self-contained.
         retained_ids = {
@@ -833,10 +911,11 @@ def _normalize_source(
     _write_json(meta_path, meta)
 
     actual = sorted(root_rows, key=lambda row: (row["start"], row["segment_id"]))
-    expected = [
+    assert_a12_empty(actual)
+    expected = sorted([
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in approved
-    ]
+    ], key=lambda row: (row["start"], row["segment_id"]))
     observed = [
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in actual
@@ -885,10 +964,10 @@ def _srt_time(microseconds: int) -> str:
 def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -> dict:
     del source_rows
     episode_id = config["episode_id"]
-    clean_video = Path(config["clean_video"]).resolve()
-    audio_source = Path(config.get("source_audio") or config["clean_video"]).resolve()
+    visual = config["_visual_input"]
+    video_input = Path(visual["video_input_path"]).resolve()
     duration = config["duration_us"]
-    width, height = _video_dimensions(clean_video)
+    width, height = _video_dimensions(video_input)
     source_identity = Path(config["source_identity_path"]).resolve()
     approved_timeline = Path(config["approved_timeline_path"]).resolve()
     handoff = Path(config["design_handoff_path"]).resolve()
@@ -909,14 +988,6 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     ):
         raise RuntimeError("STAGE05_EVIDENCE_MISMATCH")
 
-    # Heavy VMake media remains machine-local; the episode folder retains only
-    # its manifests and pointers.  A missing override preserves legacy tests.
-    clean_root = Path(config.get("clean_asset_root", episode / "40_assets_used")).resolve()
-    clean_evidence_root = Path(config.get("clean_evidence_root", clean_root)).resolve()
-    try:
-        clean_video.relative_to(clean_root.resolve())
-    except ValueError:
-        raise RuntimeError("STAGE06_CLEAN_OUTPUT_OUTSIDE_ASSET_ROOT") from None
     build_manifest_path = Path(config["build_manifest_path"]).resolve()
     prebuild = validate_prebuild.validate_prebuild(build_manifest_path)
     if prebuild["status"] != "PASS":
@@ -926,65 +997,91 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         build_manifest.get("episode_id") != episode_id
         or build_manifest["source"].get("sha256", "").lower()
         != stored_evidence["source_media_sha256"].lower()
+        or build_manifest.get("visual_asset_mode") != visual["visual_asset_mode"]
+        or Path(build_manifest["source"]["path"]).resolve()
+        != Path(stored_evidence["source_media_path"]).resolve()
         or Path(build_manifest["template"]["root_zip_path"]).resolve()
         != Path(config["template_zip"]).resolve()
         or build_manifest["template"]["root_zip_sha256"].lower()
         != _sha(Path(config["template_zip"])).lower()
-        or Path(build_manifest["vmake"]["output_path"]).resolve() != clean_video
-        or build_manifest["vmake"]["output_sha256"].lower() != _sha(clean_video).lower()
     ):
         raise RuntimeError("STAGE08_BUILD_MANIFEST_AUTHORITY_MISMATCH")
+    if visual["visual_asset_mode"] == "SOURCE_VIDEO_PROVISIONAL":
+        if video_input != Path(stored_evidence["source_media_path"]).resolve():
+            raise RuntimeError("STAGE08_SOURCE_PROVISIONAL_AUTHORITY_MISMATCH")
+    else:
+        vmake = build_manifest.get("vmake", {})
+        if (
+            Path(vmake.get("output_path", "")).resolve() != video_input
+            or str(vmake.get("output_sha256", "")).lower() != _sha(video_input).lower()
+        ):
+            raise RuntimeError("STAGE08_BUILD_MANIFEST_AUTHORITY_MISMATCH")
+        clean_root = Path(config.get("clean_asset_root", episode / "40_assets_used")).resolve()
+        clean_evidence_root = Path(config.get("clean_evidence_root", clean_root)).resolve()
+        try:
+            video_input.relative_to(clean_root)
+        except ValueError:
+            raise RuntimeError("STAGE06_CLEAN_OUTPUT_OUTSIDE_ASSET_ROOT") from None
+        clean_manifest = clean_evidence_root / "clean_visual_manifest.json"
+        clean_receipt = clean_evidence_root / "clean_visual_receipt.json"
+        if not clean_manifest.is_file() or not clean_receipt.is_file():
+            raise RuntimeError("STAGE06_EVIDENCE_MISSING")
+        clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
+        stored_clean_receipt = read_json(clean_receipt)
+        expected_receipt = clean.get("evidence", {})
+        if clean["status"] != "PASS" or stored_clean_receipt.get("status") != "PASS" or any(
+            stored_clean_receipt.get(field) != expected_receipt.get(field)
+            for field in expected_receipt
+        ):
+            raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
 
-    clean_manifest = clean_evidence_root / "clean_visual_manifest.json"
-    clean_receipt = clean_evidence_root / "clean_visual_receipt.json"
-    if not clean_manifest.is_file() or not clean_receipt.is_file():
-        raise RuntimeError("STAGE06_EVIDENCE_MISSING")
-    clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
-    stored_clean_receipt = json.loads(clean_receipt.read_text(encoding="utf-8"))
-    expected_receipt = clean.get("evidence", {})
-    if clean["status"] != "PASS" or stored_clean_receipt.get("status") != "PASS" or any(
-        stored_clean_receipt.get(field) != expected_receipt.get(field)
-        for field in expected_receipt
+    state_path = Path(config["state_path"]).resolve()
+    state = read_json(state_path)
+    if state.get("episode_id") != episode_id or state.get("status") != "AUDIO_CAPTION_VALIDATED":
+        raise RuntimeError(
+            "STAGE07_STATE_INVALID:"
+            f"expected episode_id={episode_id} status=AUDIO_CAPTION_VALIDATED,"
+            f" got episode_id={state.get('episode_id')} status={state.get('status')}"
+        )
+    audio_lock = resolved_declared_path(state_path, state.get("audio_lock_path", ""))
+    caption_lock = resolved_declared_path(state_path, state.get("caption_lock_path", ""))
+    if (
+        not audio_lock.is_file() or not caption_lock.is_file()
+        or _sha(audio_lock).lower() != str(state.get("audio_lock_sha256", "")).lower()
+        or _sha(caption_lock).lower() != str(state.get("caption_lock_sha256", "")).lower()
     ):
-        raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
-    if clean["status"] != "PASS":
-        raise RuntimeError(f"STAGE06:{clean}")
-
-    audio_root = episode / "30_audio_srt"
-    audio_lock = audio_root / "audio_lock.json"
-    final_srt = audio_root / "final.srt"
-    caption_lock = audio_root / "caption_lock.json"
-    cues = config["state_cues"]
-    if not all(path.is_file() for path in (audio_lock, final_srt, caption_lock)):
         raise RuntimeError("STAGE07_EVIDENCE_MISSING")
     audio = validate_audio_caption.validate_audio_caption(audio_lock, caption_lock)
     if audio["status"] != "PASS":
         raise RuntimeError(f"STAGE07:{audio}")
     audio_payload = json.loads(audio_lock.read_text(encoding="utf-8"))
     caption_payload = json.loads(caption_lock.read_text(encoding="utf-8"))
-    expected_cues = [
-        {"cue_id": cue.get("cue_id", str(index)), "start_us": cue["start_us"],
-         "end_us": cue["end_us"], "text": cue["text"]}
-        for index, cue in enumerate(cues, start=1)
-    ]
+    final_srt = resolved_declared_path(caption_lock, caption_payload["final_srt_path"])
+    audio_source = resolved_declared_path(audio_lock, audio_payload["audio_path"])
     if (
         audio_payload.get("episode_id") != episode_id
-        or resolved_declared_path(audio_lock, audio_payload["audio_path"]) != audio_source
         or audio_payload.get("audio_sha256") != _sha(audio_source)
         or audio_payload.get("measured_duration_us") != duration
         or caption_payload.get("episode_id") != episode_id
-        or caption_payload.get("cues") != expected_cues
+        or not final_srt.is_file()
     ):
         raise RuntimeError("STAGE07_AUTHORITY_MISMATCH")
-    return locals()
+    if config.get("audio_policy") == "A10_RETAINED_SYNC" and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
+        raise RuntimeError("STAGE07_VALIDATED_VOCAL_STEM_REQUIRED")
+    return {
+        "source_identity": source_identity, "approved_timeline": approved_timeline,
+        "design_evidence": design_evidence, "build_manifest": build_manifest,
+        "audio_lock": audio_lock, "caption_lock": caption_lock, "final_srt": final_srt,
+        "audio_source": audio_source, "video_input": video_input,
+        "width": width, "height": height,
+    }
 
 
 def _build_episode_once(config: dict) -> dict:
     _ensure_media_tools()
     _validate_config(config)
-    clean_video = Path(config["clean_video"]).resolve()
-    audio_source = Path(config.get("source_audio") or clean_video).resolve()
-    if not clean_video.is_file() or not audio_source.is_file():
+    video_input = Path(config["_visual_input"]["video_input_path"])
+    if not video_input.is_file():
         raise FileNotFoundError("INPUT_MEDIA_MISSING")
     episode = Path(config["episode_root"]).resolve()
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
@@ -998,7 +1095,14 @@ def _build_episode_once(config: dict) -> dict:
     work_root.mkdir(parents=True, exist_ok=True)
     source = _extract_template(Path(config["template_zip"]).resolve(), work_root / "source_authority")
     pre = _stage_prerequisites(config, episode, [])
-    source_rows = _normalize_source(source, config, audio_source, pre["build_manifest"])
+    source_rows = _normalize_source(source, config, pre["audio_source"], pre["build_manifest"])
+    # The protected structure snapshot includes the approved polish bindings.
+    # Apply them to the extracted authority before cloning; the later target
+    # application is idempotent and produces the user-facing receipt.
+    apply_capcut_polish_profile.apply_project(source)
+    source_polish = validate_capcut_polish_profile.validate_project(source)
+    if source_polish["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_POLISH_SOURCE:{source_polish}")
 
     working = work_root / "working_project"
     cloned = clone_and_sync.clone_project(source, working)
@@ -1044,12 +1148,6 @@ def _build_episode_once(config: dict) -> dict:
         raise RuntimeError(f"STAGE08_POLISH:{polish_validation}")
     model = capcut_model.load_project(target)
     material_map = {row.get("id"): row for row in _materials(model.materials) if isinstance(row.get("id"), str)}
-    approved_timeline_payload = json.loads(
-        Path(config["approved_timeline_path"]).read_text(encoding="utf-8")
-    )
-    approved_authority = {
-        row["segment_id"]: row for row in approved_timeline_payload["segments"]
-    }
     timeline_rows = []
     approved_text: set[str] = set()
     required_assets: set[str] = set()
@@ -1057,17 +1155,12 @@ def _build_episode_once(config: dict) -> dict:
         for segment in track.get("segments", []):
             timerange = segment["target_timerange"]
             material = material_map.get(segment.get("material_id"), {})
-            timeline_row = {
+            timeline_rows.append({
                 "segment_id": segment["id"], "role": segment["role"],
                 "material_type": material.get("type", "unknown"),
                 "start": timerange["start"], "duration": timerange["duration"],
                 "end": timerange["start"] + timerange["duration"],
-            }
-            authority_row = approved_authority.get(segment["id"], {})
-            for field in ("text", "content_type", "caption_role", "speaker_id", "color_role", "state_effect"):
-                if field in authority_row:
-                    timeline_row[field] = authority_row[field]
-            timeline_rows.append(timeline_row)
+            })
             visible_text = _material_text(material)
             if visible_text:
                 approved_text.add(visible_text)
@@ -1080,9 +1173,16 @@ def _build_episode_once(config: dict) -> dict:
     receipt_path = build_root / "build_inputs_receipt.json"
     contract = {
         "schema_version": "001short-build-contract-v1", "episode_id": config["episode_id"],
-        "track_layout_version": "shrt_white_base_v2",
-        "approved_title_text": {"T1": config["T1"], "T2": config["T2"]},
-        "primary_speaker_id": approved_timeline_payload.get("primary_speaker_id"),
+        "track_layout_version": TRACK_LAYOUT,
+        "root_contract_path": config["root_contract_path"],
+        "workspace_root": str(Path(config["workspace_root"]).resolve()),
+        "root_profile": config["root_profile"],
+        "root_template_profile": config["_resolved_root_contract"]["template_profile"],
+        "visual_asset_mode": config["_visual_input"]["visual_asset_mode"],
+        "video_asset_key": config["_visual_input"]["video_asset_key"],
+        "video_input_path": str(pre["video_input"]),
+        "video_input_sha256": _sha(pre["video_input"]),
+        "upload_ready": config["_visual_input"]["upload_ready"],
         "source_project_path": str(source.resolve()), "working_project_path": str(target.resolve()),
         "evidence_root_path": str(evidence_root.resolve()), "source_core_sha256": source_manifest,
         "source_root_sha256": source_root_sha, "template_sha256": template_sha,
@@ -1102,18 +1202,22 @@ def _build_episode_once(config: dict) -> dict:
         "structure_snapshot_sha256": _sha(snapshot_path), "project_id": project_id,
         "draft_id": draft_id, "main_timeline_id": timeline_id,
         "required_asset_paths": sorted(required_assets), "approved_text": sorted(approved_text),
+        "approved_role_text": {"T1": config["T1"], "T2": config["T2"]},
+        "approved_segment_text": {
+            row["segment_id"]: {
+                "role": row["role"], "start": row["start"], "duration": row["duration"],
+                "text": row["text"],
+                **({"color_role": row["color_role"]} if row["role"] == "A10_TEXT" else {}),
+                **({"state_effect": row["state_effect"]} if row["role"] == "STATE" else {}),
+            }
+            for row in _approved_rows(config)
+            if row.get("role") in {"A9_TEXT", "A10_TEXT", "STATE"}
+        },
         "approved_actual_order": [row["segment_id"] for row in ordered], "timeline": ordered,
         "primary_timeline_roles": ["VIDEO"], "authorized_gaps": [],
         "authorized_overlaps": [], "parallel_pairs": [],
-        "subtitle_roles": ["STATE"],
-        "caption_bindings": [
-            {
-                "segment_id": cue.get("segment_id")
-                or _approved_id(config, _approved_rows(config), "STATE", index - 1),
-                "cue_id": cue.get("cue_id", str(index)),
-            }
-            for index, cue in enumerate(config["state_cues"], start=1)
-        ],
+        "subtitle_roles": ["STATE", "A9_TEXT", "A10_TEXT"],
+        "caption_bindings": build_caption_bindings(config, pre["caption_lock"]),
     }
     _write_json(contract_path, contract)
     inputs = validate_build_inputs.validate_build_inputs(
@@ -1148,16 +1252,38 @@ def _build_episode_once(config: dict) -> dict:
         target.parent,
         build_root / "root_meta_info.before.json",
     )
-    state = {
+    state_path = Path(config["state_path"]).resolve()
+    state = read_json(state_path)
+    state.update({
         "episode_id": config["episode_id"], "current_stage": "09",
-        "status": "WAIT_USER_CAPCUT_CHECK", "project_name": config["project_name"],
+        "status": "CAPCUT_STATIC_VALIDATED", "project_name": config["project_name"],
         "local_capcut_project_path": str(target), "stage09_user_approval": "NOT_RUN",
+        "visual_asset_mode": config["_visual_input"]["visual_asset_mode"],
+        "video_asset_key": config["_visual_input"]["video_asset_key"],
+        "upload_ready": config["_visual_input"]["upload_ready"],
         "cloud_prepare": cloud_prepare,
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    })
+    report_path = build_root / "build_report.json"
+    report = {
+        "episode_id": config["episode_id"], "status": "CAPCUT_STATIC_VALIDATED",
+        "current_stage": "09", "project_name": config["project_name"],
+        "project_path": str(target),
+        "media_source_path": str(pre["video_input"]),
+        "visual_asset_mode": state["visual_asset_mode"],
+        "video_asset_key": state["video_asset_key"],
+        "upload_ready": state["upload_ready"],
+        "capcut_evidence_path": str(capcut_evidence),
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
     }
-    _write_json(episode / "episode_state.json", state)
+    _write_json(report_path, report)
+    _write_json(state_path, state)
     return {
         "status": state["status"], "current_stage": "09", "stage08_validation": "PASS",
+        "visual_asset_mode": state["visual_asset_mode"], "upload_ready": state["upload_ready"],
         "project_path": str(target), "capcut_evidence_path": str(capcut_evidence),
+        "media_source_path": str(pre["video_input"]),
+        "build_report_path": str(report_path), "next_action": "WAIT_USER_CAPCUT_CHECK",
     }
 
 

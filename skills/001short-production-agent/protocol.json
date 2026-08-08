@@ -3,6 +3,15 @@
   "schema_version": "001short-executable-protocol-v1",
   "owner_skill": "001short-production-agent",
   "lane": "general_shorts_production",
+  "track_layout": "shrt_white_base_v2_15",
+  "canonical_tracks": [
+    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
+    "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
+    "A9", "A10", "A11", "A12_RESERVED_EMPTY"
+  ],
+  "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"],
+  "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt"],
+  "a12_policy": "EMPTY",
   "authority": {
     "policy": "SKILL.md",
     "machine_contract": "protocol.json",
@@ -149,8 +158,6 @@
     "public_upload_requires_explicit_approval": true,
     "completion_report_requires_upload_metadata": true,
     "source_file_evidence_required": true,
-    "source_intake_receipt_identity_required": true,
-    "onedrive_0000shrt_episode_root_required": true,
     "vmake_final_download_evidence_required": true,
     "vmake_substitute_file_forbidden": true,
     "capcut_visual_confirmation_required_before_completion": true
@@ -171,11 +178,11 @@
     "T2": "top title line 2",
     "A9": "TTS or narration",
     "A9_TEXT": "TTS-linked visible caption",
-    "A10": "original speaker and source audio",
+    "A10": "validated Demucs source vocal stem only",
     "A10_TEXT": "original-speech caption",
     "STATE": "situation or state caption",
     "A11": "sound effects",
-    "A12": "background music",
+    "A12": "reserved empty",
     "SCREEN": "screen visual effect"
   },
   "stages": [
@@ -251,7 +258,9 @@
       "name": "AUDIO_CAPTION_LOCK",
       "requires_state": "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY",
       "produces": [
-        "30_audio_srt/audio_caption_lock.json"
+        "30_audio_srt/audio_lock.json",
+        "30_audio_srt/caption_lock.json",
+        "30_audio_srt/final.srt"
       ],
       "validators": [
         "scripts/validate_audio_caption.py"

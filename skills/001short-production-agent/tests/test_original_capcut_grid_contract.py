@@ -22,6 +22,7 @@ class OriginalCapCutGridContractTest(unittest.TestCase):
             "A10 화자발언 3",
             "STATE 상황설명문구",
         )
+        self.assertIn("templates/original-capcut-grid.md", SKILL.read_text(encoding="utf-8"))
         for path in (STAGE02, REPORTING):
             text = path.read_text(encoding="utf-8")
             self.assertIn("ORIGINAL_CAPCUT_GRID_REQUIRED_ROWS", text, path.name)

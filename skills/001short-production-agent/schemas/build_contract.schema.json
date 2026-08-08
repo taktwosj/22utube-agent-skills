@@ -3,19 +3,29 @@
   "title": "001short actual CAPCUT_PROJECT build contract",
   "type": "object",
   "required": [
-    "schema_version", "episode_id", "source_project_path", "working_project_path", "evidence_root_path",
+    "schema_version", "episode_id", "track_layout_version", "root_contract_path", "workspace_root", "root_profile", "root_template_profile", "visual_asset_mode", "video_asset_key", "video_input_path", "video_input_sha256", "upload_ready", "source_project_path", "working_project_path", "evidence_root_path",
     "source_core_sha256", "source_root_sha256", "template_sha256", "design_lock_evidence_path",
     "design_lock_evidence_sha256", "structure_snapshot_sha256", "project_id", "draft_id",
     "audio_lock_path", "audio_lock_sha256", "caption_lock_path",
     "caption_lock_sha256", "final_srt_path", "final_srt_sha256",
     "approved_timeline_path", "approved_timeline_sha256", "build_inputs_receipt_path",
     "build_inputs_receipt_sha256",
-    "main_timeline_id", "required_asset_paths", "approved_text", "approved_actual_order",
+    "main_timeline_id", "required_asset_paths", "approved_text", "approved_role_text", "approved_segment_text", "approved_actual_order",
     "timeline", "primary_timeline_roles", "authorized_gaps", "authorized_overlaps", "parallel_pairs"
   ],
   "properties": {
     "schema_version": {"type": "string", "const": "001short-build-contract-v1"},
     "episode_id": {"type": "string", "minLength": 1},
+    "track_layout_version": {"type": "string", "const": "shrt_white_base_v2_15"},
+    "root_contract_path": {"type": "string", "minLength": 1},
+    "workspace_root": {"type": "string", "minLength": 1},
+    "root_profile": {"type": "string", "minLength": 1},
+    "root_template_profile": {"type": "string", "const": "shrt_white_base_v2"},
+    "visual_asset_mode": {"enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]},
+    "video_asset_key": {"enum": ["clean_video", "source_video"]},
+    "video_input_path": {"type": "string", "minLength": 1},
+    "video_input_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "upload_ready": {"type": "boolean"},
     "source_project_path": {"type": "string", "minLength": 1},
     "working_project_path": {"type": "string", "minLength": 1},
     "evidence_root_path": {"type": "string", "minLength": 1},
@@ -40,6 +50,31 @@
     "main_timeline_id": {"type": "string", "minLength": 1},
     "required_asset_paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
     "approved_text": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "approved_role_text": {
+      "type": "object",
+      "required": ["T1", "T2"],
+      "properties": {
+        "T1": {"type": "string", "minLength": 1},
+        "T2": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "approved_segment_text": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["role", "start", "duration", "text"],
+        "properties": {
+          "role": {"enum": ["A9_TEXT", "A10_TEXT", "STATE"]},
+          "start": {"type": "integer"},
+          "duration": {"type": "integer", "minimum": 1},
+          "text": {"type": "string", "minLength": 1},
+          "color_role": {"enum": ["WHITE", "YELLOW"]},
+          "state_effect": {"enum": ["FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"]}
+        },
+        "additionalProperties": false
+      }
+    },
     "approved_actual_order": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
     "timeline": {
       "type": "array",
@@ -60,7 +95,23 @@
     "primary_timeline_roles": {"type": "array", "minItems": 1, "items": {"type": "string"}},
     "authorized_gaps": {"type": "array"},
     "authorized_overlaps": {"type": "array"},
-    "parallel_pairs": {"type": "array"}
+    "parallel_pairs": {"type": "array"},
+    "subtitle_roles": {
+      "type": "array", "uniqueItems": true,
+      "items": {"enum": ["STATE", "A10_TEXT", "A9_TEXT"]}
+    },
+    "caption_bindings": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["segment_id", "cue_id", "role"],
+        "properties": {
+          "segment_id": {"type": "string", "minLength": 1},
+          "cue_id": {"type": "string", "minLength": 1},
+          "role": {"enum": ["STATE", "A10_TEXT", "A9_TEXT"]}
+        },
+        "additionalProperties": false
+      }
+    }
   },
   "additionalProperties": true
 }

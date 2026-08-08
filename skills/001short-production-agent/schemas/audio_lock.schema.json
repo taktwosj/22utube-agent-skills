@@ -16,17 +16,6 @@
     "tts_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
     "vocal_stem_manifest_path": {"type": "string", "minLength": 1},
     "vocal_stem_manifest_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
-    "a10_separation": {
-      "type": "object",
-      "required": ["override", "method", "status", "required_before"],
-      "properties": {
-        "override": {"type": "string", "const": "A10_CAPCUT_SEPARATION_USER_OVERRIDE"},
-        "method": {"type": "string", "const": "CAPCUT_BUILT_IN_VOCAL_SEPARATION"},
-        "status": {"type": "string", "const": "DEFERRED_TO_STAGE08"},
-        "required_before": {"type": "string", "const": "USER_APPROVED_AND_RENDER"}
-      },
-      "additionalProperties": false
-    },
     "ffprobe_verified": {"type": "boolean", "const": true},
     "role_files": {
       "type": "array",
@@ -34,7 +23,7 @@
         "type": "object",
         "required": ["role", "audio_path", "audio_sha256", "measured_duration_us", "audio_codec", "ffprobe_verified"],
         "properties": {
-          "role": {"type": "string", "enum": ["A9", "A10", "A11", "A12"]},
+          "role": {"type": "string", "enum": ["A9", "A10", "A11"]},
           "audio_path": {"type": "string", "minLength": 1},
           "audio_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
           "measured_duration_us": {"type": "integer"},

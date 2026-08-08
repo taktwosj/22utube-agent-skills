@@ -7,7 +7,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -18,17 +17,17 @@ if str(SCRIPTS) not in sys.path:
 from validate_audio_caption import validate_audio_caption
 from validate_vocal_stem import validate_vocal_stem
 import rebind_existing_draft_vocal_stem as existing_rebind
-import separate_source_vocals as separator
+from separate_source_vocals import classify_demucs_failure
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def make_wav(path: Path) -> int:
+def make_wav(path: Path, seconds: float = 0.4) -> int:
     subprocess.run([
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
-        "-i", "sine=frequency=440:duration=0.4", "-ac", "1", "-ar", "48000",
+        "-i", f"sine=frequency=440:duration={seconds}", "-ac", "1", "-ar", "48000",
         "-c:a", "pcm_s16le", str(path),
     ], check=True)
     return round(float(subprocess.run([
@@ -38,14 +37,6 @@ def make_wav(path: Path) -> int:
 
 
 class VocalStemContractTest(unittest.TestCase):
-    def test_demucs_access_denied_is_nonblocking_execution_environment_wait(self):
-        with patch.object(separator, "_run", side_effect=PermissionError("Access is denied")):
-            payload = separator._wait_payload()
-
-        self.assertEqual(payload["status"], "WAIT_DEMUCS_EXECUTION_ENVIRONMENT")
-        self.assertEqual(payload["error"], "ACCESS_DENIED")
-        self.assertEqual(payload["nonblocking_route"], "A10_CAPCUT_SEPARATION_USER_OVERRIDE")
-
     def _fixture(self, root: Path) -> tuple[Path, Path, Path]:
         source = root / "source.wav"
         vocals = root / "vocals.wav"
@@ -84,6 +75,30 @@ class VocalStemContractTest(unittest.TestCase):
             self.assertEqual(Path(result["evidence"]["a10_audio_path"]), vocals)
             self.assertEqual(result["evidence"]["a12_policy"], "EMPTY")
             self.assertTrue(result["evidence"]["human_listen_qc_required"])
+            self.assertEqual(result["evidence"]["human_listen_qc_status"], "NOT_VERIFIED")
+            self.assertEqual(result["evidence"]["audio_quality_status"], "NOT_VERIFIED")
+
+    def test_requires_canonical_vocals_filename_and_independent_source_duration(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, vocals, manifest = self._fixture(root)
+            renamed = root / "speaker.wav"; vocals.rename(renamed)
+            payload = json.loads(manifest.read_text(encoding="utf-8"))
+            payload["vocals_path"] = renamed.name
+            payload["capcut_allowed_audio_path"] = renamed.name
+            payload["vocals_sha256"] = sha256(renamed)
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertIn("VOCAL_STEM_CANONICAL_FILENAME_REQUIRED", {row["code"] for row in validate_vocal_stem(manifest)["errors"]})
+
+            make_wav(source, 0.8)
+            payload["source_sha256"] = sha256(source)
+            payload["source_duration_us"] = payload["vocals_duration_us"]
+            manifest.write_text(json.dumps(payload), encoding="utf-8")
+            self.assertIn("VOCAL_STEM_SOURCE_DURATION_MISMATCH", {row["code"] for row in validate_vocal_stem(manifest)["errors"]})
+
+    def test_demucs_environment_failures_are_distinct_from_processing_failures(self):
+        self.assertEqual(classify_demucs_failure("Permission denied WinError 5"), "DEMUCS_EXECUTION_ENVIRONMENT_FAILED")
+        self.assertEqual(classify_demucs_failure("CUDA out of memory during separation"), "DEMUCS_PROCESSING_FAILED")
 
     def test_rejects_a10_path_that_is_not_vocal_stem(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -144,67 +159,21 @@ class VocalStemContractTest(unittest.TestCase):
             result = validate_audio_caption(audio_lock, caption)
             self.assertEqual(result["status"], "FAIL")
             self.assertIn("AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN", {row["code"] for row in result["errors"]})
+            lock["audio_source"] = "SOURCE_VOCAL_STEM"
+            lock["role_files"] = [{"role": "A12", "audio_path": vocals.name, "audio_sha256": sha256(vocals), "measured_duration_us": duration, "audio_codec": "pcm_s16le", "ffprobe_verified": True}]
+            audio_lock.write_text(json.dumps(lock), encoding="utf-8")
+            broken_caption["audio_lock_sha256"] = sha256(audio_lock)
+            caption.write_text(json.dumps(broken_caption), encoding="utf-8")
+            result = validate_audio_caption(audio_lock, caption)
+            self.assertEqual(result["status"], "FAIL")
+            self.assertIn("AUDIO_CAPTION_AUDIO_LOCK_SCHEMA", {row["code"] for row in result["errors"]})
 
-    def test_audio_lock_accepts_exact_deferred_capcut_separation_override(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source, _, _ = self._fixture(root)
-            duration = round(float(subprocess.run([
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                "-of", "default=nw=1:nk=1", str(source),
-            ], check=True, capture_output=True, text=True).stdout.strip()) * 1_000_000)
-            audio_lock = root / "audio_lock.json"
-            audio_lock.write_text(json.dumps({
-                "schema_version": "001short-audio-lock-v3",
-                "episode_id": "SH_VOCAL_TEST",
-                "status": "PASS",
-                "audio_source": "SOURCE_CLIP",
-                "audio_path": source.name,
-                "audio_sha256": sha256(source),
-                "measured_duration_us": duration,
-                "audio_codec": "pcm_s16le",
-                "ffprobe_verified": True,
-                "a10_separation": {
-                    "override": "A10_CAPCUT_SEPARATION_USER_OVERRIDE",
-                    "method": "CAPCUT_BUILT_IN_VOCAL_SEPARATION",
-                    "status": "DEFERRED_TO_STAGE08",
-                    "required_before": "USER_APPROVED_AND_RENDER",
-                },
-                "role_files": [{
-                    "role": "A10",
-                    "audio_path": source.name,
-                    "audio_sha256": sha256(source),
-                    "measured_duration_us": duration,
-                    "audio_codec": "pcm_s16le",
-                    "ffprobe_verified": True,
-                }],
-            }), encoding="utf-8")
-            srt = root / "final.srt"
-            srt.write_text("1\n00:00:00,000 --> 00:00:00,200\ntest\n", encoding="utf-8")
-            caption = root / "caption_lock.json"
-            caption.write_text(json.dumps({
-                "schema_version": "001short-caption-lock-v1",
-                "episode_id": "SH_VOCAL_TEST",
-                "status": "PASS",
-                "audio_lock_path": audio_lock.name,
-                "audio_lock_sha256": sha256(audio_lock),
-                "final_srt_path": srt.name,
-                "final_srt_sha256": sha256(srt),
-                "final_cue_count": 1,
-                "cues": [{"cue_id": "1", "start_us": 0, "end_us": 200000, "text": "test"}],
-                "all_cues_within_measured_audio": True,
-                "no_overlap_verified": True,
-            }), encoding="utf-8")
+    def test_existing_draft_rebinds_legacy_and_renamed_portable_a10_to_vocal_stem(self):
+        for existing_name in ("source_audio.m4a", "a10_vocal_stem.m4a"):
+            with self.subTest(existing_name=existing_name):
+                self._assert_existing_draft_rebind(existing_name)
 
-            validation = validate_audio_caption(audio_lock, caption)
-
-            self.assertEqual(validation["status"], "PASS")
-            self.assertEqual(
-                validation["evidence"]["a10_separation_status"],
-                "DEFERRED_TO_STAGE08",
-            )
-
-    def test_existing_draft_rebinds_only_portable_a10_to_vocal_stem(self):
+    def _assert_existing_draft_rebind(self, existing_name: str) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             _, vocals, manifest = self._fixture(root)
@@ -225,8 +194,8 @@ class VocalStemContractTest(unittest.TestCase):
                     }]},
                 ],
                 "materials": {"audios": [{
-                    "id": material_id, "type": "extract_music", "name": "source_audio.m4a",
-                    "path": "##_draftpath_placeholder_##/Resources/media/source_audio.m4a",
+                    "id": material_id, "type": "extract_music", "name": existing_name,
+                    "path": f"##_draftpath_placeholder_##/Resources/media/{existing_name}",
                     "duration": duration,
                 }]},
             }), encoding="utf-8")

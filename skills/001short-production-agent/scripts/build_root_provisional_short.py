@@ -1,6 +1,11 @@
+"""DEV_ONLY legacy helper; not registered in tools.json production paths."""
+
 from __future__ import annotations
 
+DEV_ONLY = True
+
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -14,7 +19,14 @@ import clone_and_sync
 import resolve_shorts_capcut_root
 import validate_capcut_polish_profile
 from capcut_io import iter_timeline_json
-from common import sha256_file
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _write(path: Path, value: dict) -> None:
@@ -54,35 +66,6 @@ def _probe_duration_us(path: Path) -> int:
     return value
 
 
-def _add_full_duration_a12(
-    project: Path, template: Path, bgm_audio: Path, duration_us: int, segment_id: str,
-) -> None:
-    resource_name = f"bgm_audio{bgm_audio.suffix.lower() or '.wav'}"
-    resource = project / "Resources" / "media" / resource_name
-    shutil.copy2(bgm_audio, resource)
-    target_documents = list(build_episode_capcut._documents(project))
-    template_documents = list(build_episode_capcut._documents(template))
-    if len(target_documents) != len(template_documents):
-        raise RuntimeError("ROOT_A12_TEMPLATE_MIRROR_MISMATCH")
-    prefix = build_episode_capcut._draft_path_prefix(project)
-    for (_, template_payload), (target_path, target_payload) in zip(template_documents, target_documents):
-        template_track = template_payload["tracks"][14]
-        if not template_track.get("segments"):
-            raise RuntimeError("ROOT_A12_TEMPLATE_SEGMENT_MISSING")
-        template_segment = template_track["segments"][0]
-        material_id = template_segment.get("material_id")
-        materials = {row.get("id"): row for row in build_episode_capcut._materials(target_payload.get("materials", {}))}
-        material = materials.get(material_id)
-        if not isinstance(material, dict):
-            raise RuntimeError("ROOT_A12_TEMPLATE_MATERIAL_MISSING")
-        build_episode_capcut._populate_full_duration_audio(
-            target_payload["tracks"][14], template_segment, material,
-            portable_path=build_episode_capcut._portable_resource_path(prefix, f"Resources/media/{resource_name}"),
-            duration_us=duration_us, role="A12", segment_id=segment_id,
-        )
-        _write(target_path, target_payload)
-
-
 def _validate_root_timeline(
     project: Path,
     duration_us: int,
@@ -92,74 +75,60 @@ def _validate_root_timeline(
     *,
     audio_policy: str,
     tts_cues: list[dict],
-    a11_placements: list[dict],
-    has_a12_bgm: bool,
 ) -> dict:
     checked = 0
     for path, payload in [(project / "draft_content.json", json.loads((project / "draft_content.json").read_text(encoding="utf-8"))), *iter_timeline_json(project)]:
         if not isinstance(payload, dict) or not isinstance(payload.get("tracks"), list):
             continue
         tracks = payload["tracks"]
-        if len(tracks) != 15:
-            raise RuntimeError("ROOT_V2_TRACK_COUNT_INVALID")
+        if len(tracks) != 12:
+            continue
         checked += 1
         tts_only = audio_policy == "TTS_ONLY_MUTE_SOURCE"
         expected_counts = (
-            {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: len(tts_cues), 9: 1, 10: 1, 11: len(tts_cues), 12: 0, 13: len(a11_placements), 14: int(has_a12_bgm)}
+            {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: len(tts_cues), 6: 1, 7: 1, 8: len(tts_cues), 9: 0, 10: 0, 11: 0}
             if tts_only
-            else {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 1, 10: 1, 11: 0, 12: 0, 13: len(a11_placements), 14: int(has_a12_bgm)}
+            else {0: clip_count, 1: 1, 2: 1, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 0, 9: clip_count, 10: 0, 11: 0}
         )
         for index, expected in expected_counts.items():
             if len(tracks[index].get("segments", [])) != expected:
                 raise RuntimeError(f"ROOT_TRACK_SEGMENT_COUNT_INVALID:{index}")
-        for index in (1, 2, 9, 10):
+        for index in (1, 2, 6, 7):
             segment = tracks[index]["segments"][0]
             target = segment.get("target_timerange", {})
             if target.get("start") != 0 or target.get("duration") != duration_us:
                 raise RuntimeError(f"ROOT_FIXED_RANGE_INVALID:{index}")
         materials = {row.get("id"): row for row in build_episode_capcut._materials(payload.get("materials", {}))}
-        expected_text = {9: title2, 10: title1}
+        expected_text = {6: title2, 7: title1}
         for index, text in expected_text.items():
             material = materials.get(tracks[index]["segments"][0].get("material_id"), {})
             actual = build_episode_capcut._material_text(material)
             if (text and actual != text) or (not text and actual not in {None, ""}):
                 raise RuntimeError(f"ROOT_TITLE_TEXT_INVALID:{index}")
-        for video in tracks[0]["segments"]:
-            if video.get("volume") != 0.0:
-                raise RuntimeError("ROOT_VIDEO_NOT_MUTED")
         if tts_only:
-            for cue, a9, caption in zip(tts_cues, tracks[11]["segments"], tracks[8]["segments"]):
+            for video in tracks[0]["segments"]:
+                if video.get("volume") != 0.0:
+                    raise RuntimeError("ROOT_VIDEO_NOT_MUTED")
+            for cue, a9, caption in zip(tts_cues, tracks[8]["segments"], tracks[5]["segments"]):
                 expected_range = {"start": cue["target_start_us"], "duration": cue["target_duration_us"]}
                 if a9.get("target_timerange") != expected_range or caption.get("target_timerange") != expected_range:
                     raise RuntimeError("ROOT_A9_TEXT_TIME_MAPPING_INVALID")
-                if a9.get("volume") != 1.0:
-                    raise RuntimeError("ROOT_A9_NOT_NORMAL_VOLUME")
                 material = materials.get(caption.get("material_id"), {})
                 if build_episode_capcut._material_text(material) != cue["text"]:
                     raise RuntimeError("ROOT_A9_TEXT_INVALID")
-        for placement, segment in zip(a11_placements, tracks[13]["segments"]):
-            if segment.get("target_timerange") != {"start": placement["target_range_us"][0], "duration": placement["target_range_us"][1] - placement["target_range_us"][0]}:
-                raise RuntimeError("ROOT_A11_TIME_MAPPING_INVALID")
-            if segment.get("volume") != 1.0:
-                raise RuntimeError("ROOT_A11_NOT_NORMAL_VOLUME")
-        if not has_a12_bgm:
-            raise RuntimeError("ROOT_A12_BGM_REQUIRED")
-        segment = tracks[14]["segments"][0]
-        expected = {"start": 0, "duration": duration_us}
-        if segment.get("target_timerange") != expected or segment.get("source_timerange") != expected:
-            raise RuntimeError("ROOT_A12_FULL_DURATION_INVALID")
-        if segment.get("volume") != 1.0:
-            raise RuntimeError("ROOT_A12_NOT_NORMAL_VOLUME")
+        else:
+            for video, audio in zip(tracks[0]["segments"], tracks[9]["segments"]):
+                if video.get("target_timerange") != audio.get("target_timerange") or video.get("source_timerange") != audio.get("source_timerange"):
+                    raise RuntimeError("ROOT_VIDEO_A10_MAPPING_INVALID")
     if checked < 2:
         raise RuntimeError("ROOT_TIMELINE_MIRROR_MISSING")
     return {
         "root_and_mirrors_checked": checked,
-        "track_layout": 15,
+        "track_layout": 12,
         "video_segments": clip_count,
         "a9_segments": len(tts_cues) if audio_policy == "TTS_ONLY_MUTE_SOURCE" else 0,
-        "a10_segments": 0,
-        "a11_segments": len(a11_placements),
-        "a12_segments": int(has_a12_bgm),
+        "a10_segments": 0 if audio_policy == "TTS_ONLY_MUTE_SOURCE" else clip_count,
+        "a12_segments": 0,
     }
 
 
@@ -170,8 +139,6 @@ def build(args: argparse.Namespace) -> dict:
     evidence = args.episode_evidence_root.resolve()
     source_video = args.source_video.resolve()
     source_audio = args.source_audio.resolve() if args.source_audio else None
-    sfx_audio = args.sfx_audio.resolve() if args.sfx_audio else None
-    bgm_audio = args.bgm_audio.resolve() if args.bgm_audio else None
     target_root = args.capcut_root.resolve()
     target = target_root / args.project_name
     if not source_video.is_file():
@@ -190,20 +157,13 @@ def build(args: argparse.Namespace) -> dict:
         raise RuntimeError("ASSEMBLY_AUDIO_POLICY_INVALID")
     tts_cues_raw = timeline.get("tts_cues", [])
     silent_visual_ranges_raw = timeline.get("silent_visual_ranges", [])
-    a11_placements_raw = timeline.get("a11_placements", [])
     if audio_policy == "TTS_ONLY_MUTE_SOURCE" and not isinstance(tts_cues_raw, list):
         raise RuntimeError("ASSEMBLY_TTS_CUES_INVALID")
     if audio_policy == "TTS_ONLY_MUTE_SOURCE" and not isinstance(silent_visual_ranges_raw, list):
         raise RuntimeError("ASSEMBLY_SILENT_VISUAL_RANGES_INVALID")
-    if not isinstance(a11_placements_raw, list):
-        raise RuntimeError("ASSEMBLY_A11_PLACEMENTS_INVALID")
-    if a11_placements_raw and (sfx_audio is None or not sfx_audio.is_file()):
-        raise RuntimeError("ASSEMBLY_A11_AUDIO_MISSING")
-    if bgm_audio is None or not bgm_audio.is_file():
-        raise RuntimeError("ASSEMBLY_A12_AUDIO_MISSING")
     cursor = 0
     video_clips, source_audio_rows, approved_rows = [], [], []
-    source_sha = sha256_file(source_video)
+    source_sha = _sha256(source_video)
     for order, clip in enumerate(clips, start=1):
         source_start, source_end = _range(clip, "source_start_us", "source_duration_us")
         target_start, target_end = _range(clip, "target_start_us", "target_duration_us")
@@ -212,12 +172,22 @@ def build(args: argparse.Namespace) -> dict:
         cursor = target_end
         clip_id = str(clip.get("clip_id") or f"C{order:02d}")
         video_clips.append({"clip_id": clip_id, "source_range_us": [source_start, source_end], "target_range_us": [target_start, target_end], "source_sha256": source_sha})
+        if audio_policy == "A10_RETAINED_SYNC":
+            source_audio_rows.append({"clip_id": clip_id, "mode": "on", "source_range_us": [source_start, source_end], "target_range_us": [target_start, target_end], "source_sha256": source_sha})
         approved_rows.append({"segment_id": clip_id, "timeline_order": order, "role": "VIDEO", "start": target_start, "duration": target_end - target_start, "source_ref": clip_id})
+        if audio_policy == "A10_RETAINED_SYNC":
+            approved_rows.append({"segment_id": f"A10_{clip_id}", "timeline_order": 50 + order, "role": "A10", "start": target_start, "duration": target_end - target_start, "source_ref": clip_id})
     if cursor != duration_us:
         raise RuntimeError("ASSEMBLY_TARGET_DURATION_MISMATCH")
     tts_cues: list[dict] = []
     silent_visual_ranges: list[tuple[int, int]] = []
-    if audio_policy != "A10_RETAINED_SYNC":
+    if audio_policy == "A10_RETAINED_SYNC":
+        if source_audio is None or not source_audio.is_file():
+            raise RuntimeError("ASSEMBLY_INPUT_MEDIA_MISSING")
+        audio_duration_us = _probe_duration_us(source_audio)
+        if audio_duration_us + 100_000 < max(row["source_range_us"][1] for row in source_audio_rows):
+            raise RuntimeError("ASSEMBLY_VOCAL_STEM_TOO_SHORT")
+    else:
         if not tts_cues_raw:
             raise RuntimeError("ASSEMBLY_TTS_CUE_COUNT_MISMATCH")
         video_ranges = [tuple(row["target_range_us"]) for row in video_clips]
@@ -247,7 +217,7 @@ def build(args: argparse.Namespace) -> dict:
                 "cue_id": cue_id,
                 "text": text.strip(),
                 "audio_path": str(audio_path),
-                "audio_sha256": sha256_file(audio_path),
+                "audio_sha256": _sha256(audio_path),
                 "audio_duration_us": actual_duration,
                 "resource_name": resource_name,
                 "target_start_us": start,
@@ -281,19 +251,6 @@ def build(args: argparse.Namespace) -> dict:
                 cursor = cue_end
             if cursor != video_end:
                 raise RuntimeError("ASSEMBLY_TTS_CUE_COVERAGE_INVALID")
-    a11_placements: list[dict] = []
-    for index, raw in enumerate(a11_placements_raw, start=1):
-        if not isinstance(raw, dict):
-            raise RuntimeError("ASSEMBLY_A11_PLACEMENT_INVALID")
-        source_start, source_end = _range(raw, "source_start_us", "source_duration_us")
-        target_start, target_end = _range(raw, "target_start_us", "target_duration_us")
-        if target_end > duration_us:
-            raise RuntimeError("ASSEMBLY_A11_PLACEMENT_OUTSIDE_TIMELINE")
-        segment_id = str(raw.get("segment_id") or f"A11_{index:02d}")
-        a11_placements.append({"segment_id": segment_id, "source_range_us": [source_start, source_end], "target_range_us": [target_start, target_end]})
-        approved_rows.append({"segment_id": segment_id, "timeline_order": 80 + index, "role": "A11", "start": target_start, "duration": target_end - target_start, "source_ref": "sfx"})
-    if bgm_audio is not None:
-        approved_rows.append({"segment_id": "A12_BGM_FULL", "timeline_order": 90, "role": "A12", "start": 0, "duration": duration_us, "source_ref": "bgm"})
     approved_rows.extend([
         {"segment_id": "SCREEN_EFFECT_FIXED", "timeline_order": 100, "role": "SCREEN_EFFECT", "start": 0, "duration": duration_us, "source_ref": "root"},
         {"segment_id": "SCREEN_WHITE_FIXED", "timeline_order": 101, "role": "SCREEN_WHITE", "start": 0, "duration": duration_us, "source_ref": "root"},
@@ -317,7 +274,7 @@ def build(args: argparse.Namespace) -> dict:
         ],
     }
     manifest_path = evidence / "root_assembly_manifest.json"
-    _write(manifest_path, {"status": "PROVISIONAL_SOURCE_VIDEO", "episode_id": args.episode_id, "title1": args.title1, "title2": args.title2, "audio_policy": audio_policy, "source_video": str(source_video), "source_video_sha256": source_sha, "sfx_audio": str(sfx_audio) if sfx_audio else "", "sfx_audio_sha256": sha256_file(sfx_audio) if sfx_audio else "", "bgm_audio": str(bgm_audio) if bgm_audio else "", "bgm_audio_sha256": sha256_file(bgm_audio) if bgm_audio else "", "root_contract": contract, "timeline": build_manifest})
+    _write(manifest_path, {"status": "PROVISIONAL_SOURCE_VIDEO", "episode_id": args.episode_id, "title1": args.title1, "title2": args.title2, "audio_policy": audio_policy, "source_video": str(source_video), "source_video_sha256": source_sha, "source_audio": str(source_audio) if source_audio else "", "source_audio_sha256": _sha256(source_audio) if source_audio else "", "root_contract": contract, "timeline": build_manifest})
 
     staging = target_root / (".stage_" + args.project_name + "_" + uuid.uuid4().hex)
     authority = staging / "authority"
@@ -335,23 +292,20 @@ def build(args: argparse.Namespace) -> dict:
         config = {
             "episode_id": args.episode_id, "clean_video": str(source_video), "duration_us": duration_us,
             "T1": args.title1, "T2": args.title2,
-            "state_cues": [], "approved_timeline_path": str(approved_path), "audio_role": "A11" if a11_placements else None,
+            "state_cues": [], "approved_timeline_path": str(approved_path), "audio_role": "A10",
             "audio_policy": audio_policy, "tts_cues": tts_cues,
-            "audio_placements": a11_placements,
             "segment_ids": {
                 "SCREEN_EFFECT": "SCREEN_EFFECT_FIXED", "SCREEN_WHITE": "SCREEN_WHITE_FIXED", "T2": "T2_FIXED", "T1": "T1_FIXED",
                 "A9": [f"A9_{cue['cue_id']}" for cue in tts_cues],
                 "A9_TEXT": [f"A9_TEXT_{cue['cue_id']}" for cue in tts_cues],
             },
         }
-        build_episode_capcut._normalize_source(working, config, sfx_audio, build_manifest)
-        if bgm_audio is not None:
-            _add_full_duration_a12(working, source_root, bgm_audio, duration_us, "A12_BGM_FULL")
+        build_episode_capcut._normalize_source(working, config, source_audio, build_manifest)
         polish = apply_capcut_polish_profile.apply_project(working)
         polish_check = validate_capcut_polish_profile.validate_project(working)
         if polish_check["status"] != "PASS":
             raise RuntimeError(f"POLISH_VALIDATION_FAILED:{polish_check['errors']}")
-        static = _validate_root_timeline(working, duration_us, len(clips), args.title1, args.title2, audio_policy=audio_policy, tts_cues=tts_cues, a11_placements=a11_placements, has_a12_bgm=bgm_audio is not None)
+        static = _validate_root_timeline(working, duration_us, len(clips), args.title1, args.title2, audio_policy=audio_policy, tts_cues=tts_cues)
         if target.exists():
             raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
         working.rename(target)
@@ -359,9 +313,9 @@ def build(args: argparse.Namespace) -> dict:
         post_prepare_polish = validate_capcut_polish_profile.validate_project(target)
         if post_prepare_polish["status"] != "PASS":
             raise RuntimeError(f"POST_PREPARE_POLISH_VALIDATION_FAILED:{post_prepare_polish['errors']}")
-        static = _validate_root_timeline(target, duration_us, len(clips), args.title1, args.title2, audio_policy=audio_policy, tts_cues=tts_cues, a11_placements=a11_placements, has_a12_bgm=bgm_audio is not None)
+        static = _validate_root_timeline(target, duration_us, len(clips), args.title1, args.title2, audio_policy=audio_policy, tts_cues=tts_cues)
         build_episode_capcut._register_capcut_project(target, target_root, registry_backup)
-        report = {"status": "PROJECT_CREATED_WAIT_CAPCUT_OPEN", "episode_id": args.episode_id, "project_name": args.project_name, "local_capcut_path": str(target), "root_contract": contract, "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL", "audio_tracks": {"A11": len(a11_placements), "A12": int(bgm_audio is not None)}, "titles": {"T1": args.title1, "T2": args.title2}, "polish": polish, "cloud_prepare": cloud_prepare, "static_validation": static, "capcut_registration": "LOCAL_ROOT_META_REGISTERED", "next_gate": "CAPCUT_REOPEN_AND_USER_VISUAL_AUDIO_QC"}
+        report = {"status": "PROJECT_CREATED_WAIT_CAPCUT_OPEN", "episode_id": args.episode_id, "project_name": args.project_name, "local_capcut_path": str(target), "root_contract": contract, "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL", "source_audio_mode": "TTS_ONLY_MUTE_SOURCE_A9" if audio_policy == "TTS_ONLY_MUTE_SOURCE" else "DEMUCs_VOCAL_STEM_A10", "a12_policy": "EMPTY", "titles": {"T1": args.title1, "T2": args.title2}, "polish": polish, "cloud_prepare": cloud_prepare, "static_validation": static, "capcut_registration": "LOCAL_ROOT_META_REGISTERED", "next_gate": "CAPCUT_REOPEN_AND_USER_VISUAL_AUDIO_QC"}
         _write(args.report.resolve(), report)
         return report
     except Exception:
@@ -382,8 +336,6 @@ def main() -> int:
     parser.add_argument("--assembly-input", type=Path, required=True)
     parser.add_argument("--source-video", type=Path, required=True)
     parser.add_argument("--source-audio", type=Path)
-    parser.add_argument("--sfx-audio", type=Path)
-    parser.add_argument("--bgm-audio", type=Path, required=True)
     parser.add_argument("--episode-evidence-root", type=Path, required=True)
     parser.add_argument("--episode-id", required=True)
     parser.add_argument("--title1", required=True)
