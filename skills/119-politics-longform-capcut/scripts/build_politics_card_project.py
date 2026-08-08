@@ -17,10 +17,11 @@ import subprocess
 import tempfile
 import uuid
 import zipfile
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
+from root_bundle import ResolvedRoot, resolve_active_root
 
 
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
@@ -41,6 +42,85 @@ def uid() -> str:
 
 def text_of(material: dict[str, Any]) -> str:
     return json.loads(material["content"])["text"]
+
+
+def _presentation_row(
+    document: dict[str, Any], material: dict[str, Any], segment: dict[str, Any]
+) -> dict[str, Any]:
+    track_index, track = next(
+        (index, track)
+        for index, track in enumerate(document["tracks"])
+        if segment in track.get("segments", [])
+    )
+    return {
+        "material_id": material["id"],
+        "segment_id": segment["id"],
+        "text": text_of(material),
+        "target_timerange": copy.deepcopy(segment.get("target_timerange", {})),
+        "track_type": track.get("type"),
+        "track_index": track_index,
+        "track_id": track.get("id"),
+        "clip_geometry": copy.deepcopy(segment.get("clip", {})),
+    }
+
+
+def capture_presentation_contract(
+    document: dict[str, Any], cards: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Freeze the editable HUD/lower track identity and clip coordinates."""
+    text_by_id = {item["id"]: item for item in document["materials"]["texts"]}
+    rows: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+    for track in document["tracks"]:
+        if track.get("type") != "text":
+            continue
+        for segment in track.get("segments", []):
+            material = text_by_id.get(segment.get("material_id"))
+            if material is not None:
+                rows.append((text_of(material), material, segment))
+
+    source_texts: set[str] | None = None
+    lower_texts: set[str] | None = None
+    if cards is not None:
+        source_texts = {
+            f"출처 {str(card.get('source_channel', '')).strip()}\n{str(card.get('source_date', '')).strip()}"
+            for card in cards
+            if card.get("card_type") == "SOURCE_VIDEO"
+        }
+        lower_texts = {
+            str(card.get("lower_text", ""))
+            for card in cards
+            if card.get("lower_mode", "NONE") != "NONE"
+        }
+
+    sources = [
+        _presentation_row(document, material, segment)
+        for text, material, segment in rows
+        if text.startswith("출처 ") and (source_texts is None or text in source_texts)
+    ]
+    ctas = [
+        _presentation_row(document, material, segment)
+        for text, material, segment in rows
+        if text.startswith("구독은 ")
+    ]
+    lowers = [
+        _presentation_row(document, material, segment)
+        for text, material, segment in rows
+        if (
+            (lower_texts is not None and text in lower_texts)
+            or (
+                lower_texts is None
+                and text.count("\n") == 1
+                and not text.startswith(("출처 ", "구독은 ", "챕터 "))
+            )
+        )
+    ]
+    if len(ctas) != 1:
+        raise RuntimeError(f"CTA_PRESENTATION_CONTRACT_INVALID:{len(ctas)}")
+    return {
+        "source_date_hud": sources,
+        "cta_hud": ctas[0],
+        "lower_slots": lowers,
+    }
 
 
 def set_range(segment: dict[str, Any], start: int, duration: int) -> None:
@@ -512,7 +592,14 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
     return document
 
 
-def validate_build(root: Path, media_records: dict[str, dict[str, Any]], total: int, *, path_reference: Path | None = None) -> dict[str, Any]:
+def validate_build(
+    root: Path,
+    media_records: dict[str, dict[str, Any]],
+    total: int,
+    *,
+    path_reference: Path | None = None,
+    cards: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     junk = [path.relative_to(root).as_posix() for path in root.rglob("*") if JUNK_RE.search(path.name)]
     if junk:
         raise RuntimeError("PROJECT_JUNK_PRESENT")
@@ -562,7 +649,14 @@ def validate_build(root: Path, media_records: dict[str, dict[str, Any]], total: 
         media_file = root / record["embedded_relpath"] if record.get("storage") == "embedded" else Path(record["file"])
         if not media_file.is_file() or sha256(media_file) != record["sha256"]:
             raise RuntimeError("MEDIA_COPY_INTEGRITY_INVALID")
-    return {"status": "PASS", "duration_sec": total / MICROS, "mirror_sha256": next(iter(hashes)), "media_count": len(media_records), "lower_slot_overlap": False}
+    return {
+        "status": "PASS",
+        "duration_sec": total / MICROS,
+        "mirror_sha256": next(iter(hashes)),
+        "media_count": len(media_records),
+        "lower_slot_overlap": False,
+        "presentation_contract": capture_presentation_contract(document, cards),
+    }
 
 
 def register_project(meta_path: Path, source_name: str, project_name: str, project_root: Path, duration: int) -> bytes:
@@ -579,19 +673,66 @@ def register_project(meta_path: Path, source_name: str, project_name: str, proje
     return original
 
 
+def build_report_payload(
+    *,
+    project: Path,
+    media_dir: Path,
+    cards: list[dict[str, Any]],
+    media_records: dict[str, dict[str, Any]],
+    static: dict[str, Any],
+    resolved_root: ResolvedRoot,
+) -> dict[str, Any]:
+    def portable(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: portable(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [portable(item) for item in value]
+        if isinstance(value, str) and (
+            Path(value).is_absolute() or PureWindowsPath(value).is_absolute()
+        ):
+            return f"LOCAL_PATH/{PureWindowsPath(value).name}"
+        return value
+
+    public_media = portable(copy.deepcopy(media_records))
+    for record in public_media.values():
+        filename = record.get("filename", "media")
+        if "file" in record:
+            record["file"] = f"LOCAL_MEDIA_FILE/{filename}"
+        if record.get("offline_path"):
+            record["offline_path"] = f"CAPCUT_RELINK_PLACEHOLDER/{filename}"
+    media_reference = "/".join(
+        ["LOCAL_MEDIA_FOLDER", media_dir.parent.name, media_dir.name]
+    )
+    return {
+        "status": "PROJECT_CREATED_WAIT_MEDIA_RELINK",
+        "project": f"LOCAL_CAPCUT_DRAFT/{project.name}",
+        "media_folder_to_select": media_reference,
+        "root_bundle": resolved_root.to_report(),
+        "cards": portable(copy.deepcopy(cards)),
+        "media": public_media,
+        "static_validation": portable(copy.deepcopy(static)),
+        "PROJECT_BUILD": "PASS",
+        "STATIC_STRUCTURE": "PASS",
+        "MEDIA_RELINK": "WAIT",
+        "MEDIA_RESOLUTION": "WAIT",
+        "VISUAL_GATE": "WAIT_USER_VISUAL_GATE",
+        "MP4": "NOT_RUN",
+        "UPLOAD": "NOT_RUN",
+        "next": "Open in CapCut, select Media Relink, choose the local media folder printed by the builder CLI, save, close, then run post-open readback.",
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cards", type=Path, required=True)
-    parser.add_argument("--root-archive", type=Path, required=True)
-    parser.add_argument("--root-sha256", required=True)
+    parser.add_argument("--workspace-root", type=Path, required=True)
     parser.add_argument("--capcut-root", type=Path, required=True)
     parser.add_argument("--media-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--replace-invalid-target", action="store_true")
     args = parser.parse_args()
     require_capcut_closed()
-    if sha256(args.root_archive).upper() != args.root_sha256.upper():
-        raise RuntimeError("ROOT_ARCHIVE_INTEGRITY_INVALID")
+    resolved_root = resolve_active_root(args.workspace_root)
     cards_doc = json_load(args.cards)
     episode_id = str(cards_doc.get("episode_id", "")).strip()
     project_name = str(cards_doc.get("project_name", "")).strip()
@@ -625,7 +766,7 @@ def main() -> int:
     staging_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="politics-cards-", dir=staging_parent) as temporary:
         try:
-            stage = extract_root(args.root_archive, Path(temporary))
+            stage = extract_root(resolved_root.archive_path, Path(temporary))
             source_root_name = stage.name
             renamed = Path(temporary) / project_name
             stage.rename(renamed)
@@ -635,13 +776,21 @@ def main() -> int:
             document, timeline = remap_ids(stage, final_root, project_name, source_root_name)
             document = build_document(document, cards, total, media_records, project_name)
             mirror(stage, timeline, document)
-            static = validate_build(stage, media_records, total, path_reference=final_root)
+            static = validate_build(stage, media_records, total, path_reference=final_root, cards=cards)
             shutil.copytree(stage, final_root)
             published = True
-            static = validate_build(final_root, media_records, total)
+            static = validate_build(final_root, media_records, total, cards=cards)
             original_meta = register_project(meta_path, source_root_name, project_name, final_root, total)
             args.report.parent.mkdir(parents=True, exist_ok=True)
-            json_write(args.report, {"status": "PROJECT_CREATED_WAIT_MEDIA_RELINK", "project": str(final_root), "media_folder_to_select": str(args.media_dir), "root_archive": str(args.root_archive), "root_sha256": args.root_sha256.upper(), "cards": cards, "media": media_records, "static_validation": static, "next": "Open in CapCut, select Media Relink, choose media_folder_to_select, save, close, then run post-open readback."})
+            report = build_report_payload(
+                project=final_root,
+                media_dir=args.media_dir,
+                cards=cards,
+                media_records=media_records,
+                static=static,
+                resolved_root=resolved_root,
+            )
+            json_write(args.report, report)
             print(json.dumps({"status": "PASS", "project": str(final_root), "media_dir": str(args.media_dir), "static": static}, ensure_ascii=False))
         except Exception:
             if original_meta is not None:

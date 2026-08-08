@@ -44,25 +44,37 @@ contract와 episode JSON에 사용자 프로필 절대경로, `%LOCALAPPDATA%`, 
 
 ## 공용 근본 계약
 
-현재 새 회차에 쓸 근본은 다음의 v5 하나다.
+현재 새 회차에 쓸 근본은 active pointer가 선택한 검증 완료 bundle 하나다.
 
 ```text
-contract (workspace relative)
-00_asset_tools/templates/capcut/jungchilong/capcut_root_contract_v1.json
+active pointer
+00_asset_tools/templates/capcut/jungchilong/capcut_active_root_v1.json
 
-archive (workspace relative)
-00_asset_tools/templates/capcut/jungchilong/jungchilong_v5_chapter_image_lower2_CAPCUT_20260803.zip
-
-manifest (workspace relative)
-00_asset_tools/templates/capcut/jungchilong/template_manifest_v5_chapter_image_lower2.json
-
-archive SHA-256
-5D6241ED9816DD6F4123446DF35D54DF51318E61FEFF53CA13A96EE5E84A7F60
+active pointer -> PASS_ROOT_CONTRACT resolver -> builder --workspace-root
 ```
 
 근본을 직접 열어 이름만 바꾸거나, 과거 회차·실패본·`.bak`를 다음 회차의 근본으로
 사용하지 않는다. 새 화면을 근본으로 승격해야 할 때만 CapCut을 닫고
-`scripts/promote_capcut_root.py`를 staging 사본에 실행한다. root ZIP은 승격 뒤
+`scripts/promote_capcut_root.py prepare`를 staging 사본에 실행한다. active v5는 수정·덮어쓰기
+금지이며 새 화면 근본은 v6부터 시작한다.
+
+```text
+staging copy
+-> prepare candidate bundle
+-> PASS_ROOT_PROMOTION_STATIC + visual WAIT + post-open WAIT
+-> user visual approval and CapCut open/save/close evidence
+-> activate candidate
+-> atomic active pointer update
+-> immutable active version
+```
+
+prepare는 `root_version + root_profile` 두 값 모두와 active parent에서 모든 산출물 이름을 파생하고
+`CANDIDATE_ROOT_BUNDLE_PREPARED`만 반환한다. 이때 static PASS여도 active가 아니며
+`capcut_active_root_v1.json`을 바꾸지 않는다. visual과 post-open이 각각
+`PASS_USER_VISUAL_GATE`, `PASS_CAPCUT_OPEN_CLOSE`가 된 뒤에만 `activate`를 실행한다.
+activate는 전체 bundle과 parent lineage를 다시 검증하고 마지막 파일 작업으로 active
+pointer를 원자 교체한다. 실패하면 기존 pointer bytes를 그대로 보존한다. 활성 근본과 근본
+화면 증거는 회차 `VISUAL_GATE`를 부여하지 않는다. 활성화된 root ZIP과 version bundle은
 불변이다.
 
 각 PC에서 다음으로 상대경로·manifest·ZIP 해시를 먼저 확인한다.
@@ -74,6 +86,8 @@ python scripts/resolve_politics_capcut_root.py `
 ```
 
 `PASS_ROOT_CONTRACT`가 아니면 builder를 실행하지 않는다.
+handoff data, 과거 contract 경로, 직접 입력한 archive 경로·SHA는 근본을 선택할 수 없다.
+builder의 `--root-archive`와 `--root-sha256`은 허용하지 않는다.
 
 ## 사전 입력 게이트
 
@@ -201,6 +215,8 @@ PROJECT_CREATED_WAIT_MEDIA_RELINK
 
 파일명만 같다는 이유로 과거 로컬 미디어가 연결됐다고 간주하지 않는다. relink 뒤 저장된
 CapCut JSON path와 Media SHA-256이 일치해야 한다.
+최종 draft 전체에서 `onlineMaterial`, `__CAPCUT_RELINK_REQUIRED__`, 비어 있지 않은
+`online_id`·`request_id`가 하나라도 발견되면 `MEDIA_RESOLUTION=FAIL`이다.
 
 ## 조립 실행
 
@@ -208,14 +224,10 @@ CapCut을 완전히 종료한 뒤 실행한다. 아래 `<...>`만 현재 회차 
 
 ```powershell
 $workspaceRoot = (Resolve-Path $env:WORKSPACE_ROOT)
-$rootDir = Join-Path $workspaceRoot '00_asset_tools\templates\capcut\jungchilong'
-$archive = Join-Path $rootDir 'jungchilong_v5_chapter_image_lower2_CAPCUT_20260803.zip'
-$sha256 = '5D6241ED9816DD6F4123446DF35D54DF51318E61FEFF53CA13A96EE5E84A7F60'
 
 python scripts/build_politics_card_project.py `
   --cards <episode_dir>\50_capcut_project\episode_cards.json `
-  --root-archive $archive `
-  --root-sha256 $sha256 `
+  --workspace-root $workspaceRoot `
   --capcut-root "$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft" `
   --media-dir "$env:USERPROFILE\Videos\22utube_capcut_media\<project_name>\Media" `
   --report <episode_dir>\90_reports\capcut_build_v1.json
@@ -223,6 +235,12 @@ python scripts/build_politics_card_project.py `
 
 `PROJECT_CREATED_WAIT_MEDIA_RELINK`은 조립 정적 검사 통과일 뿐, 재연결·화면검수·MP4
 렌더가 완료됐다는 뜻이 아니다.
+OneDrive에 동기화하는 `capcut_build_v1.json`에는 workspace 상대경로나
+`LOCAL_CAPCUT_DRAFT`, `LOCAL_MEDIA_FOLDER`, `LOCAL_PATH` 같은 이식 가능한 참조만 쓴다.
+실제 로컬 project/media/source 절대경로는 조립 실행과 CLI 안내에만 사용하고 report에
+직렬화하지 않는다.
+build report의 `root_bundle.root_visual_gate`는 근본 승격 당시의 역사적 증거다.
+회차의 top-level `VISUAL_GATE`와 별개이며 회차 화면 승인을 상속하거나 대체하지 않는다.
 
 ## 검증과 정리
 
@@ -233,8 +251,18 @@ CapCut을 열어 relink folder를 선택하고 저장한 뒤 닫는다. 닫힌 �
 python scripts/capture_politics_relink_readback.py `
   --project "$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft\<project_name>" `
   --build-report <episode_dir>\90_reports\capcut_build_v1.json `
+  --media-dir "$env:USERPROFILE\Videos\22utube_capcut_media\<project_name>\Media" `
   --report <episode_dir>\90_reports\capcut_relink_readback_v1.json
 ```
+
+`--media-dir`는 portable build report의 `LOCAL_MEDIA_FOLDER/...` 참조를 현재 PC의 실제
+Media 폴더에 연결하는 private readback 입력이다. 이 절대경로는 report에 직렬화하지 않는다.
+portable report에 이 입력이 없으면 `WAIT_PRIVATE_MEDIA_DIR_REQUIRED`로 멈춘다. 과거의
+절대경로 기반 v1 build report는 `--media-dir` 없이도 읽는다.
+
+실패 복구는 `첫 실패 지점 재현 → 최소 수정 → 동일 검증 재실행` 순서로 한다.
+실패한 명령과 gate를 기록하고, 그 gate의 원인만 수정한 뒤 같은 명령을 다시 실행한다.
+동일 검증이 PASS가 아니면 다음 gate나 완료 상태로 진행하지 않는다.
 
 필수 결과:
 
@@ -246,11 +274,29 @@ SOURCE_DURATION_EXACT=PASS
 PROJECT_DURATION_EXACT=PASS
 LOWER_TWO_LINE_SLOT_ACTIVE_COUNT=1
 CAPCUT_MIRRORS=PASS
-MEDIA_RELINKED=PASS
+PROJECT_BUILD=PASS
+STATIC_STRUCTURE=PASS
+MEDIA_RELINK=PASS
+MEDIA_RESOLUTION=PASS
+FINAL_DRAFT_PLACEHOLDER_SCAN=PASS
+HUD_TRACK_GEOMETRY=PASS
+LOWER_SLOT_TRACK_GEOMETRY=PASS
 NO_JUNK_FILES=PASS
 VISUAL_GATE=WAIT_USER_VISUAL_GATE|PASS
 MP4=NOT_RUN|PASS
+UPLOAD=NOT_RUN|PASS
 ```
+
+builder는 source/date HUD, CTA, 하단 슬롯의 track id·type·index와 clip geometry를
+build report에 고정한다. post-open readback은 저장된 실제 draft에서 같은 필드를 다시
+읽어 text·시간·개수와 함께 비교한다. FAIL report도 파일로 남기되 CLI는 nonzero로
+종료한다. 이 비교는 좌표·트랙 드리프트를 잡는 정적 검사이며 실제 화면의 가독성, 가림,
+크롭, 재생 상태를 승인하지 않는다. 그 판단은 계속 `VISUAL_GATE`가 소유한다.
+
+`STATIC_STRUCTURE`와 `MEDIA_RESOLUTION`은 공식 `PROJECT_BUILD`와 `MEDIA_RELINK`의
+세부 증거다. 세부 PASS를 `VISUAL_GATE`, `MP4`, `UPLOAD` PASS로 승격하지 않는다.
+`PROJECT_BUILD`는 이 builder의 독립 기계 gate다. `ROOT_CONTRACT`와
+`STAGE2_PREFLIGHT` 증거가 없으면 그 둘은 별도 `WAIT`이며 자동으로 PASS가 되지 않는다.
 
 `.bak`, `before_*`, `_backup_*`, `helper_*`는 active draft에 남기지 않는다. 필요한
 백업은 draft 밖의 명시적 archive에만 두며, 다른 회차를 고치는 방식으로 재사용하지
@@ -262,9 +308,12 @@ MP4=NOT_RUN|PASS
 ROOT_CONTRACT: PASS|FAIL|WAIT
 STAGE2_PREFLIGHT: PASS|FAIL|WAIT
 PROJECT_BUILD: PASS|FAIL|WAIT
+STATIC_STRUCTURE: PASS|FAIL|WAIT
 MEDIA_RELINK: PASS|FAIL|WAIT
+MEDIA_RESOLUTION: PASS|FAIL|WAIT
 VISUAL_GATE: PASS|WAIT
 MP4: PASS|NOT RUN
+UPLOAD: PASS|NOT RUN
 PROJECT_NAME:
 LOCAL_CAPCUT_PATH:
 ONEDRIVE_CARDS_PATH:
@@ -273,5 +322,8 @@ BLOCKER:
 NEXT:
 ```
 
-`MEDIA_RELINK=PASS` 또는 `VISUAL_GATE=PASS` 없이 최종·완료·upload-ready라고
-표현하지 않는다.
+`MEDIA_RELINK=PASS` AND `VISUAL_GATE=PASS`가 둘 다 있어야 최종·완료의
+필요조건이 된다. 둘 중 하나라도 없으면 최종·완료·upload-ready라고 표현하지
+않는다. `MP4`와 `UPLOAD`은 각각 별도 상태다. `MP4=PASS`와 원격 업로드 준비
+증거가 없으면 upload-ready라고 표현하지 않고, `UPLOAD=PASS` 없이 업로드
+완료라고 표현하지 않는다.
