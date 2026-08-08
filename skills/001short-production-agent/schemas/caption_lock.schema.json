@@ -22,7 +22,8 @@
           "cue_id": {"type": "string", "minLength": 1},
           "start_us": {"type": "integer"},
           "end_us": {"type": "integer"},
-          "text": {"type": "string", "minLength": 1}
+          "text": {"type": "string", "minLength": 1},
+          "layer": {"type": "string", "minLength": 1}
         },
         "additionalProperties": true
       }

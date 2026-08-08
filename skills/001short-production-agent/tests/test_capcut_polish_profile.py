@@ -25,7 +25,7 @@ class CapCutPolishProfileTest(unittest.TestCase):
             "id": "timeline-test", "main_timeline_id": "timeline-test",
             "materials": {
                 "videos": [{"id": "v1", "type": "video", "path": "Resources/media/clean_source.mp4"}, {"id": "v2", "type": "video", "path": "Resources/media/clean_source.mp4"}],
-                "audios": [{"id": "a9", "type": "audio", "path": "Resources/media/tts_narrator.wav"}, {"id": "a10", "type": "audio", "path": "Resources/media/source_audio.m4a"}],
+                "audios": [{"id": "a9", "type": "audio", "path": "Resources/media/tts_narrator.wav"}, {"id": "a10", "type": "audio", "path": "Resources/media/a10_vocal_stem.m4a"}],
             },
             "tracks": [
                 {"segments": [_segment("video-1", "v1", 0, 2_000_000), _segment("video-2", "v2", 2_000_000, 2_000_000)]},

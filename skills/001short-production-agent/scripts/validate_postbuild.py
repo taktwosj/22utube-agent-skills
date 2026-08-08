@@ -112,7 +112,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
         errors.append(_error("E_DRAFT_MISMATCH", detail="a10_count"))
     actual_a10.sort(key=lambda row: (_range(row, "target_timerange") or [10**30])[0])
     for actual, planned in zip(actual_a10, [audio_by_clip[row["clip_id"]] for row in expected if row["clip_id"] in audio_by_clip]):
-        expected_source_range = planned.get("capcut_source_range_us", planned["source_range_us"])
+        # Mirrors build_episode_capcut: the A10 stem is timeline-aligned.
+        expected_source_range = planned.get("capcut_source_range_us", planned["target_range_us"])
         if _range(actual, "source_timerange") != expected_source_range or _range(actual, "target_timerange") != planned["target_range_us"]:
             errors.append(_error("E_DRAFT_MISMATCH", detail="a10_range"))
     if manifest["urakkai"].get("reorder_required"):

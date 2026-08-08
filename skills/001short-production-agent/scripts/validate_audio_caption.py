@@ -14,6 +14,7 @@ AUDIO_SCHEMA = SKILL_ROOT / "schemas" / "audio_lock.schema.json"
 TTS_SCHEMA = SKILL_ROOT / "schemas" / "tts_evidence.schema.json"
 CAPTION_SCHEMA = SKILL_ROOT / "schemas" / "caption_lock.schema.json"
 TIME_RE = re.compile(r"^(\d{2}):(\d{2}):(\d{2}),(\d{3})$")
+DEFAULT_CUE_LAYER = "0"
 
 
 def _probe_audio(path: Path) -> tuple[int | None, set[str]]:
@@ -241,17 +242,22 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
             parsed = []
         if len(parsed) != caption["final_cue_count"] or len(parsed) != len(caption["cues"]):
             errors.append({"code": "AUDIO_CAPTION_CUE_COUNT_MISMATCH"})
-        previous_end = 0
+        previous_end_by_layer: dict[str, int] = {}
         for expected, actual in zip(caption["cues"], parsed):
+            layer = str(expected.get("layer", DEFAULT_CUE_LAYER))
             if actual["end_us"] <= actual["start_us"]:
                 errors.append({"code": "AUDIO_CAPTION_CUE_REVERSED", "cue_id": expected.get("cue_id")})
             if any(expected.get(field) != actual.get(field) for field in ("start_us", "end_us", "text")):
                 errors.append({"code": "AUDIO_CAPTION_CUE_MISMATCH", "cue_id": expected.get("cue_id")})
-            if actual["start_us"] < previous_end:
-                errors.append({"code": "AUDIO_CAPTION_CUE_OVERLAP", "cue_id": expected.get("cue_id")})
+            if actual["start_us"] < previous_end_by_layer.get(layer, 0):
+                errors.append({
+                    "code": "AUDIO_CAPTION_CUE_OVERLAP",
+                    "cue_id": expected.get("cue_id"),
+                    "layer": layer,
+                })
             if actual["end_us"] > audio_lock["measured_duration_us"]:
                 errors.append({"code": "AUDIO_CAPTION_CUE_OUTSIDE_AUDIO", "cue_id": expected.get("cue_id")})
-            previous_end = actual["end_us"]
+            previous_end_by_layer[layer] = actual["end_us"]
     return result(errors, {
         "episode_id": audio_lock["episode_id"],
         "audio_lock_sha256": sha256_file(audio_lock_path),

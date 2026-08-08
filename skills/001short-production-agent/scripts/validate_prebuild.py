@@ -164,13 +164,19 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     audio_by_clip: dict[str, list[dict]] = {}
     for row in audio_rows:
         if not isinstance(row, dict) or row.get("mode") not in {"on", "duck", "mute"}:
-            errors.append(_error("E_AUDIO_BINDING"))
+            errors.append(_error(
+                "E_AUDIO_BINDING", clip_id=(row or {}).get("clip_id") if isinstance(row, dict) else None,
+                detail="source_audio[].mode must be one of on/duck/mute",
+            ))
             continue
         audio_by_clip.setdefault(str(row.get("clip_id")), []).append(row)
     for clip in normalized_clips:
         rows = audio_by_clip.get(clip["clip_id"], [])
         if len(rows) != 1:
-            errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
+            errors.append(_error(
+                "E_AUDIO_BINDING", clip_id=clip["clip_id"],
+                detail="exactly one source_audio row must reuse this VIDEO clip_id",
+            ))
             continue
         row = rows[0]
         if row.get("mode") in {"on", "duck"} and (
@@ -178,7 +184,10 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
             or row.get("source_range_us") != clip["source_range_us"]
             or row.get("target_range_us") != clip["target_range_us"]
         ):
-            errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
+            errors.append(_error(
+                "E_AUDIO_BINDING", clip_id=clip["clip_id"],
+                detail="source_sha256 must equal the source VIDEO sha and the ranges must match the clip",
+            ))
         capcut_source_range = row.get("capcut_source_range_us")
         if capcut_source_range is not None:
             normalized_capcut_range = _range(capcut_source_range)

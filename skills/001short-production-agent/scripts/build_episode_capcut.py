@@ -358,11 +358,17 @@ def _documents(project: Path) -> Iterator[tuple[Path, dict]]:
 
 
 def _set_media(
-    material: dict, *, media_type: str, portable_path: str, role: str, duration_us: int
+    material: dict, *, media_type: str, portable_path: str, role: str, duration_us: int,
+    dimensions: tuple[int, int] | None = None,
 ) -> None:
     if media_type == "video":
         material["type"] = "video"
         material["media_path"] = ""
+        # The seed material carries the template's dimensions, not the swapped-in
+        # media's.  Leaving them stale makes CapCut scale the clip against the
+        # wrong intrinsic size, which shows up as a blank or mis-framed preview.
+        if dimensions is not None:
+            material["width"], material["height"] = dimensions
     elif material.get("type") not in {"music", "extract_music"}:
         material["type"] = "music"
     material["role"] = role
@@ -515,13 +521,16 @@ def _normalize_source(
     video_input = Path(visual["video_input_path"])
     video_resource = visual["resource_name"]
     shutil.copy2(video_input, media / video_resource)
+    video_dimensions = _video_dimensions(video_input)
     tts_only = config.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE"
     audio_name = ""
     if not tts_only:
         if audio_source is None:
             raise RuntimeError("SOURCE_AUDIO_REQUIRED")
         audio_suffix = audio_source.suffix.lower() or ".wav"
-        audio_name = f"source_audio{audio_suffix}"
+        # This is the externally separated Demucs vocal stem, not the raw
+        # source audio.  Keep that distinction visible in the portable asset.
+        audio_name = f"a10_vocal_stem{audio_suffix}"
         shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)
 
@@ -584,7 +593,7 @@ def _normalize_source(
         _set_media(
             video_material, media_type="video",
             portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{video_resource}"),
-            role="VIDEO", duration_us=duration,
+            role="VIDEO", duration_us=duration, dimensions=video_dimensions,
         )
         video_segments = []
         for clip in sorted(build_manifest["urakkai"]["video_clips"], key=lambda row: row["target_range_us"][0]):
@@ -620,6 +629,24 @@ def _normalize_source(
             segment["id"] = _approved_id(config, approved, role)
             row = approved_by_id[segment["id"]]
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
+
+        # The pinned white-frame material arrives from CapCut with an online
+        # cache path.  The template archive already carries its portable copy;
+        # bind that copy explicitly before generic path scrubbing can blank it.
+        white_segments = tracks[TRACK_INDEX["SCREEN_WHITE"]]["segments"]
+        if white_segments:
+            white_resource = "transparent_center_white_1080x1920.png"
+            white_asset = media / white_resource
+            if not white_asset.is_file():
+                raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
+            white_material = material_map[white_segments[0]["material_id"]]
+            white_material["name"] = white_resource
+            white_material["path"] = _portable_resource_path(
+                draft_prefix, f"Resources/media/{white_resource}"
+            )
+            white_material["media_path"] = ""
+            white_material["role"] = "SCREEN_WHITE"
+            white_material["desc"] = "001short production SCREEN_WHITE"
 
         for key in ("T2", "T1"):
             index = TRACK_INDEX[key]
@@ -780,11 +807,17 @@ def _normalize_source(
                 portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
                 role="A10", duration_us=duration,
             )
+            a10_material["name"] = audio_name
             a10_segments = []
             for audio_index, audio_plan in enumerate(build_manifest["source_audio"]):
                 if audio_plan.get("mode") not in {"on", "duck"}:
                     continue
-                capcut_source_range = audio_plan.get("capcut_source_range_us", audio_plan["source_range_us"])
+                # A10 plays the reordered stem, whose length equals the final
+                # timeline (STAGE07_AUTHORITY_MISMATCH already enforces that), so
+                # its source range is the target range - not the original media's.
+                capcut_source_range = audio_plan.get(
+                    "capcut_source_range_us", audio_plan["target_range_us"]
+                )
                 a10_segment = copy.deepcopy(base_a10_segment)
                 a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
                 a10_segment["role"] = "A10"
@@ -974,7 +1007,11 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     state_path = Path(config["state_path"]).resolve()
     state = read_json(state_path)
     if state.get("episode_id") != episode_id or state.get("status") != "AUDIO_CAPTION_VALIDATED":
-        raise RuntimeError("STAGE07_STATE_INVALID")
+        raise RuntimeError(
+            "STAGE07_STATE_INVALID:"
+            f"expected episode_id={episode_id} status=AUDIO_CAPTION_VALIDATED,"
+            f" got episode_id={state.get('episode_id')} status={state.get('status')}"
+        )
     audio_lock = resolved_declared_path(state_path, state.get("audio_lock_path", ""))
     caption_lock = resolved_declared_path(state_path, state.get("caption_lock_path", ""))
     if (

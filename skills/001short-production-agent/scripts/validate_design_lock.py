@@ -18,6 +18,18 @@ LEGAL_ROLES = {
     "A10", "A10_TEXT", "STATE", "A11", "A12",
 }
 
+# shrt_white_base_v2 seeds are placeholders with no width or wrap settings, and
+# the builder swaps text without touching font size, so CapCut neither shrinks
+# nor wraps.  These are the measured per-line budgets before text leaves frame.
+MAX_LINE_LENGTH_BY_ROLE = {"T1": 10, "T2": 12, "A10_TEXT": 16, "A9_TEXT": 16}
+
+
+def _overlong_line(text: str, limit: int) -> str | None:
+    for line in str(text).splitlines():
+        if meaningful_text_length(line) > limit:
+            return line
+    return None
+
 
 def validate_role_contract(timeline: dict) -> list[dict]:
     errors: list[dict] = []
@@ -33,6 +45,14 @@ def validate_role_contract(timeline: dict) -> list[dict]:
     for row in rows:
         role, content_type = row.get("role"), row.get("content_type")
         segment_id = row.get("segment_id")
+        limit = MAX_LINE_LENGTH_BY_ROLE.get(role)
+        if limit is not None and isinstance(row.get("text"), str):
+            overlong = _overlong_line(row["text"], limit)
+            if overlong is not None:
+                errors.append({
+                    "code": "CAPTION_LINE_TOO_LONG", "segment_id": segment_id, "role": role,
+                    "limit": limit, "line": overlong,
+                })
         if role not in LEGAL_ROLES:
             errors.append({"code": "ROLE_ANCHOR_INVALID", "segment_id": segment_id})
         if role == "A12":
@@ -95,6 +115,7 @@ def validate_handoff(
     source_identity_path: Path,
     timeline_path: Path,
     evidence_path: Path | None = None,
+    allow_relock: bool = False,
 ) -> dict:
     handoff_path = Path(handoff_path).resolve()
     source_identity_path = Path(source_identity_path).resolve()
@@ -198,10 +219,15 @@ def validate_handoff(
         return result([{"code": "DESIGN_LOCK_EVIDENCE_SCHEMA", "detail": evidence_schema_errors}])
     if evidence_path is not None:
         evidence_path = Path(evidence_path).absolute()
-        guard = inspect_write_target(handoff_path.parent, evidence_path, require_new=True)
+        # Re-locking after an approved design edit is a normal path; it just has
+        # to be asked for, so an accidental overwrite still fails closed.
+        guard = inspect_write_target(
+            handoff_path.parent, evidence_path, require_new=not allow_relock
+        )
         if guard is not None:
             code = "DESIGN_LOCK_EVIDENCE_EXISTS" if guard == "PATH_EXISTS" else "DESIGN_LOCK_EVIDENCE_PATH_UNSAFE"
-            return result([{"code": code}])
+            detail = "pass --relock to overwrite the existing evidence" if guard == "PATH_EXISTS" else None
+            return result([{"code": code, **({"detail": detail} if detail else {})}])
         write_json(evidence_path, evidence)
         evidence["design_lock_evidence_path"] = str(evidence_path)
         evidence["design_lock_evidence_sha256"] = sha256_file(evidence_path)
@@ -214,8 +240,11 @@ def main() -> int:
     parser.add_argument("--source-identity", type=Path, required=True)
     parser.add_argument("--timeline", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--relock", action="store_true", help="overwrite existing design lock evidence")
     args = parser.parse_args()
-    payload = validate_handoff(args.handoff, args.source_identity, args.timeline, args.evidence)
+    payload = validate_handoff(
+        args.handoff, args.source_identity, args.timeline, args.evidence, allow_relock=args.relock
+    )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0 if payload["status"] == "PASS" else 1
 

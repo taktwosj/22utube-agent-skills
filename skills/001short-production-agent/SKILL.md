@@ -170,6 +170,8 @@ matches[0].click();
 
 우라까이 설계·production plan·다중 VIDEO/A10 조립·눈검수·post-open 검증을 수행할 때는 `references/urakkai-structural-reorder-capcut.md`를 읽는다.
 
+Stage 05 승인안을 실제 아티팩트로 옮기기 전에는 `references/urakkai-artifact-contract.md`를 읽는다. 빌더는 `production_plan.json`을 소비하지 않으며, 실제 권위는 `approved_timeline` + `build_manifest` + Stage 07 lock 세트다. `source_audio[].mode`, `capcut_source_range_us`, `caption_lock.cues[].layer`, `SCREEN_EFFECT`/`SCREEN_WHITE` 행, `state.json.status=AUDIO_CAPTION_VALIDATED`처럼 스키마에 드러나지 않는 필수 항목이 그 문서에 있다. 상황 설명과 화자 발언은 서로 다른 `layer`이므로 **시간이 겹쳐도 된다**.
+
 ### 원본 음성 전체 mute + 새 TTS 우라까이
 
 운영자가 원본 대화·BGM·효과음을 모두 끄고 새 TTS만 쓰라고 승인하면 production plan에 `audio_policy=TTS_ONLY_MUTE_SOURCE`를 선언한다. 모든 VIDEO는 `volume=0`, A10/A11/A12는 비우고 clear anchor로 기록하며, A9는 실제 새 TTS 파일을 하나 이상 둔다. 원본 화자발언은 분석·사실 귀속의 근거로만 문서에 남기고 CapCut 음원으로 재사용하지 않는다. 원본 화자발언을 살리는 경우에만 `audio_policy=A10_RETAINED_SYNC`를 쓰고 VIDEO/A10 source·target 동기 배치를 강제한다.

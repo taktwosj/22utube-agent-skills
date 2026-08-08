@@ -31,7 +31,9 @@ def validate_project(project: Path) -> dict:
                 if material.get("type") == "video":
                     videos.append((segment, material))
                 if material.get("type") in {"audio", "music", "extract_music"}:
-                    audio.append((segment, material, segment.get("role") in {"A10", "A11"} or "source_audio" in name))
+                    audio.append((segment, material, segment.get("role") in {"A10", "A11"} or any(
+                        token in name for token in ("source_audio", "a10_vocal_stem")
+                    )))
         for order, (segment, material) in enumerate(videos):
             if material.get("video_algorithm", {}).get("quality_enhance", {}).get("level") != 3:
                 errors.append({"code": "POLISH_AI_HD_MISSING", "segment": segment.get("id")})

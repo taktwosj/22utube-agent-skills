@@ -168,7 +168,12 @@ class VocalStemContractTest(unittest.TestCase):
             self.assertEqual(result["status"], "FAIL")
             self.assertIn("AUDIO_CAPTION_AUDIO_LOCK_SCHEMA", {row["code"] for row in result["errors"]})
 
-    def test_existing_draft_rebinds_only_portable_a10_to_vocal_stem(self):
+    def test_existing_draft_rebinds_legacy_and_renamed_portable_a10_to_vocal_stem(self):
+        for existing_name in ("source_audio.m4a", "a10_vocal_stem.m4a"):
+            with self.subTest(existing_name=existing_name):
+                self._assert_existing_draft_rebind(existing_name)
+
+    def _assert_existing_draft_rebind(self, existing_name: str) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             _, vocals, manifest = self._fixture(root)
@@ -189,8 +194,8 @@ class VocalStemContractTest(unittest.TestCase):
                     }]},
                 ],
                 "materials": {"audios": [{
-                    "id": material_id, "type": "extract_music", "name": "source_audio.m4a",
-                    "path": "##_draftpath_placeholder_##/Resources/media/source_audio.m4a",
+                    "id": material_id, "type": "extract_music", "name": existing_name,
+                    "path": f"##_draftpath_placeholder_##/Resources/media/{existing_name}",
                     "duration": duration,
                 }]},
             }), encoding="utf-8")

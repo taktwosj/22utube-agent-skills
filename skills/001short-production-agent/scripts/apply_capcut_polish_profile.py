@@ -161,7 +161,9 @@ def _apply(value: dict) -> dict[str, int]:
             material = index.get(segment.get("material_id"), ("", {}))[1]
             name = Path(str(material.get("path", ""))).name.casefold()
             is_a9 = segment.get("role") == "A9" or "tts_narrator" in name
-            is_source = segment.get("role") in {"A10", "A11"} or "source_audio" in name
+            is_source = segment.get("role") in {"A10", "A11"} or any(
+                token in name for token in ("source_audio", "a10_vocal_stem")
+            )
             if is_a9:
                 a9_ranges.append(_range(segment))
             if material.get("type") == "video":

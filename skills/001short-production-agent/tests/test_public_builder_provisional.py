@@ -31,7 +31,8 @@ def write(path: Path, payload: dict) -> None:
 def media(root: Path) -> tuple[Path, Path]:
     source, vocals = root / "source.mp4", root / "vocals.wav"
     subprocess.run([
-        "ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=1080x1920:r=30:d=2",
+        # Deliberately not the template's 1080x1920, so a stale material size shows up.
+        "ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=540x960:r=30:d=2",
         "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-shortest", "-y", str(source),
     ], check=True)
     subprocess.run([
@@ -51,8 +52,14 @@ def template_archive(root: Path) -> tuple[Path, Path, Path]:
     tracks = []
     for index, role in enumerate(builder.ROLE_BY_TRACK):
         material_id = f"material-{index}"
-        if role in {"VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE"}:
+        if role == "VIDEO":
             material = {"id": material_id, "type": "video", "path": "##_draftpath_placeholder_test_##/Resources/media/transparent_center_white_1080x1920.png"}
+        elif role == "SCREEN_WHITE":
+            # Real shrt_white_base_v2 points here at CapCut's cache before the
+            # builder must replace it with the project-local PNG.
+            material = {"id": material_id, "type": "photo", "path": "C:/Users/test/AppData/Local/CapCut/User Data/Cache/onlineMaterial/white.png"}
+        elif role == "SCREEN_EFFECT":
+            material = {"id": material_id, "type": "video_effect", "path": ""}
         elif role in {"A9", "A10", "A11", "A12_RESERVED_EMPTY"}:
             material = {"id": material_id, "type": "music", "path": ""}
         else:
@@ -110,9 +117,11 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 {"segment_id": "V1", "timeline_order": 1, "role": "VIDEO", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
                 {"segment_id": "T2", "timeline_order": 2, "role": "T2", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "subtitle", "content_type": "TITLE"},
                 {"segment_id": "T1", "timeline_order": 3, "role": "T1", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "title", "content_type": "TITLE"},
-                {"segment_id": "SP1", "timeline_order": 4, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
-                {"segment_id": "A10-1", "timeline_order": 5, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
-                {"segment_id": "A10-2", "timeline_order": 6, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
+                {"segment_id": "SCR_FX", "timeline_order": 4, "role": "SCREEN_EFFECT", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
+                {"segment_id": "SCR_WHITE", "timeline_order": 5, "role": "SCREEN_WHITE", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
+                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
+                {"segment_id": "A10-1", "timeline_order": 7, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
+                {"segment_id": "A10-2", "timeline_order": 8, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
             ]
             timeline = episode / "approved_timeline.json"
             write(timeline, {"schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": "fp", "audio_policy": "A10_RETAINED_SYNC", "primary_speaker_id": "P1", "segments": rows})
@@ -157,6 +166,40 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 for row in normalized["materials"]["items"]
             ))
             self.assertTrue(all(row.get("volume") == 0.0 for row in normalized["tracks"][0]["segments"]))
+            # A10 plays the timeline-aligned stem, so with no capcut_source_range_us
+            # its source range must follow the target range, not the original media's.
+            a10 = sorted(
+                normalized["tracks"][12]["segments"],
+                key=lambda row: row["target_timerange"]["start"],
+            )
+            self.assertEqual(
+                [(row["source_timerange"]["start"], row["source_timerange"]["duration"]) for row in a10],
+                [(0, 1_000_000), (1_000_000, 1_000_000)],
+            )
+            self.assertEqual(
+                [(row["target_timerange"]["start"], row["target_timerange"]["duration"]) for row in a10],
+                [(0, 1_000_000), (1_000_000, 1_000_000)],
+            )
+            materials = {
+                row["id"]: row for container in normalized["materials"].values()
+                if isinstance(container, list) for row in container if isinstance(row, dict)
+            }
+            a10_material = materials[a10[0]["material_id"]]
+            self.assertEqual(a10_material["name"], "a10_vocal_stem.wav")
+            self.assertTrue(a10_material["path"].endswith("/Resources/media/a10_vocal_stem.wav"))
+            white = normalized["tracks"][2]["segments"]
+            self.assertEqual(len(white), 1)
+            white_material = materials[white[0]["material_id"]]
+            self.assertEqual(white_material["path"], "##_draftpath_placeholder_test_##/Resources/media/transparent_center_white_1080x1920.png")
+            self.assertTrue((root / "capcut" / "project" / "Resources" / "media" / "transparent_center_white_1080x1920.png").is_file())
+            source_video = next(
+                row
+                for container in normalized["materials"].values() if isinstance(container, list)
+                for row in container
+                if isinstance(row, dict) and row.get("type") == "video"
+                and str(row.get("path", "")).endswith("source.mp4")
+            )
+            self.assertEqual((source_video["width"], source_video["height"]), (540, 960))
             self.assertEqual(result["status"], "CAPCUT_STATIC_VALIDATED")
             self.assertEqual(result["visual_asset_mode"], "SOURCE_VIDEO_PROVISIONAL")
             self.assertFalse(result["upload_ready"])
