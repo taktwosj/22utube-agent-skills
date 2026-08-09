@@ -8,6 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
+
+SCRIPT_ROOT = Path(__file__).resolve().parent
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
 from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]

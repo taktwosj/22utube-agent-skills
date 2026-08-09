@@ -125,7 +125,8 @@ try {
 
   $installScript = Join-Path $PSScriptRoot "install.ps1"
   & $installScript -Target all -Only $skillNames -DryRun:$DryRun
-  if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed with exit code $LASTEXITCODE" }
+  $installSucceeded = $?
+  if (-not $installSucceeded) { throw "install.ps1 failed" }
 
   if ($DryRun) {
     Write-Result ([ordered]@{

@@ -12,13 +12,17 @@ description: Use for original-shorts production, a source intake from Google Dri
 3. Load exactly one current stage MD: [original-capcut-grid.md](templates/original-capcut-grid.md), [final-blueprint.md](steps/05-final-blueprint.md), or [capcut-assembly.md](steps/08-capcut-assembly.md).
 4. Load only the direct supporting references linked by that stage MD. Do not load a second stage MD or replace a stage authority with a legacy document.
 
+## Lane Isolation
+
+This is the independent `owner_skill=001short-production-agent`, `lane=general_shorts_production` lane. 요청을 시작할 때 하나의 lane만 확정한다. Do not load or combine `top5isu-shorts` or another production skill while it is active.
+
 ## Minimal executable protocol
 
 - `protocol.json` is the machine contract and `workflow.json` owns state transitions. Stop with `STOP_PROTOCOL_CONFLICT` on conflict.
 - Start locally from the `0000shrt` episode root. Keep one active writer and never mutate an active CapCut draft while CapCut or its background processes are open.
 - Validate a source intake receipt with `scripts/validate_source_intake.py --receipt <path>` before Stage 01. Static validation does not authorize Drive, browser, CapCut, cloud, render, or upload actions.
 - Validate an approved Stage 05 production plan with `scripts/validate_executable_protocol.py --plan <path>` before a build. Static validation does not establish a user visual approval.
-- For approved generated narration plus retained source speech, use `A9_TTS_PLUS_A10_RETAINED`; A10 rows must be boundary-aligned with A9, and partial overlap fails with `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`.
+- For approved generated narration plus retained source speech, use `A9_TTS_PLUS_A10_RETAINED`; overlapping A10 rows use `source_audio[].mode=duck`, non-overlapping rows use `source_audio[].mode=on`, rows must be boundary-aligned with A9, and partial overlap fails with `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`.
 - Treat every `WAIT_*` and `FAIL_*` in the selected stage MD as a hard stop. Do not use conversational memory as evidence.
 
 ## New Session Handoff Bootstrap
