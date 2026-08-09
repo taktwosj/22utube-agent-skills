@@ -202,20 +202,24 @@ def verify_release_directory(
     if expected_manifest_sha is not None and expected_manifest_sha != manifest_sha:
         raise ReleaseError(f"active manifest SHA mismatch: {release}")
     manifest = json.loads(manifest_data)
+    if not isinstance(manifest, dict):
+        raise ReleaseError(f"manifest must be an object: {release}")
     files = manifest.get("files")
     if not isinstance(files, list) or manifest.get("file_count") != len(files):
         raise ReleaseError(f"manifest file_count mismatch: {release}")
-    listed_paths = {entry.get("path") for entry in files if isinstance(entry, dict)}
-    excluded_names = {"manifest.json", "READY"}
+    if any(not isinstance(entry, dict) for entry in files):
+        raise ReleaseError(f"manifest file entry must be an object: {release}")
+    listed_paths = {entry.get("path") for entry in files}
+    control_paths = {"manifest.json", "READY"}
     if require_immutable:
         immutable_path = release / "IMMUTABLE"
         if not immutable_path.is_file() or immutable_path.read_text(encoding="utf-8").strip() != manifest_sha:
             raise ReleaseError(f"local immutable seal mismatch: {release}")
-        excluded_names.add("IMMUTABLE")
+        control_paths.add("IMMUTABLE")
     actual_paths = {
         path.relative_to(release).as_posix()
         for path in release.rglob("*")
-        if path.is_file() and path.name not in excluded_names
+        if path.is_file() and path.relative_to(release).as_posix() not in control_paths
     }
     if listed_paths != actual_paths:
         extra = sorted(actual_paths - listed_paths)
@@ -451,6 +455,27 @@ def paths_equal(first: Path, second: Path) -> bool:
     return first_value == second_value
 
 
+def is_directory_link(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    if os.name != "nt":
+        return False
+    try:
+        attributes = path.stat(follow_symlinks=False).st_file_attributes
+    except (FileNotFoundError, OSError):
+        return False
+    return bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def path_entry_is_within(path: Path, root: Path) -> bool:
+    physical_path = path.parent.resolve() / path.name
+    try:
+        physical_path.relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
 def install_runtime_link(destination: Path, target: Path, backup_root: Path) -> LinkChange:
     if (destination.exists() or destination.is_symlink()) and paths_equal(destination, target):
         return LinkChange(destination, None, False)
@@ -475,6 +500,15 @@ def install_runtime_link(destination: Path, target: Path, backup_root: Path) -> 
             os.replace(backup, destination)
             print(f"ROLLBACK {backup} -> {destination}")
         raise
+
+
+def backup_existing(destination: Path, backup_root: Path, skill_name: str) -> LinkChange:
+    backup_root.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    backup = backup_root / f"{skill_name}_{stamp}_{uuid.uuid4().hex[:8]}"
+    os.replace(destination, backup)
+    print(f"BACKUP {destination} -> {backup}")
+    return LinkChange(destination, backup, True)
 
 
 def rollback_link_changes(changes: list[LinkChange]) -> None:
@@ -513,6 +547,42 @@ def build_link_plans(
             destinations.add(destination_key)
             plans.append(LinkPlan(target_name, skill["name"], destination, source, backup_root))
     return plans
+
+
+def reconcile_omitted_managed_links(
+    previous_manifest: dict[str, Any],
+    new_manifest: dict[str, Any],
+    target_names: list[str],
+    previous_plans: list[LinkPlan],
+) -> list[LinkChange]:
+    previous_names = {
+        (target_name, skill["name"])
+        for target_name in target_names
+        for skill in previous_manifest.get("skills", [])
+        if target_name in skill.get("targets", [])
+    }
+    expected_names = {
+        (target_name, skill["name"])
+        for target_name in target_names
+        for skill in new_manifest.get("skills", [])
+        if target_name in skill.get("targets", [])
+    }
+    plans = {(plan.target_name, plan.skill_name): plan for plan in previous_plans}
+    changes: list[LinkChange] = []
+    try:
+        for key in sorted(previous_names - expected_names):
+            plan = plans[key]
+            previous_release = plan.source.parent.parent
+            if (
+                is_directory_link(plan.destination)
+                and not path_entry_is_within(plan.destination, previous_release)
+                and paths_equal(plan.destination, plan.source)
+            ):
+                changes.append(backup_existing(plan.destination, plan.backup_root, plan.skill_name))
+    except Exception:
+        rollback_link_changes(changes)
+        raise
+    return changes
 
 
 def verify_link_plans(plans: list[LinkPlan]) -> None:
@@ -556,6 +626,17 @@ def activate(args: argparse.Namespace) -> None:
     local_release = cache_root / "releases" / release_id
     local_active_path = cache_root / "active.json"
     previous_active = local_active_path.read_bytes() if local_active_path.is_file() else None
+    previous_manifest: dict[str, Any] | None = None
+    previous_release: Path | None = None
+    if previous_active is not None:
+        previous_release_id, previous_manifest_sha = read_active(cache_root)
+        previous_release = cache_root / "releases" / previous_release_id
+        previous_manifest = verify_release_directory(previous_release, previous_manifest_sha, require_immutable=True)
+        if (
+            previous_manifest.get("release_id") != previous_release_id
+            or previous_manifest.get("source_commit") != previous_release_id
+        ):
+            raise ReleaseError("previous local active release identity mismatch")
     staging.parent.mkdir(parents=True, exist_ok=True)
     try:
         shutil.copytree(source_release, staging)
@@ -575,8 +656,12 @@ def activate(args: argparse.Namespace) -> None:
             make_tree_writable_for_cleanup(staging)
             shutil.rmtree(staging)
 
-    plans = build_link_plans(
-        manifest, selected_targets(args.target), runtime_overrides, backup_overrides, local_release
+    target_names = selected_targets(args.target)
+    plans = build_link_plans(manifest, target_names, runtime_overrides, backup_overrides, local_release)
+    previous_plans = (
+        build_link_plans(previous_manifest, target_names, runtime_overrides, backup_overrides, previous_release)
+        if previous_manifest is not None and previous_release is not None
+        else []
     )
     fail_after_raw = os.environ.get("AGENT_SKILLS_TEST_FAIL_LINK_AFTER")
     fail_after: int | None = None
@@ -592,6 +677,8 @@ def activate(args: argparse.Namespace) -> None:
 
     changes: list[LinkChange] = []
     try:
+        if previous_manifest is not None:
+            changes.extend(reconcile_omitted_managed_links(previous_manifest, manifest, target_names, previous_plans))
         for index, plan in enumerate(plans):
             if fail_after is not None and index == fail_after:
                 raise ReleaseError("induced runtime link failure")
@@ -614,25 +701,32 @@ def activate(args: argparse.Namespace) -> None:
 
 
 def run_self_check(skill_root: Path) -> None:
-    candidates = [skill_root / "scripts" / "self-check.ps1", skill_root / "scripts" / "self-check.sh"]
-    for candidate in candidates:
+    scripts_root = skill_root / "scripts"
+    candidate_suffixes = [".ps1", ".sh"] if os.name == "nt" else [".sh", ".ps1"]
+    available_executables = {
+        ".ps1": shutil.which("pwsh") or shutil.which("powershell"),
+        ".sh": shutil.which("bash"),
+    }
+    found_check = False
+    for suffix in candidate_suffixes:
+        candidate = scripts_root / f"self-check{suffix}"
         if not candidate.is_file():
             continue
-        if candidate.suffix == ".ps1":
-            executable = shutil.which("pwsh") or shutil.which("powershell")
-            if not executable:
-                raise ReleaseError(f"PowerShell is unavailable for self-check: {candidate}")
+        found_check = True
+        executable = available_executables[suffix]
+        if not executable:
+            continue
+        if suffix == ".ps1":
             command = [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(candidate)]
         else:
-            executable = shutil.which("bash")
-            if not executable:
-                raise ReleaseError(f"bash is unavailable for self-check: {candidate}")
             command = [executable, str(candidate)]
         completed = subprocess.run(command, cwd=skill_root, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if completed.returncode != 0:
             raise ReleaseError(f"self-check failed: {skill_root.name}: {completed.stdout}{completed.stderr}")
         print(f"SELF_CHECK PASS skill={skill_root.name} path={candidate.relative_to(skill_root).as_posix()}")
         return
+    if found_check:
+        raise ReleaseError(f"no compatible self-check executable: {skill_root}")
     print(f"SELF_CHECK SKIP skill={skill_root.name}")
 
 

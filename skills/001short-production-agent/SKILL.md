@@ -22,8 +22,13 @@ This is the independent `owner_skill=001short-production-agent`, `lane=general_s
 - Start locally from the `0000shrt` episode root. Keep one active writer and never mutate an active CapCut draft while CapCut or its background processes are open.
 - Validate a source intake receipt with `scripts/validate_source_intake.py --receipt <path>` before Stage 01. Static validation does not authorize Drive, browser, CapCut, cloud, render, or upload actions.
 - Validate an approved Stage 05 production plan with `scripts/validate_executable_protocol.py --plan <path>` before a build. Static validation does not establish a user visual approval.
+- `PAPERCLIP_DISABLED`: Do not request, register, create, validate, wait on, or report Paperclip artifacts or states in this lane. Episode intake and progress use only the local episode root, `workflow.json`, and validated episode artifacts.
 - For approved generated narration plus retained source speech, use `A9_TTS_PLUS_A10_RETAINED`; overlapping A10 rows use `source_audio[].mode=duck`, non-overlapping rows use `source_audio[].mode=on`, rows must be boundary-aligned with A9, and partial overlap fails with `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`.
 - Treat every `WAIT_*` and `FAIL_*` in the selected stage MD as a hard stop. Do not use conversational memory as evidence.
+
+## Urakkai Review Loop Contract
+
+001 `URAKKAI` Stage 04의 검토 개선 loop는 정확히 1회 실행한다. 현재 승인 후보를 현재 로컬 runtime의 Claude CLI Claude Opus 5 `--effort low`로 검토하고 Hermes가 개선한다. Claude CLI가 실패했을 때만 동일 입력의 Codex CLI `gpt-5.6-sol` `--effort low` 검토 1회로 대체하며, 증거가 없으면 `WAIT_EXTERNAL_REVIEW`에서 중단한다.
 
 ## New Session Handoff Bootstrap
 

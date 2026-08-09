@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -261,6 +262,16 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     if not isinstance(invariants, dict):
         errors.append("PROTOCOL_INVARIANTS")
     else:
+        if invariants.get("paperclip_disabled") is not True:
+            errors.append("PROTOCOL_PAPERCLIP_NOT_DISABLED")
+        if any(
+            key in invariants
+            for key in (
+                "paperclip_user_requested_only",
+                "paperclip_entry_required_before_stage_01",
+            )
+        ):
+            errors.append("PROTOCOL_PAPERCLIP_LEGACY_ROUTE_PRESENT")
         for key in required_invariants:
             if invariants.get(key) is not True:
                 errors.append(f"PROTOCOL_INVARIANT_FALSE:{key}")
@@ -279,6 +290,9 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     authority = protocol.get("authority", {})
     schemas = protocol.get("schemas", {})
     session_handoff = protocol.get("session_handoff", {})
+    review = protocol.get("urakkai_review_loop", {})
+    review_loop_count = review.get("review_loop_count") if isinstance(review, dict) else None
+    reviews_per_loop = review.get("reviews_per_loop") if isinstance(review, dict) else None
     required_paths = [
         authority.get("policy"),
         authority.get("machine_contract"),
@@ -327,12 +341,23 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         for token in [
             "references/production-orchestrator.md",
             "STOP_PROTOCOL_CONFLICT",
+            "PAPERCLIP_DISABLED",
             "## New Session Handoff Bootstrap",
             "scripts/validate_conversation_handoff.py",
             "HANDOFF_SECRET_MATERIAL_FORBIDDEN",
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
+        review_contract = re.search(
+            r"Stage 04의 검토 개선 loop는 정확히 (\d+)회 실행한다\.", skill_text
+        )
+        if (
+            not isinstance(review_loop_count, int)
+            or isinstance(review_loop_count, bool)
+            or review_contract is None
+            or int(review_contract.group(1)) != review_loop_count
+        ):
+            errors.append("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH")
 
     orchestrator_path = root / "references/production-orchestrator.md"
     if orchestrator_path.is_file():
@@ -353,6 +378,10 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     if workflow_path.is_file():
         try:
             workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+            if "paperclip" in workflow.get("runtime", {}):
+                errors.append("PROTOCOL_WORKFLOW_PAPERCLIP_ROUTE_PRESENT")
+            if "paperclip_status" in workflow.get("interim_capcut", {}).get("report_required", {}):
+                errors.append("PROTOCOL_WORKFLOW_PAPERCLIP_REPORT_PRESENT")
             executable = workflow.get("executable_protocol", {})
             if executable.get("path") != authority.get("machine_contract"):
                 errors.append("PROTOCOL_WORKFLOW_PATH_MISMATCH")
@@ -388,8 +417,19 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             interim = workflow.get("interim_capcut", {})
             if interim.get("a10_anchor") != "A10_VALIDATED_DEMUCS_VOCAL_STEM":
                 errors.append("PROTOCOL_WORKFLOW_A10_ANCHOR_MISMATCH")
+            external_review = workflow.get("blueprint_frontend", {}).get("external_review", {})
+            if external_review.get("loop_count") != review_loop_count:
+                errors.append("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH")
+            if external_review.get("reviews_per_loop") != reviews_per_loop:
+                errors.append("PROTOCOL_WORKFLOW_REVIEWS_PER_LOOP_MISMATCH")
         except Exception:
             pass
+
+    if (root / "scripts" / "validate_paperclip_entry.py").exists():
+        errors.append("PROTOCOL_PAPERCLIP_VALIDATOR_PRESENT")
+    paperclip_reference = root / "references" / "vmake-dom-clean-video-automation.md"
+    if paperclip_reference.is_file() and "OneDrive Paperclip handoff" in paperclip_reference.read_text(encoding="utf-8"):
+        errors.append("PROTOCOL_PAPERCLIP_REFERENCE_ROUTE_PRESENT")
 
     tools_path = root / "tools.json"
     if tools_path.is_file():

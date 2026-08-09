@@ -150,7 +150,7 @@
     "source_is_read_only": true,
     "state_advance_after_validator_pass_only": true,
     "gui_owner_count": 1,
-    "paperclip_user_requested_only": true,
+    "paperclip_disabled": true,
     "vmake_dom_first": true,
     "vmake_submit_after_source_identity": true,
     "vmake_candidate_integrity_only": true,

@@ -1,7 +1,10 @@
 import copy
+import contextlib
 import hashlib
+import io
 import importlib.util
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -70,6 +73,45 @@ def add_final_evidence(report: dict, root: Path) -> None:
 
 
 class ExecutableProtocolContractTest(unittest.TestCase):
+    def test_paperclip_is_disabled_and_absent_from_runtime_routes(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
+        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIs(protocol["invariants"].get("paperclip_disabled"), True)
+        self.assertNotIn("paperclip_user_requested_only", protocol["invariants"])
+        self.assertNotIn("paperclip_entry_required_before_stage_01", protocol["invariants"])
+        self.assertNotIn("paperclip", workflow["runtime"])
+        self.assertNotIn("paperclip_status", workflow["interim_capcut"]["report_required"])
+        self.assertFalse((SKILL / "scripts" / "validate_paperclip_entry.py").exists())
+        self.assertNotIn(
+            "OneDrive Paperclip handoff",
+            (SKILL / "references" / "vmake-dom-clean-video-automation.md").read_text(encoding="utf-8"),
+        )
+        self.assertIn("PAPERCLIP_DISABLED", skill_text)
+        self.assertIn("Do not request, register, create, validate, wait on, or report Paperclip", skill_text)
+
+        disabled = copy.deepcopy(protocol)
+        disabled["invariants"]["paperclip_disabled"] = False
+        self.assertIn("PROTOCOL_PAPERCLIP_NOT_DISABLED", module.validate_protocol_document(disabled))
+
+        legacy = copy.deepcopy(protocol)
+        legacy["invariants"]["paperclip_user_requested_only"] = True
+        self.assertIn("PROTOCOL_PAPERCLIP_LEGACY_ROUTE_PRESENT", module.validate_protocol_document(legacy))
+
+        with tempfile.TemporaryDirectory() as directory:
+            copied_skill = Path(directory) / "001short-production-agent"
+            shutil.copytree(SKILL, copied_skill)
+            copied_workflow_path = copied_skill / "workflow.json"
+            copied_workflow = json.loads(copied_workflow_path.read_text(encoding="utf-8"))
+            copied_workflow["runtime"]["paperclip"] = {"mode": "USER_REQUEST_ONLY"}
+            copied_workflow_path.write_text(json.dumps(copied_workflow), encoding="utf-8")
+            self.assertIn(
+                "PROTOCOL_WORKFLOW_PAPERCLIP_ROUTE_PRESENT",
+                module.validate_skill_contract(copied_skill, protocol),
+            )
+
     def test_skill_and_workflow_mandate_executable_protocol(self):
         skill_text = (SKILL / "references" / "production-orchestrator.md").read_text(encoding="utf-8")
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
@@ -233,6 +275,34 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "PROTOCOL_REQUIRED_FILE_MISSING:schemas/not-present.schema.json",
             module.validate_skill_contract(SKILL, broken),
         )
+
+    def test_self_check_catches_dynamic_review_loop_contract_mismatch(self):
+        module = load_validator()
+        self.assertIsNotNone(module, "validate_executable_protocol.py must exist")
+        protocol = module.load_protocol(PROTOCOL)
+        mismatched_protocol = copy.deepcopy(protocol)
+        mismatched_protocol["urakkai_review_loop"]["review_loop_count"] = 2
+        errors = module.validate_skill_contract(SKILL, mismatched_protocol)
+        self.assertIn("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH", errors)
+        self.assertIn("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH", errors)
+
+        with tempfile.TemporaryDirectory() as directory:
+            copied_skill = Path(directory) / "001short-production-agent"
+            shutil.copytree(SKILL, copied_skill)
+            skill_path = copied_skill / "SKILL.md"
+            skill_path.write_text(
+                skill_path.read_text(encoding="utf-8").replace(
+                    "Stage 04의 검토 개선 loop는 정확히 1회 실행한다.",
+                    "Stage 04의 검토 개선 loop는 정확히 2회 실행한다.",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(
+                    module.main(["--protocol", str(copied_skill / "protocol.json"), "--self-check"]),
+                    1,
+                )
 
     def test_clean_only_plan_requires_single_video_audio_and_empty_tracks(self):
         module = load_validator()

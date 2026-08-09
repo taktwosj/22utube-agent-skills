@@ -167,22 +167,6 @@ For another computer to run this procedure, it also needs:
 
 Never copy one machine's absolute paths, browser element IDs, cookies, or session data to another machine.
 
-### OneDrive Paperclip handoff
-
-When the operator says `페이퍼클립 쓰자` during a Shorts task, use the OneDrive progress-board pattern rather than assuming the official Paperclip API/MCP:
-
-1. Resolve the currently selected OneDrive root by realpath before writing. Do not use a historical `.ODContainer-*` path merely because it already contains old templates or scripts.
-2. Create or update `22utube/11utube/11short_handoff/{project_id}` under the active root.
-3. Include `handoff_manifest.json`, `job_state.json`, `validation_report.json`, `evidence_pack.json`, `HANDOFF_CODEX.md`, and `work/`.
-4. Copy the verified `source.mp4`, compact metadata, relevant preview evidence, and blocker report into `work/` using relative paths in manifests.
-5. If no worker currently owns the task, use `status=blocked`, `locked_by=null`, and state one exact next action. A partial VMAKE preview stays evidence only.
-6. The next Mac/home-Windows/office-Windows worker must claim the project before acting. One project may have only one active worker. While work is actually running, use that machine's editing status such as `editing_on_macmini`, `editing_on_home_windows`, or `editing_on_office_windows`; do not claim directly as `assets_ready` before the asset and QA exist.
-7. `HANDOFF_CODEX.md` must carry the DOM-first upload rule, expected full duration, clean QA criteria, access boundary, and any explicit `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` lock.
-8. After full clean QA passes, save `work/clean_source.mp4`, update evidence/validation, set `status=assets_ready`, clear blocker, and release the lock.
-9. Verify both the board validator and readback from the active OneDrive path. Local creation inside a stale backing store is not cross-machine visibility evidence.
-
-Honcho stores the durable rule; OneDrive Paperclip stores current status, lock, blocker, next action, files, and evidence.
-
 ## Failure policy
 
 - Multiple Upload/Download candidates: stop and inspect current DOM.

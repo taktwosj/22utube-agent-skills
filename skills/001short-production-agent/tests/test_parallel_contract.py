@@ -113,7 +113,7 @@ class ParallelContractTests(unittest.TestCase):
         self.assertEqual(interim["status"], "SOURCE_VIDEO_PROVISIONAL")
         self.assertEqual(interim["on_clean_arrival"], "replace_existing_VIDEO_asset_only_keep_project_structure")
         self.assertEqual(interim["report_required"]["next_action"], "CLEAN_SOURCE_SWAP_NONBLOCKING")
-        self.assertEqual(interim["report_required"]["paperclip_status"], "IN_REVIEW")
+        self.assertNotIn("paperclip_status", interim["report_required"])
         self.assertTrue(interim["batch_nonblocking"])
         self.assertIn("SOURCE_PROVISIONAL_RENDER", interim["allows"])
         self.assertEqual(interim["quality_authority"], "user")

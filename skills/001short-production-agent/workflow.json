@@ -54,11 +54,6 @@
   },
   "runtime": {
     "state_path": "{episode_root}/90_workflow/state.json",
-    "paperclip": {
-      "mode": "USER_REQUEST_ONLY",
-      "entry_path": "{episode_root}/90_workflow/paperclip_entry.json",
-      "entry_validator": "scripts/validate_paperclip_entry.py"
-    },
     "state_required": [
       "episode_id",
       "current_stage",
@@ -553,7 +548,6 @@
     "report_required": {
       "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL",
       "video_asset": "00_input/source.mp4",
-      "paperclip_status": "IN_REVIEW",
       "next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING"
     }
   },
@@ -779,7 +773,7 @@
     },
     "WAIT_EXTERNAL_REVIEW": {
       "executes_external_action": false,
-      "meaning": "one or both required urakkai review loops lack verified evidence"
+      "meaning": "the required urakkai review lacks verified evidence"
     },
     "FAIL": {
       "executes_external_action": false,

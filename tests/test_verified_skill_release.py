@@ -7,12 +7,24 @@ import stat
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from pathlib import Path
+
+from scripts import skill_release
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI = ROOT / "scripts" / "skill_release.py"
+EXPECTED_SHARED_SKILLS = [
+    "001short-production-agent",
+    "119-politics-longform-capcut",
+    "1caveman",
+    "222mara",
+    "naver-blog-posting",
+    "top5isu-shorts",
+]
 
 
 def run(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -120,6 +132,79 @@ def make_tree_writable(root: Path) -> None:
         root.chmod(root.stat().st_mode | stat.S_IWRITE | stat.S_IWUSR)
     except OSError:
         pass
+
+
+class ReleasePreflightTests(unittest.TestCase):
+    def test_main_manifest_preflight_accepts_six_enabled_shared_skills(self):
+        skills, targets = skill_release.enabled_skills(ROOT)
+        skill_release.semantic_preflight(skills, targets)
+        self.assertEqual([item["name"] for item in skills], EXPECTED_SHARED_SKILLS)
+
+
+class ReleaseValidationTests(unittest.TestCase):
+    def test_verify_release_hashes_nested_control_named_payloads_and_rejects_unlisted_ones(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, _ = create_repo(temp)
+            skill_root = repo / "skills" / "demo-skill"
+            for name in ("manifest.json", "READY", "IMMUTABLE"):
+                (skill_root / name).write_text(f"payload:{name}\n", encoding="utf-8")
+            commit = commit_repo(repo, "nested control-named payloads")
+            release_root = temp / "runtime"
+
+            published = run(
+                "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+
+            self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+            release = release_root / "releases" / commit
+            manifest = json.loads((release / "manifest.json").read_text(encoding="utf-8"))
+            listed_paths = {entry["path"] for entry in manifest["files"]}
+            for name in ("manifest.json", "READY", "IMMUTABLE"):
+                self.assertIn(f"skills/demo-skill/{name}", listed_paths)
+            skill_release.verify_release_directory(release)
+
+            unlisted = release / "skills" / "demo-skill" / "nested" / "manifest.json"
+            unlisted.parent.mkdir()
+            unlisted.write_text("unlisted nested control name\n", encoding="utf-8")
+            with self.assertRaisesRegex(skill_release.ReleaseError, "unlisted release files"):
+                skill_release.verify_release_directory(release)
+
+    def test_verify_release_rejects_non_object_manifest_file_entry_with_release_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release = Path(temporary) / "release"
+            release.mkdir()
+            manifest_data = skill_release.json_bytes({"files": ["not-an-object"], "file_count": 1})
+            (release / "manifest.json").write_bytes(manifest_data)
+            (release / "READY").write_text(hashlib.sha256(manifest_data).hexdigest() + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(skill_release.ReleaseError, "manifest file entry"):
+                skill_release.verify_release_directory(release)
+
+
+class SelfCheckTests(unittest.TestCase):
+    def test_run_self_check_uses_bash_on_unix_when_powershell_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            skill_root = Path(temporary) / "demo-skill"
+            scripts = skill_root / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "self-check.ps1").write_text("Write-Output ignored\n", encoding="utf-8")
+            shell_check = scripts / "self-check.sh"
+            shell_check.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+
+            with (
+                patch.object(skill_release.os, "name", "posix"),
+                patch.object(skill_release.shutil, "which", side_effect=lambda name: "/fake/bash" if name == "bash" else None),
+                patch.object(
+                    skill_release.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(returncode=0, stdout="", stderr=""),
+                ) as mocked_run,
+            ):
+                skill_release.run_self_check(skill_root)
+
+            self.assertEqual(mocked_run.call_args.args[0], ["/fake/bash", str(shell_check)])
 
 
 class VerifiedSkillReleaseTests(unittest.TestCase):
@@ -517,6 +602,174 @@ class VerifiedSkillReleaseTests(unittest.TestCase):
 
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("immutable release already exists with different content", completed.stderr)
+
+
+class ReleaseActivationTests(unittest.TestCase):
+    def test_activate_moves_only_prior_release_junction_omitted_by_new_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, release_root, old_commit = publish_fixture(temp, ("kept-skill", "removed-skill"))
+            cache_root = temp / "cache"
+            backup_root = temp / "codex-backups"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                "--target", "codex", "--runtime-root", f"codex={temp / 'codex'}",
+                "--backup-root", f"codex={backup_root}",
+            ]
+            first = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            removed_destination = temp / "codex" / "removed-skill"
+            self.assertEqual(
+                removed_destination.resolve(),
+                (cache_root / "releases" / old_commit / "skills" / "removed-skill").resolve(),
+            )
+
+            skill_set_path = repo / "manifests" / "skill-set.json"
+            skill_set = json.loads(skill_set_path.read_text(encoding="utf-8"))
+            skill_set["skills"] = [skill for skill in skill_set["skills"] if skill["name"] != "removed-skill"]
+            skill_set_path.write_text(json.dumps(skill_set), encoding="utf-8")
+            commit_repo(repo, "remove managed skill")
+            published = run(
+                "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+            self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+
+            activated = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+
+            self.assertEqual(activated.returncode, 0, activated.stdout + activated.stderr)
+            self.assertFalse(removed_destination.exists() or removed_destination.is_symlink())
+            backups = list(backup_root.glob("removed-skill_*"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(
+                backups[0].resolve(),
+                (cache_root / "releases" / old_commit / "skills" / "removed-skill").resolve(),
+            )
+
+    def test_activate_preserves_unmanaged_directory_omitted_by_new_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, release_root, _ = publish_fixture(temp, ("kept-skill", "removed-skill"))
+            cache_root = temp / "cache"
+            backup_root = temp / "codex-backups"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                "--target", "codex", "--runtime-root", f"codex={temp / 'codex'}",
+                "--backup-root", f"codex={backup_root}",
+            ]
+            first = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            removed_destination = temp / "codex" / "removed-skill"
+            if removed_destination.is_symlink():
+                removed_destination.unlink()
+            elif os.name == "nt":
+                subprocess.run(["cmd", "/c", "rmdir", str(removed_destination)], check=True, capture_output=True)
+            else:
+                removed_destination.rmdir()
+            removed_destination.mkdir()
+            marker = removed_destination / "local.txt"
+            marker.write_text("unmanaged\n", encoding="utf-8")
+
+            skill_set_path = repo / "manifests" / "skill-set.json"
+            skill_set = json.loads(skill_set_path.read_text(encoding="utf-8"))
+            skill_set["skills"] = [skill for skill in skill_set["skills"] if skill["name"] != "removed-skill"]
+            skill_set_path.write_text(json.dumps(skill_set), encoding="utf-8")
+            commit_repo(repo, "remove managed skill")
+            published = run(
+                "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+            self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+
+            activated = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+
+            self.assertEqual(activated.returncode, 0, activated.stdout + activated.stderr)
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unmanaged\n")
+            self.assertEqual(list(backup_root.glob("removed-skill_*")), [])
+
+    def test_activation_failure_restores_prior_release_junction_omitted_by_new_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, release_root, old_commit = publish_fixture(temp, ("kept-skill", "removed-skill"))
+            cache_root = temp / "cache"
+            backup_root = temp / "codex-backups"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                "--target", "codex", "--runtime-root", f"codex={temp / 'codex'}",
+                "--backup-root", f"codex={backup_root}",
+            ]
+            first = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+
+            skill_set_path = repo / "manifests" / "skill-set.json"
+            skill_set = json.loads(skill_set_path.read_text(encoding="utf-8"))
+            skill_set["skills"] = [skill for skill in skill_set["skills"] if skill["name"] != "removed-skill"]
+            skill_set_path.write_text(json.dumps(skill_set), encoding="utf-8")
+            commit_repo(repo, "remove managed skill")
+            published = run(
+                "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+            self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+
+            failed = run(
+                "activate", *arguments,
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1", "AGENT_SKILLS_TEST_FAIL_LINK_AFTER": "0"},
+            )
+
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("induced runtime link failure", failed.stderr)
+            removed_destination = temp / "codex" / "removed-skill"
+            self.assertEqual(
+                removed_destination.resolve(),
+                (cache_root / "releases" / old_commit / "skills" / "removed-skill").resolve(),
+            )
+            self.assertEqual(list(backup_root.glob("removed-skill_*")), [])
+            self.assertEqual(
+                json.loads((cache_root / "active.json").read_text(encoding="utf-8"))["release_id"], old_commit
+            )
+
+    def test_activate_preserves_real_prior_release_directory_reached_through_parent_alias(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, release_root, old_commit = publish_fixture(temp, ("kept-skill", "removed-skill"))
+            cache_root = temp / "cache"
+            runtime_root = temp / "codex"
+            backup_root = temp / "codex-backups"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                "--target", "codex", "--runtime-root", f"codex={runtime_root}",
+                "--backup-root", f"codex={backup_root}",
+            ]
+            first = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            prior_skills = cache_root / "releases" / old_commit / "skills"
+            for name in ("kept-skill", "removed-skill"):
+                skill_release.remove_link_or_directory(runtime_root / name)
+            runtime_root.rmdir()
+            skill_release.create_directory_link(runtime_root, prior_skills)
+
+            try:
+                skill_set_path = repo / "manifests" / "skill-set.json"
+                skill_set = json.loads(skill_set_path.read_text(encoding="utf-8"))
+                skill_set["skills"] = [skill for skill in skill_set["skills"] if skill["name"] == "kept-skill"]
+                skill_set["skills"][0]["targets"] = ["claude"]
+                skill_set_path.write_text(json.dumps(skill_set), encoding="utf-8")
+                commit_repo(repo, "omit prior codex skills")
+                published = run(
+                    "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                    env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+                )
+                self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+
+                activated = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+
+                self.assertEqual(activated.returncode, 0, activated.stdout + activated.stderr)
+                for name in ("kept-skill", "removed-skill"):
+                    self.assertTrue((prior_skills / name / "SKILL.md").is_file())
+                    self.assertEqual(list(backup_root.glob(f"{name}_*")), [])
+            finally:
+                skill_release.remove_link_or_directory(runtime_root)
 
 
 if __name__ == "__main__":

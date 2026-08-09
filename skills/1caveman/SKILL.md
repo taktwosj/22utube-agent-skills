@@ -1,6 +1,6 @@
 ---
 name: 1caveman
-description: Use when Codex restarts from first principles, repeats completed work, scans too broadly, over-plans, drifts outside an approved task, or needs terse evidence-based reporting during bounded implementation, repair, or validation work. Standalone; no other skill required.
+description: Use when Codex restarts from first principles, repeats completed work, scans too broadly, over-plans, drifts outside an approved task, needs terse evidence-based reporting during bounded implementation, repair, or validation work, or receives Korean 스킬 업데이트, 스킬 최신화, 스킬 적용, or English skill update for the current computer's shared skills. Standalone; no other skill required.
 ---
 
 # 1CAVEMAN
@@ -34,6 +34,17 @@ Follow in order:
 7. **REPORT_SHORT** — Report only when stage changes, a blocker appears, or the task completes. Never narrate tool calls, searches, or hidden reasoning.
 
 Do not delegate unless the user or workspace explicitly requests delegation. Do not restart a repository-wide audit when target files can be resolved directly. Do not weaken tests to hide failure.
+
+## Local Shared Skill Update
+
+Use this only for current computer Codex, Claude, and Hermes only. Never deploy to another PC.
+
+Require a clean confirmed source commit before activation. If source state or commit confirmation is missing, return `WAIT_COMMIT_CONFIRMATION`. Compare source `HEAD` with local runtime `active.json.release_id`.
+
+- If they match, run `python -B scripts/skill_release.py verify --target all --self-check`. If it succeeds, return `SKIP_SAME_VERSION`. Do not publish, activate, back up, or relink.
+- If they differ, run only `python -B scripts/skill_release.py publish`, then `python -B scripts/skill_release.py activate --target all`, then `python -B scripts/skill_release.py verify --target all --self-check`. Never use `update.ps1`, `install.ps1`, direct copies, or the save watcher for this verified deployment.
+
+Treat an explicit user `스킬 업데이트`, `스킬 최신화`, `스킬 적용`, or `skill update` request as runtime-deployment authorization for this current computer after the committed source is confirmed. The source commit, push, or merge retains its separate explicit user approval gate.
 
 ## Retry And Stop
 

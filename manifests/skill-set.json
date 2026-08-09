@@ -27,37 +27,7 @@
       "enabled": true
     },
     {
-      "name": "110-politics-longform-script",
-      "category": "22utube",
-      "targets": [
-        "codex",
-        "claude",
-        "hermes"
-      ],
-      "enabled": true
-    },
-    {
-      "name": "111-politics-longform-voice-srt",
-      "category": "22utube",
-      "targets": [
-        "codex",
-        "claude",
-        "hermes"
-      ],
-      "enabled": true
-    },
-    {
       "name": "222mara",
-      "category": "22utube",
-      "targets": [
-        "codex",
-        "claude",
-        "hermes"
-      ],
-      "enabled": true
-    },
-    {
-      "name": "112-politics-longform-hyperframes",
       "category": "22utube",
       "targets": [
         "codex",
