@@ -550,6 +550,19 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             errors = validate_capcut_project.validate_subtitle_binding(model, contract)
             self.assertIn("SUBTITLE_BINDING_LAYER_MISMATCH", {row["code"] for row in errors})
 
+    def test_rebuild_cleanup_removes_read_only_source_authority(self):
+        with tempfile.TemporaryDirectory() as td:
+            work_root = Path(td) / "work"
+            protected = work_root / "source_authority" / "template" / "Resources" / "combination"
+            protected.mkdir(parents=True)
+            payload = protected / "asset.bin"
+            payload.write_bytes(b"fixture")
+            payload.chmod(0o444)
+
+            builder._reset_source_authority(work_root)
+
+            self.assertFalse((work_root / "source_authority").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

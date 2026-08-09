@@ -1409,6 +1409,14 @@ def _build_episode_once(config: dict) -> dict:
     }
 
 
+def _remove_generated_tree(path: Path) -> None:
+    def make_writable_and_retry(function, raw_path, _exc_info):
+        os.chmod(raw_path, 0o700)
+        function(raw_path)
+
+    shutil.rmtree(path, onerror=make_writable_and_retry)
+
+
 def _cleanup_generated_work(work_root: Path) -> None:
     work_root = Path(work_root).resolve()
     for name in ("normalized_source", "working_project"):
@@ -1416,7 +1424,7 @@ def _cleanup_generated_work(work_root: Path) -> None:
         if candidate.parent != work_root:
             raise RuntimeError("UNSAFE_GENERATED_WORK_PATH")
         if candidate.is_dir():
-            shutil.rmtree(candidate)
+            _remove_generated_tree(candidate)
         elif candidate.exists():
             candidate.unlink()
 
@@ -1427,7 +1435,7 @@ def _reset_source_authority(work_root: Path) -> None:
     if candidate.parent != work_root:
         raise RuntimeError("UNSAFE_SOURCE_AUTHORITY_PATH")
     if candidate.is_dir():
-        shutil.rmtree(candidate)
+        _remove_generated_tree(candidate)
     elif candidate.exists():
         candidate.unlink()
 
