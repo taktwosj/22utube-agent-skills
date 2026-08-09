@@ -7,7 +7,9 @@ import stat
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from scripts import skill_release
@@ -137,6 +139,72 @@ class ReleasePreflightTests(unittest.TestCase):
         skills, targets = skill_release.enabled_skills(ROOT)
         skill_release.semantic_preflight(skills, targets)
         self.assertEqual([item["name"] for item in skills], EXPECTED_SHARED_SKILLS)
+
+
+class ReleaseValidationTests(unittest.TestCase):
+    def test_verify_release_hashes_nested_control_named_payloads_and_rejects_unlisted_ones(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, _ = create_repo(temp)
+            skill_root = repo / "skills" / "demo-skill"
+            for name in ("manifest.json", "READY", "IMMUTABLE"):
+                (skill_root / name).write_text(f"payload:{name}\n", encoding="utf-8")
+            commit = commit_repo(repo, "nested control-named payloads")
+            release_root = temp / "runtime"
+
+            published = run(
+                "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+
+            self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+            release = release_root / "releases" / commit
+            manifest = json.loads((release / "manifest.json").read_text(encoding="utf-8"))
+            listed_paths = {entry["path"] for entry in manifest["files"]}
+            for name in ("manifest.json", "READY", "IMMUTABLE"):
+                self.assertIn(f"skills/demo-skill/{name}", listed_paths)
+            skill_release.verify_release_directory(release)
+
+            unlisted = release / "skills" / "demo-skill" / "nested" / "manifest.json"
+            unlisted.parent.mkdir()
+            unlisted.write_text("unlisted nested control name\n", encoding="utf-8")
+            with self.assertRaisesRegex(skill_release.ReleaseError, "unlisted release files"):
+                skill_release.verify_release_directory(release)
+
+    def test_verify_release_rejects_non_object_manifest_file_entry_with_release_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release = Path(temporary) / "release"
+            release.mkdir()
+            manifest_data = skill_release.json_bytes({"files": ["not-an-object"], "file_count": 1})
+            (release / "manifest.json").write_bytes(manifest_data)
+            (release / "READY").write_text(hashlib.sha256(manifest_data).hexdigest() + "\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(skill_release.ReleaseError, "manifest file entry"):
+                skill_release.verify_release_directory(release)
+
+
+class SelfCheckTests(unittest.TestCase):
+    def test_run_self_check_uses_bash_on_unix_when_powershell_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            skill_root = Path(temporary) / "demo-skill"
+            scripts = skill_root / "scripts"
+            scripts.mkdir(parents=True)
+            (scripts / "self-check.ps1").write_text("Write-Output ignored\n", encoding="utf-8")
+            shell_check = scripts / "self-check.sh"
+            shell_check.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+
+            with (
+                patch.object(skill_release.os, "name", "posix"),
+                patch.object(skill_release.shutil, "which", side_effect=lambda name: "/fake/bash" if name == "bash" else None),
+                patch.object(
+                    skill_release.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(returncode=0, stdout="", stderr=""),
+                ) as mocked_run,
+            ):
+                skill_release.run_self_check(skill_root)
+
+            self.assertEqual(mocked_run.call_args.args[0], ["/fake/bash", str(shell_check)])
 
 
 class VerifiedSkillReleaseTests(unittest.TestCase):

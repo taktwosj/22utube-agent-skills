@@ -202,20 +202,24 @@ def verify_release_directory(
     if expected_manifest_sha is not None and expected_manifest_sha != manifest_sha:
         raise ReleaseError(f"active manifest SHA mismatch: {release}")
     manifest = json.loads(manifest_data)
+    if not isinstance(manifest, dict):
+        raise ReleaseError(f"manifest must be an object: {release}")
     files = manifest.get("files")
     if not isinstance(files, list) or manifest.get("file_count") != len(files):
         raise ReleaseError(f"manifest file_count mismatch: {release}")
-    listed_paths = {entry.get("path") for entry in files if isinstance(entry, dict)}
-    excluded_names = {"manifest.json", "READY"}
+    if any(not isinstance(entry, dict) for entry in files):
+        raise ReleaseError(f"manifest file entry must be an object: {release}")
+    listed_paths = {entry.get("path") for entry in files}
+    control_paths = {"manifest.json", "READY"}
     if require_immutable:
         immutable_path = release / "IMMUTABLE"
         if not immutable_path.is_file() or immutable_path.read_text(encoding="utf-8").strip() != manifest_sha:
             raise ReleaseError(f"local immutable seal mismatch: {release}")
-        excluded_names.add("IMMUTABLE")
+        control_paths.add("IMMUTABLE")
     actual_paths = {
         path.relative_to(release).as_posix()
         for path in release.rglob("*")
-        if path.is_file() and path.name not in excluded_names
+        if path.is_file() and path.relative_to(release).as_posix() not in control_paths
     }
     if listed_paths != actual_paths:
         extra = sorted(actual_paths - listed_paths)
@@ -614,25 +618,32 @@ def activate(args: argparse.Namespace) -> None:
 
 
 def run_self_check(skill_root: Path) -> None:
-    candidates = [skill_root / "scripts" / "self-check.ps1", skill_root / "scripts" / "self-check.sh"]
-    for candidate in candidates:
+    scripts_root = skill_root / "scripts"
+    candidate_suffixes = [".ps1", ".sh"] if os.name == "nt" else [".sh", ".ps1"]
+    available_executables = {
+        ".ps1": shutil.which("pwsh") or shutil.which("powershell"),
+        ".sh": shutil.which("bash"),
+    }
+    found_check = False
+    for suffix in candidate_suffixes:
+        candidate = scripts_root / f"self-check{suffix}"
         if not candidate.is_file():
             continue
-        if candidate.suffix == ".ps1":
-            executable = shutil.which("pwsh") or shutil.which("powershell")
-            if not executable:
-                raise ReleaseError(f"PowerShell is unavailable for self-check: {candidate}")
+        found_check = True
+        executable = available_executables[suffix]
+        if not executable:
+            continue
+        if suffix == ".ps1":
             command = [executable, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(candidate)]
         else:
-            executable = shutil.which("bash")
-            if not executable:
-                raise ReleaseError(f"bash is unavailable for self-check: {candidate}")
             command = [executable, str(candidate)]
         completed = subprocess.run(command, cwd=skill_root, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if completed.returncode != 0:
             raise ReleaseError(f"self-check failed: {skill_root.name}: {completed.stdout}{completed.stderr}")
         print(f"SELF_CHECK PASS skill={skill_root.name} path={candidate.relative_to(skill_root).as_posix()}")
         return
+    if found_check:
+        raise ReleaseError(f"no compatible self-check executable: {skill_root}")
     print(f"SELF_CHECK SKIP skill={skill_root.name}")
 
 
