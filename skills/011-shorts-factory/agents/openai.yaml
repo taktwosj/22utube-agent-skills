@@ -1,4 +1,0 @@
-interface:
-  display_name: "011 Shorts Factory"
-  short_description: "Operate the Paperclip P0 entry and verification flow for Korean Shorts."
-  default_prompt: "Use $011-shorts-factory to operate the required Paperclip P0 entry, team roles, and verification gates for a 001 Shorts episode."
