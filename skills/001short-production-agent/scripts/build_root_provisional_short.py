@@ -153,6 +153,8 @@ def build(args: argparse.Namespace) -> dict:
     if not isinstance(clips, list) or not clips or not isinstance(duration_us, int) or duration_us <= 0:
         raise RuntimeError("ASSEMBLY_INPUT_INVALID")
     audio_policy = timeline.get("audio_policy", "A10_RETAINED_SYNC")
+    if audio_policy == "A9_TTS_PLUS_A10_RETAINED":
+        raise RuntimeError(f"LEGACY_12_TRACK_AUDIO_POLICY_UNSUPPORTED:{audio_policy}")
     if audio_policy not in {"A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"}:
         raise RuntimeError("ASSEMBLY_AUDIO_POLICY_INVALID")
     tts_cues_raw = timeline.get("tts_cues", [])

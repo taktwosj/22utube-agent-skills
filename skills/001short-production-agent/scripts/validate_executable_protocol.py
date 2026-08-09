@@ -12,6 +12,29 @@ from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
+ALLOWED_URAKKAI_AUDIO_POLICIES = [
+    "A10_RETAINED_SYNC",
+    "TTS_ONLY_MUTE_SOURCE",
+    "A9_TTS_PLUS_A10_RETAINED",
+]
+A10_AUDIO_POLICIES = {"A10_RETAINED_SYNC", "A9_TTS_PLUS_A10_RETAINED"}
+
+
+def _ranges_overlap(left: object, right: object) -> bool:
+    return (
+        isinstance(left, list) and len(left) == 2
+        and isinstance(right, list) and len(right) == 2
+        and all(isinstance(value, int) and not isinstance(value, bool) for value in left + right)
+        and max(left[0], right[0]) < min(left[1], right[1])
+    )
+
+
+def _range_fully_covered(inner: object, outer: object) -> bool:
+    return (
+        isinstance(inner, list) and len(inner) == 2
+        and isinstance(outer, list) and len(outer) == 2
+        and outer[0] <= inner[0] and outer[1] >= inner[1]
+    )
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -108,7 +131,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required"):
             if urakkai.get(key) is not True:
                 errors.append(f"PROTOCOL_URAKKAI_GATE_FALSE:{key}")
-        if urakkai.get("allowed_audio_policies") != ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]:
+        if urakkai.get("allowed_audio_policies") != ALLOWED_URAKKAI_AUDIO_POLICIES:
             errors.append("PROTOCOL_URAKKAI_AUDIO_POLICIES_INVALID")
         if urakkai.get("minimum_video_segments", 0) < 2:
             errors.append("PROTOCOL_URAKKAI_MINIMUM_CUTS")
@@ -544,6 +567,8 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
     tts = _segments(tracks, "A9")
+    if _segments(tracks, "A12"):
+        errors.append("A12_RESERVED_EMPTY")
 
     invariants = protocol.get("invariants", {})
     if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
@@ -576,7 +601,7 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
         if audio_policy not in config.get("allowed_audio_policies", []):
             errors.append("URAKKAI_AUDIO_POLICY_INVALID")
             return errors
-        if audio_policy == "A10_RETAINED_SYNC":
+        if audio_policy in A10_AUDIO_POLICIES:
             if config.get("video_audio_mapping_must_match") and len(video) != len(audio):
                 errors.append("URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH")
             audio_by_target: Dict[tuple, List[Dict[str, Any]]] = {}
@@ -590,6 +615,34 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
                     errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
                     break
+            if audio_policy == "A9_TTS_PLUS_A10_RETAINED" and not tts:
+                errors.append("URAKKAI_MIXED_A9_REQUIRED")
+            if audio_policy == "A9_TTS_PLUS_A10_RETAINED":
+                if _segments(tracks, "A11"):
+                    errors.append("URAKKAI_MIXED_A11_FORBIDDEN")
+                for retained in audio:
+                    overlapping_tts = [
+                        narration for narration in tts
+                        if _ranges_overlap(
+                            retained.get("target_range_us"),
+                            narration.get("target_range_us"),
+                        )
+                    ]
+                    if any(
+                        not _range_fully_covered(
+                            retained.get("target_range_us"),
+                            narration.get("target_range_us"),
+                        )
+                        for narration in overlapping_tts
+                    ):
+                        errors.append("URAKKAI_MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED")
+                        break
+                    if overlapping_tts and retained.get("volume") != 0:
+                        errors.append("URAKKAI_MIXED_A10_NOT_MUTED_UNDER_A9")
+                        break
+                    if not overlapping_tts and retained.get("volume") != 1:
+                        errors.append("URAKKAI_MIXED_A10_NOT_RESTORED_OUTSIDE_A9")
+                        break
         else:
             if audio:
                 errors.append("URAKKAI_TTS_ONLY_A10_FORBIDDEN")

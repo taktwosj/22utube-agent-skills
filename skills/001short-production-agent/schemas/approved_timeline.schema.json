@@ -7,7 +7,7 @@
     "schema_version": {"type": "string", "const": "approved-timeline-v1"},
     "episode_id": {"type": "string", "minLength": 1},
     "source_fingerprint": {"type": "string", "minLength": 1},
-    "audio_policy": {"enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]},
+    "audio_policy": {"enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"]},
     "primary_speaker_id": {"type": "string", "minLength": 1},
     "segments": {
       "type": "array",

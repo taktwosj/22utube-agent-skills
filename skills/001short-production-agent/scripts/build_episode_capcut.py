@@ -38,6 +38,14 @@ from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS,
 
 ROLE_BY_TRACK = list(CANONICAL_TRACKS)
 
+# A9 carries the narration we generate; A10 carries the retained source speech.
+# MIXED keeps both, so the source stem must still be present while A9 is built.
+AUDIO_POLICIES = frozenset({
+    "A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED",
+})
+TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"})
+A10_POLICIES = frozenset({"A10_RETAINED_SYNC", "A9_TTS_PLUS_A10_RETAINED"})
+
 
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -237,7 +245,7 @@ def validate_state_cues(config: dict, timeline: dict) -> None:
 
 
 def validate_tts_cues(config: dict, timeline: dict) -> None:
-    if config.get("audio_policy") != "TTS_ONLY_MUTE_SOURCE" and not config.get("tts_cues"):
+    if config.get("audio_policy") not in TTS_POLICIES and not config.get("tts_cues"):
         return
     cues = config.get("tts_cues")
     if not isinstance(cues, list) or not cues:
@@ -320,7 +328,7 @@ def _validate_config(config: dict) -> None:
     if role_errors:
         raise ValueError(f"APPROVED_TIMELINE_ROLE_CONTRACT:{role_errors}")
     if (
-        config["audio_policy"] not in {"A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"}
+        config["audio_policy"] not in AUDIO_POLICIES
         or timeline.get("audio_policy") != config["audio_policy"]
     ):
         raise ValueError("AUDIO_POLICY_TIMELINE_MISMATCH")
@@ -540,9 +548,44 @@ def _material_text(material: dict) -> str | None:
     return text.strip() if isinstance(text, str) and text.strip() else None
 
 
+def _ranges_overlap(left: list[int], right: list[int]) -> bool:
+    return max(left[0], right[0]) < min(left[1], right[1])
+
+
+def _range_fully_covered(inner: list[int], outer: list[int]) -> bool:
+    return outer[0] <= inner[0] and outer[1] >= inner[1]
+
+
+def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
+    if config.get("audio_policy") != "A9_TTS_PLUS_A10_RETAINED":
+        return
+    narration_ranges = [cue["target_range_us"] for cue in config.get("tts_cues", [])]
+    for row in build_manifest.get("source_audio", []):
+        target_range = row.get("target_range_us")
+        if not isinstance(target_range, list) or len(target_range) != 2:
+            continue
+        overlapping_ranges = [
+            cue_range for cue_range in narration_ranges
+            if _ranges_overlap(target_range, cue_range)
+        ]
+        if any(
+            not _range_fully_covered(target_range, cue_range)
+            for cue_range in overlapping_ranges
+        ):
+            raise RuntimeError(
+                f"MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED:{row.get('clip_id')}"
+            )
+        overlaps_narration = bool(overlapping_ranges)
+        if overlaps_narration and row.get("mode") != "duck":
+            raise RuntimeError(f"MIXED_A10_MUTE_REQUIRED_UNDER_A9:{row.get('clip_id')}")
+        if not overlaps_narration and row.get("mode") != "on":
+            raise RuntimeError(f"MIXED_A10_RESTORE_REQUIRED_OUTSIDE_A9:{row.get('clip_id')}")
+
+
 def _normalize_source(
     project: Path, config: dict, audio_source: Path | None, build_manifest: dict
 ) -> list[dict]:
+    _validate_mixed_audio_modes(config, build_manifest)
     duration = config["duration_us"]
     approved = _approved_rows(config)
     approved_by_id = {row["segment_id"]: row for row in approved}
@@ -553,9 +596,11 @@ def _normalize_source(
     video_resource = visual["resource_name"]
     shutil.copy2(video_input, media / video_resource)
     video_dimensions = _video_dimensions(video_input)
-    tts_only = config.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE"
+    policy = config.get("audio_policy")
+    build_a9 = policy in TTS_POLICIES
+    keep_a10 = policy in A10_POLICIES
     audio_name = ""
-    if not tts_only:
+    if keep_a10:
         if audio_source is None:
             raise RuntimeError("SOURCE_AUDIO_REQUIRED")
         audio_suffix = audio_source.suffix.lower() or ".wav"
@@ -588,8 +633,10 @@ def _normalize_source(
             for index, track in enumerate(tracks)
             if track.get("segments")
         }
-        a12_material_ids = {
-            segment.get("material_id") for segment in tracks[A12_INDEX].get("segments", [])
+        empty_audio_material_ids = {
+            segment.get("material_id")
+            for track_index in (TRACK_INDEX["A11"], A12_INDEX)
+            for segment in tracks[track_index].get("segments", [])
             if isinstance(segment.get("material_id"), str)
         }
 
@@ -599,7 +646,7 @@ def _normalize_source(
         a9_template_segment = None
         a9_template_material = None
         a9_parent = None
-        if tts_only:
+        if build_a9:
             if not tracks[TRACK_INDEX["A9_TEXT"]].get("segments") or not tracks[TRACK_INDEX["A9"]].get("segments"):
                 raise RuntimeError("PINNED_A9_TEMPLATE_SEGMENT_MISSING")
             a9_text_template_segment = copy.deepcopy(tracks[TRACK_INDEX["A9_TEXT"]]["segments"][0])
@@ -766,7 +813,7 @@ def _normalize_source(
                 generated.append(segment)
             tracks[track_index]["segments"] = generated
 
-        if tts_only:
+        if build_a9:
             assert a9_text_template_segment is not None and a9_text_template_material is not None
             assert a9_text_parent is not None and a9_template_segment is not None
             assert a9_template_material is not None and a9_parent is not None
@@ -825,8 +872,9 @@ def _normalize_source(
                 tts_segments.append(sound)
             tracks[TRACK_INDEX["A9_TEXT"]]["segments"] = captions
             tracks[TRACK_INDEX["A9"]]["segments"] = tts_segments
-            tracks[TRACK_INDEX["A10"]]["segments"] = []
-        else:
+            if not keep_a10:
+                tracks[TRACK_INDEX["A10"]]["segments"] = []
+        if keep_a10:
             # The A10 template seed must be captured before generated lanes are
             # cleared.  v2 pins A10 at physical track 12.
             base_a10_segment = seed_segments.get(TRACK_INDEX["A10"])
@@ -852,6 +900,7 @@ def _normalize_source(
                 a10_segment = copy.deepcopy(base_a10_segment)
                 a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
                 a10_segment["role"] = "A10"
+                a10_segment["volume"] = 0.0 if audio_plan["mode"] == "duck" else 1.0
                 a10_segment["target_timerange"] = {
                     "start": audio_plan["target_range_us"][0],
                     "duration": audio_plan["target_range_us"][1] - audio_plan["target_range_us"][0],
@@ -862,9 +911,10 @@ def _normalize_source(
                 }
                 a10_segments.append(a10_segment)
             tracks[TRACK_INDEX["A10"]]["segments"] = a10_segments
+        tracks[TRACK_INDEX["A11"]]["segments"] = []
         tracks[A12_INDEX]["segments"] = []
-        _remove_material_ids(payload["materials"], a12_material_ids)
-        for material_id in a12_material_ids:
+        _remove_material_ids(payload["materials"], empty_audio_material_ids)
+        for material_id in empty_audio_material_ids:
             material_map.pop(material_id, None)
 
         # Keep every retained local template material self-contained.
@@ -1075,7 +1125,9 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         or not final_srt.is_file()
     ):
         raise RuntimeError("STAGE07_AUTHORITY_MISMATCH")
-    if config.get("audio_policy") == "A10_RETAINED_SYNC" and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
+    # Any policy that keeps A10 must bind the primary audio to the separated stem;
+    # under MIXED the generated A9 narration rides alongside it as a role file.
+    if config.get("audio_policy") in A10_POLICIES and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
         raise RuntimeError("STAGE07_VALIDATED_VOCAL_STEM_REQUIRED")
     return {
         "source_identity": source_identity, "approved_timeline": approved_timeline,
@@ -1517,6 +1569,10 @@ def build_episode(config: dict) -> dict:
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
+    _validate_mixed_audio_modes(
+        config,
+        read_json(Path(config["build_manifest_path"]).resolve()),
+    )
     _assert_optional_edit_lock(config)
     work_root = Path(config["work_root"]).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
