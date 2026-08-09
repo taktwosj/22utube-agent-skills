@@ -50,10 +50,9 @@ def validate_project(project: Path) -> dict:
                 expected_volume = 0.0 if any(start < b and a < end for a, b in a9_ranges) else 1.0
                 if segment.get("volume") != expected_volume:
                     errors.append({"code": "POLISH_NARRATION_MUTE_MISSING", "segment": segment.get("id")})
-                vocal = _refs(index, segment, "vocal_separations")
-                if not any(row.get("choice") == 2 for row in vocal):
-                    errors.append({"code": "POLISH_VOCAL_RETAIN_MISSING", "segment": segment.get("id")})
-    return {"status": "PASS" if not errors else "FAIL", "errors": errors, "profile": "001short-capcut-polish-v2"}
+                if _refs(index, segment, "vocal_separations"):
+                    errors.append({"code": "POLISH_CAPCUT_VOCAL_METADATA_FORBIDDEN", "segment": segment.get("id")})
+    return {"status": "PASS" if not errors else "FAIL", "errors": errors, "profile": "001short-capcut-polish-v3"}
 
 
 def main() -> int:

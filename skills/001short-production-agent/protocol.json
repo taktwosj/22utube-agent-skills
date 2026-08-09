@@ -15,7 +15,8 @@
     "protocol": "schemas/executable_protocol.schema.json",
     "production_plan": "schemas/executable_production_plan.schema.json",
     "completion_report": "schemas/completion_report.schema.json",
-    "session_handoff": "schemas/conversation_handoff.schema.json"
+    "session_handoff": "schemas/conversation_handoff.schema.json",
+    "vocal_stem_manifest": "schemas/vocal_stem_manifest.schema.json"
   },
   "activation": {
     "aliases": [
@@ -57,7 +58,10 @@
       "unchanged_error": "URAKKAI_STRUCTURE_UNCHANGED",
       "fake_split_forbidden": true,
       "approved_final_order_required": true,
-      "a10_sync_required_for_all_used_ranges": true
+      "allowed_audio_policies": [
+        "A10_RETAINED_SYNC",
+        "TTS_ONLY_MUTE_SOURCE"
+      ]
     },
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
       "trigger": "operator explicitly requests clean-only, source-order unchanged, title-only, or equivalent",
@@ -95,7 +99,7 @@
     "effort": "low",
     "review_loop_count": 1,
     "reviews_per_loop": 1,
-    "creator_machine": "macmini",
+    "review_runner": "current_local_runtime",
     "approval_authority": "user",
     "fallback_provider": "codex_cli",
     "fallback_model": "gpt-5.6-sol",
@@ -111,8 +115,7 @@
     "source_is_read_only": true,
     "state_advance_after_validator_pass_only": true,
     "gui_owner_count": 1,
-    "paperclip_entry_required_before_stage_01": true,
-    "paperclip_entry_writer_machine": "macmini",
+    "paperclip_user_requested_only": true,
     "vmake_dom_first": true,
     "vmake_submit_after_source_identity": true,
     "vmake_candidate_integrity_only": true,
@@ -139,7 +142,7 @@
     "capcut_cloud_media_pass_required": true,
     "capcut_zip_test_required": true,
     "capcut_cloud_sync_explicit_request_required": true,
-    "capcut_cloud_destination_by_writer_machine_required": true,
+    "capcut_cloud_destination_explicit_request_required": true,
     "capcut_cloud_row_readback_required_when_requested": true,
     "capcut_cloud_reopen_playback_required_when_requested": true,
     "public_upload_requires_explicit_approval": true,
@@ -150,7 +153,8 @@
     "capcut_visual_confirmation_required_before_completion": true
     ,"capcut_polish_profile_required": true,
     "capcut_polish_profile_validator_required": true,
-    "source_audio_vocal_retain_required": true,
+    "source_audio_vocal_stem_required_when_retained": true,
+    "capcut_vocal_retain_metadata_not_audio_separation": true,
     "source_audio_mute_during_a9_required": true,
     "all_audio_loudness_normalized_lufs": -14,
     "video_join_transition_required": "W Flash",
@@ -168,7 +172,7 @@
     "A10_TEXT": "original-speech caption",
     "STATE": "situation or state caption",
     "A11": "sound effects",
-    "A12": "background music",
+    "A12": "reserved empty",
     "SCREEN": "screen visual effect"
   },
   "stages": [
@@ -324,11 +328,7 @@
     "capcut_cloud_sync": {
       "default_status": "NOT_REQUESTED",
       "requires_explicit_user_request": true,
-      "destination_by_writer_machine": {
-        "macmini": "macmini",
-        "home_windows": "home",
-        "office_windows": "ofc"
-      },
+      "destination_must_be_explicit": true,
       "forbid_preemptive_sync": true,
       "synced_status": "SYNCED"
     },
@@ -385,6 +385,12 @@
     "PUBLIC_UPLOAD_NOT_APPROVED": "public upload state requires explicit approval",
     "URAKKAI_FAKE_SPLIT": "urakkai uses contiguous fake splits without an effective structural reorder",
     "URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH": "used A10 source/target ranges do not exactly match VIDEO",
+    "URAKKAI_AUDIO_POLICY_INVALID": "urakkai audio_policy is not declared by the protocol",
+    "URAKKAI_TTS_ONLY_A10_FORBIDDEN": "TTS-only urakkai must leave A10 empty",
+    "URAKKAI_TTS_ONLY_VIDEO_NOT_MUTED": "TTS-only urakkai must mute every VIDEO segment",
+    "URAKKAI_TTS_ONLY_A9_REQUIRED": "TTS-only urakkai must contain at least one A9 segment",
+    "URAKKAI_TTS_ONLY_FORBIDDEN_AUDIO_PRESENT": "TTS-only urakkai must leave A11 and A12 empty",
+    "URAKKAI_TTS_ONLY_CLEAR_ANCHOR_MISSING": "TTS-only urakkai must declare cleared audio anchors",
     "VMAKE_DIRECT_INSERT_ASSET_INVALID": "VIDEO must use the canonical VMake clean_video asset",
     "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT": "urakkai review must complete exactly one creator-machine review before user approval",
     "SOURCE_FILE_EVIDENCE_MISSING": "completion report lacks verified source file evidence",

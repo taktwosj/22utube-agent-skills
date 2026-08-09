@@ -54,13 +54,6 @@
     "capcut_cloud_sync_requested": {
       "type": "boolean"
     },
-    "writer_machine": {
-      "enum": [
-        "macmini",
-        "home_windows",
-        "office_windows"
-      ]
-    },
     "capcut_cloud_destination": {
       "enum": [
         "macmini",
@@ -323,7 +316,6 @@
       "then": {
         "required": [
           "capcut_cloud_sync_requested",
-          "writer_machine",
           "capcut_cloud_destination",
           "capcut_cloud_row"
         ],

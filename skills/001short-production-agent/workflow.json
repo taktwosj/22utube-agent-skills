@@ -30,22 +30,11 @@
   },
   "runtime": {
     "state_path": "{episode_root}/90_workflow/state.json",
-    "paperclip_entry_path": "{episode_root}/90_workflow/paperclip_entry.json",
-    "paperclip_entry_validator": "scripts/validate_paperclip_entry.py",
-    "paperclip_entry_required_before_stage": "01",
-    "paperclip_stage_ledger_path": "{episode_root}/90_workflow/paperclip_stage_ledger.json",
-    "paperclip_stage_ledger_required_fields": [
-      "stage",
-      "attempt_kind",
-      "stage_started_at",
-      "stage_finished_at",
-      "elapsed_seconds",
-      "outcome",
-      "first_failure_code",
-      "recovery_elapsed_seconds",
-      "next_action"
-    ],
-    "paperclip_stage_ledger_authority": "P0-verifier issue readback",
+    "paperclip": {
+      "mode": "USER_REQUEST_ONLY",
+      "entry_path": "{episode_root}/90_workflow/paperclip_entry.json",
+      "entry_validator": "scripts/validate_paperclip_entry.py"
+    },
     "state_required": [
       "episode_id",
       "current_stage",
@@ -465,7 +454,7 @@
         "SPEAKER_A10",
         "STATE_CAPTION",
         "A11_SFX",
-        "A12_BGM",
+        "A12_UNUSED",
         "SCREEN"
       ],
       "repeat": true,
@@ -480,7 +469,7 @@
       "effort": "low",
       "loop_count": 1,
       "reviews_per_loop": 1,
-      "creator_machine": "macmini",
+      "review_runner": "current_local_runtime",
       "approval_authority": "user",
       "fallback": "Codex CLI gpt-5.6-sol at low effort",
       "evidence": "20_script/external-review.json"
@@ -516,9 +505,9 @@
       "new_tracks": false,
       "new_tools": false,
       "a10_authority": "source.mp4",
-      "capcut_polish_profile": "001short-capcut-polish-v2",
+      "capcut_polish_profile": "001short-capcut-polish-v3",
       "capcut_polish_validator": "scripts/validate_capcut_polish_profile.py",
-      "source_audio_separation": "vocal_retain_choice_2",
+      "source_audio_separation": "external_demucs_vocal_stem_when_a10_is_retained",
       "source_audio_during_a9": "mute",
       "audio_loudness_lufs": -14,
       "transition_each_join": "W Flash",
@@ -778,7 +767,7 @@
     "paid_tts": false,
     "vmake": "submit_after_source_identity_verify_after_final_design",
     "capcut_gui": "after_final_design_approval",
-    "capcut_cloud_sync": "explicit_user_request_only_destination_by_writer_machine",
+    "capcut_cloud_sync": "explicit_user_request_only_to_user_named_destination",
     "upload": false
   },
   "states": {

@@ -108,7 +108,7 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
     errors: list[dict] = []
     audio_schema_errors = validate_schema(audio_lock, read_json(AUDIO_SCHEMA))
     if (
-        audio_lock.get("schema_version") == "001short-audio-lock-v2"
+        audio_lock.get("schema_version") in {"001short-audio-lock-v2", "001short-audio-lock-v3"}
         and not audio_lock.get("audio_codec")
     ):
         audio_schema_errors.append("$: missing audio_codec")
@@ -135,6 +135,43 @@ def validate_audio_caption(audio_lock_path: Path, caption_lock_path: Path) -> di
             continue
         role_files[role] = role_file
         _validate_audio_file(audio_lock_path, role_file, errors, role=role)
+
+    if audio_lock["audio_source"] == "SOURCE_CLIP":
+        errors.append({"code": "AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN"})
+
+    if audio_lock["audio_source"] == "SOURCE_VOCAL_STEM":
+        manifest_value = audio_lock.get("vocal_stem_manifest_path")
+        manifest_sha = audio_lock.get("vocal_stem_manifest_sha256")
+        if not manifest_value or not manifest_sha:
+            errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_EVIDENCE_MISSING"})
+        else:
+            manifest_path = resolved_declared_path(audio_lock_path, manifest_value)
+            if not manifest_path.is_file() or sha256_file(manifest_path) != manifest_sha:
+                errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_EVIDENCE_INVALID"})
+            else:
+                from validate_vocal_stem import validate_vocal_stem
+
+                stem = validate_vocal_stem(manifest_path)
+                if stem["status"] != "PASS":
+                    errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_EVIDENCE_INVALID", "detail": stem["errors"]})
+                elif stem["evidence"].get("episode_id") != audio_lock["episode_id"]:
+                    errors.append({"code": "AUDIO_CAPTION_EPISODE_ID_MISMATCH"})
+                else:
+                    a10 = role_files.get("A10")
+                    stem_audio = Path(stem["evidence"]["a10_audio_path"])
+                    if a10 is None:
+                        errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_A10_MISSING"})
+                    else:
+                        a10_audio = resolved_declared_path(audio_lock_path, a10["audio_path"])
+                        if a10_audio != stem_audio:
+                            errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_A10_PATH_MISMATCH"})
+                        if any(
+                            audio_lock.get(field) != a10.get(field)
+                            for field in ("audio_path", "audio_sha256", "measured_duration_us", "audio_codec", "ffprobe_verified")
+                        ):
+                            errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_PRIMARY_A10_MISMATCH"})
+                        if resolved_declared_path(audio_lock_path, audio_lock["audio_path"]) != stem_audio:
+                            errors.append({"code": "AUDIO_CAPTION_VOCAL_STEM_PRIMARY_PATH_MISMATCH"})
 
     tts_required = audio_lock["audio_source"] == "GENERATED_TTS" or "A9" in role_files
     tts_path_value = audio_lock.get("tts_evidence_path")

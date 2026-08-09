@@ -66,9 +66,11 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     else:
         urakkai = modes["URAKKAI"]
         clean_only = modes["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
-        for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required", "a10_sync_required_for_all_used_ranges"):
+        for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required"):
             if urakkai.get(key) is not True:
                 errors.append(f"PROTOCOL_URAKKAI_GATE_FALSE:{key}")
+        if urakkai.get("allowed_audio_policies") != ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]:
+            errors.append("PROTOCOL_URAKKAI_AUDIO_POLICIES_INVALID")
         if urakkai.get("minimum_video_segments", 0) < 2:
             errors.append("PROTOCOL_URAKKAI_MINIMUM_CUTS")
         expected_clean = {
@@ -93,7 +95,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             "preferred_model": "Claude Opus 5",
             "effort": "low",
             "reviews_per_loop": 1,
-            "creator_machine": "macmini",
+            "review_runner": "current_local_runtime",
             "approval_authority": "user",
             "fallback_provider": "codex_cli",
             "fallback_model": "gpt-5.6-sol",
@@ -140,11 +142,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     expected_cloud_sync = {
         "default_status": "NOT_REQUESTED",
         "requires_explicit_user_request": True,
-        "destination_by_writer_machine": {
-            "macmini": "macmini",
-            "home_windows": "home",
-            "office_windows": "ofc",
-        },
+        "destination_must_be_explicit": True,
         "forbid_preemptive_sync": True,
         "synced_status": "SYNCED",
     }
@@ -176,10 +174,12 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "vmake_final_download_evidence_required",
         "vmake_substitute_file_forbidden",
         "capcut_visual_confirmation_required_before_completion",
+        "source_audio_vocal_stem_required_when_retained",
+        "capcut_vocal_retain_metadata_not_audio_separation",
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_sync_explicit_request_required",
-        "capcut_cloud_destination_by_writer_machine_required",
+        "capcut_cloud_destination_explicit_request_required",
         "capcut_cloud_row_readback_required_when_requested",
         "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
@@ -218,6 +218,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("production_plan"),
         schemas.get("completion_report"),
         schemas.get("session_handoff"),
+        schemas.get("vocal_stem_manifest"),
         session_handoff.get("validator"),
         session_handoff.get("template"),
         "tools.json",
@@ -237,6 +238,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("production_plan"),
         schemas.get("completion_report"),
         schemas.get("session_handoff"),
+        schemas.get("vocal_stem_manifest"),
         "tools.json",
     ]:
         if isinstance(relative, str) and (root / relative).is_file():
@@ -469,6 +471,7 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
+    tts = _segments(tracks, "A9")
 
     invariants = protocol.get("invariants", {})
     if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
@@ -497,9 +500,13 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
             errors.append("URAKKAI_VIDEO_SEGMENT_COUNT")
         if config.get("fake_split_forbidden") and _effective_video_groups(video) < minimum:
             errors.append("URAKKAI_FAKE_SPLIT")
-        if config.get("video_audio_mapping_must_match") and len(video) != len(audio):
-            errors.append("URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH")
-        if config.get("a10_sync_required_for_all_used_ranges"):
+        audio_policy = plan.get("audio_policy", "A10_RETAINED_SYNC")
+        if audio_policy not in config.get("allowed_audio_policies", []):
+            errors.append("URAKKAI_AUDIO_POLICY_INVALID")
+            return errors
+        if audio_policy == "A10_RETAINED_SYNC":
+            if config.get("video_audio_mapping_must_match") and len(video) != len(audio):
+                errors.append("URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH")
             audio_by_target: Dict[tuple, List[Dict[str, Any]]] = {}
             for segment in audio:
                 target = segment.get("target_range_us")
@@ -511,6 +518,18 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
                     errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
                     break
+        else:
+            if audio:
+                errors.append("URAKKAI_TTS_ONLY_A10_FORBIDDEN")
+            if any(segment.get("volume") != 0 for segment in video):
+                errors.append("URAKKAI_TTS_ONLY_VIDEO_NOT_MUTED")
+            if not tts:
+                errors.append("URAKKAI_TTS_ONLY_A9_REQUIRED")
+            if _segments(tracks, "A11") or _segments(tracks, "A12"):
+                errors.append("URAKKAI_TTS_ONLY_FORBIDDEN_AUDIO_PRESENT")
+            cleared = set(plan.get("cleared_anchors", []))
+            if not {"A10", "A11", "A12"}.issubset(cleared):
+                errors.append("URAKKAI_TTS_ONLY_CLEAR_ANCHOR_MISSING")
         return errors
 
     config = modes[mode]
@@ -729,16 +748,14 @@ def validate_completion_report(
     if sync_status not in {sync.get("default_status"), sync.get("synced_status")}:
         errors.append("CAPCUT_CLOUD_SYNC_STATUS_INVALID")
     elif sync_status == sync.get("synced_status"):
-        mapping = sync.get("destination_by_writer_machine", {})
-        writer_machine = report.get("writer_machine")
         if report.get("capcut_cloud_sync_requested") is not True:
             errors.append("CAPCUT_CLOUD_SYNC_EXPLICIT_REQUEST_REQUIRED")
-        if mapping.get(writer_machine) != report.get("capcut_cloud_destination"):
-            errors.append("CAPCUT_CLOUD_DESTINATION_MISMATCH")
+        if _missing(report.get("capcut_cloud_destination")):
+            errors.append("CAPCUT_CLOUD_DESTINATION_MISSING")
         row = report.get("capcut_cloud_row")
         if not isinstance(row, dict) or any(_missing(row.get(field)) for field in config.get("cloud_sync_row_required_fields", [])):
             errors.append("CAPCUT_CLOUD_ROW_MISSING")
-    elif any(field in report for field in ("capcut_cloud_sync_requested", "writer_machine")):
+    elif "capcut_cloud_sync_requested" in report:
         errors.append("CAPCUT_CLOUD_SYNC_UNREQUESTED")
 
     status = report.get("public_upload_status")
