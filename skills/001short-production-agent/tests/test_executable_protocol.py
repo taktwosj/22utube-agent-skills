@@ -304,6 +304,43 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                     1,
                 )
 
+    def test_stage04_uses_current_local_runtime_and_safe_cli_argument_order(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        stage_path = SKILL / "steps" / "04-external-review.md"
+        contract_path = SKILL / "references" / "stage04-external-review-contract.md"
+        stage_text = stage_path.read_text(encoding="utf-8")
+        contract_text = contract_path.read_text(encoding="utf-8")
+        claude_command = (
+            'claude.cmd -p "<review-prompt>" --model opus --effort low '
+            '--no-session-persistence --tools Read'
+        )
+        codex_command = (
+            'codex.cmd --ask-for-approval never exec --ephemeral --sandbox read-only '
+            '--model gpt-5.6-sol --config \'model_reasoning_effort="low"\' "<review-prompt>"'
+        )
+
+        for text in (stage_text, contract_text):
+            self.assertIn("current local runtime", text)
+            self.assertNotIn("Mac mini", text)
+            self.assertIn(claude_command, text)
+            self.assertIn(codex_command, text)
+        self.assertEqual(module.validate_skill_contract(SKILL, protocol), [])
+
+        with tempfile.TemporaryDirectory() as directory:
+            copied_skill = Path(directory) / "001short-production-agent"
+            shutil.copytree(SKILL, copied_skill)
+            copied_stage = copied_skill / "steps" / "04-external-review.md"
+            copied_stage.write_text(
+                copied_stage.read_text(encoding="utf-8")
+                .replace("current local runtime", "Mac mini creator machine", 1)
+                .replace(claude_command, 'claude.cmd -p --tools Read "<review-prompt>"', 1),
+                encoding="utf-8",
+            )
+            errors = module.validate_skill_contract(copied_skill, protocol)
+            self.assertIn("PROTOCOL_STAGE04_REVIEW_RUNNER_MISMATCH", errors)
+            self.assertIn("PROTOCOL_STAGE04_CLAUDE_COMMAND_ORDER_MISSING", errors)
+
     def test_clean_only_plan_requires_single_video_audio_and_empty_tracks(self):
         module = load_validator()
         self.assertIsNotNone(module, "validate_executable_protocol.py must exist")

@@ -308,6 +308,8 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         session_handoff.get("template"),
         "scripts/validate_source_intake.py",
         "references/production-orchestrator.md",
+        "steps/04-external-review.md",
+        "references/stage04-external-review-contract.md",
         "tools.json",
     ]
     for relative in required_paths:
@@ -373,6 +375,29 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         ]:
             if token not in orchestrator_text:
                 errors.append(f"PROTOCOL_ORCHESTRATOR_TOKEN_MISSING:{token}")
+
+    stage04_paths = [
+        root / "steps" / "04-external-review.md",
+        root / "references" / "stage04-external-review-contract.md",
+    ]
+    claude_command = (
+        'claude.cmd -p "<review-prompt>" --model opus --effort low '
+        '--no-session-persistence --tools Read'
+    )
+    codex_command = (
+        'codex.cmd --ask-for-approval never exec --ephemeral --sandbox read-only '
+        '--model gpt-5.6-sol --config \'model_reasoning_effort="low"\' "<review-prompt>"'
+    )
+    for stage04_path in stage04_paths:
+        if not stage04_path.is_file():
+            continue
+        stage04_text = stage04_path.read_text(encoding="utf-8")
+        if "current local runtime" not in stage04_text or "Mac mini" in stage04_text:
+            errors.append("PROTOCOL_STAGE04_REVIEW_RUNNER_MISMATCH")
+        if claude_command not in stage04_text:
+            errors.append("PROTOCOL_STAGE04_CLAUDE_COMMAND_ORDER_MISSING")
+        if codex_command not in stage04_text:
+            errors.append("PROTOCOL_STAGE04_CODEX_COMMAND_ORDER_MISSING")
 
     workflow_path = root / str(authority.get("state_machine", "workflow.json"))
     if workflow_path.is_file():
