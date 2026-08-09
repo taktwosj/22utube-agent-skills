@@ -117,6 +117,7 @@ class CleanCandidateTests(unittest.TestCase):
                         "design_lock_evidence_sha256": sha256(design),
                         "clean_source_path": source.name,
                         "clean_source_sha256": sha256(source),
+                        "clean_source_origin": "AGENT_PRIMARY_CLEAN_SOURCE",
                         "expected_duration_us": 400000,
                         "expected_width": 16,
                         "expected_height": 16,
