@@ -729,6 +729,48 @@ class ReleaseActivationTests(unittest.TestCase):
                 json.loads((cache_root / "active.json").read_text(encoding="utf-8"))["release_id"], old_commit
             )
 
+    def test_activate_preserves_real_prior_release_directory_reached_through_parent_alias(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, release_root, old_commit = publish_fixture(temp, ("kept-skill", "removed-skill"))
+            cache_root = temp / "cache"
+            runtime_root = temp / "codex"
+            backup_root = temp / "codex-backups"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                "--target", "codex", "--runtime-root", f"codex={runtime_root}",
+                "--backup-root", f"codex={backup_root}",
+            ]
+            first = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            prior_skills = cache_root / "releases" / old_commit / "skills"
+            for name in ("kept-skill", "removed-skill"):
+                skill_release.remove_link_or_directory(runtime_root / name)
+            runtime_root.rmdir()
+            skill_release.create_directory_link(runtime_root, prior_skills)
+
+            try:
+                skill_set_path = repo / "manifests" / "skill-set.json"
+                skill_set = json.loads(skill_set_path.read_text(encoding="utf-8"))
+                skill_set["skills"] = [skill for skill in skill_set["skills"] if skill["name"] == "kept-skill"]
+                skill_set["skills"][0]["targets"] = ["claude"]
+                skill_set_path.write_text(json.dumps(skill_set), encoding="utf-8")
+                commit_repo(repo, "omit prior codex skills")
+                published = run(
+                    "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                    env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+                )
+                self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+
+                activated = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+
+                self.assertEqual(activated.returncode, 0, activated.stdout + activated.stderr)
+                for name in ("kept-skill", "removed-skill"):
+                    self.assertTrue((prior_skills / name / "SKILL.md").is_file())
+                    self.assertEqual(list(backup_root.glob(f"{name}_*")), [])
+            finally:
+                skill_release.remove_link_or_directory(runtime_root)
+
 
 if __name__ == "__main__":
     unittest.main()
