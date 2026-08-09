@@ -116,6 +116,11 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
         expected_source_range = planned.get("capcut_source_range_us", planned["target_range_us"])
         if _range(actual, "source_timerange") != expected_source_range or _range(actual, "target_timerange") != planned["target_range_us"]:
             errors.append(_error("E_DRAFT_MISMATCH", detail="a10_range"))
+        expected_volume = 0.0 if planned.get("mode") == "duck" else 1.0
+        if actual.get("volume") != expected_volume:
+            errors.append(_error(
+                "E_DRAFT_MISMATCH", detail="a10_volume", clip_id=planned["clip_id"]
+            ))
     if manifest["urakkai"].get("reorder_required"):
         if [row.get("id") for row in actual_video] != manifest["urakkai"].get("locked_permutation"):
             errors.append(_error("E_DRAFT_MISMATCH", detail="order"))

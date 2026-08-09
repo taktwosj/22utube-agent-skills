@@ -22,7 +22,7 @@
       "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
     },
     "audio_policy": {
-      "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]
+      "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"]
     },
     "visual_asset_mode": {
       "enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]

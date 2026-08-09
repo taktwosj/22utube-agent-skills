@@ -373,6 +373,17 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         errors = validate_design_lock.validate_role_contract(timeline)
         self.assertIn("A9_TEXT_PAIRING_MISMATCH", {row["code"] for row in errors})
 
+    def test_mixed_policy_missing_a9_uses_policy_neutral_diagnostic(self):
+        timeline = {
+            "audio_policy": "A9_TTS_PLUS_A10_RETAINED",
+            "segments": [
+                {"role": "T1", "text": "title", "content_type": "TITLE"},
+                {"role": "T2", "text": "sub", "content_type": "TITLE"},
+            ],
+        }
+        errors = validate_design_lock.validate_role_contract(timeline)
+        self.assertIn("A9_REQUIRED_FOR_TTS_POLICY", {row["code"] for row in errors})
+
     def test_stage05_rejects_any_a12_placement(self):
         timeline = {"segments": [
             {"role": "T1", "text": "title", "content_type": "TITLE"},

@@ -176,6 +176,8 @@ Stage 05 승인안을 실제 아티팩트로 옮기기 전에는 `references/ura
 
 운영자가 원본 대화·BGM·효과음을 모두 끄고 새 TTS만 쓰라고 승인하면 production plan에 `audio_policy=TTS_ONLY_MUTE_SOURCE`를 선언한다. 모든 VIDEO는 `volume=0`, A10/A11/A12는 비우고 clear anchor로 기록하며, A9는 실제 새 TTS 파일을 하나 이상 둔다. 원본 화자발언은 분석·사실 귀속의 근거로만 문서에 남기고 CapCut 음원으로 재사용하지 않는다. 원본 화자발언을 살리는 경우에만 `audio_policy=A10_RETAINED_SYNC`를 쓰고 VIDEO/A10 source·target 동기 배치를 강제한다.
 
+새 TTS 성우 내레이션과 원본 화자발언을 함께 쓰는 승인 설계는 `audio_policy=A9_TTS_PLUS_A10_RETAINED`를 선언한다. 생성한 TTS와 대응 자막은 A9/A9_TEXT에, 검증된 외부 vocal stem과 화자 자막은 A10/A10_TEXT에 둔다. A9 target range와 겹치는 A10 `source_audio` 행은 `source_audio[].mode=duck`으로 선언해 `volume=0`으로 음소거하고, 겹치지 않는 행은 `source_audio[].mode=on`으로 선언해 `volume=1`로 복원한다. A9 내레이션 경계는 A10/source_audio 행 경계에 맞춰야 한다. A10 한 행의 일부만 A9와 겹치면 자동 분할하지 않고 `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`로 중단한다. A9_TEXT와 A10_TEXT는 같은 시간대에 공존할 수 있다. A11과 A12는 물리 트랙만 유지하고 segment와 material을 모두 비운다.
+
 ### 음성 없는 화면 텍스트 전용 우라까이
 
 운영자가 `나레이션 아니고 화면 텍스트만`, `음성 없이 글자만`, `TTS 말고 화면 글자`, 또는 동등한 표현으로 정정하면 이를 **음성 TTS가 없는 화면 텍스트 모드**로 해석한다. 운영자가 나레이션을 명시적으로 거부한 문맥에서 `텍스트 TTS`라고 표현해도 음성 합성을 뜻한다고 되묻거나 자동 생성하지 않는다.

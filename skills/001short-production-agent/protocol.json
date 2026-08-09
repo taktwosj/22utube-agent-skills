@@ -69,7 +69,8 @@
       "approved_final_order_required": true,
       "allowed_audio_policies": [
         "A10_RETAINED_SYNC",
-        "TTS_ONLY_MUTE_SOURCE"
+        "TTS_ONLY_MUTE_SOURCE",
+        "A9_TTS_PLUS_A10_RETAINED"
       ]
     },
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {

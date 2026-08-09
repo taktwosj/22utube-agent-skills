@@ -132,8 +132,8 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
             or sound.get("text") != text.get("text")
         ):
             errors.append({"code": "A9_TEXT_PAIRING_MISMATCH", "cue_id": cue_id})
-    if timeline.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE" and not a9:
-        errors.append({"code": "A9_TEXT_REQUIRED_FOR_TTS_ONLY"})
+    if timeline.get("audio_policy") in {"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"} and not a9:
+        errors.append({"code": "A9_REQUIRED_FOR_TTS_POLICY"})
     return errors
 
 

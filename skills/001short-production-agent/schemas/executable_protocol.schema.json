@@ -116,9 +116,9 @@
             "allowed_audio_policies": {
               "type": "array",
               "uniqueItems": true,
-              "minItems": 2,
+              "minItems": 3,
               "items": {
-                "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"]
+                "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"]
               }
             }
           },

@@ -245,6 +245,95 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             row["placements"] = [placement for placement in row["placements"] if placement["anchor"] != "A9"]
         self.assertIn("URAKKAI_TTS_ONLY_A9_REQUIRED", module.validate_production_plan(no_tts, protocol))
 
+    def test_urakkai_mixed_policy_accepts_retained_a10_and_generated_a9(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        mixed = json.loads(
+            (SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8")
+        )
+        mixed["audio_policy"] = "A9_TTS_PLUS_A10_RETAINED"
+        mixed["cleared_anchors"] = ["A11", "A12"]
+        mixed["timeline"][0]["placements"].extend([
+            {
+                "anchor": "A9", "operation": "clone_template_segment", "asset_key": "tts_01",
+                "source_range_us": [0, 1_000_000], "target_range_us": [0, 1_000_000], "volume": 1,
+            },
+            {
+                "anchor": "A9_TEXT", "operation": "replace_text_preserve_style",
+                "target_range_us": [0, 1_000_000], "text": "narration",
+            },
+            {
+                "anchor": "A10_TEXT", "operation": "replace_text_preserve_style",
+                "target_range_us": [0, 1_000_000], "text": "speaker",
+            },
+        ])
+        mixed["timeline"][0]["placements"][1]["volume"] = 0
+
+        self.assertEqual(module.validate_production_plan(mixed, protocol), [])
+        plan_schema = json.loads(PLAN_SCHEMA.read_text(encoding="utf-8"))
+        self.assertIn(
+            "A9_TTS_PLUS_A10_RETAINED",
+            plan_schema["properties"]["audio_policy"]["enum"],
+        )
+        protocol_schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        self.assertIn(
+            "A9_TTS_PLUS_A10_RETAINED",
+            protocol_schema["properties"]["production_modes"]["properties"]["URAKKAI"]
+            ["properties"]["allowed_audio_policies"]["items"]["enum"],
+        )
+        missing_a9 = copy.deepcopy(mixed)
+        for row in missing_a9["timeline"]:
+            row["placements"] = [
+                placement for placement in row["placements"]
+                if placement["anchor"] not in {"A9", "A9_TEXT"}
+            ]
+        self.assertIn(
+            "URAKKAI_MIXED_A9_REQUIRED",
+            module.validate_production_plan(missing_a9, protocol),
+        )
+
+        audible_overlap = copy.deepcopy(mixed)
+        audible_overlap["timeline"][0]["placements"][1]["volume"] = 1
+        self.assertIn(
+            "URAKKAI_MIXED_A10_NOT_MUTED_UNDER_A9",
+            module.validate_production_plan(audible_overlap, protocol),
+        )
+
+        partial_overlap = copy.deepcopy(mixed)
+        for placement in partial_overlap["timeline"][0]["placements"]:
+            if placement["anchor"] in {"A9", "A9_TEXT"}:
+                placement["target_range_us"] = [500_000, 1_000_000]
+        self.assertIn(
+            "URAKKAI_MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED",
+            module.validate_production_plan(partial_overlap, protocol),
+        )
+
+        mixed_a11 = copy.deepcopy(mixed)
+        mixed_a11["timeline"][0]["placements"].append({
+            "anchor": "A11", "operation": "clone_template_segment", "asset_key": "original_narration",
+            "source_range_us": [0, 1_000_000], "target_range_us": [0, 1_000_000], "volume": 1,
+        })
+        self.assertIn(
+            "URAKKAI_MIXED_A11_FORBIDDEN",
+            module.validate_production_plan(mixed_a11, protocol),
+        )
+
+        mixed_a12 = copy.deepcopy(mixed)
+        mixed_a12["timeline"][0]["placements"].append({
+            "anchor": "A12", "operation": "clone_template_segment", "asset_key": "bgm",
+            "source_range_us": [0, 1_000_000], "target_range_us": [0, 1_000_000], "volume": 1,
+        })
+        self.assertIn(
+            "A12_RESERVED_EMPTY",
+            module.validate_production_plan(mixed_a12, protocol),
+        )
+
+        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("A9_TTS_PLUS_A10_RETAINED", skill_text)
+        self.assertIn("source_audio[].mode=duck", skill_text)
+        self.assertIn("source_audio[].mode=on", skill_text)
+        self.assertIn("MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED", skill_text)
+
     def test_protocol_declares_final_shorts_hard_gates(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -252,7 +341,10 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         clean_only = protocol["production_modes"]["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
         self.assertIs(urakkai.get("fake_split_forbidden"), True)
         self.assertIs(urakkai.get("approved_final_order_required"), True)
-        self.assertEqual(urakkai.get("allowed_audio_policies"), ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE"])
+        self.assertEqual(
+            urakkai.get("allowed_audio_policies"),
+            ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"],
+        )
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
         self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")
         self.assertEqual(clean_only.get("original_audio_duration"), "FULL_LENGTH")
