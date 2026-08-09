@@ -481,6 +481,15 @@ def install_runtime_link(destination: Path, target: Path, backup_root: Path) -> 
         raise
 
 
+def backup_existing(destination: Path, backup_root: Path, skill_name: str) -> LinkChange:
+    backup_root.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    backup = backup_root / f"{skill_name}_{stamp}_{uuid.uuid4().hex[:8]}"
+    os.replace(destination, backup)
+    print(f"BACKUP {destination} -> {backup}")
+    return LinkChange(destination, backup, True)
+
+
 def rollback_link_changes(changes: list[LinkChange]) -> None:
     for change in reversed(changes):
         if not change.changed:
@@ -517,6 +526,39 @@ def build_link_plans(
             destinations.add(destination_key)
             plans.append(LinkPlan(target_name, skill["name"], destination, source, backup_root))
     return plans
+
+
+def reconcile_omitted_managed_links(
+    previous_manifest: dict[str, Any],
+    new_manifest: dict[str, Any],
+    target_names: list[str],
+    previous_plans: list[LinkPlan],
+) -> list[LinkChange]:
+    previous_names = {
+        (target_name, skill["name"])
+        for target_name in target_names
+        for skill in previous_manifest.get("skills", [])
+        if target_name in skill.get("targets", [])
+    }
+    expected_names = {
+        (target_name, skill["name"])
+        for target_name in target_names
+        for skill in new_manifest.get("skills", [])
+        if target_name in skill.get("targets", [])
+    }
+    plans = {(plan.target_name, plan.skill_name): plan for plan in previous_plans}
+    changes: list[LinkChange] = []
+    try:
+        for key in sorted(previous_names - expected_names):
+            plan = plans[key]
+            if (plan.destination.exists() or plan.destination.is_symlink()) and paths_equal(
+                plan.destination, plan.source
+            ):
+                changes.append(backup_existing(plan.destination, plan.backup_root, plan.skill_name))
+    except Exception:
+        rollback_link_changes(changes)
+        raise
+    return changes
 
 
 def verify_link_plans(plans: list[LinkPlan]) -> None:
@@ -560,6 +602,17 @@ def activate(args: argparse.Namespace) -> None:
     local_release = cache_root / "releases" / release_id
     local_active_path = cache_root / "active.json"
     previous_active = local_active_path.read_bytes() if local_active_path.is_file() else None
+    previous_manifest: dict[str, Any] | None = None
+    previous_release: Path | None = None
+    if previous_active is not None:
+        previous_release_id, previous_manifest_sha = read_active(cache_root)
+        previous_release = cache_root / "releases" / previous_release_id
+        previous_manifest = verify_release_directory(previous_release, previous_manifest_sha, require_immutable=True)
+        if (
+            previous_manifest.get("release_id") != previous_release_id
+            or previous_manifest.get("source_commit") != previous_release_id
+        ):
+            raise ReleaseError("previous local active release identity mismatch")
     staging.parent.mkdir(parents=True, exist_ok=True)
     try:
         shutil.copytree(source_release, staging)
@@ -579,8 +632,12 @@ def activate(args: argparse.Namespace) -> None:
             make_tree_writable_for_cleanup(staging)
             shutil.rmtree(staging)
 
-    plans = build_link_plans(
-        manifest, selected_targets(args.target), runtime_overrides, backup_overrides, local_release
+    target_names = selected_targets(args.target)
+    plans = build_link_plans(manifest, target_names, runtime_overrides, backup_overrides, local_release)
+    previous_plans = (
+        build_link_plans(previous_manifest, target_names, runtime_overrides, backup_overrides, previous_release)
+        if previous_manifest is not None and previous_release is not None
+        else []
     )
     fail_after_raw = os.environ.get("AGENT_SKILLS_TEST_FAIL_LINK_AFTER")
     fail_after: int | None = None
@@ -596,6 +653,8 @@ def activate(args: argparse.Namespace) -> None:
 
     changes: list[LinkChange] = []
     try:
+        if previous_manifest is not None:
+            changes.extend(reconcile_omitted_managed_links(previous_manifest, manifest, target_names, previous_plans))
         for index, plan in enumerate(plans):
             if fail_after is not None and index == fail_after:
                 raise ReleaseError("induced runtime link failure")
