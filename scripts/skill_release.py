@@ -455,6 +455,27 @@ def paths_equal(first: Path, second: Path) -> bool:
     return first_value == second_value
 
 
+def is_directory_link(path: Path) -> bool:
+    if path.is_symlink():
+        return True
+    if os.name != "nt":
+        return False
+    try:
+        attributes = path.stat(follow_symlinks=False).st_file_attributes
+    except (FileNotFoundError, OSError):
+        return False
+    return bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def path_entry_is_within(path: Path, root: Path) -> bool:
+    physical_path = path.parent.resolve() / path.name
+    try:
+        physical_path.relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
 def install_runtime_link(destination: Path, target: Path, backup_root: Path) -> LinkChange:
     if (destination.exists() or destination.is_symlink()) and paths_equal(destination, target):
         return LinkChange(destination, None, False)
@@ -551,8 +572,11 @@ def reconcile_omitted_managed_links(
     try:
         for key in sorted(previous_names - expected_names):
             plan = plans[key]
-            if (plan.destination.exists() or plan.destination.is_symlink()) and paths_equal(
-                plan.destination, plan.source
+            previous_release = plan.source.parent.parent
+            if (
+                is_directory_link(plan.destination)
+                and not path_entry_is_within(plan.destination, previous_release)
+                and paths_equal(plan.destination, plan.source)
             ):
                 changes.append(backup_existing(plan.destination, plan.backup_root, plan.skill_name))
     except Exception:
