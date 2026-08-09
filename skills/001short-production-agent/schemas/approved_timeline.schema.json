@@ -28,7 +28,7 @@
           "cue_id": {"type": "string", "minLength": 1},
           "speaker_id": {"type": "string", "minLength": 1},
           "color_role": {"enum": ["WHITE", "YELLOW"]},
-          "state_effect": {"enum": ["FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"]}
+          "state_effect": {"enum": ["LASER_CUT"]}
         },
         "additionalProperties": true
       }

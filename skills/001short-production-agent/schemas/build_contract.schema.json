@@ -21,10 +21,12 @@
     "workspace_root": {"type": "string", "minLength": 1},
     "root_profile": {"type": "string", "minLength": 1},
     "root_template_profile": {"type": "string", "const": "shrt_white_base_v2"},
-    "visual_asset_mode": {"enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]},
-    "video_asset_key": {"enum": ["clean_video", "source_video"]},
+    "visual_asset_mode": {"enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"]},
+    "video_asset_key": {"enum": ["clean_video", "source_video", "user_approved_clean_video"]},
     "video_input_path": {"type": "string", "minLength": 1},
     "video_input_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "user_clean_override_path": {"type": "string", "minLength": 1},
+    "user_clean_override_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
     "upload_ready": {"type": "boolean"},
     "source_project_path": {"type": "string", "minLength": 1},
     "working_project_path": {"type": "string", "minLength": 1},
@@ -70,7 +72,7 @@
           "duration": {"type": "integer", "minimum": 1},
           "text": {"type": "string", "minLength": 1},
           "color_role": {"enum": ["WHITE", "YELLOW"]},
-          "state_effect": {"enum": ["FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"]}
+          "state_effect": {"enum": ["LASER_CUT"]}
         },
         "additionalProperties": false
       }

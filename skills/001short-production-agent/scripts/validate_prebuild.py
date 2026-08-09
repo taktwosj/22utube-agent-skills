@@ -68,9 +68,15 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     clean_source = payload.get("clean_source")
     urakkai = payload["urakkai"]
     if (
-        visual_mode not in {"CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"}
+        visual_mode not in {
+            "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
+            "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+        }
         or not isinstance(source, dict) or not isinstance(template, dict) or not isinstance(urakkai, dict)
-        or (visual_mode == "CLEAN_VISUAL_READY" and not isinstance(clean_source, dict))
+        or (
+            visual_mode in {"CLEAN_VISUAL_READY", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"}
+            and not isinstance(clean_source, dict)
+        )
     ):
         return result([_error("E_MANIFEST_INVALID", field="sections")])
     source_path = Path(source.get("path", "")).resolve()
@@ -145,6 +151,45 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
                 or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
             ):
                 errors.append(_error("E_VMAKE_BINDING"))
+
+    if visual_mode == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+        assert isinstance(clean_source, dict)
+        output_path = Path(clean_source.get("output_path", "")).resolve()
+        output_sha = clean_source.get("output_sha256")
+        override_path = Path(clean_source.get("user_clean_override_path", "")).resolve()
+        override_sha = clean_source.get("user_clean_override_sha256")
+        try:
+            override = read_json(override_path)
+        except (OSError, ValueError, TypeError):
+            override = None
+        authority = override.get("user_authority") if isinstance(override, dict) else None
+        declared_output = (
+            Path(override_path.parent / override.get("episode_clean_source_path", "")).resolve()
+            if isinstance(override, dict) else None
+        )
+        if (
+            clean_source.get("origin") != visual_mode
+            or not output_path.is_file() or output_path.is_symlink()
+            or not isinstance(output_sha, str)
+            or sha256_file(output_path).lower() != output_sha.lower()
+            or not override_path.is_file()
+            or not isinstance(override_sha, str)
+            or sha256_file(override_path).lower() != override_sha.lower()
+            or not isinstance(override, dict)
+            or override.get("schema_version") != "001short-user-clean-override-v1"
+            or override.get("episode_id") != payload["episode_id"]
+            or override.get("status") != visual_mode
+            or not isinstance(authority, dict)
+            or not isinstance(authority.get("evidence"), str)
+            or not authority["evidence"].strip()
+            or not isinstance(authority.get("exact_text"), str)
+            or not authority["exact_text"].strip()
+            or declared_output != output_path
+            or str(override.get("clean_source_sha256", "")).lower() != output_sha.lower()
+            or override.get("clean_visual_ready_claim") is not False
+            or vmake is not None
+        ):
+            errors.append(_error("E_USER_CLEAN_OVERRIDE_BINDING"))
 
     clips = urakkai.get("video_clips")
     target_duration = urakkai.get("target_duration_us")

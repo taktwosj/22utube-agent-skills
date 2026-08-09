@@ -16,9 +16,25 @@ Normal production semantics are A9=TTS, A10=validated Demucs source vocal stem, 
 
 Use only the validated `clean_video` asset for normal VIDEO placements. A source-video provisional build is review-only and never clears clean, render, or upload gates.
 
+An exact file that the user explicitly selects may instead use
+`USER_APPROVED_NONMATCHING_CLEAN_SOURCE`. Bind the local file, SHA-256, and the
+user's exact approval text in `user_clean_override.json`. Duration or resolution
+may differ from the source in this mode; that difference is recorded, not used as
+a rejection gate. This mode is not VMake evidence, is not
+`CLEAN_VISUAL_READY`, and remains `upload_ready=false` until manual CapCut review.
+
+The canonical physical layout stays at 15 tracks. Only `STATE_LASER` is
+routable for STATE cues (`LASER_CUT`); `STATE_FLICKER` and `STATE_GLITCH` stay
+physically present and empty. Retained-speaker captions use the two
+`A10_TEXT_WHITE` and `A10_TEXT_YELLOW` lanes while A10 remains one audio stem.
+
 ## Urakkai Editorial Authority
 
-Urakkai requires the declared structural reorder and user approval. Its final duration is allowed to differ from source duration; clean-only remains full-length passthrough.
+Urakkai always requires the source-time original table and target-time urakkai
+table. Do not call an external AI reviewer. Manual mode waits for user approval;
+when the user requests automatic mode, preserve both tables and continue without
+asking for approval. Its final duration is allowed to differ from source
+duration; clean-only remains full-length passthrough.
 
 ## Handoff
 

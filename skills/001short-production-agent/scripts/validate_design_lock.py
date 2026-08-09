@@ -108,8 +108,8 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
                 errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
             elif _overlong_line(text, 8) is not None:
                 errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
-            if row.get("state_effect") not in {"FLICKER_RAVE", "GLITCH_SHAKE", "LASER_CUT"}:
-                errors.append({"code": "STATE_EFFECT_REQUIRED", "segment_id": segment_id})
+            if row.get("state_effect") != "LASER_CUT":
+                errors.append({"code": "STATE_EFFECT_LASER_ONLY", "segment_id": segment_id})
 
     a9_rows = [row for row in rows if row.get("role") == "A9"]
     a9_text_rows = [row for row in rows if row.get("role") == "A9_TEXT"]

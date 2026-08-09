@@ -209,6 +209,49 @@ def resolve_visual_input(config: dict) -> dict:
             "resource_name": "clean_video.mp4",
             "upload_ready": False,
         }
+    if mode == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+        raw = config.get("clean_video")
+        raw_override = config.get("user_clean_override_path")
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("USER_CLEAN_VIDEO_REQUIRED")
+        if not isinstance(raw_override, str) or not raw_override:
+            raise ValueError("USER_CLEAN_OVERRIDE_REQUIRED")
+        video = Path(raw).resolve()
+        override_path = Path(raw_override).resolve()
+        if not video.is_file():
+            raise FileNotFoundError("USER_CLEAN_VIDEO_MISSING")
+        try:
+            override = read_json(override_path)
+        except (OSError, ValueError, TypeError) as exc:
+            raise RuntimeError(f"USER_CLEAN_OVERRIDE_INVALID:{exc}") from exc
+        authority = override.get("user_authority")
+        declared_video = resolved_declared_path(
+            override_path, override.get("episode_clean_source_path", "")
+        )
+        if (
+            override.get("schema_version") != "001short-user-clean-override-v1"
+            or override.get("episode_id") != config.get("episode_id")
+            or override.get("status") != mode
+            or not isinstance(authority, dict)
+            or not isinstance(authority.get("evidence"), str)
+            or not authority["evidence"].strip()
+            or not isinstance(authority.get("exact_text"), str)
+            or not authority["exact_text"].strip()
+            or declared_video != video
+            or str(override.get("clean_source_sha256", "")).lower() != _sha(video).lower()
+            or override.get("clean_visual_ready_claim") is not False
+        ):
+            raise RuntimeError("USER_CLEAN_OVERRIDE_AUTHORITY_INVALID")
+        return {
+            "visual_asset_mode": mode,
+            "video_asset_key": "user_approved_clean_video",
+            "video_input_path": video,
+            "video_input_sha256": _sha(video),
+            "resource_name": "clean_video.mp4",
+            "upload_ready": False,
+            "user_clean_override_path": override_path,
+            "user_clean_override_sha256": _sha(override_path),
+        }
     raise ValueError(f"VISUAL_ASSET_MODE_INVALID:{mode}")
 
 
@@ -1059,7 +1102,7 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     if visual["visual_asset_mode"] == "SOURCE_VIDEO_PROVISIONAL":
         if video_input != Path(stored_evidence["source_media_path"]).resolve():
             raise RuntimeError("STAGE08_SOURCE_PROVISIONAL_AUTHORITY_MISMATCH")
-    else:
+    elif visual["visual_asset_mode"] == "CLEAN_VISUAL_READY":
         clean_source = build_manifest.get("clean_source", {})
         if (
             Path(clean_source.get("output_path", "")).resolve() != video_input
@@ -1092,6 +1135,18 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
             != str(clean_source.get("output_sha256", "")).lower()
         ):
             raise RuntimeError("STAGE06_CLEAN_SOURCE_ORIGIN_MISMATCH")
+    else:
+        clean_source = build_manifest.get("clean_source", {})
+        override_path = Path(visual["user_clean_override_path"]).resolve()
+        if (
+            clean_source.get("origin") != "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"
+            or Path(clean_source.get("output_path", "")).resolve() != video_input
+            or str(clean_source.get("output_sha256", "")).lower() != _sha(video_input).lower()
+            or Path(clean_source.get("user_clean_override_path", "")).resolve() != override_path
+            or str(clean_source.get("user_clean_override_sha256", "")).lower()
+            != _sha(override_path).lower()
+        ):
+            raise RuntimeError("STAGE08_USER_CLEAN_OVERRIDE_AUTHORITY_MISMATCH")
 
     state_path = Path(config["state_path"]).resolve()
     state = read_json(state_path)
@@ -1244,6 +1299,10 @@ def _build_episode_once(config: dict) -> dict:
         "video_input_path": str(pre["video_input"]),
         "video_input_sha256": _sha(pre["video_input"]),
         "upload_ready": config["_visual_input"]["upload_ready"],
+        **({
+            "user_clean_override_path": str(config["_visual_input"]["user_clean_override_path"]),
+            "user_clean_override_sha256": config["_visual_input"]["user_clean_override_sha256"],
+        } if config["_visual_input"]["visual_asset_mode"] == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE" else {}),
         "source_project_path": str(source.resolve()), "working_project_path": str(target.resolve()),
         "evidence_root_path": str(evidence_root.resolve()), "source_core_sha256": source_manifest,
         "source_root_sha256": source_root_sha, "template_sha256": template_sha,

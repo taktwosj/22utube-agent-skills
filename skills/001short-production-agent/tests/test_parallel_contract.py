@@ -95,11 +95,11 @@ class ParallelContractTests(unittest.TestCase):
         self.assertIn("clean_visual_evidence", checks["08"]["optional_prerequisites"])
         self.assertEqual(
             checks["08"]["allowed_visual_asset_modes"],
-            ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"],
+            ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"],
         )
         stages = {stage["id"]: stage for stage in json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))["stages"]}
         self.assertEqual(stages["07"]["requires_state"], "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY")
-        self.assertEqual(stages["08"]["requires_state"], "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL")
+        self.assertEqual(stages["08"]["requires_state"], "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE")
 
     def test_interim_capcut_never_waits_for_vmake_and_requires_clean_video_swap(self):
         interim = self.workflow["interim_capcut"]

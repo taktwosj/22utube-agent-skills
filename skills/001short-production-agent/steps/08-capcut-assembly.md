@@ -9,7 +9,8 @@
 
 ## Build contract
 
-- Accepted visual input modes are `CLEAN_VISUAL_READY` and `SOURCE_VIDEO_PROVISIONAL`. The provisional mode uses the episode source video and must remain reported as provisional. Neither mode is upload-ready evidence: static assembly ends at `CAPCUT_STATIC_VALIDATED` / `WAIT_USER_CAPCUT_CHECK`.
+- Accepted visual input modes are `CLEAN_VISUAL_READY`, `SOURCE_VIDEO_PROVISIONAL`, and `USER_APPROVED_NONMATCHING_CLEAN_SOURCE`. The user-approved mode may differ from the source duration and resolution when `user_clean_override.json` binds the exact file, SHA-256, observed mismatch, and explicit user wording. It is not VMake evidence or `CLEAN_VISUAL_READY`. Every mode remains `upload_ready=false`; static assembly ends at `CAPCUT_STATIC_VALIDATED` / `WAIT_USER_CAPCUT_CHECK`.
+- Keep all 15 physical tracks. Route every STATE cue only to `STATE_LASER` with `state_effect=LASER_CUT`; keep `STATE_FLICKER` and `STATE_GLITCH` empty. Speaker captions remain the two `A10_TEXT_WHITE` / `A10_TEXT_YELLOW` lanes.
 - `A12_RESERVED_EMPTY` must remain empty. Do not place BGM, segments, materials, or production-plan rows on A12.
 - A10 authority is the validated external vocals stem required by Stage 07. CapCut built-in vocal separation is forbidden and must not be used as a bypass.
 - Preserve exact approved T1, T2, caption-role, speaker-color, effect, audio, and timing placements. The builder executes the locked plan and does not redesign it.

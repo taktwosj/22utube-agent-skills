@@ -18,7 +18,13 @@ import build_episode_capcut as builder
 import validate_design_lock
 import validate_prebuild
 import validate_capcut_project
-from track_contract import CANONICAL_TRACKS, LOGICAL_ROLE_BY_TRACK, TRACK_LAYOUT
+from track_contract import (
+    CANONICAL_TRACKS,
+    LOGICAL_ROLE_BY_TRACK,
+    STATE_TRACK_BY_EFFECT,
+    TRACK_INDEX,
+    TRACK_LAYOUT,
+)
 
 
 class CanonicalProvisionalContractTest(unittest.TestCase):
@@ -129,6 +135,100 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             }), encoding="utf-8")
             self.assertEqual(validate_prebuild.validate_prebuild(manifest)["status"], "PASS")
 
+    def test_user_approved_nonmatching_clean_source_is_a_distinct_video_mode(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "source.mp4"
+            clean = root / "clean.mp4"
+            template = root / "root.zip"
+            source.write_bytes(b"source")
+            clean.write_bytes(b"different-duration-and-resolution")
+            template.write_bytes(b"template")
+            import hashlib
+
+            def sha(path):
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+
+            override = root / "user_clean_override.json"
+            override.write_text(json.dumps({
+                "schema_version": "001short-user-clean-override-v1",
+                "episode_id": "EP",
+                "status": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "user_authority": {"evidence": "conversation", "exact_text": "이걸로 하라고"},
+                "episode_clean_source_path": "clean.mp4",
+                "clean_source_sha256": sha(clean),
+                "clean_source_duration_us": 1_900_000,
+                "clean_source_resolution": "360x640",
+                "source_duration_us": 2_000_000,
+                "source_resolution": "1080x1920",
+                "clean_visual_ready_claim": False,
+            }), encoding="utf-8")
+
+            resolved = builder.resolve_visual_input({
+                "episode_id": "EP",
+                "visual_asset_mode": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "clean_video": str(clean),
+                "user_clean_override_path": str(override),
+            })
+            self.assertEqual(resolved["video_asset_key"], "user_approved_clean_video")
+            self.assertEqual(resolved["video_input_path"], clean.resolve())
+            self.assertFalse(resolved["upload_ready"])
+
+            manifest = root / "build_manifest.json"
+            manifest.write_text(json.dumps({
+                "schema_version": "001short-build-manifest-v1", "episode_id": "EP",
+                "visual_asset_mode": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "source": {"path": str(source), "sha256": sha(source), "duration_us": 2_000_000},
+                "template": {"root_name": "shrt white", "root_zip_path": str(template),
+                             "root_zip_sha256": sha(template)},
+                "clean_source": {
+                    "origin": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                    "output_path": str(clean), "output_sha256": sha(clean),
+                    "user_clean_override_path": str(override),
+                    "user_clean_override_sha256": sha(override),
+                },
+                "urakkai": {"production_type": "URAKKAI", "target_duration_us": 2_000_000,
+                             "reorder_required": True, "locked_permutation": ["C2", "C1"],
+                             "video_clips": [
+                                 {"clip_id": "C2", "source_sha256": sha(source),
+                                  "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]},
+                                 {"clip_id": "C1", "source_sha256": sha(source),
+                                  "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]},
+                             ]},
+                "source_audio": [{"clip_id": "C2", "mode": "mute"}, {"clip_id": "C1", "mode": "mute"}],
+            }), encoding="utf-8")
+            self.assertEqual(validate_prebuild.validate_prebuild(manifest)["status"], "PASS")
+
+            payload = json.loads(override.read_text(encoding="utf-8"))
+            payload["user_authority"]["exact_text"] = ""
+            override.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "USER_CLEAN_OVERRIDE_AUTHORITY_INVALID"):
+                builder.resolve_visual_input({
+                    "episode_id": "EP",
+                    "visual_asset_mode": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                    "clean_video": str(clean),
+                    "user_clean_override_path": str(override),
+                })
+
+    def test_15_tracks_remain_but_only_laser_state_effect_is_routable(self):
+        self.assertEqual(len(CANONICAL_TRACKS), 15)
+        self.assertEqual(STATE_TRACK_BY_EFFECT, {"LASER_CUT": TRACK_INDEX["STATE_LASER"]})
+        timeline = {"segments": [{
+            "segment_id": "ST", "role": "STATE", "start": 0, "duration": 1_000_000,
+            "text": "현재 상황", "content_type": "STATE", "caption_role": "STATE",
+            "state_effect": "FLICKER_RAVE",
+        }]}
+        codes = {row["code"] for row in validate_design_lock.validate_role_contract(timeline)}
+        self.assertIn("STATE_EFFECT_LASER_ONLY", codes)
+        timeline["segments"][0]["state_effect"] = "LASER_CUT"
+        codes = {row["code"] for row in validate_design_lock.validate_role_contract(timeline)}
+        self.assertNotIn("STATE_EFFECT_LASER_ONLY", codes)
+        for schema_name in ("approved_timeline.schema.json", "build_contract.schema.json"):
+            schema_text = (SKILL / "schemas" / schema_name).read_text(encoding="utf-8")
+            self.assertIn('"enum": ["LASER_CUT"]', schema_text)
+            self.assertNotIn('"FLICKER_RAVE"', schema_text)
+            self.assertNotIn('"GLITCH_SHAKE"', schema_text)
+
     def test_no_state_episode_is_legal(self):
         config = {
             "duration_us": 1_000_000, "state_cues": [], "T1": "첫 줄", "T2": "둘째 줄",
@@ -237,7 +337,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             {"segment_id": "WHITE", "role": "SCREEN_WHITE", "start": 0, "duration": 1_000_000},
             {"segment_id": "ST1", "role": "STATE", "start": 0, "duration": 500_000,
              "text": "12345678\nABCDEFGH", "content_type": "STATE", "caption_role": "STATE",
-             "state_effect": "FLICKER_RAVE"},
+             "state_effect": "LASER_CUT"},
         ]}
         self.assertEqual(validate_design_lock.validate_role_contract(timeline), [])
         builder.validate_state_cues({
@@ -422,7 +522,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             "approved_role_text": {"T1": "title", "T2": "sub"},
             "approved_segment_text": {
                 "SP": {"role": "A10_TEXT", "start": 0, "duration": 10, "text": "speaker text", "color_role": "WHITE"},
-                "ST": {"role": "STATE", "start": 0, "duration": 10, "text": "state text", "state_effect": "FLICKER_RAVE"},
+                "ST": {"role": "STATE", "start": 0, "duration": 10, "text": "state text", "state_effect": "LASER_CUT"},
             },
         }
         self.assertIn("CAPTION_SEGMENT_AUTHORITY_MISMATCH", {row["code"] for row in validate_capcut_project.validate_v2_role_routing(model, contract)})

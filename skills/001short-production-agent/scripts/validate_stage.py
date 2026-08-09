@@ -66,12 +66,15 @@ def resolve_stage(state: dict) -> str:
 
 
 def _entry_state_matches(state: dict, requirement: str) -> bool:
-    suffix = "_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL"
+    suffix = "_WITH_ACCEPTED_VISUAL_MODE"
     if requirement.endswith(suffix):
         return (
             state.get("status") == requirement.removesuffix(suffix)
             and state.get("visual_asset_mode")
-            in {"CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"}
+            in {
+                "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
+                "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+            }
         )
     return state.get("status") in requirement.split("_OR_")
 

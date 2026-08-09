@@ -210,6 +210,8 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "clean_source_policy": {
                 "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
                 "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+                "user_override": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "user_override_requires": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"],
                 "fallback_reasons": [
                     "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
                     "VMAKE_ACQUISITION_ISSUE",
@@ -276,70 +278,34 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             module.validate_skill_contract(SKILL, broken),
         )
 
-    def test_self_check_catches_dynamic_review_loop_contract_mismatch(self):
+    def test_self_check_catches_missing_urakkai_table_approval_contract(self):
         module = load_validator()
         self.assertIsNotNone(module, "validate_executable_protocol.py must exist")
         protocol = module.load_protocol(PROTOCOL)
         mismatched_protocol = copy.deepcopy(protocol)
-        mismatched_protocol["urakkai_review_loop"]["review_loop_count"] = 2
-        errors = module.validate_skill_contract(SKILL, mismatched_protocol)
-        self.assertIn("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH", errors)
-        self.assertIn("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH", errors)
+        mismatched_protocol["urakkai_approval"]["required_report_artifacts"] = []
+        self.assertIn(
+            "PROTOCOL_URAKKAI_APPROVAL_ARTIFACTS",
+            module.validate_protocol_document(mismatched_protocol),
+        )
+        self.assertIn(
+            "PROTOCOL_WORKFLOW_URAKKAI_REPORT_ARTIFACTS_MISMATCH",
+            module.validate_skill_contract(SKILL, mismatched_protocol),
+        )
 
-        with tempfile.TemporaryDirectory() as directory:
-            copied_skill = Path(directory) / "001short-production-agent"
-            shutil.copytree(SKILL, copied_skill)
-            skill_path = copied_skill / "SKILL.md"
-            skill_path.write_text(
-                skill_path.read_text(encoding="utf-8").replace(
-                    "Stage 04의 검토 개선 loop는 정확히 1회 실행한다.",
-                    "Stage 04의 검토 개선 loop는 정확히 2회 실행한다.",
-                    1,
-                ),
-                encoding="utf-8",
-            )
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(
-                    module.main(["--protocol", str(copied_skill / "protocol.json"), "--self-check"]),
-                    1,
-                )
-
-    def test_stage04_uses_current_local_runtime_and_safe_cli_argument_order(self):
+    def test_stage04_uses_user_approval_without_external_llm_review(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
-        stage_path = SKILL / "steps" / "04-external-review.md"
-        contract_path = SKILL / "references" / "stage04-external-review-contract.md"
+        stage_path = SKILL / "steps" / "04-user-approval.md"
         stage_text = stage_path.read_text(encoding="utf-8")
-        contract_text = contract_path.read_text(encoding="utf-8")
-        claude_command = (
-            'claude.cmd -p "<review-prompt>" --model opus --effort low '
-            '--no-session-persistence --tools Read'
-        )
-        codex_command = (
-            'codex.cmd --ask-for-approval never exec --ephemeral --sandbox read-only '
-            '--model gpt-5.6-sol --config \'model_reasoning_effort="low"\' "<review-prompt>"'
-        )
-
-        for text in (stage_text, contract_text):
-            self.assertIn("current local runtime", text)
-            self.assertNotIn("Mac mini", text)
-            self.assertIn(claude_command, text)
-            self.assertIn(codex_command, text)
+        self.assertIn("original-capcut-grid.md", stage_text)
+        self.assertIn("urakkai-capcut-grid.md", stage_text)
+        self.assertIn("WAIT_USER_URAKKAI_APPROVAL", stage_text)
+        self.assertIn("URAKKAI_AUTO_APPROVED", stage_text)
+        self.assertNotIn("claude.cmd", stage_text)
+        self.assertNotIn("codex.cmd", stage_text)
+        self.assertFalse(protocol["urakkai_approval"]["external_review_required"])
         self.assertEqual(module.validate_skill_contract(SKILL, protocol), [])
-
-        with tempfile.TemporaryDirectory() as directory:
-            copied_skill = Path(directory) / "001short-production-agent"
-            shutil.copytree(SKILL, copied_skill)
-            copied_stage = copied_skill / "steps" / "04-external-review.md"
-            copied_stage.write_text(
-                copied_stage.read_text(encoding="utf-8")
-                .replace("current local runtime", "Mac mini creator machine", 1)
-                .replace(claude_command, 'claude.cmd -p --tools Read "<review-prompt>"', 1),
-                encoding="utf-8",
-            )
-            errors = module.validate_skill_contract(copied_skill, protocol)
-            self.assertIn("PROTOCOL_STAGE04_REVIEW_RUNNER_MISMATCH", errors)
-            self.assertIn("PROTOCOL_STAGE04_CLAUDE_COMMAND_ORDER_MISSING", errors)
 
     def test_clean_only_plan_requires_single_video_audio_and_empty_tracks(self):
         module = load_validator()
@@ -539,23 +505,21 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIs(invariants.get("vmake_nonblocking_source_provisional_allowed"), True)
         self.assertEqual(invariants.get("source_provisional_video_asset_key"), "source_video")
 
-        review = protocol["urakkai_review_loop"]
-        self.assertEqual(review["enabled_for"], ["URAKKAI"])
-        self.assertEqual(review["preferred_provider"], "claude_cli")
-        self.assertEqual(review["preferred_model"], "Claude Opus 5")
-        self.assertEqual(review["effort"], "low")
-        self.assertEqual(review["review_loop_count"], 1)
-        self.assertEqual(review["reviews_per_loop"], 1)
-        self.assertEqual(review["review_runner"], "current_local_runtime")
-        self.assertEqual(review["approval_authority"], "user")
-        self.assertEqual(review["fallback_provider"], "codex_cli")
-        self.assertEqual(review["fallback_model"], "gpt-5.6-sol")
-        self.assertEqual(review["fallback_effort"], "low")
+        approval = protocol["urakkai_approval"]
+        self.assertEqual(approval["enabled_for"], ["URAKKAI"])
+        self.assertIs(approval["external_review_required"], False)
+        self.assertEqual(approval["approval_authority"], "user")
+        self.assertEqual(approval["required_report_artifacts"], [
+            "20_script/original-capcut-grid.md",
+            "20_script/urakkai-capcut-grid.md",
+            "20_script/URAKKAI_BLUEPRINT.md",
+        ])
 
         stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
-        self.assertEqual(stage04["pass"], "WAIT_USER_URAKKAI_APPROVAL")
-        self.assertEqual(workflow["blueprint_frontend"]["external_review"]["loop_count"], 1)
-        self.assertEqual(workflow["external_actions"]["llm_calls"], "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK")
+        self.assertEqual(stage04["pass"], "WAIT_USER_URAKKAI_APPROVAL_OR_URAKKAI_AUTO_APPROVED")
+        self.assertEqual(stage04["file"], "steps/04-user-approval.md")
+        self.assertEqual(workflow["blueprint_frontend"]["user_approval"]["external_review_required"], False)
+        self.assertEqual(workflow["external_actions"]["llm_calls"], "NONE")
         self.assertIn("VMake Direct-Insert Contract", skill_text)
         self.assertIn("Urakkai Editorial Authority", skill_text)
 
@@ -566,9 +530,9 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             module.validate_protocol_document(broken),
         )
         broken = json.loads(json.dumps(protocol, ensure_ascii=False))
-        broken["urakkai_review_loop"]["fallback_provider"] = "none"
+        broken["urakkai_approval"]["external_review_required"] = True
         self.assertIn(
-            "PROTOCOL_URAKKAI_REVIEW_GATE:fallback_provider",
+            "PROTOCOL_URAKKAI_EXTERNAL_REVIEW_FORBIDDEN",
             module.validate_protocol_document(broken),
         )
 
@@ -594,6 +558,20 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "SOURCE_PROVISIONAL_ASSET_INVALID:clean_video",
             module.validate_production_plan(provisional_plan, protocol),
         )
+
+        user_clean_plan = json.loads(
+            (SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8")
+        )
+        user_clean_plan["visual_asset_mode"] = "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"
+        user_clean_plan["user_clean_override"] = {
+            "status": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+            "evidence": "conversation",
+        }
+        for row in user_clean_plan["timeline"]:
+            for placement in row["placements"]:
+                if placement["anchor"] == "VIDEO":
+                    placement["asset_key"] = "user_approved_clean_video"
+        self.assertEqual(module.validate_production_plan(user_clean_plan, protocol), [])
 
     def test_urakkai_final_duration_is_not_forced_to_source_duration(self):
         module = load_validator()

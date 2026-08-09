@@ -25,7 +25,16 @@
       "enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"]
     },
     "visual_asset_mode": {
-      "enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]
+      "enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"]
+    },
+    "user_clean_override": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {"const": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"},
+        "evidence": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
     },
     "total_duration_us": {"type": "integer", "minimum": 1},
     "original_order": {"type": "array", "minItems": 1},

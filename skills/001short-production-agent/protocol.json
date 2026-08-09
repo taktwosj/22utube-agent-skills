@@ -9,7 +9,7 @@
     "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
     "A9", "A10", "A11", "A12_RESERVED_EMPTY"
   ],
-  "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"],
+  "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"],
   "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt"],
   "a12_policy": "EMPTY",
   "manual_finalization": {
@@ -17,6 +17,8 @@
     "clean_source_policy": {
       "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
       "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+      "user_override": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+      "user_override_requires": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"],
       "fallback_reasons": [
         "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
         "VMAKE_ACQUISITION_ISSUE",
@@ -125,22 +127,20 @@
       "source_order_change": "FORBIDDEN"
     }
   },
-  "urakkai_review_loop": {
+  "urakkai_approval": {
     "enabled_for": [
       "URAKKAI"
     ],
-    "preferred_provider": "claude_cli",
-    "preferred_model": "Claude Opus 5",
-    "effort": "low",
-    "review_loop_count": 1,
-    "reviews_per_loop": 1,
-    "review_runner": "current_local_runtime",
+    "external_review_required": false,
     "approval_authority": "user",
-    "fallback_provider": "codex_cli",
-    "fallback_model": "gpt-5.6-sol",
-    "fallback_effort": "low",
-    "fallback_on_claude_failure": true,
-    "evidence_path": "20_script/external-review.json"
+    "auto_mode_skips_user_approval": true,
+    "required_report_artifacts": [
+      "20_script/original-capcut-grid.md",
+      "20_script/urakkai-capcut-grid.md",
+      "20_script/URAKKAI_BLUEPRINT.md"
+    ],
+    "manual_pass_state": "WAIT_USER_URAKKAI_APPROVAL",
+    "auto_pass_state": "URAKKAI_AUTO_APPROVED"
   },
   "invariants": {
     "single_active_lane": true,
@@ -162,6 +162,8 @@
     "vmake_direct_insert_required": true,
     "vmake_direct_insert_asset": "40_assets_used/clean_source.mp4",
     "vmake_direct_insert_asset_key": "clean_video",
+    "user_approved_nonmatching_clean_source_allowed": true,
+    "user_approved_nonmatching_clean_asset_key": "user_approved_clean_video",
     "urakkai_final_duration_independent_from_source": true,
     "clean_visual_duration_matches_source_before_edit": true,
     "clean_only_full_source_duration_required": true,
@@ -243,17 +245,19 @@
     },
     {
       "id": "04",
-      "name": "EXTERNAL_REVIEW",
+      "name": "URAKKAI_REPORT_AND_APPROVAL",
       "requires_state": "FIRST_RECOMMENDATION_READY",
       "produces": [
-        "20_script/external-review.md"
+        "20_script/original-capcut-grid.md",
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md"
       ],
-      "pass_state": "WAIT_USER_URAKKAI_APPROVAL"
+      "pass_state": "WAIT_USER_URAKKAI_APPROVAL_OR_URAKKAI_AUTO_APPROVED"
     },
     {
       "id": "05",
       "name": "FINAL_DESIGN",
-      "requires_state": "USER_URAKKAI_APPROVED",
+      "requires_state": "USER_URAKKAI_APPROVED_OR_URAKKAI_AUTO_APPROVED",
       "produces": [
         "20_script/final-blueprint.md",
         "20_script/production_plan.json"
@@ -295,7 +299,7 @@
     {
       "id": "08",
       "name": "CAPCUT_BUILD",
-      "requires_state": "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL",
+      "requires_state": "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE",
       "produces": [
         "50_capcut_project/project.zip",
         "50_capcut_project/build_receipt.json"

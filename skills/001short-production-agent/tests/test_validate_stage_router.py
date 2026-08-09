@@ -19,10 +19,11 @@ import validate_stage
 class ValidateStageRouterTest(unittest.TestCase):
     def test_protocol_is_entry_state_authority(self):
         self.assertEqual(validate_stage.STAGE_ENTRY_STATUS["07"], "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY")
-        self.assertEqual(validate_stage.STAGE_ENTRY_STATUS["08"], "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL")
+        self.assertEqual(validate_stage.STAGE_ENTRY_STATUS["08"], "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE")
         self.assertTrue(validate_stage._entry_state_matches({"status": "FINAL_DESIGN_LOCKED"}, validate_stage.STAGE_ENTRY_STATUS["07"]))
         self.assertTrue(validate_stage._entry_state_matches({"status": "CLEAN_VISUAL_READY"}, validate_stage.STAGE_ENTRY_STATUS["07"]))
         self.assertTrue(validate_stage._entry_state_matches({"status": "AUDIO_CAPTION_VALIDATED", "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL"}, validate_stage.STAGE_ENTRY_STATUS["08"]))
+        self.assertTrue(validate_stage._entry_state_matches({"status": "AUDIO_CAPTION_VALIDATED", "visual_asset_mode": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"}, validate_stage.STAGE_ENTRY_STATUS["08"]))
 
     def test_stage07_public_advance_is_atomic_and_records_canonical_locks(self):
         with tempfile.TemporaryDirectory() as td:

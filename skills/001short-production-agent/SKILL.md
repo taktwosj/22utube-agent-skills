@@ -26,9 +26,13 @@ This is the independent `owner_skill=001short-production-agent`, `lane=general_s
 - For approved generated narration plus retained source speech, use `A9_TTS_PLUS_A10_RETAINED`; overlapping A10 rows use `source_audio[].mode=duck`, non-overlapping rows use `source_audio[].mode=on`, rows must be boundary-aligned with A9, and partial overlap fails with `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`.
 - Treat every `WAIT_*` and `FAIL_*` in the selected stage MD as a hard stop. Do not use conversational memory as evidence.
 
-## Urakkai Review Loop Contract
+## Urakkai Table and Approval Contract
 
-001 `URAKKAI` Stage 04의 검토 개선 loop는 정확히 1회 실행한다. 현재 승인 후보를 현재 로컬 runtime의 Claude CLI Claude Opus 5 `--effort low`로 검토하고 Hermes가 개선한다. Claude CLI가 실패했을 때만 동일 입력의 Codex CLI `gpt-5.6-sol` `--effort low` 검토 1회로 대체하며, 증거가 없으면 `WAIT_EXTERNAL_REVIEW`에서 중단한다.
+001 `URAKKAI`는 원본 시간축의 `original-capcut-grid.md`와 재배치 목표
+시간축의 `urakkai-capcut-grid.md`를 항상 먼저 작성하고 사용자 메시지에
+두 표를 순서대로 보여준다. 외부 AI 검토를 호출하지 않는다. 수동 모드는
+`WAIT_USER_URAKKAI_APPROVAL`에서 승인받고, 사용자가 자동 모드를 지시하면
+표를 보존한 채 `URAKKAI_AUTO_APPROVED`로 바로 Stage 05에 진입한다.
 
 ## New Session Handoff Bootstrap
 

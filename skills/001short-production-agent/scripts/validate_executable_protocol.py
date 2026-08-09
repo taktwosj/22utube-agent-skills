@@ -71,7 +71,10 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_TRACK_LAYOUT")
     if protocol.get("canonical_tracks") != expected_tracks:
         errors.append("PROTOCOL_CANONICAL_TRACKS")
-    if protocol.get("visual_asset_modes") != ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"]:
+    if protocol.get("visual_asset_modes") != [
+        "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
+        "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+    ]:
         errors.append("PROTOCOL_VISUAL_ASSET_MODES")
     if protocol.get("stage07_outputs") != ["audio_lock.json", "caption_lock.json", "final.srt"]:
         errors.append("PROTOCOL_STAGE07_OUTPUTS")
@@ -84,6 +87,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "clean_source_policy": {
             "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
             "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+            "user_override": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+            "user_override_requires": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"],
             "fallback_reasons": [
                 "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
                 "VMAKE_ACQUISITION_ISSUE",
@@ -153,29 +158,33 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
             if clean_only.get(key) != value:
                 errors.append(f"PROTOCOL_CLEAN_ONLY_GATE:{key}")
 
-    review = protocol.get("urakkai_review_loop")
-    if not isinstance(review, dict):
-        errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP")
+    approval = protocol.get("urakkai_approval")
+    expected_artifacts = [
+        "20_script/original-capcut-grid.md",
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md",
+    ]
+    if not isinstance(approval, dict):
+        errors.append("PROTOCOL_URAKKAI_APPROVAL")
     else:
-        expected_review = {
+        expected_approval = {
             "enabled_for": ["URAKKAI"],
-            "preferred_provider": "claude_cli",
-            "preferred_model": "Claude Opus 5",
-            "effort": "low",
-            "reviews_per_loop": 1,
-            "review_runner": "current_local_runtime",
+            "external_review_required": False,
             "approval_authority": "user",
-            "fallback_provider": "codex_cli",
-            "fallback_model": "gpt-5.6-sol",
-            "fallback_effort": "low",
-            "fallback_on_claude_failure": True,
-            "evidence_path": "20_script/external-review.json",
+            "auto_mode_skips_user_approval": True,
+            "required_report_artifacts": expected_artifacts,
+            "manual_pass_state": "WAIT_USER_URAKKAI_APPROVAL",
+            "auto_pass_state": "URAKKAI_AUTO_APPROVED",
         }
-        if review.get("review_loop_count") != 1:
-            errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
-        for key, value in expected_review.items():
-            if review.get(key) != value:
-                errors.append(f"PROTOCOL_URAKKAI_REVIEW_GATE:{key}")
+        for key, value in expected_approval.items():
+            if approval.get(key) != value:
+                errors.append(
+                    "PROTOCOL_URAKKAI_EXTERNAL_REVIEW_FORBIDDEN"
+                    if key == "external_review_required"
+                    else "PROTOCOL_URAKKAI_APPROVAL_ARTIFACTS"
+                    if key == "required_report_artifacts"
+                    else f"PROTOCOL_URAKKAI_APPROVAL_GATE:{key}"
+                )
 
     stages = protocol.get("stages")
     expected_stages = [f"{number:02d}" for number in range(1, 10)]
@@ -188,7 +197,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "30_audio_srt/audio_lock.json", "30_audio_srt/caption_lock.json", "30_audio_srt/final.srt"
     ]:
         errors.append("PROTOCOL_STAGE07_OUTPUTS")
-    elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
+    elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
     elif stages[8].get("produces") != [] or "validators" in stages[8]:
         errors.append("PROTOCOL_STAGE09_MANUAL_TERMINAL")
@@ -290,9 +299,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     authority = protocol.get("authority", {})
     schemas = protocol.get("schemas", {})
     session_handoff = protocol.get("session_handoff", {})
-    review = protocol.get("urakkai_review_loop", {})
-    review_loop_count = review.get("review_loop_count") if isinstance(review, dict) else None
-    reviews_per_loop = review.get("reviews_per_loop") if isinstance(review, dict) else None
+    approval = protocol.get("urakkai_approval", {})
     required_paths = [
         authority.get("policy"),
         authority.get("machine_contract"),
@@ -308,8 +315,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         session_handoff.get("template"),
         "scripts/validate_source_intake.py",
         "references/production-orchestrator.md",
-        "steps/04-external-review.md",
-        "references/stage04-external-review-contract.md",
+        "steps/04-user-approval.md",
         "tools.json",
     ]
     for relative in required_paths:
@@ -350,16 +356,8 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
-        review_contract = re.search(
-            r"Stage 04의 검토 개선 loop는 정확히 (\d+)회 실행한다\.", skill_text
-        )
-        if (
-            not isinstance(review_loop_count, int)
-            or isinstance(review_loop_count, bool)
-            or review_contract is None
-            or int(review_contract.group(1)) != review_loop_count
-        ):
-            errors.append("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH")
+        if "외부 AI 검토를 호출하지 않는다" not in skill_text:
+            errors.append("PROTOCOL_SKILL_EXTERNAL_REVIEW_DISABLED_MISSING")
 
     orchestrator_path = root / "references/production-orchestrator.md"
     if orchestrator_path.is_file():
@@ -376,28 +374,17 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             if token not in orchestrator_text:
                 errors.append(f"PROTOCOL_ORCHESTRATOR_TOKEN_MISSING:{token}")
 
-    stage04_paths = [
-        root / "steps" / "04-external-review.md",
-        root / "references" / "stage04-external-review-contract.md",
-    ]
-    claude_command = (
-        'claude.cmd -p "<review-prompt>" --model opus --effort low '
-        '--no-session-persistence --tools Read'
-    )
-    codex_command = (
-        'codex.cmd --ask-for-approval never exec --ephemeral --sandbox read-only '
-        '--model gpt-5.6-sol --config \'model_reasoning_effort="low"\' "<review-prompt>"'
-    )
-    for stage04_path in stage04_paths:
-        if not stage04_path.is_file():
-            continue
+    stage04_path = root / "steps" / "04-user-approval.md"
+    if stage04_path.is_file():
         stage04_text = stage04_path.read_text(encoding="utf-8")
-        if "current local runtime" not in stage04_text or "Mac mini" in stage04_text:
-            errors.append("PROTOCOL_STAGE04_REVIEW_RUNNER_MISMATCH")
-        if claude_command not in stage04_text:
-            errors.append("PROTOCOL_STAGE04_CLAUDE_COMMAND_ORDER_MISSING")
-        if codex_command not in stage04_text:
-            errors.append("PROTOCOL_STAGE04_CODEX_COMMAND_ORDER_MISSING")
+        for token in (
+            "original-capcut-grid.md", "urakkai-capcut-grid.md",
+            "WAIT_USER_URAKKAI_APPROVAL", "URAKKAI_AUTO_APPROVED",
+        ):
+            if token not in stage04_text:
+                errors.append(f"PROTOCOL_STAGE04_TOKEN_MISSING:{token}")
+        if "claude.cmd" in stage04_text or "codex.cmd" in stage04_text:
+            errors.append("PROTOCOL_STAGE04_EXTERNAL_REVIEW_COMMAND_FORBIDDEN")
 
     workflow_path = root / str(authority.get("state_machine", "workflow.json"))
     if workflow_path.is_file():
@@ -442,11 +429,13 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             interim = workflow.get("interim_capcut", {})
             if interim.get("a10_anchor") != "A10_VALIDATED_DEMUCS_VOCAL_STEM":
                 errors.append("PROTOCOL_WORKFLOW_A10_ANCHOR_MISMATCH")
-            external_review = workflow.get("blueprint_frontend", {}).get("external_review", {})
-            if external_review.get("loop_count") != review_loop_count:
-                errors.append("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH")
-            if external_review.get("reviews_per_loop") != reviews_per_loop:
-                errors.append("PROTOCOL_WORKFLOW_REVIEWS_PER_LOOP_MISMATCH")
+            user_approval = workflow.get("blueprint_frontend", {}).get("user_approval", {})
+            if user_approval.get("external_review_required") is not False:
+                errors.append("PROTOCOL_WORKFLOW_EXTERNAL_REVIEW_NOT_DISABLED")
+            if user_approval.get("auto_mode_skips_user_approval") is not True:
+                errors.append("PROTOCOL_WORKFLOW_AUTO_APPROVAL_BYPASS_MISSING")
+            if user_approval.get("required_report_artifacts") != approval.get("required_report_artifacts"):
+                errors.append("PROTOCOL_WORKFLOW_URAKKAI_REPORT_ARTIFACTS_MISMATCH")
         except Exception:
             pass
 
@@ -649,6 +638,17 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
         elif visual_mode == "CLEAN_VISUAL_READY":
             expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
             error_prefix = "VMAKE_DIRECT_INSERT_ASSET_INVALID"
+        elif visual_mode == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+            override = plan.get("user_clean_override")
+            if (
+                not isinstance(override, dict)
+                or override.get("status") != visual_mode
+                or not isinstance(override.get("evidence"), str)
+                or not override["evidence"].strip()
+            ):
+                errors.append("USER_CLEAN_OVERRIDE_EVIDENCE_INVALID")
+            expected_asset_key = "user_approved_clean_video"
+            error_prefix = "USER_CLEAN_OVERRIDE_ASSET_INVALID"
         else:
             errors.append(f"VISUAL_ASSET_MODE_INVALID:{visual_mode}")
             expected_asset_key = None

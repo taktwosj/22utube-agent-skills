@@ -23,6 +23,8 @@
     "clean_source_policy": {
       "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
       "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+      "user_override": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+      "user_override_requires": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"],
       "fallback_reasons": [
         "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
         "VMAKE_ACQUISITION_ISSUE",
@@ -65,7 +67,7 @@
       "01": "{episode_root}/10_analysis/source-analysis.md",
       "02": "{episode_root}/20_script/original-blueprint.md",
       "03": "{episode_root}/20_script/first-recommendation.md",
-      "04": "{episode_root}/20_script/external-review.md",
+      "04": "{episode_root}/20_script/urakkai-capcut-grid.md",
       "05": "{episode_root}/20_script/final-blueprint.md",
       "06": "{episode_root}/40_assets_used/clean_visual_manifest.json",
       "07": [
@@ -365,11 +367,12 @@
     },
     {
       "id": "04",
-      "file": "steps/04-external-review.md",
-      "pass": "WAIT_USER_URAKKAI_APPROVAL",
+      "file": "steps/04-user-approval.md",
+      "pass": "WAIT_USER_URAKKAI_APPROVAL_OR_URAKKAI_AUTO_APPROVED",
       "required_evidence": [
-        "20_script/external-review.md",
-        "20_script/external-review.json"
+        "20_script/original-capcut-grid.md",
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md"
       ]
     },
     {
@@ -426,7 +429,7 @@
       "api_key_visibility": "forbidden",
       "live_success": ["ok=true", "video_title_present", "comment_error_absent"],
       "request": "50_public_threads_then_local_like_reply_recency_rank_and_diverse_5_to_6_selection",
-      "use": "Stage_03_04_creative_hook_and_audience_interpretation_only",
+      "use": "Stage_03_creative_hook_and_audience_interpretation_only",
       "not_authority_for": ["source_fact", "identity", "event_claim"],
       "failure": "COMMENTS_UNAVAILABLE_NONBLOCKING"
     },
@@ -460,19 +463,18 @@
       "repeat": true,
       "coexist": true
     },
-    "external_review": {
+    "user_approval": {
       "enabled_for": [
         "URAKKAI"
       ],
-      "provider": "claude_cli",
-      "model": "Claude Opus 5",
-      "effort": "low",
-      "loop_count": 1,
-      "reviews_per_loop": 1,
-      "review_runner": "current_local_runtime",
+      "external_review_required": false,
       "approval_authority": "user",
-      "fallback": "Codex CLI gpt-5.6-sol at low effort",
-      "evidence": "20_script/external-review.json"
+      "auto_mode_skips_user_approval": true,
+      "required_report_artifacts": [
+        "20_script/original-capcut-grid.md",
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md"
+      ]
     },
     "vmake": {
       "trigger": "SOURCE_OCR_VERIFIED",
@@ -590,7 +592,8 @@
         ],
         "allowed_visual_asset_modes": [
           "CLEAN_VISUAL_READY",
-          "SOURCE_VIDEO_PROVISIONAL"
+          "SOURCE_VIDEO_PROVISIONAL",
+          "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"
         ]
       },
       "09": {
@@ -759,7 +762,7 @@
     }
   },
   "external_actions": {
-    "llm_calls": "URAKKAI_STAGE_04_CLAUDE_CLI_WITH_CODEX_FALLBACK",
+    "llm_calls": "NONE",
     "paid_tts": false,
     "vmake": "submit_after_source_identity_verify_after_final_design",
     "capcut_gui": "after_final_design_approval",
@@ -770,10 +773,6 @@
     "WAIT": {
       "executes_external_action": false,
       "meaning": "required evidence for the active stage is not yet present"
-    },
-    "WAIT_EXTERNAL_REVIEW": {
-      "executes_external_action": false,
-      "meaning": "the required urakkai review lacks verified evidence"
     },
     "FAIL": {
       "executes_external_action": false,
@@ -815,7 +814,7 @@
   "stop": {
     "missing_input": "WAIT_INPUT",
     "ocr_unclear": "WAIT_OCR_UNRESOLVED",
-    "before_external_return": "WAIT_EXTERNAL_REVIEW",
+    "before_urakkai_manual_approval": "WAIT_USER_URAKKAI_APPROVAL",
     "before_final_design_lock": "WAIT_FINAL_DESIGN_LOCK",
     "before_capcut_preflight": "WAIT_CAPCUT_PREFLIGHT",
     "before_user_approval": "WAIT_USER_APPROVAL",

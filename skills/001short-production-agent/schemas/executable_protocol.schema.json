@@ -11,7 +11,7 @@
     "schemas",
     "session_handoff",
     "production_modes",
-    "urakkai_review_loop",
+    "urakkai_approval",
     "invariants",
     "manual_finalization",
     "anchors",
@@ -159,62 +159,42 @@
         }
       }
     },
-    "urakkai_review_loop": {
+    "urakkai_approval": {
       "type": "object",
       "required": [
         "enabled_for",
-        "preferred_provider",
-        "preferred_model",
-        "effort",
-        "review_loop_count",
-        "reviews_per_loop",
-        "review_runner",
+        "external_review_required",
         "approval_authority",
-        "fallback_provider",
-        "fallback_model",
-        "fallback_effort",
-        "fallback_on_claude_failure",
-        "evidence_path"
+        "auto_mode_skips_user_approval",
+        "required_report_artifacts",
+        "manual_pass_state",
+        "auto_pass_state"
       ],
       "properties": {
         "enabled_for": {
           "const": ["URAKKAI"]
         },
-        "preferred_provider": {
-          "const": "claude_cli"
-        },
-        "preferred_model": {
-          "const": "Claude Opus 5"
-        },
-        "effort": {
-          "const": "low"
-        },
-        "review_loop_count": {
-          "const": 1
-        },
-        "reviews_per_loop": {
-          "const": 1
-        },
-        "review_runner": {
-          "const": "current_local_runtime"
+        "external_review_required": {
+          "const": false
         },
         "approval_authority": {
           "const": "user"
         },
-        "fallback_provider": {
-          "const": "codex_cli"
-        },
-        "fallback_model": {
-          "const": "gpt-5.6-sol"
-        },
-        "fallback_effort": {
-          "const": "low"
-        },
-        "fallback_on_claude_failure": {
+        "auto_mode_skips_user_approval": {
           "const": true
         },
-        "evidence_path": {
-          "const": "20_script/external-review.json"
+        "required_report_artifacts": {
+          "const": [
+            "20_script/original-capcut-grid.md",
+            "20_script/urakkai-capcut-grid.md",
+            "20_script/URAKKAI_BLUEPRINT.md"
+          ]
+        },
+        "manual_pass_state": {
+          "const": "WAIT_USER_URAKKAI_APPROVAL"
+        },
+        "auto_pass_state": {
+          "const": "URAKKAI_AUTO_APPROVED"
         }
       },
       "additionalProperties": false
@@ -330,10 +310,12 @@
         "automation_terminal_state": {"const": "WAIT_USER_CAPCUT_CHECK"},
         "clean_source_policy": {
           "type": "object",
-          "required": ["primary", "fallback", "fallback_reasons", "sequence"],
+          "required": ["primary", "fallback", "user_override", "user_override_requires", "fallback_reasons", "sequence"],
           "properties": {
             "primary": {"const": "AGENT_PRIMARY_CLEAN_SOURCE"},
             "fallback": {"const": "USER_FALLBACK_CLEAN_SOURCE"},
+            "user_override": {"const": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"},
+            "user_override_requires": {"const": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"]},
             "fallback_reasons": {"const": ["VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE", "VMAKE_ACQUISITION_ISSUE", "VMAKE_VERIFICATION_ISSUE"]},
             "sequence": {
               "const": [

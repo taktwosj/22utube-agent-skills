@@ -34,7 +34,7 @@ def approved_timeline():
         }),
         ("state", "STATE", 800, 200, {
             "text": "Firstsee", "content_type": "SITUATION", "caption_role": "STATE",
-            "state_effect": "FLICKER_RAVE",
+            "state_effect": "LASER_CUT",
         }),
     ]
     return {

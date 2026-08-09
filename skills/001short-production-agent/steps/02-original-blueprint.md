@@ -8,7 +8,8 @@
 - `SOURCE_OBSERVATION`, `SCREEN_LABEL`, `SCREEN_CLAIM`, `TRANSCRIPT`, `UNVERIFIED`를 구분한다. 화면 제작자 설명이나 화자 라벨을 독립 검증된 사실로 승격하지 않는다.
 - 화자·욕설·창문음·현장음·편집 SFX·BGM이 원본에서 명확하지 않으면 `UNVERIFIED`로 남긴다.
 - 텍스트는 문구뿐 아니라 1080×1920 기준 위치·bbox·정렬·줄 수·대표색·외곽선/배경·등장 구간을 기록한다.
-- `templates/original-capcut-grid.md`를 복사해 `original-blueprint.md`의 CapCut 세로줄 원본표를 작성한다. `ORIGINAL_CAPCUT_GRID_REQUIRED_ROWS`: `T1`, `T2`, `A9 TTS`, `A9_TEXT`, `A10 작가 나레이션`, `A10 화자발언 1`, `A10 화자발언 2`, `A10 화자발언 3`, `STATE 상황설명문구`를 모든 source 구간 열에 반드시 작성한다.
+- `templates/original-capcut-grid.md`를 복사해 `original-blueprint.md`의 CapCut 세로줄 원본표를 작성한다. `ORIGINAL_CAPCUT_GRID_REQUIRED_ROWS`: `T1`, `T2`, `A9 TTS`, `A9_TEXT`, `A10 작가 나레이션`, `A10 화자발언 1`, `A10 화자발언 2`, `A10 화자발언 3`, `STATE 상황설명문구`를 모든 source 구간 열에 반드시 작성한다. 가로축은 실측 source `start–end`, 세로축은 레이어다.
+- 사용자 보고 메시지 본문에도 같은 원본표 전체를 먼저 표시한다. 파일 링크나 요약만으로 대체하지 않는다. 이 규칙은 보고 형식이며 새로운 Stage 전이 validator를 추가하지 않는다.
 - 각 칸에는 원본 문구·발화·시간·화면 상태 또는 근거 있는 부재 사유를 넣는다. bare `없음`, `비움`, `UNVERIFIED`만 쓰지 않는다. title evidence가 없으면 `미확정 — 제목 evidence 필요`, 화자 ID가 없으면 `화자발언 N (인물 미확정)`과 해당 발화를 쓴다.
 - `A9 TTS`는 원본 작가 나레이션 재현 대본이고 새 WAV가 아니다. `A9_TEXT`는 같은 원문을 한 줄 15자 이하로 줄바꿈만 하며, 원문 의미를 줄이거나 바꾸지 않는다. `STATE 상황설명문구`는 현재 행동·감정·관계를 나타내는 짧은 비문장 문구로 쓴다.
 - 변화 구간마다 `source_beat_id`, `story_function`, `dialogue_dependency`, `baked_order_semantics`, `hook_candidate`를 기록하고 `source_order_signature`를 만든다.

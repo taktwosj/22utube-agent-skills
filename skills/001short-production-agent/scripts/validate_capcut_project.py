@@ -557,7 +557,12 @@ def validate_segment_material_types_and_durations(
         if actual_duration is None or target_range is None:
             continue
         exact_duration = expected_row.get("duration_mode") == "exact"
-        if not exact_duration:
+        user_approved_video_mismatch = (
+            role == "VIDEO"
+            and (contract or {}).get("visual_asset_mode")
+            == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"
+        )
+        if not exact_duration and not user_approved_video_mismatch:
             source_range = segment.get("source_timerange")
             if isinstance(source_range, dict):
                 source_start = source_range.get("start")
@@ -576,7 +581,9 @@ def validate_segment_material_types_and_durations(
                         )
                     )
                     continue
-        if exact_duration:
+        if user_approved_video_mismatch:
+            mismatch = False
+        elif exact_duration:
             mismatch = abs(actual_duration - target_range[1]) > 50_000
         else:
             source_range = segment.get("source_timerange")
@@ -741,11 +748,24 @@ def validate_capcut_project(
     if visual_tuple not in {
         ("SOURCE_VIDEO_PROVISIONAL", "source_video", False),
         ("CLEAN_VISUAL_READY", "clean_video", False),
+        ("USER_APPROVED_NONMATCHING_CLEAN_SOURCE", "user_approved_clean_video", False),
     }:
         return {
             **result([_error("BUILD_CONTRACT_VISUAL_MODE_MISMATCH")]),
             "next_action": "NONE",
         }
+    if contract.get("visual_asset_mode") == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+        override_path = Path(contract.get("user_clean_override_path", "")).resolve()
+        override_sha = contract.get("user_clean_override_sha256")
+        if (
+            not override_path.is_file()
+            or not isinstance(override_sha, str)
+            or sha256_file(override_path).lower() != override_sha.lower()
+        ):
+            return {
+                **result([_error("USER_CLEAN_OVERRIDE_EVIDENCE_INVALID")]),
+                "next_action": "NONE",
+            }
     snapshot_schema_errors = validate_schema(snapshot, snapshot_schema)
     if snapshot_schema_errors:
         return {
