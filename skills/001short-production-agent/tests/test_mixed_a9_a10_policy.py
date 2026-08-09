@@ -232,6 +232,7 @@ class MixedA9A10PolicyTest(unittest.TestCase):
             # The regression this guards: TTS_ONLY cleared A10, so a mixed episode
             # silently lost every retained-speech segment.
             self.assertEqual(len(a9), 1)
+            self.assertEqual(a9[0].get("volume"), 1.0)
             self.assertEqual(len(a9_text), 1)
             self.assertEqual(len(a10), 2)
             self.assertEqual(a10[0].get("volume"), 0.0)
@@ -256,6 +257,16 @@ class MixedA9A10PolicyTest(unittest.TestCase):
             self.assertEqual(postbuild["status"], "FAIL")
             self.assertIn(
                 {"code": "E_DRAFT_MISMATCH", "detail": "a10_volume", "clip_id": "V2"},
+                postbuild["errors"],
+            )
+
+            broken["tracks"][builder.TRACK_INDEX["A10"]]["segments"][0]["volume"] = 0.0
+            broken["tracks"][builder.TRACK_INDEX["A9"]]["segments"][0]["volume"] = 0.0
+            write(draft_path, broken)
+            postbuild = builder.validate_postbuild.validate_postbuild(build_manifest, draft_path.parent)
+            self.assertEqual(postbuild["status"], "FAIL")
+            self.assertIn(
+                {"code": "E_DRAFT_MISMATCH", "detail": "a9_volume", "segment_id": "TTS01"},
                 postbuild["errors"],
             )
 

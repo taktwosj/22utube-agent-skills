@@ -911,6 +911,8 @@ def _normalize_source(
                 sound["role"] = "A9"
                 sound["target_timerange"] = {"start": start_us, "duration": end_us - start_us}
                 sound["source_timerange"] = {"start": 0, "duration": end_us - start_us}
+                sound["volume"] = 1.0
+                sound["last_nonzero_volume"] = 1.0
                 captions.append(caption)
                 tts_segments.append(sound)
             tracks[TRACK_INDEX["A9_TEXT"]]["segments"] = captions

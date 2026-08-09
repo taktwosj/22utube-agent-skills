@@ -69,6 +69,7 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
         return result([_error("E_DRAFT_MISMATCH", detail="tracks")])
     materials = _material_map(content.get("materials", {}))
     actual_video: list[dict] = []
+    actual_a9: list[dict] = []
     actual_a10: list[dict] = []
     actual_a12: list[dict] = []
     for track in content["tracks"]:
@@ -78,6 +79,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
             role = segment.get("role")
             if role == "VIDEO":
                 actual_video.append(segment)
+            elif role == "A9":
+                actual_a9.append(segment)
             elif role == "A10":
                 actual_a10.append(segment)
             elif role in {"A12", "A12_RESERVED_EMPTY"}:
@@ -87,6 +90,11 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
     errors: list[dict] = []
     if actual_a12:
         errors.append(_error("E_DRAFT_MISMATCH", detail="a12_reserved_empty"))
+    for segment in actual_a9:
+        if segment.get("volume") != 1.0:
+            errors.append(_error(
+                "E_DRAFT_MISMATCH", detail="a9_volume", segment_id=segment.get("id")
+            ))
     if manifest["visual_asset_mode"] == "SOURCE_VIDEO_PROVISIONAL":
         expected_video_sha = manifest["source"]["sha256"]
         expected_video_detail = "source_media"
