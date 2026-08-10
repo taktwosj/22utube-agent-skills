@@ -807,6 +807,13 @@ def _normalize_source(
         if len(tracks) != len(ROLE_BY_TRACK):
             raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
         payload["duration"] = duration
+        draft_config = payload.get("config")
+        if not isinstance(draft_config, dict):
+            draft_config = {}
+            payload["config"] = draft_config
+        # Preserve CapCut's clip mute toggle in addition to the per-segment
+        # zero-volume layer. The source MP4 remains intact; A10 is audible.
+        draft_config["video_mute"] = True
         material_map = {
             row.get("id"): row for row in _materials(payload.get("materials", {}))
             if isinstance(row.get("id"), str)

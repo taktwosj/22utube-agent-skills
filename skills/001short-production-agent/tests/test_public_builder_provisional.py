@@ -165,7 +165,27 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 row.get("role") in {"A12", "A12_RESERVED_EMPTY"}
                 for row in normalized["materials"]["items"]
             ))
+            self.assertTrue(normalized["config"]["video_mute"])
             self.assertTrue(all(row.get("volume") == 0.0 for row in normalized["tracks"][0]["segments"]))
+            self.assertEqual(
+                builder.validate_postbuild.validate_postbuild(build_manifest, root / "capcut" / "project")["status"],
+                "PASS",
+            )
+            video_mute_disabled = json.loads(json.dumps(normalized))
+            video_mute_disabled["config"]["video_mute"] = False
+            write(root / "capcut" / "project" / "draft_content.json", video_mute_disabled)
+            self.assertIn(
+                {"code": "E_DRAFT_MISMATCH", "detail": "video_mute"},
+                builder.validate_postbuild.validate_postbuild(build_manifest, root / "capcut" / "project")["errors"],
+            )
+            video_volume_enabled = json.loads(json.dumps(normalized))
+            video_volume_enabled["tracks"][0]["segments"][0]["volume"] = 1.0
+            write(root / "capcut" / "project" / "draft_content.json", video_volume_enabled)
+            self.assertIn(
+                {"code": "E_DRAFT_MISMATCH", "detail": "video_volume", "clip_id": "V2"},
+                builder.validate_postbuild.validate_postbuild(build_manifest, root / "capcut" / "project")["errors"],
+            )
+            write(root / "capcut" / "project" / "draft_content.json", normalized)
             # A10 plays the timeline-aligned stem, so with no capcut_source_range_us
             # its source range must follow the target range, not the original media's.
             a10 = sorted(

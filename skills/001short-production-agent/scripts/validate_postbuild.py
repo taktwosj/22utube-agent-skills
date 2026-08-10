@@ -88,6 +88,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
     actual_video.sort(key=lambda row: (_range(row, "target_timerange") or [10**30])[0])
     expected = sorted(manifest["urakkai"]["video_clips"], key=lambda row: row["target_range_us"][0])
     errors: list[dict] = []
+    if not isinstance(content.get("config"), dict) or content["config"].get("video_mute") is not True:
+        errors.append(_error("E_DRAFT_MISMATCH", detail="video_mute"))
     if actual_a12:
         errors.append(_error("E_DRAFT_MISMATCH", detail="a12_reserved_empty"))
     for segment in actual_a9:
@@ -111,6 +113,8 @@ def validate_postbuild(build_manifest_path: Path, project_path: Path) -> dict:
         ):
             errors.append(_error("E_DRAFT_MISMATCH", clip_id=planned["clip_id"]))
             continue
+        if actual.get("volume") != 0.0:
+            errors.append(_error("E_DRAFT_MISMATCH", detail="video_volume", clip_id=planned["clip_id"]))
         material = materials.get(actual.get("material_id"))
         asset = _asset(project, material.get("path") if isinstance(material, dict) else None)
         if not isinstance(material, dict) or material.get("type") != "video" or asset is None or not asset.is_file() or sha256_file(asset).lower() != expected_video_sha.lower():
