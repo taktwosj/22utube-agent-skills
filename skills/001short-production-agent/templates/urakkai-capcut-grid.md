@@ -1,22 +1,26 @@
-# 우라까이 캡컷 표 — <episode_id>
+# 우라까이표 — <episode_id>
 
-`URAKKAI_CAPCUT_GRID_REQUIRED_ROWS`
+최종 순서와 목표 시간을 기록한다. 각 열 머리글에 대응 원본 단위 `Bxx`를 반드시 쓴다.
+실제 열은 `V01`부터 연속 번호로 늘린다. 조립 전 모든 `미확인`을 실제 값, `없음`, 또는 `비움`으로 바꾼다.
 
-> 승인 후보의 target 시간을 가로축으로, 실제 CapCut 논리 레이어를 세로축으로 기록한다. 모든 시간 칸을 채운다.
-
-| 레이어 / target 시간 | <00:00.000–00:02.000> | <00:02.000–00:05.000> |
+| 레이어 \ 목표 시간 | V01 00.0–05.1 B07 | V02 05.1–08.6 B04 |
 |---|---|---|
-| VIDEO | <source 구간과 실제 사용할 화면> | <source 구간과 실제 사용할 화면> |
-| T1 | <승인 후보 T1> | <승인 후보 T1> |
-| T2 | <승인 후보 T2> | <승인 후보 T2> |
-| A9 TTS | <실제 읽을 문장 / 해당 없음 — 이유> | <실제 읽을 문장 / 해당 없음 — 이유> |
-| A9_TEXT | <A9과 같은 표시 문구 / 해당 없음 — 이유> | <A9과 같은 표시 문구 / 해당 없음 — 이유> |
-| A10 원본화자발언 | <source range + retain/mute/duck + 발화> | <source range + retain/mute/duck + 발화> |
-| A10_TEXT_WHITE | <primary speaker 문구 / 해당 없음 — 이유> | <primary speaker 문구 / 해당 없음 — 이유> |
-| A10_TEXT_YELLOW | <other speaker 문구 / 해당 없음 — 이유> | <other speaker 문구 / 해당 없음 — 이유> |
-| STATE | <현재 상황 문구 / 해당 없음 — 이유> | <현재 상황 문구 / 해당 없음 — 이유> |
-| A11 | <SFX와 배치 / 해당 없음 — 이유> | <SFX와 배치 / 해당 없음 — 이유> |
-| A12_RESERVED_EMPTY | <예약 비움 — 자동 조립 금지> | <예약 비움 — 자동 조립 금지> |
-| SCREEN | <화면 효과와 baked text 처리> | <화면 효과와 baked text 처리> |
+| T1 | 미확인 | 미확인 |
+| T2 | 미확인 | 미확인 |
+| A9_TEXT | 비움 | 비움 |
+| A10_TEXT_YELLOW | 비움 | 비움 |
+| A10_TEXT_WHITE | 미확인 | 미확인 |
+| STATE_LASER | 미확인 | 미확인 |
+| STATE_GLITCH | 비움 | 비움 |
+| STATE_FLICKER | 비움 | 비움 |
+| SCREEN_WHITE | 템플릿 유지 | 템플릿 유지 |
+| SCREEN_EFFECT | W Flash | W Flash |
+| VIDEO | 미확인 | 미확인 |
+| A9 | 비움 | 비움 |
+| A10 | 미확인 | 미확인 |
+| A11 | 비움 | 비움 |
+| A12_RESERVED_EMPTY | 비움 | 비움 |
 
-실제 산출물에서는 꺾쇠 placeholder를 제거하고 각 시간 헤더를 실측 `start–end`로 바꾼다. bare `없음`, `비움`, `UNVERIFIED`는 실패다.
+셀 표기: 사용 대상이 없으면 `없음`, 최종 조립에서 의도적으로 제외하면 `비움`.
+빈 칸·공백·대시·placeholder는 금지한다. `미확인`은 하드 실패다.
+`A9_TEXT`와 `STATE_LASER`는 한 줄 15자 이하, 최대 2줄이다.

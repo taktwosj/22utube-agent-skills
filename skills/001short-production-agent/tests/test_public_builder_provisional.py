@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 SKILL = Path(__file__).resolve().parents[1]
 SCRIPTS = SKILL / "scripts"
+GRID_ORIGINAL = SKILL / "tests" / "fixtures" / "original_grid_8.pass.md"
+GRID_URAKKAI = SKILL / "tests" / "fixtures" / "urakkai_grid_8.pass.md"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
@@ -26,6 +28,60 @@ def sha(path: Path) -> str:
 def write(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
+def install_valid_grids(episode: Path, *, mixed: bool = False) -> None:
+    script_root = episode / "20_script"
+    script_root.mkdir(parents=True, exist_ok=True)
+    a9 = ("narration", "비움") if mixed else ("비움", "비움")
+    yellow = ("비움", "there") if mixed else ("비움", "비움")
+    rows = (
+        ("T1", "title", "title"),
+        ("T2", "subtitle", "subtitle"),
+        ("A9_TEXT", *a9),
+        ("A10_TEXT_YELLOW", *yellow),
+        ("A10_TEXT_WHITE", "hello", "비움"),
+        ("STATE_LASER", "비움", "비움"),
+        ("STATE_GLITCH", "비움", "비움"),
+        ("STATE_FLICKER", "비움", "비움"),
+        ("SCREEN_WHITE", "템플릿 유지", "템플릿 유지"),
+        ("SCREEN_EFFECT", "W Flash", "W Flash"),
+        ("VIDEO", "장면2", "장면1"),
+        ("A9", *a9),
+        ("A10", "분리 음성", "분리 음성"),
+        ("A11", "비움", "비움"),
+        ("A12_RESERVED_EMPTY", "비움", "비움"),
+    )
+    body = "\n".join("| " + " | ".join(row) + " |" for row in rows)
+    original = "| 레이어 \\ 원본 시간 | B01 0.0–1.0 | B02 1.0–2.0 |\n|---|---|---|\n" + body + "\n"
+    urakkai = "| 레이어 \\ 목표 시간 | V01 0.0–1.0 B02 | V02 1.0–2.0 B01 |\n|---|---|---|\n" + body + "\n"
+    (script_root / "original-capcut-grid.md").write_text(original, encoding="utf-8")
+    (script_root / "urakkai-capcut-grid.md").write_text(urakkai, encoding="utf-8")
+
+
+def bind_state_artifacts(
+    state: Path,
+    *,
+    timeline: Path,
+    build_manifest: Path,
+    design_evidence: Path,
+    audio_lock: Path,
+    caption_lock: Path,
+) -> None:
+    payload = json.loads(state.read_text(encoding="utf-8"))
+    payload.update({
+        "approved_timeline_path": str(timeline),
+        "approved_timeline_sha256": sha(timeline),
+        "build_manifest_path": str(build_manifest),
+        "build_manifest_sha256": sha(build_manifest),
+        "design_lock_evidence_path": str(design_evidence),
+        "design_lock_evidence_sha256": sha(design_evidence),
+        "audio_lock_path": str(audio_lock),
+        "audio_lock_sha256": sha(audio_lock),
+        "caption_lock_path": str(caption_lock),
+        "caption_lock_sha256": sha(caption_lock),
+    })
+    write(state, payload)
 
 
 def media(root: Path) -> tuple[Path, Path]:
@@ -105,6 +161,7 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
     def test_public_builder_finishes_source_provisional_with_real_gates(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); episode = root / "episode"; episode.mkdir()
+            install_valid_grids(episode)
             source, vocals = media(root)
             archive, _, contract = template_archive(root)
             identity = episode / "source_identity.json"
@@ -153,6 +210,10 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             write(state, {"episode_id": "EP", "current_stage": "08", "status": "AUDIO_CAPTION_VALIDATED", "audio_lock_path": str(audio_lock), "audio_lock_sha256": sha(audio_lock), "caption_lock_path": str(caption), "caption_lock_sha256": sha(caption)})
             build_manifest = episode / "build_manifest.json"
             write(build_manifest, {"schema_version": "001short-build-manifest-v1", "episode_id": "EP", "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL", "source": {"path": str(source), "sha256": sha(source), "duration_us": 2_000_000}, "template": {"root_name": "shrt white", "root_zip_path": str(archive), "root_zip_sha256": sha(archive)}, "urakkai": {"production_type": "URAKKAI", "target_duration_us": 2_000_000, "reorder_required": True, "locked_permutation": ["V2", "V1"], "video_clips": [{"clip_id": "V2", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]}, "source_audio": [{"clip_id": "V2", "mode": "on", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "mode": "on", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]})
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             config = {"episode_id": "EP", "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL", "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "audio_policy": "A10_RETAINED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
@@ -275,6 +336,10 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 "vmake": {"receipt_path": str(vmake_receipt), "output_path": str(clean_video), "run_id": "run", "job_id": "job", "input_sha256": sha(source), "output_sha256": sha(clean_video), "final_download": True},
             })
             write(build_manifest, clean_build_manifest)
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             edit_lock = episode / "90_workflow" / "clean_swap_lock.json"
             write(edit_lock, {"episode_id": "EP", "action": "STAGE08_VIDEO_ONLY_SWAP", "project_path": str(root / "capcut" / "project")})
             before_nonvideo = json.loads((root / "capcut" / "project" / "draft_content.json").read_text(encoding="utf-8"))["tracks"][1:]

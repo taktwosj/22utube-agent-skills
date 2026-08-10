@@ -1,4 +1,12 @@
-# 07 오디오
-원본 배경음 성분은 제거한다. A12는 비운다. 화자·동물·포인트 음성은 A10, TTS는 A9, 효과음은 A11에만 배치한다. 실제 오디오 파일을 ffprobe로 확인하고 duration·codec·stream을 기록한다. SRT cue와 승인된 A9·A10 오디오 구간이 일치할 때만 `AUDIO_CAPTION_VALIDATED`다.
+# 07 오디오·자막 잠금
 
-원본 화자 음성을 남기는 경우에는 `references/source-vocal-separation.md`를 읽고 실제 Demucs stem `vocals.wav`만 A10에 넣는다. CapCut 보컬 유지 설정만으로는 배경음 제거 완료가 아니다.
+우라까이표의 실제 사용 행만 준비한다.
+
+- A9가 있으면 실제 나레이션 파일을 검증하고 같은 시간·문장의 A9_TEXT를 만든다.
+- STATE_LASER만 있으면 TTS 엔진을 호출하지 않는다. STATE는 음성 없는 상황설명문이다.
+- A10이 있을 때만 Demucs로 원본 전체를 한 번 분리하고, 확정된 VIDEO 순서대로 화성 stem을 재배열한다.
+- A10이 비움이면 Demucs와 A10 오디오 준비를 건너뛴다.
+- A11은 실제 효과음이 있을 때만 사용한다. A12는 항상 비운다.
+- A9_TEXT와 STATE_LASER는 한 줄 15자 이하, 최대 2줄이다.
+
+실제 오디오 파일의 codec·duration·SHA-256과 자막 cue 정합을 검증한 뒤에만 `AUDIO_CAPTION_VALIDATED`로 진행한다.

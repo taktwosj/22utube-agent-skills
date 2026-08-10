@@ -1,10 +1,13 @@
-# 03 1차 추천
-원본 설계도에 사용자 리뷰와 원본으로 확인된 Gemini 분석만 반영한다. `references/shorts-structure-taxonomy.md`에 따라 원본 `source_structure_pattern` 하나와 대응 `remake_structure_pattern` 하나를 명시한다.
+# 03 우라까이표
 
-- `source_order_signature`와 `target_order_signature`를 먼저 쓴다. 훅만 붙이고 원본 본문을 그대로 두는 안은 추천하지 않는다.
-- 훅은 실제 payoff/proof/reversal/result에서 고르고, 필요한 대화·인과 묶음도 같이 이동한다.
-- `execution_strategy`는 원본 `delivery_mode`와 별개로 고른다. `화자발언`은 원본을 살릴지의 판단이며, `TTS`는 훅·브리지·회수 중 필요한 역할만 맡긴다.
-- `SAFE_UNCHANGED_FALLBACK`과 `BLOCKED_REFERENCE`는 정직하게 표시하고 우라까이 추천으로 승격하지 않는다.
-- 제안은 `와우포인트 → 미해결 질문 → 선별된 원인/증거 → 회수`의 몰입 곡선과 가단야(가·단·야) 표를 포함한다.
-- `templates/urakkai-capcut-grid.md`를 복사해 `first-recommendation.md`에 `URAKKAI_CAPCUT_GRID_REQUIRED_ROWS` 우라까이표를 작성한다. 가로축은 실측 target `start–end`, 세로축은 레이어이며 모든 target 시간 칸을 근거 있는 값으로 채운다.
-- 사용자 보고 메시지 본문에도 원본표 다음에 우라까이표 전체를 표시한다. 순서 서명, 파일 링크, 구조 요약만으로 대체하지 않는다. 이 규칙은 보고 형식이며 새로운 Stage 전이 validator를 추가하지 않는다.
+검증된 원본표에서 최종 장면 순서와 표현 방식을 결정한다.
+
+1. 구조 추천, 훅, target order, 오디오 정책을 `20_script/first-recommendation.md`에 기록한다.
+2. `templates/urakkai-capcut-grid.md`를 사용해 별도 정본 `20_script/urakkai-capcut-grid.md`를 만든다.
+3. 가로 머리글을 `V01 <target start>–<target end> Bxx` 형식으로 연속 작성한다.
+4. 세로축은 원본표와 같은 고정 15행을 같은 순서로 모두 작성한다.
+5. 모든 교차 셀을 실제 값, `없음`, 또는 `비움`으로 채운다. 빈 칸과 `미확인`을 남기지 않는다.
+6. `A9`는 실제 나레이션 오디오, `A9_TEXT`는 그 음성과 같은 자막이다. 소리 없는 설명문은 `STATE_LASER`에 둔다.
+7. 원본 화자를 유지할 때만 A10과 A10_TEXT를 사용한다.
+
+우라까이표 전체를 원본표 다음에 대화창에 출력한다. 파일 링크나 요약으로 대체하지 않는다.

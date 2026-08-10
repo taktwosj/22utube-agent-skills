@@ -3,6 +3,58 @@
   "schema_version": "001short-executable-protocol-v1",
   "owner_skill": "001short-production-agent",
   "lane": "general_shorts_production",
+  "grid_harness": {
+    "validator": "scripts/validate_capcut_grids.py",
+    "original_path": "20_script/original-capcut-grid.md",
+    "urakkai_path": "20_script/urakkai-capcut-grid.md",
+    "row_order": [
+      "T1", "T2", "A9_TEXT", "A10_TEXT_YELLOW", "A10_TEXT_WHITE",
+      "STATE_LASER", "STATE_GLITCH", "STATE_FLICKER", "SCREEN_WHITE",
+      "SCREEN_EFFECT", "VIDEO", "A9", "A10", "A11", "A12_RESERVED_EMPTY"
+    ],
+    "empty_cell_error": "TABLE_EMPTY_CELL_FORBIDDEN",
+    "unverified_cell_error": "TABLE_UNVERIFIED_CELL",
+    "a12_value": "비움",
+    "a9_text_max_lines": 2,
+    "a9_text_max_chars_per_line": 15,
+    "state_laser_max_lines": 2,
+    "state_laser_max_chars_per_line": 15,
+    "builder_preflight_before_writes": true,
+    "chat_report_required_in_auto_mode": true,
+    "final_report_requires": [
+      "draft_readback_summary",
+      "project_filename_code_block",
+      "absolute_project_path_code_block"
+    ],
+    "locked_artifact_binding": [
+      "build_manifest.urakkai.video_clips",
+      "build_manifest.source_audio",
+      "approved_timeline.segments",
+      "state.approved_timeline_path_sha256",
+      "state.build_manifest_path_sha256",
+      "state.design_lock_evidence_path_sha256",
+      "state.audio_lock_path_sha256",
+      "audio_lock.role_files",
+      "state.caption_lock_path_sha256",
+      "caption_lock.cues"
+    ],
+    "semantic_validation_before_writes": true,
+    "semantic_error_codes": [
+      "TABLE_VIDEO_RANGE_MISMATCH",
+      "TABLE_ROLE_ACTUAL_PRESENT_DECLARED_EMPTY",
+      "TABLE_ROLE_DECLARED_POPULATED_ACTUAL_MISSING",
+      "TABLE_TITLE_TEXT_MISMATCH",
+      "TABLE_CAPTION_LOCK_ROLE_MISSING",
+      "TABLE_CELL_TEXT_MISMATCH",
+      "TABLE_CAPTION_TEXT_MISMATCH",
+      "TABLE_AUDIO_LOCK_ROLE_MISSING",
+      "TABLE_STATE_LOCK_MISSING",
+      "TABLE_STATE_LOCK_PATH_MISMATCH",
+      "TABLE_STATE_LOCK_SHA_MISMATCH",
+      "TABLE_DESIGN_LOCK_INVALID",
+      "TABLE_AUDIO_CAPTION_LOCK_INVALID"
+    ]
+  },
   "track_layout": "shrt_white_base_v2_15",
   "canonical_tracks": [
     "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
@@ -196,7 +248,7 @@
     "all_audio_loudness_normalized_lufs": -14,
     "video_join_transition_required": "W Flash",
     "video_ai_hd_level_required": 3,
-    "state_caption_meaningful_character_max": 8,
+    "state_caption_meaningful_character_max": 15,
     "speaker_caption_line_count": "dynamic_current_speaker_count"
   },
   "anchors": {
@@ -230,7 +282,8 @@
       "name": "ORIGINAL_BLUEPRINT",
       "requires_state": "SOURCE_OCR_VERIFIED",
       "produces": [
-        "20_script/original-blueprint.md"
+        "20_script/original-blueprint.md",
+        "20_script/original-capcut-grid.md"
       ],
       "pass_state": "ORIGINAL_BLUEPRINT_READY"
     },
@@ -239,7 +292,8 @@
       "name": "FIRST_RECOMMENDATION",
       "requires_state": "ORIGINAL_BLUEPRINT_READY",
       "produces": [
-        "20_script/first-recommendation.md"
+        "20_script/first-recommendation.md",
+        "20_script/urakkai-capcut-grid.md"
       ],
       "pass_state": "FIRST_RECOMMENDATION_READY"
     },
@@ -400,6 +454,27 @@
   },
   "errors": {
     "STOP_PROTOCOL_CONFLICT": "SKILL.md, protocol.json, and workflow.json conflict; do not guess",
+    "TABLE_EMPTY_CELL_FORBIDDEN": "original or urakkai grid contains an implicit empty cell",
+    "TABLE_UNVERIFIED_CELL": "original or urakkai grid contains an unverified cell",
+    "TABLE_PLACEHOLDER_FORBIDDEN": "original or urakkai grid contains an explicit placeholder marker",
+    "TABLE_PATH_OVERRIDE_FORBIDDEN": "builder grid paths must resolve only from the canonical episode root",
+    "TABLE_VIDEO_RANGE_MISMATCH": "grid B/V ranges or source mapping do not match the locked build manifest",
+    "TABLE_ROLE_ACTUAL_PRESENT_DECLARED_EMPTY": "grid declares a role empty although the locked assembly contains it",
+    "TABLE_ROLE_DECLARED_POPULATED_ACTUAL_MISSING": "grid declares a populated role absent from the locked assembly",
+    "TABLE_TITLE_TEXT_MISMATCH": "grid T1 or T2 text differs from the approved timeline",
+    "TABLE_CAPTION_LOCK_ROLE_MISSING": "grid/timeline text role lacks a matching caption-lock cue",
+    "TABLE_CELL_TEXT_MISMATCH": "grid cell text differs from the same-time approved timeline text",
+    "TABLE_CAPTION_TEXT_MISMATCH": "caption-lock cue text or cue ID differs from the same-time timeline row",
+    "TABLE_AUDIO_LOCK_ROLE_MISSING": "a populated A9 or A10 grid role is absent from audio_lock role_files",
+    "TABLE_STATE_LOCK_MISSING": "state lacks a required artifact path or SHA lock",
+    "TABLE_STATE_LOCK_PATH_MISMATCH": "state artifact path differs from the configured canonical locked path",
+    "TABLE_STATE_LOCK_SHA_MISMATCH": "state artifact SHA lock does not match the current file",
+    "TABLE_DESIGN_LOCK_INVALID": "source identity, design handoff, timeline, or design evidence binding is invalid",
+    "TABLE_AUDIO_CAPTION_LOCK_INVALID": "the existing audio/caption validator rejects the state-bound locks",
+    "TABLE_HEADER_INVALID": "grid time-axis header is missing, malformed, or out of order",
+    "TABLE_ROW_MISSING": "grid is missing one or more required 15-track report rows",
+    "TABLE_ROW_COUNT_INVALID": "grid must contain exactly the required 15 report rows",
+    "TABLE_ROW_ORDER_INVALID": "grid rows do not match the fixed 15-track report order",
     "PRODUCTION_MODE_INVALID": "production mode is not declared",
     "URAKKAI_STRUCTURE_UNCHANGED": "urakkai final order equals original order",
     "CLEAN_ONLY_SOURCE_ORDER_CHANGED": "clean-only source and final order differ",

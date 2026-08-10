@@ -13,13 +13,15 @@ from unittest.mock import patch
 
 SKILL = Path(__file__).resolve().parents[1]
 SCRIPTS = SKILL / "scripts"
+GRID_ORIGINAL = SKILL / "tests" / "fixtures" / "original_grid_8.pass.md"
+GRID_URAKKAI = SKILL / "tests" / "fixtures" / "urakkai_grid_8.pass.md"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import build_episode_capcut as builder
 import build_root_provisional_short as legacy_builder
 import validate_design_lock
-from test_public_builder_provisional import media, sha, template_archive, write
+from test_public_builder_provisional import bind_state_artifacts, install_valid_grids, media, sha, template_archive, write
 
 
 class MixedA9A10PolicyTest(unittest.TestCase):
@@ -32,6 +34,7 @@ class MixedA9A10PolicyTest(unittest.TestCase):
             root = Path(td)
             episode = root / "episode"
             episode.mkdir()
+            install_valid_grids(episode, mixed=True)
             source, vocals = media(root)
             narration = root / "tts_01.wav"
             subprocess.run([
@@ -155,6 +158,10 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                     {"clip_id": "V1", "mode": "on", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]},
                 ],
             })
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             config = {
                 "episode_id": "EP", "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL",
                 "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [],
@@ -170,6 +177,16 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                 "root_contract_path": contract.name, "workspace_root": str(root),
                 "root_profile": "home_windows",
             }
+
+            def relock_timeline() -> None:
+                payload = json.loads(handoff.read_text(encoding="utf-8"))
+                payload["timeline_sha256"] = sha(timeline)
+                write(handoff, payload)
+                locked = validate_design_lock.validate_handoff(
+                    handoff, identity, timeline, evidence, allow_relock=True
+                )
+                self.assertEqual(locked["status"], "PASS", locked)
+
             original_timeline = json.loads(timeline.read_text(encoding="utf-8"))
             partial_timeline = json.loads(timeline.read_text(encoding="utf-8"))
             for row in partial_timeline["segments"]:
@@ -182,6 +199,11 @@ class MixedA9A10PolicyTest(unittest.TestCase):
             partial_manifest["source_audio"][0]["target_range_us"] = [0, 2_000_000]
             partial_manifest["source_audio"][0]["mode"] = "duck"
             write(build_manifest, partial_manifest)
+            relock_timeline()
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
             ):
@@ -191,6 +213,7 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                 ):
                     builder.build_episode(config)
             write(timeline, original_timeline)
+            relock_timeline()
             config["tts_cues"][0]["target_range_us"] = [0, 1_000_000]
             write(build_manifest, {
                 **partial_manifest,
@@ -202,9 +225,17 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                     partial_manifest["source_audio"][1],
                 ],
             })
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             invalid_manifest = json.loads(build_manifest.read_text(encoding="utf-8"))
             invalid_manifest["source_audio"][0]["mode"] = "on"
             write(build_manifest, invalid_manifest)
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
             ):
@@ -215,6 +246,10 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                     builder.build_episode(config)
             invalid_manifest["source_audio"][0]["mode"] = "duck"
             write(build_manifest, invalid_manifest)
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
             ):

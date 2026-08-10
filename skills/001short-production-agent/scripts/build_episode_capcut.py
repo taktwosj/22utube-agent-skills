@@ -29,6 +29,7 @@ import validate_capcut_polish_profile
 import validate_postbuild
 import validate_prebuild
 import validate_clean_visual
+import validate_capcut_grids
 import validate_design_lock
 import resolve_shorts_capcut_root
 from capcut_io import iter_primary_draft_documents
@@ -50,6 +51,97 @@ A10_POLICIES = frozenset({"A10_RETAINED_SYNC", "A9_TTS_PLUS_A10_RETAINED"})
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def validate_grid_harness(config: dict) -> dict:
+    forbidden_overrides = (
+        "original_grid_path",
+        "urakkai_grid_path",
+    )
+    if any(key in config for key in forbidden_overrides):
+        raise ValueError("TABLE_PATH_OVERRIDE_FORBIDDEN")
+    episode_value = config.get("episode_root")
+    if not isinstance(episode_value, str) or not episode_value.strip():
+        raise ValueError("TABLE_EPISODE_ROOT_REQUIRED")
+    episode = Path(episode_value).resolve()
+    original = episode / "20_script" / "original-capcut-grid.md"
+    urakkai = episode / "20_script" / "urakkai-capcut-grid.md"
+    validation = validate_capcut_grids.validate_grids(original, urakkai)
+    if validation["status"] != "PASS":
+        first = validation["errors"][0]
+        details = ":".join(
+            str(first[key])
+            for key in ("table", "row", "column")
+            if key in first
+        )
+        suffix = f":{details}" if details else ""
+        raise ValueError(f"{first['code']}{suffix}")
+    required = (
+        "build_manifest_path", "approved_timeline_path", "design_lock_evidence_path", "state_path"
+    )
+    missing = [key for key in required if not isinstance(config.get(key), str) or not config[key].strip()]
+    if missing:
+        raise ValueError(f"TABLE_LOCKED_ARTIFACT_REQUIRED:{','.join(missing)}")
+    state_path = Path(config["state_path"]).resolve()
+    if not state_path.is_file():
+        raise ValueError("TABLE_LOCKED_ARTIFACT_REQUIRED:state_path")
+    state = read_json(state_path)
+    binding_specs = {
+        "approved_timeline": ("approved_timeline_path", "approved_timeline_sha256", Path(config["approved_timeline_path"]).resolve()),
+        "build_manifest": ("build_manifest_path", "build_manifest_sha256", Path(config["build_manifest_path"]).resolve()),
+        "design_lock_evidence": ("design_lock_evidence_path", "design_lock_evidence_sha256", Path(config["design_lock_evidence_path"]).resolve()),
+        "audio_lock": ("audio_lock_path", "audio_lock_sha256", None),
+        "caption_lock": ("caption_lock_path", "caption_lock_sha256", None),
+    }
+    artifact_paths: dict[str, Path] = {}
+    for name, (path_key, sha_key, expected_path) in binding_specs.items():
+        declared_value = state.get(path_key)
+        declared_sha = state.get(sha_key)
+        if not isinstance(declared_value, str) or not declared_value.strip() or not isinstance(declared_sha, str):
+            raise ValueError(f"TABLE_STATE_LOCK_MISSING:{name}")
+        declared_path = resolved_declared_path(state_path, declared_value)
+        if expected_path is not None and declared_path != expected_path:
+            raise ValueError(f"TABLE_STATE_LOCK_PATH_MISMATCH:{name}")
+        if not declared_path.is_file() or _sha(declared_path).lower() != declared_sha.lower():
+            raise ValueError(f"TABLE_STATE_LOCK_SHA_MISMATCH:{name}")
+        artifact_paths[name] = declared_path
+    semantic_errors = validate_capcut_grids.validate_locked_assembly(
+        validation,
+        read_json(artifact_paths["build_manifest"]),
+        read_json(artifact_paths["approved_timeline"]),
+        read_json(artifact_paths["audio_lock"]),
+        read_json(artifact_paths["caption_lock"]),
+    )
+    if semantic_errors:
+        first = semantic_errors[0]
+        details = ":".join(
+            str(first[key]) for key in ("table", "row", "column") if key in first
+        )
+        suffix = f":{details}" if details else ""
+        raise ValueError(f"{first['code']}{suffix}")
+    design_required = ("source_identity_path", "design_handoff_path")
+    design_missing = [
+        key for key in design_required
+        if not isinstance(config.get(key), str) or not config[key].strip()
+    ]
+    if design_missing:
+        raise ValueError(f"TABLE_DESIGN_LOCK_REQUIRED:{','.join(design_missing)}")
+    design_result = validate_design_lock.validate_handoff(
+        Path(config["design_handoff_path"]).resolve(),
+        Path(config["source_identity_path"]).resolve(),
+        artifact_paths["approved_timeline"],
+    )
+    if design_result["status"] != "PASS":
+        first_code = design_result["errors"][0]["code"] if design_result.get("errors") else "UNKNOWN"
+        raise ValueError(f"TABLE_DESIGN_LOCK_INVALID:{first_code}")
+    audio_caption = validate_audio_caption.validate_audio_caption(
+        artifact_paths["audio_lock"], artifact_paths["caption_lock"]
+    )
+    if audio_caption["status"] != "PASS":
+        first_code = audio_caption["errors"][0]["code"] if audio_caption.get("errors") else "UNKNOWN"
+        raise ValueError(f"TABLE_AUDIO_CAPTION_LOCK_INVALID:{first_code}")
+    validation["locked_assembly"] = "PASS"
+    return validation
 
 
 def _sha(path: Path) -> str:
@@ -277,7 +369,8 @@ def validate_state_cues(config: dict, timeline: dict) -> None:
             or cue["start_us"] < previous_end
             or cue["end_us"] <= cue["start_us"]
             or cue["end_us"] > duration
-            or any(meaningful_text_length(line) > 8 for line in cue["text"].splitlines())
+            or len(cue["text"].splitlines()) > 2
+            or any(meaningful_text_length(line) > 15 for line in cue["text"].splitlines())
             or cue.get("text") != row.get("text")
             or cue["start_us"] != row.get("start")
             or cue["end_us"] - cue["start_us"] != row.get("duration")
@@ -1683,6 +1776,7 @@ def _replace_video_material_only(target: Path, clean_video: Path, duration_us: i
 
 
 def swap_provisional_video_only(config: dict) -> dict:
+    validate_grid_harness(config)
     _ensure_media_tools()
     _validate_config(config, revision_operation="swap")
     if config["visual_asset_mode"] != "CLEAN_VISUAL_READY":
@@ -1789,6 +1883,7 @@ def swap_provisional_video_only(config: dict) -> dict:
 
 
 def build_episode(config: dict) -> dict:
+    validate_grid_harness(config)
     _validate_config(config)
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():

@@ -2,6 +2,9 @@
   "schema_version": "001short-production-workflow-v3",
   "owner_skill": "001short-production-agent",
   "lane": "general_shorts_production",
+  "grid_harness": {
+    "authority": "protocol.json#/grid_harness"
+  },
   "blueprint_reference": "references/blueprint_matrix.md",
   "analysis_authority": "original_source_only",
   "assembly_visual": "vmake_submit_after_source_identity_nonblocking_source_provisional_then_clean_swap",
@@ -65,9 +68,19 @@
     "upload_info_path": "{episode_root}/60_upload/upload_info.json",
     "work_outputs": {
       "01": "{episode_root}/10_analysis/source-analysis.md",
-      "02": "{episode_root}/20_script/original-blueprint.md",
-      "03": "{episode_root}/20_script/first-recommendation.md",
-      "04": "{episode_root}/20_script/urakkai-capcut-grid.md",
+      "02": [
+        "{episode_root}/20_script/original-blueprint.md",
+        "{episode_root}/20_script/original-capcut-grid.md"
+      ],
+      "03": [
+        "{episode_root}/20_script/first-recommendation.md",
+        "{episode_root}/20_script/urakkai-capcut-grid.md"
+      ],
+      "04": [
+        "{episode_root}/20_script/URAKKAI_BLUEPRINT.md",
+        "{episode_root}/20_script/original-capcut-grid.md",
+        "{episode_root}/20_script/urakkai-capcut-grid.md"
+      ],
       "05": "{episode_root}/20_script/final-blueprint.md",
       "06": "{episode_root}/40_assets_used/clean_visual_manifest.json",
       "07": [
@@ -517,7 +530,7 @@
       "video_smart_adjust": [42, 47],
       "video_sharpen": 50,
       "video_clear": 50,
-      "state_caption_meaningful_character_max": 8,
+      "state_caption_meaningful_character_max": 15,
       "speaker_caption_lines": "dynamic_current_speaker_count"
     }
   },

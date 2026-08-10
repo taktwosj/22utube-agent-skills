@@ -21,7 +21,8 @@ LEGAL_ROLES = {
 # shrt_white_base_v2 seeds are placeholders with no width or wrap settings, and
 # the builder swaps text without touching font size, so CapCut neither shrinks
 # nor wraps.  These are the measured per-line budgets before text leaves frame.
-MAX_LINE_LENGTH_BY_ROLE = {"T1": 10, "T2": 12, "A10_TEXT": 16, "A9_TEXT": 16}
+MAX_LINE_LENGTH_BY_ROLE = {"T1": 10, "T2": 12, "A10_TEXT": 16, "A9_TEXT": 15}
+MAX_LINE_COUNT_BY_ROLE = {"A9_TEXT": 2, "STATE": 2}
 FULL_SPAN_ROLES = ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT")
 
 
@@ -80,6 +81,16 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
                     "code": "CAPTION_LINE_TOO_LONG", "segment_id": segment_id, "role": role,
                     "limit": limit, "line": overlong,
                 })
+        line_limit = MAX_LINE_COUNT_BY_ROLE.get(role)
+        if (
+            line_limit is not None
+            and isinstance(row.get("text"), str)
+            and len(row["text"].splitlines()) > line_limit
+        ):
+            errors.append({
+                "code": "CAPTION_TOO_MANY_LINES", "segment_id": segment_id, "role": role,
+                "limit": line_limit,
+            })
         if role not in LEGAL_ROLES:
             errors.append({"code": "ROLE_ANCHOR_INVALID", "segment_id": segment_id})
         if role == "A12":
@@ -106,7 +117,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
             text = row.get("text")
             if not isinstance(text, str) or not text.strip():
                 errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
-            elif _overlong_line(text, 8) is not None:
+            elif _overlong_line(text, 15) is not None:
                 errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
             if row.get("state_effect") != "LASER_CUT":
                 errors.append({"code": "STATE_EFFECT_LASER_ONLY", "segment_id": segment_id})

@@ -61,8 +61,9 @@ CapCut은 자동 축소·줄바꿈을 하지 않는다. 공백 제외 기준 줄
 |---|---|---|
 | T1 | 10 | `CAPTION_LINE_TOO_LONG` |
 | T2 | 12 | `CAPTION_LINE_TOO_LONG` |
-| A10_TEXT / A9_TEXT | 16 | `CAPTION_LINE_TOO_LONG` |
-| STATE | 8 | `STATE_TEXT_TOO_LONG` / `STATE_CUES_INVALID` |
+| A10_TEXT | 16 | `CAPTION_LINE_TOO_LONG` |
+| A9_TEXT | 15, 최대 2줄 | `CAPTION_LINE_TOO_LONG` / `CAPTION_TOO_MANY_LINES` |
+| STATE | 15, 최대 2줄 | `STATE_TEXT_TOO_LONG` / `CAPTION_TOO_MANY_LINES` / `STATE_CUES_INVALID` |
 
 넘으면 문구를 줄이거나 명시적 `\n`을 넣는다. 멀티라인 큐는 `final.srt`에서 지원된다.
 

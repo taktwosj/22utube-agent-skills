@@ -11,6 +11,8 @@ from unittest.mock import patch
 SKILL = Path(__file__).resolve().parents[1]
 SCRIPTS = SKILL / "scripts"
 TESTS = Path(__file__).resolve().parent
+GRID_ORIGINAL = SKILL / "tests" / "fixtures" / "original_grid_8.pass.md"
+GRID_URAKKAI = SKILL / "tests" / "fixtures" / "urakkai_grid_8.pass.md"
 for path in (SCRIPTS, TESTS):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -19,7 +21,7 @@ import build_episode_capcut as builder
 import validate_clean_visual
 import validate_design_lock
 import validate_prebuild
-from test_public_builder_provisional import media, sha, template_archive, write
+from test_public_builder_provisional import bind_state_artifacts, install_valid_grids, media, sha, template_archive, write
 
 
 class PublicBuilderCleanTest(unittest.TestCase):
@@ -49,6 +51,7 @@ class PublicBuilderCleanTest(unittest.TestCase):
     def test_public_builder_finishes_with_real_clean_vmake_chain(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); episode = root / "episode"; episode.mkdir()
+            install_valid_grids(episode)
             source, vocals = media(root)
             archive, _, contract = template_archive(root)
             clean_root = episode / "40_assets_used"; clean_root.mkdir()
@@ -100,6 +103,10 @@ class PublicBuilderCleanTest(unittest.TestCase):
             write(vmake_receipt, {"provider": "vmake", "run_id": "run", "job_id": "job", "uploaded_source_sha256": sha(source), "downloaded_output_sha256": sha(clean_video), "final_download": True})
             build_manifest = episode / "build_manifest.json"
             write(build_manifest, {"schema_version": "001short-build-manifest-v1", "episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "source": {"path": str(source), "sha256": sha(source), "duration_us": 2_000_000}, "template": {"root_name": "shrt white", "root_zip_path": str(archive), "root_zip_sha256": sha(archive)}, "clean_source": {"origin": "AGENT_PRIMARY_CLEAN_SOURCE", "output_path": str(clean_video), "output_sha256": sha(clean_video)}, "vmake": {"receipt_path": str(vmake_receipt), "output_path": str(clean_video), "run_id": "run", "job_id": "job", "input_sha256": sha(source), "output_sha256": sha(clean_video), "final_download": True}, "urakkai": {"production_type": "URAKKAI", "target_duration_us": 2_000_000, "reorder_required": True, "locked_permutation": ["V2", "V1"], "video_clips": [{"clip_id": "V2", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]}, "source_audio": [{"clip_id": "V2", "mode": "on", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]}, {"clip_id": "V1", "mode": "on", "source_sha256": sha(source), "source_range_us": [0, 1_000_000], "target_range_us": [1_000_000, 2_000_000]}]})
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             config = {"episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "clean_video": str(clean_video), "clean_asset_root": str(clean_root), "clean_evidence_root": str(clean_root), "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "audio_policy": "A10_RETAINED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None

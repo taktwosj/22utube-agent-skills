@@ -12,6 +12,19 @@ Accepted intake declarations are `GOOGLE_DRIVE`, `URL`, and `DESKTOP`. Do not pe
 
 Normal production semantics are A9=TTS, A10=validated Demucs source vocal stem, A11=SFX, A12=EMPTY. A11 is optional; A12 is reserved empty in the canonical v2 contract. The explicit clean-only and `TTS_ONLY_MUTE_SOURCE` branches declare their empty anchors in the plan and retain their tighter rules.
 
+## User-facing three phases
+
+Always expose production as `원본표 → 우라까이표 → CapCut 조립`.
+Both tables use the fixed 15-row order declared by `protocol.json`, contain no
+implicit empty cells, and are emitted to the 대화창 by
+`scripts/validate_capcut_grids.py --emit-report`. Automatic mode does not skip
+the complete-table report. The CapCut builder validates both files before any
+work-root or local-draft write.
+
+After assembly, report current validator/readback evidence, then separate code
+blocks for the 프로젝트 파일명 and 프로젝트 전체 경로. Missing readback is
+`NOT RUN`, never `PASS`.
+
 ## VMake Direct-Insert Contract
 
 Use only the validated `clean_video` asset for normal VIDEO placements. A source-video provisional build is review-only and never clears clean, render, or upload gates.
@@ -38,4 +51,4 @@ duration; clean-only remains full-length passthrough.
 
 ## Handoff
 
-For a new session, validate `templates/conversation-handoff.json` with `scripts/validate_conversation_handoff.py`. Load the environment once without output. Never include a token, cookie, key, password, OAuth value, or session identifier; reject it as `HANDOFF_SECRET_MATERIAL_FORBIDDEN`. Resume an old episode only with `resume_requested=true`, an episode ID, and current artifact readback.
+For a new session, validate `templates/conversation-handoff.json` with `scripts/validate_conversation_handoff.py --handoff <path>`. Load the environment once without output. Never include a token, cookie, key, password, OAuth value, or session identifier; reject it as `HANDOFF_SECRET_MATERIAL_FORBIDDEN`. Resume an old episode only with `resume_requested=true`, an episode ID, and current artifact readback.
