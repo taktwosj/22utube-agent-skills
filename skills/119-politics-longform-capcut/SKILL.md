@@ -5,187 +5,197 @@ description: Use only when a political-longform request explicitly contains CapC
 
 # 119 정치롱폼 CapCut 제작
 
-119는 대본 작성부터 편집 가능한 로컬 CapCut 프로젝트까지 이어 간다.
-사용자가 CapCut을 직접 말했을 때만 사용한다. 캡컷, 119, 119정치롱폼도 같은 명시적
-호출로 취급한다. 명시 호출이 없으면 119로 자동 우회하지 않는다.
-`FORBIDDEN`: 명시 호출 없는 자동 우회.
+119는 승인된 정치롱폼 설계를 실제 source·narration·visual·root 자산과 결합해
+편집 가능한 로컬 CapCut 프로젝트로 조립한다.
+
+사용자가 CapCut, 캡컷, 119, 119정치롱폼을 명시했을 때 사용한다.
+명시 호출이 없으면 119로 자동 우회하지 않는다.
 
 ## 시작
 
-1. `episode_id`, 현재 active writer, 요청 결과를 확인한다.
-2. 강한 PRE-119 표식 하나 또는 보조 표식 두 개 이상이 있으면 승인 여부보다 먼저
-   [pre119-handoff-contract.md](references/pre119-handoff-contract.md)를 읽고 이 경로를 고정한다.
-3. PRE-119 표식 기준을 충족하지 않고 승인된 대본도 없을 때만
-   [direct-script.md](references/direct-script.md)를 읽는다.
-4. 승인된 대본이 있으면 아래 입력 경로 하나를 고른다.
-5. 현재 단계의 reference만 읽고 작업한다. 다른 단계 문서를 미리 읽지 않는다.
+1. `episode_id`, active writer, 사용자 요청 결과를 확인한다.
+2. 승인된 대본이 없을 때만 [direct-script.md](references/direct-script.md)를 읽는다.
+3. 승인 대본에 `[ASSEMBLY_ONLY_SEED]` 또는 `execution_mode=ASSEMBLY_ONLY`가 있으면
+   이 문서의 `ASSEMBLY_ONLY` 직접 경로를 최우선으로 적용한다.
+4. 현재 단계의 reference만 읽으며 관련 없는 reference 전체를 미리 읽지 않는다.
 
 | 관찰 가능한 상태 | 읽을 문서 | 상태 |
 |---|---|---|
-| PRE-119 강한 표식 1개 또는 보조 표식 2개 이상 | `pre119-handoff-contract.md` | `PRE119_VALIDATION` |
 | 대본 미승인 | `direct-script.md` | `CAN_DRAFT` 또는 `WAIT_SCRIPT_APPROVAL` |
+| 승인 대본 + ASSEMBLY_ONLY_SEED | 이 문서 + 현재 책임 reference | `ASSEMBLY_ONLY_READY` |
 | 직접 대본 승인·제공 | 이 문서의 직접 경로 | `DIRECT_SCRIPT_READY` |
 | 기존 Stage 2 산출물 사용을 명시 | `legacy-stage2.md` | `LEGACY_STAGE2_PREFLIGHT` |
 | 실패 단계가 불명확 | `resume-map.md` | 한 단계 선택 |
 
-직접 경로의 최소 입력은 `episode_id`, 승인된 최종 대본, 출처 URL·원본 SRT·로컬 미디어
-중 하나 이상이다. 없는 제작 미디어는 승인 뒤 수집·생성할 수 있다. 직접 경로는 110·111,
-외부검토 영수증, lock, review packet, 업로드 패키지에 의존하지 않는다.
+직접 경로의 최소 입력은 `episode_id`, 승인된 최종 대본,
+출처 URL·원본 SRT·로컬 미디어 중 하나 이상이다.
+직접 경로는 110·111, 외부 검토 영수증, review packet, 업로드 패키지에 의존하지 않는다.
 
-## PRE-119 인계 입력 계약
+## ASSEMBLY_ONLY 잠금
 
-EDITORIAL_OWNER = TOGUN_PRE119
-PRODUCTION_OWNER = 119-politics-longform-capcut
-ENTRY_STATE = DIRECT_SCRIPT_READY
+`ASSEMBLY_ONLY_SEED`는 투군 PRE-119가 다음을 확정했다는 뜻이다.
 
-119는 투군 PRE-119가 승인 후보로 작성한 다음 파일을 입력으로 사용한다.
+```text
+카드 순서
+CARD_TYPE
+챕터 제목·훅
+나레이션 대사
+HTML/CSS 설명카드 문구
+하단 SRT | COMMENTARY_2LINE | NONE
+논평 2줄
+CTA 정책
+WHY_THIS_SEGMENT
+```
 
-- `20_script/119_final_script.md`
-- `20_script/pre119_handoff.json`
-- `00_source/source_packet.md`
-- `10_analysis/pre119_editorial_packet.md`
-- `90_reports/source_gap_and_status.md`
+119는 다음 런타임 값만 결합한다.
 
-패킷 내부 PASS를 승인 근거로 사용하지 않는다. 외부에서 전달된 승인 SHA와 승인 증거를
-`validate_pre119_handoff.py`에 주고 실제 대본 raw bytes SHA, 패킷 current SHA, 외부 승인
-SHA의 3자 일치를 확인한다. 검증 결과는 별도 보고서에 쓰며 입력 패킷을 덮어쓰지 않는다.
-검증기는 `episode_cards.json`을 만들지 않는다.
+```text
+실제 파일 경로
+SHA-256
+실제 duration
+검증된 source range
+source channel/date/speaker
+narration audio/SRT
+rendered image
+target start/duration
+```
 
-제작 시작 전 다음을 확인한다.
+이미 실제 PASS 산출물과 동일 identity·SHA·duration이 있으면 다시 조사·검증·생성하지 않는다.
 
-- `episode_id` 존재
-- `90_reports/pre119_handoff_validation.json`의 외부 승인 3자 SHA 결속 `status = PASS`
-- `CENTRAL_QUESTION` 존재
-- `SELECTED_THESIS` 존재
-- `CHAPTER ORDER` 존재
-- `SOURCE_ID`와 `VIDEO_URL` 존재
-- 후보 source in/out 또는 transcript gap 표시
-- `BETWEEN_IMAGE` 값 존재
-- `BETWEEN_NARRATION` 값 존재
-- `LOWER_MODE`가 `SRT | COMMENTARY_2LINE | NONE` 중 하나
-- 미확정·119 재검증 항목 존재
+허용되는 기본 흐름:
 
-119가 변경하면 안 되는 항목:
+```text
+기존 또는 필요한 A/B/C/D 자산
+→ episode_cards.json
+→ caption layout validator
+→ USER_FINAL_ASSEMBLY_GRID.md
+→ clean build
+→ relink
+→ save/close
+→ readback
+→ media resolution
+→ visual gate
+```
 
-- `CENTRAL_QUESTION`
-- `SELECTED_THESIS`
-- 정치적 방향
-- `CHAPTER ORDER`
-- 원본 클립의 논리적 순서
-- 승인 나레이션 문장
-- 승인 하단 논평 문구
-- 사용자 승인 편집 방식 A/B/C
+ASSEMBLY_ONLY 회차에서 금지:
 
-119가 기술 검증 과정에서 조정할 수 있는 항목:
+```text
+정치 이슈 재조사
+승인 대본 재작성·재검토
+기존 PASS source metadata·exact quote 재검증
+목표 초를 맞추기 위한 강제 retime
+Grid 필드 보완용 추가 조사
+builder 기능개선·TDD·candidate code 수정
+새 adapter·독립 code review
+정상 PASS 단계 전체 재실행
+build 후 active draft 직접 수술
+```
 
-- 실제 원음에 맞춘 source cut 시작·종료점
-- 음절 절단 방지를 위한 컷 경계
-- SRT split 또는 clamp
-- 실제 나레이션 오디오 기준 cue timing
-- 미디어 경로·SHA·duration
-- builder가 요구하는 기술 필드
+현재 조립을 실제로 불가능하게 만드는 결함이면 자동 개발 작업으로 확장하지 않고
+`ASSEMBLY_BLOCKED:<정확한 원인>`으로 중단한다.
 
-기술 조정으로 승인된 의미·논지·클립 순서가 바뀌면 119가 임의 수정하지 않고 투군 PRE-119로 복귀한다.
+## 승인 뒤 A–D
 
-외부 승인 SHA 또는 승인 증거가 없으면:
-
-→ `WAIT_EXTERNAL_APPROVAL_REQUIRED`
-
-실제 대본 raw bytes SHA, 패킷 current SHA, 외부 승인 SHA가 다르면:
-
-→ `WAIT_APPROVAL_HASH_MISMATCH`
-
-중심 질문 또는 선택 논제가 없으면:
-
-→ `WAIT_CENTRAL_QUESTION` 또는 `WAIT_THESIS`
-
-transcript가 부족하면:
-
-→ `WAIT_TRANSCRIPT`
-
-source identity가 변경되면:
-
-→ 기존 타임코드·인용·하단 문구·컷 순서를 무효화
-→ `WAIT_SOURCE_REVERIFY`
-
-119는 승인된 대본을 다시 작성하거나 PRE-119 SRT 구상 프롬프트를 자체 실행하지 않는다.
-
-## 승인 뒤 선택적 병렬 실행
-
-대본 승인 뒤 A와 D는 항상 시작한다. 사용자가 나레이션·TTS·별도 오디오를 명시적으로
-요청했을 때만 B를 시작하고, 이미지·그래픽을 명시적으로 요청했을 때만 C를 시작한다.
-활성 작업은 병렬 실행하며 각 작업자는 자기 출력만 쓴다.
+없는 필수 산출물만 만들고 기존 PASS 산출물은 재사용한다.
 
 | 작업 | 읽을 문서 | 독점 출력 |
 |---|---|---|
 | A 출처·SRT·다운로드·로컬 컷 | `source-media.md` | source media와 source captions |
-| B 나레이션·정렬·SRT | 명시 요청 시에만 `narration.md` | narration media와 narration SRT |
-| C 지원되는 시각 자산 | 명시 요청 시에만 `visual-assets.md` | episode `Resources` 자산 |
-| D 근본·target·CapCut 종료 준비 | `capcut-assembly.md`의 준비 절 | 읽기 결과와 공식 resolver 출력 |
+| B 나레이션·정렬·SRT | `narration.md` | narration media와 narration SRT |
+| C HTML/CSS 설명카드 등 지원 시각 자산 | `visual-assets.md` | episode `Resources` 자산 |
+| D 근본·target·CapCut 종료 준비 | `capcut-assembly.md` 준비 절 | 공식 resolver 결과 |
 
-A와 D, 그리고 요청되어 활성화된 B/C는 서로의 미완성 결과를 정본으로 쓰지 않는다.
-요청되지 않은 B/C는 `NOT_REQUESTED` 또는 `NOT_APPLICABLE`이며 join이 기다리지 않는다.
-join owner 한 명은 A/D와 활성 B/C의 실제 산출물만 `episode_cards.json`으로 합친다.
-PRE-119 경로에서는 `compile_pre119_episode_cards.py`가 실제 A/B/C/D 증거의 경로, SHA-256,
-양의 duration과 RAW/DISPLAY 자막 provenance를 검증한 뒤에만 이 파일을 만든다. 기본
-빌드는 source video의 embedded audio와 사용 가능한 source footage·editable text overlay로
-진행한다. 별도 요청이 없으면 챕터 1→2→3→4의 `SOURCE_VIDEO`를 t=0부터 연속 배치하며
-intro·image·narration은 넣지 않는다. narration audio/SRT나 episode image가 없어도 멈추지 않는다. 이후
-`capcut-assembly.md`에 따라 build → relink → readback → visual 순서로 계속한다.
-목표 조합은 `SOURCE_VIDEO=VIDEO+SOURCE`, `NARRATION_VIDEO=VIDEO+NARRATION`,
-`CHAPTER_CARD=IMAGE+SILENT`, `NARRATION_IMAGE=IMAGE+NARRATION`이다. `VIDEO+SILENT`와
-`IMAGE+SOURCE`는 별도 구현 전에는 지원한다고 말하지 않는다. lower 선택은 `SRT`,
-`COMMENTARY_2LINE`, `NONE`이며 audio에 맞춰 기존 builder mode에 매핑한다. C는 image,
-B는 narration을 선택한 경우에만 활성화한다.
+A–D는 다른 작업의 state·산출물·CapCut draft·`episode_cards.json`을 수정하지 않는다.
+모두 준비된 뒤 join owner 한 명만 실제 산출물을 `episode_cards.json`으로 합친다.
+`episode_cards.json`이 유일한 join이자 조립 Source of Truth다.
+
+## 전체 하단 자막 화면 계약
+
+다음 모든 하단 표시 자막에 동일하게 적용한다.
+
+```text
+SOURCE_TTS
+NARRATION_TTS
+VIDEO100_EXPLAINER
+```
+
+잠금값:
+
+```text
+TARGET_CHARS_PER_LINE = 15
+MAX_LINES             = 2
+TARGET_CHARS_PER_CUE  = 30
+HARD_MAX_LINE_CHARS   = 18
+```
+
+- 평균 한 줄 15자를 목표로 하고 화면에는 최대 2줄만 표시한다.
+- 표시 글자 수는 각 줄의 앞뒤 공백을 제외하고 내부 공백·문장부호를 포함해 센다.
+- 두 줄이면 전체 표시 글자 수가 30자를 넘지 않게 한다.
+- 자연스러운 조사·어절·호흡 경계에서 줄을 나눈다.
+- 긴 문장을 글자 크기로 억지 축소하지 않는다.
+- 30자를 넘으면 원문을 바꾸지 말고 시간상 연속된 다음 cue로 분할한다.
+- 원본 SRT·직접인용은 축약·의역하지 않는다.
+- `VIDEO100_EXPLAINER`는 정확히 2줄이어야 한다.
+- 3줄 표시, 빈 줄, 작업 메모형 문구는 FAIL이다.
+- SRT와 `VIDEO100_EXPLAINER`를 같은 시간대에 함께 표시하지 않는다.
+
+빌드 전 `validate_politics_caption_layout.py`를 로컬로 실행한다.
+정상 PASS 결과를 다시 Codex에게 읽혀 같은 검사를 반복시키지 않는다.
 
 ## 핵심 불변식
 
 - 한 회차에는 active writer 한 명만 둔다.
 - CapCut 또는 백그라운드 프로세스가 열려 있으면 draft를 만들거나 고치지 않는다.
-- active pointer가 선택한 검증 완료 근본만 사용한다. 과거 회차·실패본·`.bak`를 근본으로
-  쓰지 않는다.
-- resolved root bundle에 `runtime_adapters/v5_legacy_profile_adapter_v1.json`이 있으면
-  [v5-legacy-profile-root-adapter.md](references/v5-legacy-profile-root-adapter.md)만 추가로 읽고
-  그 adapter builder를 사용한다. ZIP 자체 수정·재압축과 stock builder 직접 사용은 금지한다.
-- 원본 MP4, Media 폴더, CapCut draft, cache, 계정 정보는 로컬에 둔다. OneDrive에는
-  portable root, cards, 상대경로 보고서와 해시만 둔다.
-- 사용자 프로필 절대경로, `%LOCALAPPDATA%`, cache 경로를 portable JSON에 직렬화하지 않는다.
-- ASR cue는 편집 컷을 정하지 않는다. 실제 컷에서 자막만 split 또는 clamp한다.
-- 요청되지 않은 narration audio/SRT와 episode image는 제작 필수 입력이 아니다.
-- 업로드·썸네일은 사용자가 명시적으로 요청한 별도 단계다.
+- active pointer가 선택한 검증 완료 근본만 사용한다.
+- 원본 MP4, Media 폴더, CapCut draft, cache, 계정 정보는 로컬에 둔다.
+- portable JSON에는 사용자 프로필 절대경로와 cache 경로를 넣지 않는다.
+- ASR cue가 편집 컷을 정하지 않는다. 실제 컷에서 자막을 split 또는 clamp한다.
+- 목표 길이·원본/나레이션 비율은 사용자 절대 LOCK이 아니면 `[EST]`다.
+- 실제 source와 narration duration을 사용한다.
+- 업로드·썸네일·렌더는 사용자 명시 요청이 있는 별도 단계다.
 
 ## 실패와 재개
 
-활성 단계의 API·media·schema·continuity·alignment·builder·readback·relink·visual 검사에서
-구체적 기술 실패가 발생했을 때만 멈춘다. `첫 실패 재현 → 원인 최소 수정 → 같은 검사 재실행`으로 처리한다. 성공한
-단계는 다시 읽거나 실행하지 않고, 실제 산출물에서 실패한 단계 하나만 재개한다.
-요청되지 않은 B/C의 누락·무효는 실패가 아니며 resume-map 재개 대상으로 삼지 않는다.
-나중에 B/C가 명시 요청되면 성공한 A/D를 다시 하지 않고 해당 작업만 추가한다.
+일반 직접 경로에서는 구체적 기술 실패가 발생했을 때
+`첫 실패 재현 → 원인 최소 수정 → 같은 검사 재실행`으로 처리한다.
+
+ASSEMBLY_ONLY에서는 자동 코드수정·기능개선으로 확장하지 않는다.
+상위 조립 입력 오류는 상위 입력 또는 cards를 수정한 뒤 clean rebuild한다.
+active draft의 CTA·텍스트·template·attachment·history를 연쇄 수술하지 않는다.
+
+성공한 단계는 실제 identity·SHA·duration이 유지되면 다시 실행하지 않는다.
 재개점이 불명확할 때만 [resume-map.md](references/resume-map.md)를 읽는다.
 
 ## 단계 문서
 
 - 대본: [direct-script.md](references/direct-script.md)
 - 출처 미디어: [source-media.md](references/source-media.md)
-- 나레이션(명시 요청 시): [narration.md](references/narration.md)
-- 시각 자산(명시 요청 시): [visual-assets.md](references/visual-assets.md)
+- 나레이션: [narration.md](references/narration.md)
+- 시각 자산: [visual-assets.md](references/visual-assets.md)
 - 조립·검증: [capcut-assembly.md](references/capcut-assembly.md)
+- 카드 계약: [episode-card-contract.md](references/episode-card-contract.md)
 - 재개 선택: [resume-map.md](references/resume-map.md)
 - 기존 Stage 2 전용: [legacy-stage2.md](references/legacy-stage2.md)
 
-세부 card schema가 필요할 때만
-[episode-card-contract.md](references/episode-card-contract.md)를 추가로 읽는다. 근본 승격
-작업을 명시적으로 요청받았을 때만 [root-bundle-contract.md](references/root-bundle-contract.md)를
-읽는다. 어느 단계도 관련 없는 reference 전체를 읽지 않는다.
+근본 승격 작업을 명시적으로 요청받았을 때만
+[root-bundle-contract.md](references/root-bundle-contract.md)를 읽는다.
 
 ## 완료 판정
 
-직접 경로는 `STAGE2_PREFLIGHT`를 요구하거나 보고하지 않는다. 실제 결과를
-`DIRECT_SCRIPT_READY`, `ROOT_CONTRACT`, `PROJECT_BUILD`, `MEDIA_RELINK`,
-`MEDIA_RESOLUTION`, `VISUAL_GATE`로 보고한다. 레거시 경로만 `STAGE2_PREFLIGHT`를 쓴다.
+직접 경로는 `STAGE2_PREFLIGHT`를 요구하거나 보고하지 않는다.
 
-`MEDIA_RELINK=PASS`와 `VISUAL_GATE=PASS`가 모두 있어야 CapCut 제작 완료다. 정적 JSON
-검사는 화면 승인이 아니다. `MP4`와 `UPLOAD`는 각각 요청받아 실행한 경우에만
-`PASS`로 보고하며, 실행하지 않았으면 `NOT RUN`이다. B/C 결과는 해당 작업을 요청받았을
-때만 완료 보고에 포함하며, 요청되지 않은 B/C의 부재는 `MEDIA_RELINK`나 `VISUAL_GATE`를
-막지 않는다.
+```text
+DIRECT_SCRIPT_READY 또는 ASSEMBLY_ONLY_READY
+ROOT_CONTRACT
+CAPTION_LAYOUT
+EPISODE_CARDS
+USER_FINAL_ASSEMBLY_GRID
+PROJECT_BUILD
+MEDIA_RELINK
+MEDIA_RESOLUTION
+VISUAL_GATE
+```
+
+`MEDIA_RELINK=PASS`, `MEDIA_RESOLUTION=PASS`, `VISUAL_GATE=PASS`가 모두 있어야
+CapCut 제작 완료다. 정적 JSON 검사나 GRID는 실제 화면 승인 증거가 아니다.
+`MP4`와 `UPLOAD`는 실행하지 않았으면 `NOT RUN`이다.
