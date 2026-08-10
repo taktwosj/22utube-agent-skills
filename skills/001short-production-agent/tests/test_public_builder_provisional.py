@@ -211,6 +211,33 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(Path(report["media_source_path"]), source.resolve())
             self.assertEqual(json.loads(state.read_text(encoding="utf-8"))["current_stage"], "09")
 
+            canonical_state_before_revisions = sha(state)
+            revision_v1 = {**config, "revision_id": "v1"}
+            with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
+                builder, "_register_capcut_project", return_value=None
+            ):
+                v1_result = builder.build_episode(revision_v1)
+            v1_project = root / "capcut" / "project_v1"
+            v1_state = episode / "90_workflow" / "revisions" / "v1" / "state.json"
+            self.assertEqual(Path(v1_result["project_path"]), v1_project)
+            self.assertTrue(v1_state.is_file())
+            v1_project_before_v2 = sha(v1_project / "draft_content.json")
+            v1_state_before_v2 = sha(v1_state)
+            self.assertEqual(sha(state), canonical_state_before_revisions)
+
+            revision_v2 = {**config, "revision_id": "v2"}
+            with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
+                builder, "_register_capcut_project", return_value=None
+            ):
+                v2_result = builder.build_episode(revision_v2)
+            v2_project = root / "capcut" / "project_v2"
+            v2_state = episode / "90_workflow" / "revisions" / "v2" / "state.json"
+            self.assertEqual(Path(v2_result["project_path"]), v2_project)
+            self.assertTrue(v2_state.is_file())
+            self.assertEqual(sha(v1_project / "draft_content.json"), v1_project_before_v2)
+            self.assertEqual(sha(v1_state), v1_state_before_v2)
+            self.assertEqual(sha(state), canonical_state_before_revisions)
+
             clean_root = episode / "40_assets_used"; clean_root.mkdir()
             clean_video = clean_root / "clean_video.mp4"
             subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=1080x1920:r=30:d=2", "-y", str(clean_video)], check=True)
@@ -242,6 +269,26 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(swapped["status"], "CAPCUT_STATIC_VALIDATED")
             self.assertEqual(swapped["next_action"], "WAIT_USER_CAPCUT_CHECK")
             self.assertFalse(swapped["upload_ready"])
+
+            revision_edit_lock = episode / "90_workflow" / "clean_swap_lock_v1.json"
+            write(revision_edit_lock, {"episode_id": "EP", "action": "STAGE08_VIDEO_ONLY_SWAP", "project_path": str(v1_project)})
+            revision_swap = {
+                **config,
+                "revision_id": "v1",
+                "visual_asset_mode": "CLEAN_VISUAL_READY",
+                "clean_video": str(clean_video),
+                "clean_asset_root": str(clean_root),
+                "clean_evidence_root": str(clean_root),
+                "edit_lock_path": str(revision_edit_lock),
+                "T1": "mutable shared title",
+            }
+            with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
+                builder, "_register_capcut_project", return_value=None
+            ):
+                revision_swapped = builder.swap_provisional_video_only(revision_swap)
+            self.assertEqual(revision_swapped["status"], "CAPCUT_STATIC_VALIDATED")
+            self.assertEqual(revision_swap["T1"], "title")
+            self.assertTrue((v1_project / "Resources" / "media" / "clean_video.mp4").is_file())
 
 
 if __name__ == "__main__":

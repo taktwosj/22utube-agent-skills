@@ -347,7 +347,148 @@ def assert_a12_empty(segments: list[dict]) -> None:
         raise RuntimeError("A12_RESERVED_EMPTY")
 
 
-def _validate_config(config: dict) -> None:
+REVISION_ID_PATTERN = re.compile(r"v[1-9][0-9]*\Z")
+REVISION_SWAP_OVERRIDE_KEYS = frozenset({
+    "visual_asset_mode", "clean_video", "clean_asset_root", "clean_evidence_root",
+    "edit_lock_path",
+})
+
+
+def prepare_revision_config(config: dict) -> None:
+    """Resolve an optional rebuild revision without touching legacy builds."""
+    revision_id = config.get("revision_id")
+    if revision_id is None:
+        return
+    if not isinstance(revision_id, str) or not REVISION_ID_PATTERN.fullmatch(revision_id):
+        raise ValueError("REVISION_ID_INVALID")
+    episode = Path(config["episode_root"]).resolve()
+    canonical_state = episode / "90_workflow" / "state.json"
+    revision_state = episode / "90_workflow" / "revisions" / revision_id / "state.json"
+    configured_state = config.get("state_path")
+    if configured_state:
+        resolved_state = Path(configured_state).resolve()
+        if resolved_state not in {canonical_state, revision_state}:
+            raise ValueError("REVISION_STATE_PATH_INVALID")
+    project_name = config.get("project_name")
+    if not isinstance(project_name, str) or not project_name.strip():
+        raise ValueError("REVISION_PROJECT_NAME_INVALID")
+    base_project_name = re.sub(r"_v[1-9][0-9]*$", "", project_name)
+    build_root = episode / "50_capcut_project" / "revisions" / revision_id
+    config.update({
+        "state_path": str(revision_state),
+        "work_root": str(build_root / "build_work"),
+        "project_name": f"{base_project_name}_{revision_id}",
+        "_revision_context": {
+            "revision_id": revision_id,
+            "canonical_state_path": str(canonical_state),
+            "build_root": str(build_root),
+        },
+    })
+
+
+def _revision_snapshot_path(config: dict) -> Path | None:
+    context = config.get("_revision_context")
+    if not isinstance(context, dict):
+        return None
+    return Path(config["state_path"]).resolve().with_name("build_config.json")
+
+
+def _revision_snapshot_payload(config: dict) -> dict:
+    return {
+        key: copy.deepcopy(value)
+        for key, value in config.items()
+        if not key.startswith("_")
+    }
+
+
+def bind_revision_snapshot(config: dict, *, operation: str) -> None:
+    """Verify a revision's immutable config or load it for an allowed swap."""
+    snapshot_path = _revision_snapshot_path(config)
+    if snapshot_path is None:
+        return
+    state_path = Path(config["state_path"]).resolve()
+    if not snapshot_path.exists():
+        if state_path.exists():
+            raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
+        return
+    if not snapshot_path.is_file() or not state_path.is_file():
+        raise RuntimeError("REVISION_CONFIG_BINDING_MISSING")
+    state = read_json(state_path)
+    if (
+        Path(state.get("build_config_path", "")).resolve() != snapshot_path
+        or state.get("build_config_sha256") != _sha(snapshot_path)
+    ):
+        raise RuntimeError("REVISION_CONFIG_BINDING_INVALID")
+    snapshot = read_json(snapshot_path)
+    observed = _revision_snapshot_payload(config)
+    if operation == "build":
+        if observed != snapshot:
+            raise ValueError("REVISION_CONFIG_DRIFT")
+    elif operation == "swap":
+        overrides = {
+            key: copy.deepcopy(config[key])
+            for key in REVISION_SWAP_OVERRIDE_KEYS
+            if key in config
+        }
+        config.clear()
+        config.update(copy.deepcopy(snapshot))
+        config.update(overrides)
+        prepare_revision_config(config)
+    else:
+        raise ValueError("REVISION_OPERATION_INVALID")
+
+
+def initialize_revision_state(config: dict) -> None:
+    """Seed a new revision state from immutable Stage 07 evidence only once."""
+    context = config.get("_revision_context")
+    if not isinstance(context, dict):
+        return
+    revision_state = Path(config["state_path"]).resolve()
+    if revision_state.exists():
+        if not _revision_snapshot_path(config).is_file():
+            raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
+        return
+    canonical_state = Path(context["canonical_state_path"]).resolve()
+    if not canonical_state.is_file():
+        raise RuntimeError("REVISION_SOURCE_STATE_MISSING")
+    source_state = read_json(canonical_state)
+    if source_state.get("episode_id") != config["episode_id"]:
+        raise RuntimeError("REVISION_SOURCE_STATE_EPISODE_MISMATCH")
+    state = copy.deepcopy(source_state)
+    for key in ("local_capcut_project_path", "cloud_prepare", "video_asset_key", "upload_ready"):
+        state.pop(key, None)
+    for key in ("audio_lock_path", "caption_lock_path"):
+        value = state.get(key)
+        if isinstance(value, str) and value:
+            state[key] = str(resolved_declared_path(canonical_state, value))
+    state.update({
+        "episode_id": config["episode_id"],
+        "revision_id": context["revision_id"],
+        "current_stage": "08",
+        "status": "AUDIO_CAPTION_VALIDATED",
+        "project_name": config["project_name"],
+        "stage09_user_approval": "NOT_RUN",
+        "next_action": "CAPCUT_BUILD",
+    })
+    snapshot_path = _revision_snapshot_path(config)
+    snapshot = _revision_snapshot_payload(config)
+    _write_json(snapshot_path, snapshot)
+    state["build_config_path"] = str(snapshot_path)
+    state["build_config_sha256"] = _sha(snapshot_path)
+    _write_json(revision_state, state)
+
+
+def _build_root(config: dict, episode: Path) -> Path:
+    context = config.get("_revision_context")
+    if isinstance(context, dict):
+        return Path(context["build_root"]).resolve()
+    return episode / "50_capcut_project"
+
+
+def _validate_config(config: dict, *, revision_operation: str = "build") -> None:
+    prepare_revision_config(config)
+    _bind_portable_root_contract(config)
+    bind_revision_snapshot(config, operation=revision_operation)
     _bind_portable_root_contract(config)
     required = (
         "episode_id", "visual_asset_mode", "audio_policy", "duration_us", "T1", "T2", "state_cues",
@@ -358,8 +499,15 @@ def _validate_config(config: dict) -> None:
     missing = [key for key in required if key not in config]
     if missing:
         raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
-    canonical_state = Path(config["episode_root"]).resolve() / "90_workflow" / "state.json"
-    if Path(config["state_path"]).resolve() != canonical_state:
+    episode = Path(config["episode_root"]).resolve()
+    canonical_state = episode / "90_workflow" / "state.json"
+    context = config.get("_revision_context")
+    expected_state = (
+        episode / "90_workflow" / "revisions" / context["revision_id"] / "state.json"
+        if isinstance(context, dict)
+        else canonical_state
+    )
+    if Path(config["state_path"]).resolve() != expected_state:
         raise ValueError("CANONICAL_STATE_PATH_REQUIRED")
     if config.get("audio_role", "A10") not in {"A10", None}:
         raise ValueError("AUDIO_ROLE_INVALID")
@@ -1206,7 +1354,7 @@ def _build_episode_once(config: dict) -> dict:
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
     episode.mkdir(parents=True, exist_ok=True)
-    build_root = episode / "50_capcut_project"
+    build_root = _build_root(config, episode)
     evidence_root = build_root / "evidence"
     evidence_root.mkdir(parents=True, exist_ok=True)
     work_root = Path(config["work_root"]).resolve()
@@ -1529,7 +1677,7 @@ def _replace_video_material_only(target: Path, clean_video: Path, duration_us: i
 
 def swap_provisional_video_only(config: dict) -> dict:
     _ensure_media_tools()
-    _validate_config(config)
+    _validate_config(config, revision_operation="swap")
     if config["visual_asset_mode"] != "CLEAN_VISUAL_READY":
         raise RuntimeError("CLEAN_SWAP_CLEAN_VISUAL_REQUIRED")
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
@@ -1538,7 +1686,7 @@ def swap_provisional_video_only(config: dict) -> dict:
     _assert_clean_swap_lock(config, target)
     _assert_capcut_closed_for_target(target)
     episode = Path(config["episode_root"]).resolve()
-    build_root = episode / "50_capcut_project"
+    build_root = _build_root(config, episode)
     snapshot_path = build_root / "structure_snapshot.json"
     contract_path = build_root / "build_contract.json"
     state_path = Path(config["state_path"]).resolve()
@@ -1638,6 +1786,7 @@ def build_episode(config: dict) -> dict:
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
+    initialize_revision_state(config)
     _validate_mixed_audio_modes(
         config,
         read_json(Path(config["build_manifest_path"]).resolve()),
