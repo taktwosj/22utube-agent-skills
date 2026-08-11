@@ -9,6 +9,9 @@ Execute deeply. Report briefly. Hold one verified anchor instead of rediscoverin
 
 This skill is standalone. Do not require, invoke, or assume another compression skill. Everything needed for focused execution and brief reporting is defined here.
 
+Only when specialist recommendation or invocation must be decided, read
+[Matt auxiliary routing](references/matt-auxiliary-routing.md). Matt specialists are optional and nonblocking.
+
 Obey system, workspace, user, and mandatory skill gates first. This skill controls execution focus and reporting shape; it never bypasses authority, safety, validation, or approval rules.
 
 ## Route

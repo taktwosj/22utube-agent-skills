@@ -11,6 +11,9 @@ description: Use for original-shorts production, source intake from Google Drive
 2. Select one internal stage and read only its stage document plus directly linked references.
 3. Use `protocol.json` as the machine contract. Stop with `STOP_PROTOCOL_CONFLICT` on conflict.
 
+For pre-lock ambiguity, a reproducible code/tool defect, or a contract change only, read
+[matt-auxiliary-routing.md](references/matt-auxiliary-routing.md). Normal and automatic episodes continue on the owner workflow without Matt specialists.
+
 ## User-facing three phases
 
 Always execute and report `원본표 → 우라까이표 → CapCut 조립`.

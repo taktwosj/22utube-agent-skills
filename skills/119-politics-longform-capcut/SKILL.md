@@ -20,6 +20,9 @@ description: Use only when a political-longform request explicitly contains CapC
 4. 승인된 대본이 있으면 아래 입력 경로 하나를 고른다.
 5. 현재 단계의 reference만 읽고 작업한다. 다른 단계 문서를 미리 읽지 않는다.
 
+승인 전 모호함, 재현 가능한 코드·도구 결함, 또는 계약 변경에만
+[matt-auxiliary-routing.md](references/matt-auxiliary-routing.md)를 읽는다. 정상 제작과 승인 SHA 이후 기획은 119 경로만 따른다.
+
 | 관찰 가능한 상태 | 읽을 문서 | 상태 |
 |---|---|---|
 | PRE-119 강한 표식 1개 또는 보조 표식 2개 이상 | `pre119-handoff-contract.md` | `PRE119_VALIDATION` |
