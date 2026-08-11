@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko" data-render-status="PASS">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920,height=1080,initial-scale=1">
+<style>{{INLINE_CSS}}</style>
+</head>
+<body>
+{{BODY}}
+<script>
+(() => {
+  const safeTop = 756;
+  const minimumGapPx = 14;
+  const panel = document.querySelector('.main-shell');
+  const footer = document.querySelector('.footer');
+  const blocks = [...document.querySelectorAll('.info-block')];
+  const rect = (node) => {
+    const value = node.getBoundingClientRect();
+    return { left:value.left, top:value.top, right:value.right, bottom:value.bottom, width:value.width, height:value.height };
+  };
+  const visible = (node) => {
+    const style = getComputedStyle(node);
+    const value = rect(node);
+    return { display:style.display, visibility:style.visibility, opacity:style.opacity, clientRects:node.getClientRects().length, visible:value.width > 0 && value.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0 };
+  };
+  const overlaps = (first, second) => {
+    const a = rect(first);
+    const b = rect(second);
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  };
+  const panelRect = rect(panel);
+  const footerRect = rect(footer);
+  const panelStyle = getComputedStyle(panel);
+  const padding = { top:parseFloat(panelStyle.paddingTop), right:parseFloat(panelStyle.paddingRight), bottom:parseFloat(panelStyle.paddingBottom), left:parseFloat(panelStyle.paddingLeft) };
+  const blockRects = blocks.map(rect);
+  const finalBlock = blockRects.reduce((latest, current) => current.bottom > latest.bottom ? current : latest, blockRects[0]);
+  const infoGridFooterGapPx = footerRect.top - finalBlock.bottom;
+  const coreContent = [panel, footer, ...blocks];
+  const inCanvas = (value) => value.left >= 0 && value.top >= 0 && value.right <= 1920 && value.bottom <= 1080;
+  const blockCollision = blocks.some((block, index) => blocks.slice(index + 1).some((other) => overlaps(block, other)));
+  const footerCollision = blocks.some((block) => overlaps(block, footer));
+  const geometry = {
+    canvas:{ width:1920, height:1080 }, safeAreaTop:safeTop, minimumGapPx,
+    mainShell:{ rect:panelRect, padding, scrollHeight:panel.scrollHeight, clientHeight:panel.clientHeight, visibility:visible(panel) },
+    footer:{ rect:footerRect, scrollHeight:footer.scrollHeight, clientHeight:footer.clientHeight, scrollWidth:footer.scrollWidth, clientWidth:footer.clientWidth, text:footer.textContent.trim(), visibility:visible(footer) },
+    blocks:blocks.map((block, index) => ({ index, rect:blockRects[index], scrollHeight:block.scrollHeight, clientHeight:block.clientHeight, visibility:visible(block) })),
+    infoGridFooterGapPx,
+    info_grid_footer_gap_px:infoGridFooterGapPx,
+    collisions:{ blockToBlock:blockCollision, blockToFooter:footerCollision },
+  };
+  const failures = [];
+  if (!(footerRect.bottom <= panelRect.bottom - padding.bottom)) failures.push('FOOTER_OUTSIDE_RESERVED_MAIN_SHELL');
+  if (!(infoGridFooterGapPx + 0.5 >= minimumGapPx)) failures.push('INFO_GRID_FOOTER_GAP_INVALID');
+  if (!(footerRect.bottom < safeTop)) failures.push('FOOTER_SAFE_AREA_INVALID');
+  if (!(panel.scrollHeight <= panel.clientHeight) || !(footer.scrollHeight <= footer.clientHeight) || blocks.some((block) => block.scrollHeight > block.clientHeight)) failures.push('CORE_VERTICAL_OVERFLOW');
+  if (!geometry.footer.text || !geometry.footer.visibility.visible || footer.scrollWidth > footer.clientWidth) failures.push('FOOTER_TEXT_NOT_VISIBLE');
+  if (coreContent.some((node) => !inCanvas(rect(node)))) failures.push('CORE_OUTSIDE_CANVAS');
+  if (blockCollision || footerCollision) failures.push('CORE_RECT_COLLISION');
+  geometry.failures = failures;
+  geometry.valid = failures.length === 0;
+  document.documentElement.dataset.geometry = JSON.stringify(geometry);
+  document.documentElement.dataset.renderStatus = geometry.valid ? 'PASS' : 'HTML_CARD_GEOMETRY_INVALID';
+})();
+</script>
+</body>
+</html>
