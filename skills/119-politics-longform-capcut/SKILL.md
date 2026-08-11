@@ -5,31 +5,42 @@ description: Use only when a political-longform request explicitly contains CapC
 
 # 119 정치롱폼 CapCut 제작
 
-119는 승인된 정치롱폼 설계를 실제 source·narration·visual·root 자산과 결합해
-편집 가능한 로컬 CapCut 프로젝트로 조립한다.
+119는 투군 PRE-119가 승인까지 끝낸 정치롱폼 설계를 실제 source·narration·visual·root 자산과 결합해 편집 가능한 로컬 CapCut 프로젝트로 조립한다.
 
-사용자가 CapCut, 캡컷, 119, 119정치롱폼을 명시했을 때 사용한다.
-명시 호출이 없으면 119로 자동 우회하지 않는다.
+사용자가 CapCut, 캡컷, 119, 119정치롱폼을 명시했을 때 사용한다. 명시 호출이 없으면 119로 자동 우회하지 않는다.
 
 ## 시작
 
 1. `episode_id`, active writer, 사용자 요청 결과를 확인한다.
-2. 승인된 대본이 없을 때만 [direct-script.md](references/direct-script.md)를 읽는다.
-3. 승인 대본에 `[ASSEMBLY_ONLY_SEED]` 또는 `execution_mode=ASSEMBLY_ONLY`가 있으면
-   이 문서의 `ASSEMBLY_ONLY` 직접 경로를 최우선으로 적용한다.
-4. 현재 단계의 reference만 읽으며 관련 없는 reference 전체를 미리 읽지 않는다.
+2. `20_script/pre119_handoff.json`, `togun-pre119-handoff-v3`, `TOGUN_PRE119_TO_119_DIRECT`, `EDITORIAL_OWNER=TOGUN_PRE119`, `PRE119_SOURCE_CANDIDATE` 중 강한 표식 하나가 있거나 보조 표식 두 개 이상이면 승인 여부보다 먼저 [pre119-handoff-contract.md](references/pre119-handoff-contract.md)를 읽는다.
+3. PRE-119 경로가 선택되면 `validate_pre119_handoff.py`가 PASS하기 전 direct-script로 fallback하지 않는다.
+4. 승인 대본에 `[ASSEMBLY_ONLY_SEED]` 또는 `execution_mode=ASSEMBLY_ONLY`가 있으면 `ASSEMBLY_ONLY` 조립 경로를 최우선으로 적용한다.
+5. PRE-119가 아니고 승인 대본도 없을 때만 [direct-script.md](references/direct-script.md)를 읽는다.
+6. 현재 단계의 reference만 읽으며 관련 없는 문서를 미리 읽지 않는다.
 
 | 관찰 가능한 상태 | 읽을 문서 | 상태 |
 |---|---|---|
+| PRE-119 강한 표식 1개 또는 보조 표식 2개 이상 | `pre119-handoff-contract.md` | `PRE119_VALIDATION` |
 | 대본 미승인 | `direct-script.md` | `CAN_DRAFT` 또는 `WAIT_SCRIPT_APPROVAL` |
-| 승인 대본 + ASSEMBLY_ONLY_SEED | 이 문서 + 현재 책임 reference | `ASSEMBLY_ONLY_READY` |
+| PRE-119 PASS + 승인 대본 + ASSEMBLY_ONLY_SEED | 이 문서 + 현재 책임 reference | `ASSEMBLY_ONLY_READY` |
 | 직접 대본 승인·제공 | 이 문서의 직접 경로 | `DIRECT_SCRIPT_READY` |
 | 기존 Stage 2 산출물 사용을 명시 | `legacy-stage2.md` | `LEGACY_STAGE2_PREFLIGHT` |
 | 실패 단계가 불명확 | `resume-map.md` | 한 단계 선택 |
 
-직접 경로의 최소 입력은 `episode_id`, 승인된 최종 대본,
-출처 URL·원본 SRT·로컬 미디어 중 하나 이상이다.
-직접 경로는 110·111, 외부 검토 영수증, review packet, 업로드 패키지에 의존하지 않는다.
+직접 경로 최소 입력은 `episode_id`, 승인된 최종 대본, 출처 URL·원본 SRT·로컬 미디어 중 하나 이상이다. 직접 경로는 110·111, 외부 검토 영수증, review packet, locked-clips 패킷에 의존하지 않는다.
+
+## PRE-119 승인 잠금
+
+PRE-119 입력은 다음 validator를 통과해야 한다.
+
+```powershell
+python scripts/validate_pre119_handoff.py `
+  --package-root <pre119-package> `
+  --approved-script-sha256 <user-approved-final-script-sha256> `
+  --approval-evidence <user_message:id-or-runtime_approval:id>
+```
+
+PASS 전에는 `episode_cards.json`을 만들지 않는다. 패킷 내부의 `PASS`나 승인 필드는 외부 사용자 승인 evidence를 대신하지 못한다.
 
 ## ASSEMBLY_ONLY 잠금
 
@@ -60,15 +71,18 @@ rendered image
 target start/duration
 ```
 
-이미 실제 PASS 산출물과 동일 identity·SHA·duration이 있으면 다시 조사·검증·생성하지 않는다.
+동일 identity·SHA·duration의 실제 PASS 산출물이 있으면 다시 조사·검증·생성하지 않는다.
 
-허용되는 기본 흐름:
+허용 흐름:
 
 ```text
-기존 또는 필요한 A/B/C/D 자산
+PRE119_VALIDATION=PASS
+→ 기존 또는 필요한 A/B/C/D 자산
 → episode_cards.json
-→ caption layout validator
-→ USER_FINAL_ASSEMBLY_GRID.md
+→ ASSEMBLY_PREFLIGHT
+   - CAPTION_LAYOUT
+   - SRT_TEXT_FIDELITY
+   - USER_FINAL_ASSEMBLY_GRID
 → clean build
 → relink
 → save/close
@@ -84,15 +98,14 @@ ASSEMBLY_ONLY 회차에서 금지:
 승인 대본 재작성·재검토
 기존 PASS source metadata·exact quote 재검증
 목표 초를 맞추기 위한 강제 retime
-Grid 필드 보완용 추가 조사
+GRID 보완용 추가 조사
 builder 기능개선·TDD·candidate code 수정
 새 adapter·독립 code review
 정상 PASS 단계 전체 재실행
 build 후 active draft 직접 수술
 ```
 
-현재 조립을 실제로 불가능하게 만드는 결함이면 자동 개발 작업으로 확장하지 않고
-`ASSEMBLY_BLOCKED:<정확한 원인>`으로 중단한다.
+현재 조립을 실제로 불가능하게 만드는 결함이면 자동 개발 작업으로 확장하지 않고 `ASSEMBLY_BLOCKED:<정확한 원인>`으로 중단한다.
 
 ## 승인 뒤 A–D
 
@@ -102,16 +115,14 @@ build 후 active draft 직접 수술
 |---|---|---|
 | A 출처·SRT·다운로드·로컬 컷 | `source-media.md` | source media와 source captions |
 | B 나레이션·정렬·SRT | `narration.md` | narration media와 narration SRT |
-| C HTML/CSS 설명카드 등 지원 시각 자산 | `visual-assets.md` | episode `Resources` 자산 |
+| C 민주블루 HTML/CSS 설명카드 등 | `visual-assets.md` | episode `Resources` 자산 |
 | D 근본·target·CapCut 종료 준비 | `capcut-assembly.md` 준비 절 | 공식 resolver 결과 |
 
-A–D는 다른 작업의 state·산출물·CapCut draft·`episode_cards.json`을 수정하지 않는다.
-모두 준비된 뒤 join owner 한 명만 실제 산출물을 `episode_cards.json`으로 합친다.
-`episode_cards.json`이 유일한 join이자 조립 Source of Truth다.
+A–D는 다른 작업의 state·산출물·CapCut draft·`episode_cards.json`을 수정하지 않는다. 모두 준비된 뒤 join owner 한 명만 실제 산출물을 `episode_cards.json`으로 합친다. 이 파일이 유일한 조립 Source of Truth다.
 
 ## 전체 하단 자막 화면 계약
 
-다음 모든 하단 표시 자막에 동일하게 적용한다.
+적용 대상:
 
 ```text
 SOURCE_TTS
@@ -129,18 +140,29 @@ HARD_MAX_LINE_CHARS   = 18
 ```
 
 - 평균 한 줄 15자를 목표로 하고 화면에는 최대 2줄만 표시한다.
-- 표시 글자 수는 각 줄의 앞뒤 공백을 제외하고 내부 공백·문장부호를 포함해 센다.
-- 두 줄이면 전체 표시 글자 수가 30자를 넘지 않게 한다.
-- 자연스러운 조사·어절·호흡 경계에서 줄을 나눈다.
-- 긴 문장을 글자 크기로 억지 축소하지 않는다.
-- 30자를 넘으면 원문을 바꾸지 말고 시간상 연속된 다음 cue로 분할한다.
-- 원본 SRT·직접인용은 축약·의역하지 않는다.
+- 줄 앞뒤 공백을 제외하고 내부 공백·문장부호를 포함해 센다.
+- 두 줄 전체 30자, 한 줄 hard max 18자를 넘으면 FAIL이다.
+- 긴 문장은 글자 크기로 축소하지 않고 시간상 연속 cue로 분할한다.
+- 원본 SRT·직접인용·승인 나레이션 문장은 축약·의역하지 않는다.
 - `VIDEO100_EXPLAINER`는 정확히 2줄이어야 한다.
-- 3줄 표시, 빈 줄, 작업 메모형 문구는 FAIL이다.
+- 3줄, 빈 줄, 작업 메모형 문구는 FAIL이다.
 - SRT와 `VIDEO100_EXPLAINER`를 같은 시간대에 함께 표시하지 않는다.
 
-빌드 전 `validate_politics_caption_layout.py`를 로컬로 실행한다.
-정상 PASS 결과를 다시 Codex에게 읽혀 같은 검사를 반복시키지 않는다.
+## 민주블루 HTML 카드
+
+`DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`은 문서 규칙이 아니라 실제 템플릿·렌더러를 사용한다.
+
+```text
+templates/democratic_blue_center_info_card_v1.html
+templates/democratic_blue_center_info_card_v1.css
+scripts/render_democratic_blue_card.py
+```
+
+투군이 확정한 JSON 문구를 주입해 1920×1080 PNG를 만들고, manifest의 SHA·해상도·하단 30% 안전영역을 확인한다. 외부 이미지 검색·AI 이미지 생성·다중 시안을 기본 실행하지 않는다.
+
+## CTA 정책
+
+회차 CTA는 `ON|OFF` 중 하나다. 현재 builder는 회차 전체 CTA ON/OFF를 지원한다. 카드별 값이 섞이면 `CTA_POLICY_MIXED_UNSUPPORTED`로 중단한다. CTA OFF는 active draft 수술이 아니라 build 전에 템플릿 CTA segment를 제거한다.
 
 ## 핵심 불변식
 
@@ -156,18 +178,13 @@ HARD_MAX_LINE_CHARS   = 18
 
 ## 실패와 재개
 
-일반 직접 경로에서는 구체적 기술 실패가 발생했을 때
-`첫 실패 재현 → 원인 최소 수정 → 같은 검사 재실행`으로 처리한다.
+일반 직접 경로는 `첫 실패 재현 → 원인 최소 수정 → 같은 검사 재실행`으로 처리한다. ASSEMBLY_ONLY에서는 자동 코드수정·기능개선으로 확장하지 않는다. 상위 조립 입력 오류는 상위 입력 또는 cards를 수정한 뒤 preflight와 clean rebuild를 다시 실행한다. active draft의 CTA·텍스트·template·attachment·history metadata를 연쇄 수술하지 않는다.
 
-ASSEMBLY_ONLY에서는 자동 코드수정·기능개선으로 확장하지 않는다.
-상위 조립 입력 오류는 상위 입력 또는 cards를 수정한 뒤 clean rebuild한다.
-active draft의 CTA·텍스트·template·attachment·history를 연쇄 수술하지 않는다.
-
-성공한 단계는 실제 identity·SHA·duration이 유지되면 다시 실행하지 않는다.
-재개점이 불명확할 때만 [resume-map.md](references/resume-map.md)를 읽는다.
+성공한 단계는 실제 identity·SHA·duration이 유지되면 다시 실행하지 않는다. 재개점이 불명확할 때만 [resume-map.md](references/resume-map.md)를 읽는다.
 
 ## 단계 문서
 
+- PRE-119: [pre119-handoff-contract.md](references/pre119-handoff-contract.md)
 - 대본: [direct-script.md](references/direct-script.md)
 - 출처 미디어: [source-media.md](references/source-media.md)
 - 나레이션: [narration.md](references/narration.md)
@@ -177,18 +194,20 @@ active draft의 CTA·텍스트·template·attachment·history를 연쇄 수술�
 - 재개 선택: [resume-map.md](references/resume-map.md)
 - 기존 Stage 2 전용: [legacy-stage2.md](references/legacy-stage2.md)
 
-근본 승격 작업을 명시적으로 요청받았을 때만
-[root-bundle-contract.md](references/root-bundle-contract.md)를 읽는다.
+근본 승격을 명시적으로 요청받았을 때만 [root-bundle-contract.md](references/root-bundle-contract.md)를 읽는다.
 
 ## 완료 판정
 
 직접 경로는 `STAGE2_PREFLIGHT`를 요구하거나 보고하지 않는다.
 
 ```text
-DIRECT_SCRIPT_READY 또는 ASSEMBLY_ONLY_READY
+PRE119_VALIDATION 또는 DIRECT_SCRIPT_READY
+ASSEMBLY_ONLY_READY
 ROOT_CONTRACT
-CAPTION_LAYOUT
 EPISODE_CARDS
+ASSEMBLY_PREFLIGHT
+CAPTION_LAYOUT
+SRT_TEXT_FIDELITY
 USER_FINAL_ASSEMBLY_GRID
 PROJECT_BUILD
 MEDIA_RELINK
@@ -196,6 +215,4 @@ MEDIA_RESOLUTION
 VISUAL_GATE
 ```
 
-`MEDIA_RELINK=PASS`, `MEDIA_RESOLUTION=PASS`, `VISUAL_GATE=PASS`가 모두 있어야
-CapCut 제작 완료다. 정적 JSON 검사나 GRID는 실제 화면 승인 증거가 아니다.
-`MP4`와 `UPLOAD`는 실행하지 않았으면 `NOT RUN`이다.
+`MEDIA_RELINK=PASS`, `MEDIA_RESOLUTION=PASS`, `VISUAL_GATE=PASS`가 모두 있어야 CapCut 제작 완료다. 정적 JSON 검사나 GRID는 실제 화면 승인 증거가 아니다. `MP4`와 `UPLOAD`는 실행하지 않았으면 `NOT RUN`이다.

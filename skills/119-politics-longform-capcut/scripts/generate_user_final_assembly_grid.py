@@ -9,26 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROWS = (
-    "SEGMENT_ID",
-    "CHAPTER_TITLE",
-    "CARD_TYPE",
-    "SCREEN",
-    "VISUAL_DESIGN",
-    "RENDERED_ASSET",
-    "VIDEO_SOURCE",
-    "SOURCE_RANGE",
-    "SOURCE_AUDIO",
-    "NARRATION_AUDIO",
-    "NARRATION_TEXT",
-    "SOURCE_CHANNEL",
-    "SOURCE_DATE",
-    "LOWER_MODE",
-    "LOWER_TEXT",
-    "CTA_LIKE_SUBSCRIBE",
-    "WHY_THIS_SEGMENT",
-    "STATUS",
+    "SEGMENT_ID", "CHAPTER_TITLE", "CARD_TYPE", "SCREEN", "VISUAL_DESIGN",
+    "RENDERED_ASSET", "VIDEO_SOURCE", "SOURCE_RANGE", "SOURCE_AUDIO",
+    "NARRATION_AUDIO", "NARRATION_TEXT", "SOURCE_CHANNEL", "SOURCE_DATE",
+    "LOWER_MODE", "LOWER_TEXT", "CTA_LIKE_SUBSCRIBE", "WHY_THIS_SEGMENT", "STATUS",
 )
 
 
@@ -36,9 +21,7 @@ def clock(microseconds: int) -> str:
     seconds = max(0, round(microseconds / 1_000_000))
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
-    if hours:
-        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes:02d}:{seconds:02d}"
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes:02d}:{seconds:02d}"
 
 
 def safe(value: Any) -> str:
@@ -89,24 +72,15 @@ def row_data(card: dict[str, Any], global_cta: Any) -> dict[str, str]:
     source_audio, narration_audio = audio_flags(card_type, card)
     source_start = int(card.get("source_start_us", 0))
     source_duration = int(card.get("source_duration_us", 0))
-    source_range = (
-        f"{clock(source_start)}–{clock(source_start + source_duration)}"
-        if source_duration > 0
-        else "N/A"
-    )
+    source_range = f"{clock(source_start)}–{clock(source_start + source_duration)}" if source_duration > 0 else "N/A"
     return {
         "SEGMENT_ID": safe(card.get("card_id")),
         "CHAPTER_TITLE": safe(card.get("chapter_title", card.get("chapter_label"))),
         "CARD_TYPE": safe(card_type),
         "SCREEN": screen_of(card_type),
         "VISUAL_DESIGN": safe(card.get("visual_design", card.get("style_profile"))),
-        "RENDERED_ASSET": safe(
-            Path(str(card["image_file"])).name if card.get("image_file") else None
-        ),
-        "VIDEO_SOURCE": safe(
-            card.get("source_id")
-            or (Path(str(card["source_file"])).name if card.get("source_file") else None)
-        ),
+        "RENDERED_ASSET": safe(Path(str(card["image_file"])).name if card.get("image_file") else None),
+        "VIDEO_SOURCE": safe(card.get("source_id") or (Path(str(card["source_file"])).name if card.get("source_file") else None)),
         "SOURCE_RANGE": source_range,
         "SOURCE_AUDIO": safe(source_audio),
         "NARRATION_AUDIO": safe(narration_audio),
@@ -124,18 +98,14 @@ def row_data(card: dict[str, Any], global_cta: Any) -> dict[str, str]:
 def render(document: dict[str, Any]) -> str:
     cards = normalize(document)
     labels = [
-        f"{clock(int(card['target_start_us']))}–"
-        f"{clock(int(card['target_start_us']) + int(card['target_duration_us']))}"
+        f"{clock(int(card['target_start_us']))}–{clock(int(card['target_start_us']) + int(card['target_duration_us']))}"
         for card in cards
     ]
     global_cta = document.get("cta_like_subscribe", "N/A")
     mapped = [row_data(card, global_cta) for card in cards]
-
     lines = [
-        "# 119 USER FINAL ASSEMBLY GRID",
-        "",
-        "> READ-ONLY VIEW — `episode_cards.json`이 유일한 조립 정본이다.",
-        "",
+        "# 119 USER FINAL ASSEMBLY GRID", "",
+        "> READ-ONLY VIEW — `episode_cards.json`이 유일한 조립 정본이다.", "",
         "| 레이어 \\ 최종 시간 | " + " | ".join(labels) + " |",
         "|---|" + "|".join(["---"] * len(labels)) + "|",
     ]

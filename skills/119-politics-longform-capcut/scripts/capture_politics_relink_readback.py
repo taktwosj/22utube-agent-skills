@@ -162,7 +162,9 @@ def readback_presentation_contract(
         item.get("id"): item for item in document.get("materials", {}).get("texts", [])
     }
 
-    def resolve(row: dict[str, Any]) -> dict[str, Any] | None:
+    def resolve(row: dict[str, Any] | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
         material = materials.get(row.get("material_id"))
         if material is None:
             return None
@@ -189,8 +191,11 @@ def readback_presentation_contract(
 
     source_rows = [resolve(row) for row in expected.get("source_date_hud", [])]
     lower_rows = [resolve(row) for row in expected.get("lower_slots", [])]
-    cta_row = resolve(expected.get("cta_hud", {}))
-    if cta_row is None or any(row is None for row in source_rows + lower_rows):
+    expected_cta = expected.get("cta_hud")
+    cta_row = resolve(expected_cta)
+    if (expected_cta is not None and cta_row is None) or any(
+        row is None for row in source_rows + lower_rows
+    ):
         return None
     return {
         "source_date_hud": source_rows,
@@ -204,11 +209,15 @@ def unexpected_presentation_segments(
 ) -> list[str]:
     if not expected:
         return []
-    expected_rows = (
-        list(expected.get("source_date_hud", []))
-        + [expected.get("cta_hud", {})]
-        + list(expected.get("lower_slots", []))
-    )
+    expected_rows = [
+        row
+        for row in (
+            list(expected.get("source_date_hud", []))
+            + [expected.get("cta_hud")]
+            + list(expected.get("lower_slots", []))
+        )
+        if row is not None
+    ]
     expected_pairs = {
         (row.get("material_id"), row.get("segment_id")) for row in expected_rows
     }

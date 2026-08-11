@@ -16,14 +16,11 @@ MAX_LINES = 2
 TARGET_CHARS_PER_CUE = 30
 HARD_MAX_LINE_CHARS = 18
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
-# Existing assembly cards may still use user-facing lower-mode names.  Keep the
-# validator read-compatible while new cards use the internal enum above.
 LEGACY_LOWER_MODE_ALIASES = {
     "SRT": "SRT",
     "COMMENTARY_2LINE": "VIDEO100_EXPLAINER",
 }
-SRT_FILE_FIELDS = ("source_srt_file", "narration_srt_file", "srt_file")
-
+SRT_MODES = {"SRT", "SOURCE_TTS", "NARRATION_TTS"}
 WORK_NOTE_PATTERNS = (
     "주시면 되지 않을까요",
     "다음 영상을 보겠습니다",
@@ -33,7 +30,6 @@ WORK_NOTE_PATTERNS = (
 
 
 def display_length(line: str) -> int:
-    """Count displayed code points, including internal spaces and punctuation."""
     return len(line.strip())
 
 
@@ -50,23 +46,18 @@ def validate_caption(text: str, *, label: str, exact_two_lines: bool = False) ->
     raw_rows = caption_rows(text)
     lines = nonempty_lines(text)
     findings: list[dict[str, Any]] = []
-
     if any(not row.strip() for row in raw_rows):
         findings.append({"code": "CAPTION_EMPTY_LINE", "label": label})
-
     if not lines:
         return [{"code": "CAPTION_TEXT_EMPTY", "label": label}]
-
     if len(lines) > MAX_LINES:
         findings.append(
             {"code": "CAPTION_MAX_LINES_EXCEEDED", "label": label, "actual": len(lines), "max": MAX_LINES}
         )
-
     if exact_two_lines and len(lines) != 2:
         findings.append(
             {"code": "COMMENTARY_REQUIRES_EXACTLY_2_LINES", "label": label, "actual": len(lines)}
         )
-
     lengths = [display_length(line) for line in lines]
     if lengths and max(lengths) > HARD_MAX_LINE_CHARS:
         findings.append(
@@ -77,7 +68,6 @@ def validate_caption(text: str, *, label: str, exact_two_lines: bool = False) ->
                 "hard_max": HARD_MAX_LINE_CHARS,
             }
         )
-
     if lengths and math.ceil(sum(lengths) / len(lengths)) > TARGET_CHARS_PER_LINE:
         findings.append(
             {
@@ -88,7 +78,6 @@ def validate_caption(text: str, *, label: str, exact_two_lines: bool = False) ->
                 "target": TARGET_CHARS_PER_LINE,
             }
         )
-
     if sum(lengths) > TARGET_CHARS_PER_CUE:
         findings.append(
             {
@@ -98,14 +87,10 @@ def validate_caption(text: str, *, label: str, exact_two_lines: bool = False) ->
                 "target": TARGET_CHARS_PER_CUE,
             }
         )
-
     normalized = "\n".join(lines)
     for pattern in WORK_NOTE_PATTERNS:
         if pattern in normalized:
-            findings.append(
-                {"code": "CAPTION_WORK_NOTE_EXPOSED", "label": label, "pattern": pattern}
-            )
-
+            findings.append({"code": "CAPTION_WORK_NOTE_EXPOSED", "label": label, "pattern": pattern})
     return findings
 
 
@@ -116,9 +101,7 @@ def parse_srt(path: Path) -> list[tuple[str, str]]:
     cues: list[tuple[str, str]] = []
     for block in re.split(r"\n{2,}", raw):
         rows = block.splitlines()
-        if len(rows) < 2:
-            continue
-        timestamp_index = next((i for i, row in enumerate(rows) if "-->" in row), None)
+        timestamp_index = next((index for index, row in enumerate(rows) if "-->" in row), None)
         if timestamp_index is None:
             continue
         cue_id = rows[0].strip() if timestamp_index > 0 else str(len(cues) + 1)
@@ -127,15 +110,34 @@ def parse_srt(path: Path) -> list[tuple[str, str]]:
     return cues
 
 
-def card_srt_paths(card: dict[str, Any], cards_path: Path) -> list[Path]:
+def validate_srt(path: Path) -> list[dict[str, Any]]:
+    cues = parse_srt(path)
+    if not cues:
+        return [{"code": "SRT_CUES_REQUIRED", "label": str(path)}]
+    findings: list[dict[str, Any]] = []
+    for cue_id, text in cues:
+        findings.extend(validate_caption(text, label=f"{path.name}:cue={cue_id}"))
+    return findings
+
+
+def resolve_card_path(value: str, cards_path: Path) -> Path:
+    candidate = Path(value)
+    return candidate if candidate.is_absolute() else cards_path.parent / candidate
+
+
+def card_srt_paths(card: dict[str, Any], cards_path: Path, mode: str) -> list[Path]:
+    if mode == "SOURCE_TTS":
+        fields = ("source_srt_file", "display_srt_path", "srt_file")
+    elif mode == "NARRATION_TTS":
+        fields = ("narration_srt_file", "srt_file")
+    else:
+        fields = ("source_srt_file", "narration_srt_file", "display_srt_path", "srt_file")
     paths: list[Path] = []
-    for field in SRT_FILE_FIELDS:
+    for field in fields:
         value = card.get(field)
         if not isinstance(value, str) or not value.strip():
             continue
-        candidate = Path(value)
-        if not candidate.is_absolute():
-            candidate = cards_path.parent / candidate
+        candidate = resolve_card_path(value, cards_path)
         if candidate not in paths:
             paths.append(candidate)
     return paths
@@ -146,7 +148,6 @@ def validate_cards(path: Path) -> list[dict[str, Any]]:
     cards = document.get("cards")
     if not isinstance(cards, list):
         return [{"code": "CARDS_REQUIRED", "label": str(path)}]
-
     findings: list[dict[str, Any]] = []
     for card in cards:
         if not isinstance(card, dict):
@@ -157,29 +158,24 @@ def validate_cards(path: Path) -> list[dict[str, Any]]:
         card_id = str(card.get("card_id", "?"))
         label = f"{path.name}:{card_id}"
         if mode not in LOWER_MODES and mode != "SRT":
-            findings.append(
-                {"code": "CAPTION_INVALID_LOWER_MODE", "label": card_id, "mode": raw_mode}
-            )
+            findings.append({"code": "CAPTION_INVALID_LOWER_MODE", "label": card_id, "mode": raw_mode})
             continue
         if mode == "NONE":
             continue
-        text = str(card.get("lower_text", ""))
-        if mode == "SRT" and not text.strip():
-            references = card_srt_paths(card, path)
+        if mode in SRT_MODES:
+            references = card_srt_paths(card, path, mode)
             if not references:
                 findings.append({"code": "CAPTION_SRT_REFERENCE_REQUIRED", "label": label})
                 continue
             for srt in references:
                 if not srt.is_file():
-                    findings.append(
-                        {"code": "SRT_FILE_MISSING", "label": label, "path": str(srt)}
-                    )
+                    findings.append({"code": "SRT_FILE_MISSING", "label": label, "path": str(srt)})
                 else:
                     findings.extend(validate_srt(srt))
             continue
         findings.extend(
             validate_caption(
-                text,
+                str(card.get("lower_text", "")),
                 label=label,
                 exact_two_lines=mode == "VIDEO100_EXPLAINER",
             )
@@ -187,42 +183,8 @@ def validate_cards(path: Path) -> list[dict[str, Any]]:
     return findings
 
 
-def validate_srt(path: Path) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    cues = parse_srt(path)
-    if not cues:
-        return [{"code": "SRT_CUES_REQUIRED", "label": str(path)}]
-    for cue_id, text in cues:
-        findings.extend(validate_caption(text, label=f"{path.name}:cue={cue_id}"))
-    return findings
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--cards", type=Path)
-    parser.add_argument("--srt", type=Path, action="append", default=[])
-    parser.add_argument("--report", type=Path, required=True)
-    args = parser.parse_args()
-
-    if args.cards is None and not args.srt:
-        raise RuntimeError("CAPTION_INPUT_REQUIRED")
-
-    findings: list[dict[str, Any]] = []
-    checked: list[str] = []
-
-    if args.cards is not None:
-        if not args.cards.is_file():
-            raise RuntimeError(f"CARDS_FILE_MISSING:{args.cards}")
-        checked.append(str(args.cards))
-        findings.extend(validate_cards(args.cards))
-
-    for srt in args.srt:
-        if not srt.is_file():
-            raise RuntimeError(f"SRT_FILE_MISSING:{srt}")
-        checked.append(str(srt))
-        findings.extend(validate_srt(srt))
-
-    report = {
+def build_report(checked: list[str], findings: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
         "schema": "politics-longform-caption-layout.v1",
         "policy": {
             "target_chars_per_line": TARGET_CHARS_PER_LINE,
@@ -234,10 +196,33 @@ def main() -> int:
         "status": "PASS" if not findings else "FAIL",
         "findings": findings,
     }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cards", type=Path)
+    parser.add_argument("--srt", type=Path, action="append", default=[])
+    parser.add_argument("--report", type=Path, required=True)
+    args = parser.parse_args()
+    if args.cards is None and not args.srt:
+        raise RuntimeError("CAPTION_INPUT_REQUIRED")
+    findings: list[dict[str, Any]] = []
+    checked: list[str] = []
+    if args.cards is not None:
+        if not args.cards.is_file():
+            raise RuntimeError(f"CARDS_FILE_MISSING:{args.cards}")
+        checked.append(str(args.cards))
+        findings.extend(validate_cards(args.cards))
+    for srt in args.srt:
+        if not srt.is_file():
+            raise RuntimeError(f"SRT_FILE_MISSING:{srt}")
+        checked.append(str(srt))
+        findings.extend(validate_srt(srt))
+    report = build_report(checked, findings)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if not findings else 2
+    return 0 if report["status"] == "PASS" else 2
 
 
 if __name__ == "__main__":

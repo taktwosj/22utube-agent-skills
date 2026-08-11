@@ -181,6 +181,9 @@ def main() -> int:
         write_report(package_root, blocked_report("WAIT_APPROVAL_HASH_MISMATCH", markers, script_lock=lock_report))
         return 2
 
+    minimal_edit_plan = handoff.get("minimal_edit_plan")
+    if not isinstance(minimal_edit_plan, dict):
+        minimal_edit_plan = {}
     required = {
         "episode_id": handoff.get("episode_id"),
         "project_name": handoff.get("project_name"),
@@ -190,13 +193,24 @@ def main() -> int:
         "between_image": handoff.get("between_image"),
         "between_narration": handoff.get("between_narration"),
         "lower_mode": handoff.get("lower_mode"),
+        "execution_mode": handoff.get("execution_mode", "ASSEMBLY_ONLY"),
+        "cta_like_subscribe": handoff.get(
+            "cta_like_subscribe", minimal_edit_plan.get("cta_like_subscribe", "ON")
+        ),
     }
     if any(value in (None, "", []) for value in required.values()):
         write_report(package_root, blocked_report("WAIT_PRE119_PLAN_FIELDS_REQUIRED", markers))
         return 2
-    if required["lower_mode"] not in {"SRT", "COMMENTARY_2LINE", "NONE"}:
+    if required["lower_mode"] not in {"SRT", "COMMENTARY_2LINE", "NONE", "MIXED"}:
         write_report(package_root, blocked_report("FAIL_PRE119_LOWER_MODE", markers))
         return 2
+    if required["execution_mode"] != "ASSEMBLY_ONLY":
+        write_report(package_root, blocked_report("FAIL_PRE119_EXECUTION_MODE", markers))
+        return 2
+    if str(required["cta_like_subscribe"]).strip().upper() not in {"ON", "OFF"}:
+        write_report(package_root, blocked_report("FAIL_PRE119_CTA_POLICY", markers))
+        return 2
+    required["cta_like_subscribe"] = str(required["cta_like_subscribe"]).strip().upper()
 
     report = {
         "schema": "politics-pre119-handoff-validation.v1",
