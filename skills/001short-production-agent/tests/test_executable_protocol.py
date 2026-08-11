@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -73,6 +74,24 @@ def add_final_evidence(report: dict, root: Path) -> None:
 
 
 class ExecutableProtocolContractTest(unittest.TestCase):
+    def test_plan_cli_separates_legacy_v1_from_current_v2(self):
+        current = json.loads((SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8"))
+        self.assertEqual(current["schema_version"], "001short-production-plan-v2")
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "plan.json"
+            path.write_text(json.dumps(current), encoding="utf-8")
+            passed = subprocess.run([sys.executable, str(VALIDATOR), "--plan", str(path)], capture_output=True, text=True, encoding="utf-8", check=False)
+            self.assertEqual(passed.returncode, 0, passed.stdout)
+            current["schema_version"] = "001short-production-plan-v1"
+            path.write_text(json.dumps(current), encoding="utf-8")
+            rejected = subprocess.run([sys.executable, str(VALIDATOR), "--plan", str(path)], capture_output=True, text=True, encoding="utf-8", check=False)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("PRODUCTION_PLAN_V1_CURRENT_FIELDS_FORBIDDEN", rejected.stdout)
+            legacy = json.loads((SKILL / "tests" / "fixtures" / "urakkai_tts_only.pass.json").read_text(encoding="utf-8"))
+            path.write_text(json.dumps(legacy), encoding="utf-8")
+            legacy_result = subprocess.run([sys.executable, str(VALIDATOR), "--plan", str(path)], capture_output=True, text=True, encoding="utf-8", check=False)
+            self.assertEqual(legacy_result.returncode, 0, legacy_result.stdout)
+
     def test_paperclip_is_disabled_and_absent_from_runtime_routes(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -176,7 +195,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertEqual([stage["id"] for stage in protocol["stages"]], [f"{n:02d}" for n in range(1, 10)])
         self.assertEqual(
             set(protocol["production_modes"]),
-            {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"},
+            {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"},
         )
         self.assertEqual(
             protocol["completion_report"]["cloud_sync_row_required_fields"],
@@ -387,7 +406,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         mixed = json.loads(
             (SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8")
         )
-        mixed["audio_policy"] = "A9_TTS_PLUS_A10_RETAINED"
+        mixed["audio_policy"] = "A9_TTS_PLUS_A10_REASSEMBLED"
         mixed["cleared_anchors"] = ["A11", "A12"]
         mixed["timeline"][0]["placements"].extend([
             {
@@ -408,12 +427,12 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertEqual(module.validate_production_plan(mixed, protocol), [])
         plan_schema = json.loads(PLAN_SCHEMA.read_text(encoding="utf-8"))
         self.assertIn(
-            "A9_TTS_PLUS_A10_RETAINED",
+            "A9_TTS_PLUS_A10_REASSEMBLED",
             plan_schema["properties"]["audio_policy"]["enum"],
         )
         protocol_schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         self.assertIn(
-            "A9_TTS_PLUS_A10_RETAINED",
+            "A9_TTS_PLUS_A10_REASSEMBLED",
             protocol_schema["properties"]["production_modes"]["properties"]["URAKKAI"]
             ["properties"]["allowed_audio_policies"]["items"]["enum"],
         )
@@ -465,7 +484,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         )
 
         skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("A9_TTS_PLUS_A10_RETAINED", skill_text)
+        self.assertIn("A10_REASSEMBLED_SYNC", skill_text)
         self.assertIn("source_audio[].mode=duck", skill_text)
         self.assertIn("source_audio[].mode=on", skill_text)
         self.assertIn("MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED", skill_text)
@@ -479,7 +498,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIs(urakkai.get("approved_final_order_required"), True)
         self.assertEqual(
             urakkai.get("allowed_audio_policies"),
-            ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"],
+            ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED"],
         )
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
         self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")

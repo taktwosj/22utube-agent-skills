@@ -56,17 +56,17 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                 {"segment_id": "T1", "timeline_order": 3, "role": "T1", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "title", "content_type": "TITLE"},
                 {"segment_id": "SCR_FX", "timeline_order": 4, "role": "SCREEN_EFFECT", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
                 {"segment_id": "SCR_WHITE", "timeline_order": 5, "role": "SCREEN_WHITE", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
-                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
-                {"segment_id": "SP2", "timeline_order": 7, "role": "A10_TEXT", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC", "text": "there", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P2", "color_role": "YELLOW"},
+                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "source_range_us": [1_000_000, 2_000_000], "cue_id": "SP1", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
+                {"segment_id": "SP2", "timeline_order": 7, "role": "A10_TEXT", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC", "source_range_us": [0, 1_000_000], "cue_id": "SP2", "text": "there", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P2", "color_role": "YELLOW"},
                 {"segment_id": "TTS01", "timeline_order": 8, "role": "A9", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "narration", "content_type": "TTS", "cue_id": "TTS01"},
-                {"segment_id": "TTS01_TXT", "timeline_order": 9, "role": "A9_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "narration", "content_type": "TTS", "caption_role": "A9_TEXT", "cue_id": "TTS01"},
+                {"segment_id": "TTS01_TXT", "timeline_order": 9, "role": "A9_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "source_range_us": [1_000_000, 2_000_000], "text": "narration", "content_type": "TTS", "caption_role": "A9_TEXT", "cue_id": "TTS01"},
                 {"segment_id": "A10-1", "timeline_order": 10, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
                 {"segment_id": "A10-2", "timeline_order": 11, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
             ]
             timeline = episode / "approved_timeline.json"
             write(timeline, {
                 "schema_version": "approved-timeline-v1", "episode_id": "EP",
-                "source_fingerprint": "fp", "audio_policy": "A9_TTS_PLUS_A10_RETAINED",
+                "source_fingerprint": "fp", "production_mode": "URAKKAI", "audio_policy": "A9_TTS_PLUS_A10_REASSEMBLED",
                 "primary_speaker_id": "P1", "segments": rows,
             })
             handoff = episode / "design_handoff.json"
@@ -173,7 +173,7 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                 "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity),
                 "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff),
                 "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest),
-                "state_path": str(state), "audio_policy": "A9_TTS_PLUS_A10_RETAINED",
+                "state_path": str(state), "production_mode": "URAKKAI", "audio_policy": "A9_TTS_PLUS_A10_REASSEMBLED",
                 "root_contract_path": contract.name, "workspace_root": str(root),
                 "root_profile": "home_windows",
             }
@@ -193,6 +193,8 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                 if row.get("role") in {"A9", "A9_TEXT"}:
                     row["start"] = 500_000
                     row["duration"] = 500_000
+                    if row.get("role") == "A9_TEXT":
+                        row["source_range_us"] = [1_500_000, 2_000_000]
             write(timeline, partial_timeline)
             config["tts_cues"][0]["target_range_us"] = [500_000, 1_000_000]
             partial_manifest = json.loads(build_manifest.read_text(encoding="utf-8"))

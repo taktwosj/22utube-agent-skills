@@ -14,6 +14,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import validate_stage
+from common import sha256_file
 
 
 class ValidateStageRouterTest(unittest.TestCase):
@@ -31,7 +32,10 @@ class ValidateStageRouterTest(unittest.TestCase):
             state_path = workflow / "state.json"
             state_path.write_text(json.dumps({"episode_id": "EP", "current_stage": "07", "status": "FINAL_DESIGN_LOCKED"}), encoding="utf-8")
             audio = episode / "audio_lock.json"; caption = episode / "caption_lock.json"
-            audio.write_text("{}", encoding="utf-8"); caption.write_text("{}", encoding="utf-8")
+            audio.write_text(json.dumps({"schema_version": "001short-audio-lock-v4"}), encoding="utf-8")
+            timing = episode / "caption_timing.json"
+            timing.write_text(json.dumps({"schema_version": "001short-caption-timing-evidence-v2"}), encoding="utf-8")
+            caption.write_text(json.dumps({"schema_version": "001short-caption-lock-v2", "caption_timing_evidence_path": str(timing)}), encoding="utf-8")
             argv = ["validate_stage.py", "--state", str(state_path), "--audio-lock", str(audio), "--caption-lock", str(caption), "--advance"]
             with patch.object(sys, "argv", argv), patch.object(validate_stage, "_receipt_error", return_value=None), patch.object(validate_stage, "_run", return_value={"status": "PASS", "errors": [], "evidence": {}}):
                 self.assertEqual(validate_stage.main(), 0)
@@ -91,6 +95,107 @@ class ValidateStageRouterTest(unittest.TestCase):
             state = Path(td) / "state.json"; state.write_text("{}", encoding="utf-8")
             with patch.object(sys, "argv", ["validate_stage.py", "--state", str(state)]):
                 self.assertEqual(validate_stage.main(), 1)
+
+    def test_state_artifact_paths_are_episode_root_relative_and_cannot_escape(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = Path(td) / "episode"
+            workflow = episode / "90_workflow"
+            workflow.mkdir(parents=True)
+            state = workflow / "state.json"
+            inside = episode / "20_script" / "receipt.json"
+            inside.parent.mkdir()
+            inside.write_text("{}", encoding="utf-8")
+            self.assertEqual(
+                validate_stage._state_declared_path(state, "20_script/receipt.json"),
+                inside.resolve(),
+            )
+            for raw in ("../outside.json", str((Path(td) / "outside.json").resolve())):
+                with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, "STATE_ARTIFACT_PATH_UNSAFE"):
+                    validate_stage._state_declared_path(state, raw)
+
+    def test_stage05_advance_binds_design_and_plan_validation_receipts(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = Path(td) / "episode"
+            workflow = episode / "90_workflow"
+            workflow.mkdir(parents=True)
+            state_path = workflow / "state.json"
+            state_path.write_text(json.dumps({
+                "episode_id": "EP", "current_stage": "05", "status": "URAKKAI_AUTO_APPROVED",
+            }), encoding="utf-8")
+            evidence = episode / "20_script" / "design_lock_evidence.json"
+            evidence.parent.mkdir()
+            evidence.write_text(json.dumps({"status": "PASS", "episode_id": "EP"}), encoding="utf-8")
+            plan = evidence.with_name("production_plan.json")
+            plan.write_text(json.dumps({"schema_version": "001short-production-plan-v2", "episode_id": "EP"}), encoding="utf-8")
+            receipt = workflow / "production_plan_validation.json"
+            argv = [
+                "validate_stage.py", "--state", str(state_path),
+                "--handoff", str(evidence), "--source-identity", str(evidence),
+                "--timeline", str(evidence), "--design-lock-evidence", str(evidence),
+                "--production-plan", str(plan), "--production-plan-receipt", str(receipt),
+                "--advance",
+            ]
+            seen = {}
+            def run(check, args):
+                if check == "design_lock":
+                    seen["design_lock_evidence"] = args.design_lock_evidence
+                    return {"status": "PASS", "errors": [], "evidence": {}}
+                return {
+                    "status": "PASS", "errors": [],
+                    "evidence": {"episode_id": "EP", "production_plan_path": str(plan.resolve()), "production_plan_sha256": sha256_file(plan)},
+                }
+            with patch.object(sys, "argv", argv), patch.object(validate_stage, "_run", side_effect=run):
+                self.assertEqual(validate_stage.main(), 0)
+            advanced = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(seen["design_lock_evidence"], evidence)
+            self.assertEqual(validate_stage._state_declared_path(state_path, advanced["design_lock_evidence_path"]), evidence.resolve())
+            self.assertEqual(advanced["design_lock_evidence_sha256"], sha256_file(evidence))
+            self.assertEqual(validate_stage._state_declared_path(state_path, advanced["production_plan_path"]), plan.resolve())
+            self.assertEqual(validate_stage._state_declared_path(state_path, advanced["production_plan_validation_receipt_path"]), receipt.resolve())
+            self.assertEqual(advanced["production_plan_validation_receipt_sha256"], sha256_file(receipt))
+
+    def test_stage05_missing_episode_id_is_deterministic_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            workflow = Path(td) / "episode" / "90_workflow"; workflow.mkdir(parents=True)
+            state = workflow / "state.json"
+            state.write_text(json.dumps({"current_stage": "05", "status": "URAKKAI_AUTO_APPROVED"}), encoding="utf-8")
+            stdout = io.StringIO()
+            with patch.object(sys, "argv", ["validate_stage.py", "--state", str(state)]), redirect_stdout(stdout):
+                self.assertEqual(validate_stage.main(), 1)
+            self.assertIn("STATE_REQUIRED_FIELD_MISSING:episode_id", stdout.getvalue())
+
+    def test_stage07_advance_rejects_legacy_lock_versions(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = Path(td) / "episode"; workflow = episode / "90_workflow"; workflow.mkdir(parents=True)
+            state = workflow / "state.json"; state.write_text(json.dumps({"episode_id": "EP", "current_stage": "07", "status": "FINAL_DESIGN_LOCKED"}), encoding="utf-8")
+            audio = episode / "audio.json"; audio.write_text(json.dumps({"schema_version": "001short-audio-lock-v3"}), encoding="utf-8")
+            caption = episode / "caption.json"; caption.write_text(json.dumps({"schema_version": "001short-caption-lock-v1"}), encoding="utf-8")
+            stdout = io.StringIO()
+            with patch.object(sys, "argv", ["validate_stage.py", "--state", str(state), "--audio-lock", str(audio), "--caption-lock", str(caption), "--advance"]), patch.object(validate_stage, "_run", return_value={"status": "PASS", "errors": [], "evidence": {}}), redirect_stdout(stdout):
+                self.assertEqual(validate_stage.main(), 1)
+            self.assertIn("AUDIO_LOCK_MIGRATION_REQUIRED", stdout.getvalue())
+
+    def test_state_resolver_rejects_mocked_reparse_component(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = Path(td) / "episode"; workflow = episode / "90_workflow"; workflow.mkdir(parents=True)
+            state = workflow / "state.json"
+            target = episode / "20_script" / "receipt.json"; target.parent.mkdir(); target.write_text("{}", encoding="utf-8")
+            with patch("common._is_reparse_point", side_effect=lambda path: Path(path) == target.parent):
+                with self.assertRaisesRegex(ValueError, "STATE_ARTIFACT_PATH_UNSAFE"):
+                    validate_stage._state_declared_path(state, "20_script/receipt.json")
+
+    def test_state_resolver_rejects_actual_symlink_component_when_supported(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = Path(td) / "episode"; workflow = episode / "90_workflow"; workflow.mkdir(parents=True)
+            state = workflow / "state.json"
+            real = episode / "real"; real.mkdir(); (real / "receipt.json").write_text("{}", encoding="utf-8")
+            alias = episode / "alias"
+            try:
+                alias.symlink_to(real, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest(f"symlink unavailable: {exc}")
+            with self.assertRaisesRegex(ValueError, "STATE_ARTIFACT_PATH_UNSAFE"):
+                validate_stage._state_declared_path(state, "alias/receipt.json")
 
 
 if __name__ == "__main__":

@@ -48,6 +48,7 @@
       "TABLE_CELL_TEXT_MISMATCH",
       "TABLE_CAPTION_TEXT_MISMATCH",
       "TABLE_AUDIO_LOCK_ROLE_MISSING",
+      "CAPTION_LOCK_CUE_UNASSEMBLED",
       "TABLE_STATE_LOCK_MISSING",
       "TABLE_STATE_LOCK_PATH_MISMATCH",
       "TABLE_STATE_LOCK_SHA_MISMATCH",
@@ -62,7 +63,7 @@
     "A9", "A10", "A11", "A12_RESERVED_EMPTY"
   ],
   "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"],
-  "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt"],
+  "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt", "caption_timing_evidence.json"],
   "a12_policy": "EMPTY",
   "manual_finalization": {
     "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
@@ -147,9 +148,9 @@
       "fake_split_forbidden": true,
       "approved_final_order_required": true,
       "allowed_audio_policies": [
-        "A10_RETAINED_SYNC",
+        "A10_REASSEMBLED_SYNC",
         "TTS_ONLY_MUTE_SOURCE",
-        "A9_TTS_PLUS_A10_RETAINED"
+        "A9_TTS_PLUS_A10_REASSEMBLED"
       ]
     },
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
@@ -176,6 +177,15 @@
       "explicit_exception_to_multi_cut_gate": true,
       "video_duration": "FULL_LENGTH",
       "original_audio_duration": "FULL_LENGTH",
+      "source_order_change": "FORBIDDEN"
+    },
+    "SOURCE_ORDER_UNCHANGED_A10_RETAINED": {
+      "trigger": "operator explicitly selects a full Demucs vocal stem without source reordering",
+      "source_order_unchanged": true,
+      "video_audio_mapping_must_match": true,
+      "video_duration": "FULL_LENGTH",
+      "a10_duration": "FULL_LENGTH",
+      "allowed_audio_policies": ["A10_RETAINED_SYNC"],
       "source_order_change": "FORBIDDEN"
     }
   },
@@ -257,7 +267,7 @@
     "T2": "top title line 2",
     "A9": "TTS or narration",
     "A9_TEXT": "TTS-linked visible caption",
-    "A10": "validated Demucs source vocal stem only",
+    "A10": "explicit mode-bound source clean audio, full Demucs stem, or mapped reassembled Demucs stem",
     "A10_TEXT": "original-speech caption",
     "STATE": "situation or state caption",
     "A11": "sound effects",
@@ -343,7 +353,8 @@
       "produces": [
         "30_audio_srt/audio_lock.json",
         "30_audio_srt/caption_lock.json",
-        "30_audio_srt/final.srt"
+        "30_audio_srt/final.srt",
+        "30_audio_srt/caption_timing_evidence.json"
       ],
       "validators": [
         "scripts/validate_audio_caption.py"

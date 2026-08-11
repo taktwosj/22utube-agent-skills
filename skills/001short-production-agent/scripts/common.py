@@ -52,6 +52,38 @@ def resolved_declared_path(base_file: Path, declared: str) -> Path:
     return candidate.resolve()
 
 
+def resolve_episode_artifact(episode_root: Path, declared: str) -> Path:
+    """Resolve an episode artifact without permitting aliases or root escape."""
+    unresolved_root = Path(episode_root).absolute()
+    if path_contains_alias(unresolved_root):
+        raise ValueError("STATE_ARTIFACT_PATH_UNSAFE:ALIAS")
+    root = unresolved_root.resolve(strict=True)
+    candidate = Path(declared)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    if path_contains_alias(candidate):
+        raise ValueError("STATE_ARTIFACT_PATH_UNSAFE:ALIAS")
+    try:
+        resolved = candidate.resolve(strict=False)
+        resolved.relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise ValueError("STATE_ARTIFACT_PATH_UNSAFE:OUTSIDE_EPISODE_ROOT") from exc
+    return resolved
+
+
+def resolve_state_artifact(state_path: Path, declared: str) -> Path:
+    unresolved_state = Path(state_path).absolute()
+    if path_contains_alias(unresolved_state):
+        raise ValueError("STATE_ARTIFACT_PATH_UNSAFE:ALIAS")
+    workflow_root = next(
+        (parent for parent in unresolved_state.parents if parent.name == "90_workflow"),
+        None,
+    )
+    if workflow_root is None:
+        raise ValueError("STATE_ARTIFACT_PATH_UNSAFE:STATE_ROOT")
+    return resolve_episode_artifact(workflow_root.parent, declared)
+
+
 def _is_reparse_point(path: Path) -> bool:
     try:
         attributes = getattr(os.lstat(path), "st_file_attributes", 0)

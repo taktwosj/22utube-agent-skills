@@ -86,7 +86,8 @@
       "07": [
         "{episode_root}/30_audio_srt/audio_lock.json",
         "{episode_root}/30_audio_srt/caption_lock.json",
-        "{episode_root}/30_audio_srt/final.srt"
+        "{episode_root}/30_audio_srt/final.srt",
+        "{episode_root}/30_audio_srt/caption_timing_evidence.json"
       ],
       "08": "{episode_root}/50_capcut_project/static_validation.json"
     },

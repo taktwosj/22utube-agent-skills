@@ -67,6 +67,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     vmake = payload.get("vmake")
     clean_source = payload.get("clean_source")
     urakkai = payload["urakkai"]
+    production_mode = payload.get("production_mode", urakkai.get("production_type") if isinstance(urakkai, dict) else None)
     if (
         visual_mode not in {
             "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
@@ -193,7 +194,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
 
     clips = urakkai.get("video_clips")
     target_duration = urakkai.get("target_duration_us")
-    if urakkai.get("production_type") != "URAKKAI" or not isinstance(clips, list) or not clips:
+    if production_mode not in {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"} or not isinstance(clips, list) or not clips:
         errors.append(_error("E_MANIFEST_INVALID", field="urakkai"))
         clips = []
     if not isinstance(target_duration, int) or isinstance(target_duration, bool) or target_duration <= 0:
@@ -226,8 +227,20 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         target_cursor = clip["target_range_us"][1]
     if target_cursor != target_duration:
         errors.append(_error("E_VIDEO_RANGE", detail="target_end"))
-    if _coalesced_clip_count(normalized_clips) < 2:
+    if production_mode == "URAKKAI" and _coalesced_clip_count(normalized_clips) < 2:
         errors.append(_error("E_EFFECTIVE_CLIP"))
+
+    if production_mode != "URAKKAI":
+        if target_duration != source_duration:
+            errors.append(_error("E_SOURCE_ORDER_DURATION"))
+        if any(row.get("source_range_us") != row.get("target_range_us") for row in normalized_clips):
+            errors.append(_error("E_SOURCE_ORDER_CHANGED"))
+        expected_matrix = {
+            "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": ("SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
+            "SOURCE_ORDER_UNCHANGED_A10_RETAINED": ("A10_RETAINED_SYNC", "SOURCE_VOCAL_STEM"),
+        }
+        if (payload.get("audio_policy"), payload.get("audio_source")) != expected_matrix[production_mode]:
+            errors.append(_error("E_AUDIO_MODE_MATRIX"))
 
     if urakkai.get("reorder_required"):
         permutation = urakkai.get("locked_permutation")
@@ -279,6 +292,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     return result(errors, {
         "build_manifest_path": str(path), "episode_id": payload["episode_id"],
         "visual_asset_mode": visual_mode,
+        "production_mode": production_mode,
     })
 
 

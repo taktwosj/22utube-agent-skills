@@ -73,12 +73,12 @@ class PublicBuilderCleanTest(unittest.TestCase):
                 {"segment_id": "T1", "timeline_order": 3, "role": "T1", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "title", "content_type": "TITLE"},
                 {"segment_id": "SCR_FX", "timeline_order": 4, "role": "SCREEN_EFFECT", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
                 {"segment_id": "SCR_WHITE", "timeline_order": 5, "role": "SCREEN_WHITE", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
-                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
+                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "source_range_us": [1_000_000, 2_000_000], "cue_id": "1", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
                 {"segment_id": "A10-1", "timeline_order": 7, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
                 {"segment_id": "A10-2", "timeline_order": 8, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
             ]
             timeline = episode / "approved_timeline.json"
-            write(timeline, {"schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": "fp", "audio_policy": "A10_RETAINED_SYNC", "primary_speaker_id": "P1", "segments": rows})
+            write(timeline, {"schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": "fp", "production_mode": "URAKKAI", "audio_policy": "A10_REASSEMBLED_SYNC", "primary_speaker_id": "P1", "segments": rows})
             handoff = episode / "design_handoff.json"
             write(handoff, {"schema_version": "tikitaka-design-handoff-v1", "episode_id": "EP", "status": "PASS", "source_identity_path": identity.name, "source_identity_sha256": sha(identity), "timeline_path": timeline.name, "timeline_sha256": sha(timeline), "source_fingerprint": "fp", "approved_timeline_order": [row["segment_id"] for row in rows]})
             evidence = episode / "design_evidence.json"
@@ -107,7 +107,7 @@ class PublicBuilderCleanTest(unittest.TestCase):
                 state, timeline=timeline, build_manifest=build_manifest,
                 design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
             )
-            config = {"episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "clean_video": str(clean_video), "clean_asset_root": str(clean_root), "clean_evidence_root": str(clean_root), "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "audio_policy": "A10_RETAINED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
+            config = {"episode_id": "EP", "visual_asset_mode": "CLEAN_VISUAL_READY", "clean_video": str(clean_video), "clean_asset_root": str(clean_root), "clean_evidence_root": str(clean_root), "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "production_mode": "URAKKAI", "audio_policy": "A10_REASSEMBLED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
             ):

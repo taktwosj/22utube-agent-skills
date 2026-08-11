@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -15,15 +16,18 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
+from schema_runtime import validate_schema
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
+CURRENT_PLAN_SCHEMA = SKILL_ROOT / "schemas" / "executable_production_plan.schema.json"
+LEGACY_PLAN_SCHEMA = SKILL_ROOT / "schemas" / "executable_production_plan_v1.schema.json"
 ALLOWED_URAKKAI_AUDIO_POLICIES = [
-    "A10_RETAINED_SYNC",
+    "A10_REASSEMBLED_SYNC",
     "TTS_ONLY_MUTE_SOURCE",
-    "A9_TTS_PLUS_A10_RETAINED",
+    "A9_TTS_PLUS_A10_REASSEMBLED",
 ]
-A10_AUDIO_POLICIES = {"A10_RETAINED_SYNC", "A9_TTS_PLUS_A10_RETAINED"}
+A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED"}
 
 
 def _ranges_overlap(left: object, right: object) -> bool:
@@ -76,11 +80,11 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
     ]:
         errors.append("PROTOCOL_VISUAL_ASSET_MODES")
-    if protocol.get("stage07_outputs") != ["audio_lock.json", "caption_lock.json", "final.srt"]:
+    if protocol.get("stage07_outputs") != ["audio_lock.json", "caption_lock.json", "final.srt", "caption_timing_evidence.json"]:
         errors.append("PROTOCOL_STAGE07_OUTPUTS")
     if protocol.get("a12_policy") != "EMPTY":
         errors.append("PROTOCOL_A12_POLICY")
-    if protocol.get("anchors", {}).get("A10") != "validated Demucs source vocal stem only":
+    if protocol.get("anchors", {}).get("A10") != "explicit mode-bound source clean audio, full Demucs stem, or mapped reassembled Demucs stem":
         errors.append("PROTOCOL_A10_AUTHORITY")
     expected_manual_finalization = {
         "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
@@ -133,12 +137,13 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
                 errors.append(f"PROTOCOL_SESSION_HANDOFF_GATE:{key}")
 
     modes = protocol.get("production_modes")
-    expected_modes = {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}
+    expected_modes = {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"}
     if not isinstance(modes, dict) or set(modes) != expected_modes:
         errors.append("PROTOCOL_MODES")
     else:
         urakkai = modes["URAKKAI"]
         clean_only = modes["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+        source_order_stem = modes["SOURCE_ORDER_UNCHANGED_A10_RETAINED"]
         for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required"):
             if urakkai.get(key) is not True:
                 errors.append(f"PROTOCOL_URAKKAI_GATE_FALSE:{key}")
@@ -157,6 +162,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         for key, value in expected_clean.items():
             if clean_only.get(key) != value:
                 errors.append(f"PROTOCOL_CLEAN_ONLY_GATE:{key}")
+        if source_order_stem.get("allowed_audio_policies") != ["A10_RETAINED_SYNC"]:
+            errors.append("PROTOCOL_SOURCE_ORDER_STEM_AUDIO_POLICY")
 
     approval = protocol.get("urakkai_approval")
     expected_artifacts = [
@@ -194,7 +201,8 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     elif stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
     elif stages[6].get("produces") != [
-        "30_audio_srt/audio_lock.json", "30_audio_srt/caption_lock.json", "30_audio_srt/final.srt"
+        "30_audio_srt/audio_lock.json", "30_audio_srt/caption_lock.json", "30_audio_srt/final.srt",
+        "30_audio_srt/caption_timing_evidence.json",
     ]:
         errors.append("PROTOCOL_STAGE07_OUTPUTS")
     elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE":
@@ -603,6 +611,26 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     if not isinstance(plan, dict):
         return ["PRODUCTION_PLAN_OBJECT_REQUIRED"]
 
+    version = plan.get("schema_version")
+    if version == "001short-production-plan-v1":
+        if validate_schema(plan, read_json(LEGACY_PLAN_SCHEMA)):
+            return ["PRODUCTION_PLAN_V1_CURRENT_FIELDS_FORBIDDEN"]
+        plan = copy.deepcopy(plan)
+        if plan.get("production_mode") == "URAKKAI":
+            plan["audio_policy"] = {
+                "A10_RETAINED_SYNC": "A10_REASSEMBLED_SYNC",
+                "A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED",
+            }.get(plan.get("audio_policy"), plan.get("audio_policy"))
+            plan["audio_source"] = "GENERATED_TTS" if plan.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE" else "REASSEMBLED_VOCAL_STEM"
+        else:
+            plan["audio_policy"] = "SOURCE_ORDER_CLEAN_AUDIO"
+            plan["audio_source"] = "SOURCE_CLIP"
+    elif version == "001short-production-plan-v2":
+        if validate_schema(plan, read_json(CURRENT_PLAN_SCHEMA)):
+            return ["PRODUCTION_PLAN_V2_SCHEMA_INVALID"]
+    else:
+        return ["PRODUCTION_PLAN_SCHEMA_VERSION_INVALID"]
+
     mode = plan.get("production_mode")
     modes = protocol.get("production_modes", {})
     if mode not in modes:
@@ -685,9 +713,9 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
                     errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
                     break
-            if audio_policy == "A9_TTS_PLUS_A10_RETAINED" and not tts:
+            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED" and not tts:
                 errors.append("URAKKAI_MIXED_A9_REQUIRED")
-            if audio_policy == "A9_TTS_PLUS_A10_RETAINED":
+            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED":
                 if _segments(tracks, "A11"):
                     errors.append("URAKKAI_MIXED_A11_FORBIDDEN")
                 for retained in audio:
@@ -727,7 +755,24 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 errors.append("URAKKAI_TTS_ONLY_CLEAR_ANCHOR_MISSING")
         return errors
 
+    if mode == "SOURCE_ORDER_UNCHANGED_A10_RETAINED":
+        if original_order != final_order:
+            errors.append("SOURCE_ORDER_STEM_ORDER_CHANGED")
+        if plan.get("audio_policy") != "A10_RETAINED_SYNC" or plan.get("audio_source") != "SOURCE_VOCAL_STEM":
+            errors.append("SOURCE_ORDER_STEM_AUDIO_MATRIX_INVALID")
+        if not video or len(video) != len(audio):
+            errors.append("SOURCE_ORDER_STEM_VIDEO_AUDIO_COUNT_MISMATCH")
+        for visual, retained in zip(video, audio):
+            if visual.get("source_range_us") != retained.get("source_range_us") or visual.get("target_range_us") != retained.get("target_range_us"):
+                errors.append("SOURCE_ORDER_STEM_VIDEO_AUDIO_MAPPING_MISMATCH")
+                break
+        if video and (video[0].get("target_range_us", [None])[0] != 0 or video[-1].get("target_range_us", [None, None])[1] != duration):
+            errors.append("SOURCE_ORDER_STEM_DURATION_MISMATCH")
+        return errors
+
     config = modes[mode]
+    if plan.get("audio_policy") != "SOURCE_ORDER_CLEAN_AUDIO" or plan.get("audio_source") != "SOURCE_CLIP":
+        errors.append("CLEAN_ONLY_AUDIO_MATRIX_INVALID")
     if isinstance(original_order, list) and isinstance(final_order, list) and original_order != final_order:
         errors.append("CLEAN_ONLY_SOURCE_ORDER_CHANGED")
     if len(video) != config.get("video_segments", 1):

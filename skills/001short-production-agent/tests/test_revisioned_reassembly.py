@@ -32,9 +32,9 @@ class RevisionedReassemblyConfigTest(unittest.TestCase):
                 "episode_id": "EP",
                 "current_stage": "09",
                 "status": "CAPCUT_STATIC_VALIDATED",
-                "audio_lock_path": "../../30_audio_srt/audio_lock.json",
+                "audio_lock_path": "30_audio_srt/audio_lock.json",
                 "audio_lock_sha256": "a" * 64,
-                "caption_lock_path": "../../30_audio_srt/caption_lock.json",
+                "caption_lock_path": "30_audio_srt/caption_lock.json",
                 "caption_lock_sha256": "b" * 64,
                 "project_name": "episode_v0",
             }

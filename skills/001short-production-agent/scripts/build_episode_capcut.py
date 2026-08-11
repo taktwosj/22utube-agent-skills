@@ -31,9 +31,10 @@ import validate_prebuild
 import validate_clean_visual
 import validate_capcut_grids
 import validate_design_lock
+import validate_executable_protocol
 import resolve_shorts_capcut_root
 from capcut_io import iter_primary_draft_documents
-from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path
+from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
 from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
@@ -42,10 +43,12 @@ ROLE_BY_TRACK = list(CANONICAL_TRACKS)
 # A9 carries the narration we generate; A10 carries the retained source speech.
 # MIXED keeps both, so the source stem must still be present while A9 is built.
 AUDIO_POLICIES = frozenset({
-    "A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED",
+    "SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC",
+    "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED",
 })
-TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"})
-A10_POLICIES = frozenset({"A10_RETAINED_SYNC", "A9_TTS_PLUS_A10_RETAINED"})
+TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
+A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
+STEM_POLICIES = A10_POLICIES - {"SOURCE_ORDER_CLEAN_AUDIO"}
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -99,7 +102,7 @@ def validate_grid_harness(config: dict) -> dict:
         declared_sha = state.get(sha_key)
         if not isinstance(declared_value, str) or not declared_value.strip() or not isinstance(declared_sha, str):
             raise ValueError(f"TABLE_STATE_LOCK_MISSING:{name}")
-        declared_path = resolved_declared_path(state_path, declared_value)
+        declared_path = resolve_state_artifact(state_path, declared_value)
         if expected_path is not None and declared_path != expected_path:
             raise ValueError(f"TABLE_STATE_LOCK_PATH_MISMATCH:{name}")
         if not declared_path.is_file() or _sha(declared_path).lower() != declared_sha.lower():
@@ -119,6 +122,49 @@ def validate_grid_harness(config: dict) -> dict:
         )
         suffix = f":{details}" if details else ""
         raise ValueError(f"{first['code']}{suffix}")
+    audio_payload = read_json(artifact_paths["audio_lock"])
+    caption_payload = read_json(artifact_paths["caption_lock"])
+    if audio_payload.get("schema_version") != "001short-audio-lock-v4":
+        raise ValueError("AUDIO_LOCK_MIGRATION_REQUIRED")
+    if caption_payload.get("schema_version") != "001short-caption-lock-v2":
+        raise ValueError("CAPTION_LOCK_MIGRATION_REQUIRED")
+    timing_path = resolved_declared_path(
+        artifact_paths["caption_lock"],
+        str(caption_payload.get("caption_timing_evidence_path", "")),
+    )
+    try:
+        timing_payload = read_json(timing_path)
+    except (OSError, TypeError, ValueError):
+        raise ValueError("CAPTION_TIMING_EVIDENCE_MIGRATION_REQUIRED") from None
+    if timing_payload.get("schema_version") != "001short-caption-timing-evidence-v2":
+        raise ValueError("CAPTION_TIMING_EVIDENCE_MIGRATION_REQUIRED")
+    for name in ("production_plan", "production_plan_validation_receipt"):
+        path_key, sha_key = f"{name}_path", f"{name}_sha256"
+        declared = state.get(path_key)
+        expected_sha = state.get(sha_key)
+        if not isinstance(declared, str) or not declared or not isinstance(expected_sha, str):
+            raise ValueError(f"TABLE_STATE_LOCK_MISSING:{name}")
+        bound_path = resolve_state_artifact(state_path, declared)
+        if not bound_path.is_file() or _sha(bound_path).lower() != expected_sha.lower():
+            raise ValueError(f"TABLE_STATE_LOCK_SHA_MISMATCH:{name}")
+        artifact_paths[name] = bound_path
+    production_plan = read_json(artifact_paths["production_plan"])
+    if production_plan.get("schema_version") != "001short-production-plan-v2":
+        raise ValueError("PRODUCTION_PLAN_MIGRATION_REQUIRED")
+    if validate_executable_protocol.validate_production_plan(
+        production_plan, validate_executable_protocol.load_protocol()
+    ):
+        raise ValueError("PRODUCTION_PLAN_VALIDATION_RECEIPT_INVALID")
+    receipt = read_json(artifact_paths["production_plan_validation_receipt"])
+    receipt_evidence = receipt.get("evidence", {})
+    if (
+        receipt.get("status") != "PASS"
+        or receipt.get("errors") != []
+        or receipt_evidence.get("production_plan_path") != str(artifact_paths["production_plan"])
+        or str(receipt_evidence.get("production_plan_sha256", "")).lower()
+        != _sha(artifact_paths["production_plan"]).lower()
+    ):
+        raise ValueError("PRODUCTION_PLAN_VALIDATION_RECEIPT_INVALID")
     design_required = ("source_identity_path", "design_handoff_path")
     design_missing = [
         key for key in design_required
@@ -135,7 +181,11 @@ def validate_grid_harness(config: dict) -> dict:
         first_code = design_result["errors"][0]["code"] if design_result.get("errors") else "UNKNOWN"
         raise ValueError(f"TABLE_DESIGN_LOCK_INVALID:{first_code}")
     audio_caption = validate_audio_caption.validate_audio_caption(
-        artifact_paths["audio_lock"], artifact_paths["caption_lock"]
+        artifact_paths["audio_lock"], artifact_paths["caption_lock"],
+        expected_production_plan_path=artifact_paths["production_plan"],
+        expected_production_plan_sha256=state["production_plan_sha256"],
+        expected_production_plan_receipt_path=artifact_paths["production_plan_validation_receipt"],
+        expected_production_plan_receipt_sha256=state["production_plan_validation_receipt_sha256"],
     )
     if audio_caption["status"] != "PASS":
         first_code = audio_caption["errors"][0]["code"] if audio_caption.get("errors") else "UNKNOWN"
@@ -432,6 +482,9 @@ def build_caption_bindings(config: dict, caption_lock_path: Path) -> list[dict]:
             raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
         used_cues.add(cue_id)
         bindings.append({"segment_id": row["segment_id"], "cue_id": cue_id, "role": role})
+    locked_cues = {str(cue.get("cue_id")) for cue in cues}
+    if used_cues != locked_cues:
+        raise RuntimeError("CAPTION_LOCK_CUE_UNASSEMBLED")
     return bindings
 
 
@@ -553,7 +606,7 @@ def initialize_revision_state(config: dict) -> None:
     for key in ("audio_lock_path", "caption_lock_path"):
         value = state.get(key)
         if isinstance(value, str) and value:
-            state[key] = str(resolved_declared_path(canonical_state, value))
+            state[key] = str(resolve_state_artifact(canonical_state, value))
     state.update({
         "episode_id": config["episode_id"],
         "revision_id": context["revision_id"],
@@ -841,7 +894,7 @@ def _range_fully_covered(inner: list[int], outer: list[int]) -> bool:
 
 
 def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
-    if config.get("audio_policy") != "A9_TTS_PLUS_A10_RETAINED":
+    if config.get("audio_policy") not in {"A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"}:
         return
     narration_ranges = [cue["target_range_us"] for cue in config.get("tts_cues", [])]
     for row in build_manifest.get("source_audio", []):
@@ -890,7 +943,11 @@ def _normalize_source(
         audio_suffix = audio_source.suffix.lower() or ".wav"
         # This is the externally separated Demucs vocal stem, not the raw
         # source audio.  Keep that distinction visible in the portable asset.
-        audio_name = f"a10_vocal_stem{audio_suffix}"
+        audio_name = (
+            f"a10_source_clean_audio{audio_suffix}"
+            if policy == "SOURCE_ORDER_CLEAN_AUDIO"
+            else f"a10_vocal_stem{audio_suffix}"
+        )
         shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)
 
@@ -1407,15 +1464,25 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
             f"expected episode_id={episode_id} status={expected_state},"
             f" got episode_id={state.get('episode_id')} status={state.get('status')}"
         )
-    audio_lock = resolved_declared_path(state_path, state.get("audio_lock_path", ""))
-    caption_lock = resolved_declared_path(state_path, state.get("caption_lock_path", ""))
+    audio_lock = resolve_state_artifact(state_path, state.get("audio_lock_path", ""))
+    caption_lock = resolve_state_artifact(state_path, state.get("caption_lock_path", ""))
     if (
         not audio_lock.is_file() or not caption_lock.is_file()
         or _sha(audio_lock).lower() != str(state.get("audio_lock_sha256", "")).lower()
         or _sha(caption_lock).lower() != str(state.get("caption_lock_sha256", "")).lower()
     ):
         raise RuntimeError("STAGE07_EVIDENCE_MISSING")
-    audio = validate_audio_caption.validate_audio_caption(audio_lock, caption_lock)
+    plan_path = resolve_state_artifact(state_path, state.get("production_plan_path", ""))
+    plan_receipt_path = resolve_state_artifact(
+        state_path, state.get("production_plan_validation_receipt_path", "")
+    )
+    audio = validate_audio_caption.validate_audio_caption(
+        audio_lock, caption_lock,
+        expected_production_plan_path=plan_path,
+        expected_production_plan_sha256=state.get("production_plan_sha256"),
+        expected_production_plan_receipt_path=plan_receipt_path,
+        expected_production_plan_receipt_sha256=state.get("production_plan_validation_receipt_sha256"),
+    )
     if audio["status"] != "PASS":
         raise RuntimeError(f"STAGE07:{audio}")
     audio_payload = json.loads(audio_lock.read_text(encoding="utf-8"))
@@ -1432,7 +1499,18 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         raise RuntimeError("STAGE07_AUTHORITY_MISMATCH")
     # Any policy that keeps A10 must bind the primary audio to the separated stem;
     # under MIXED the generated A9 narration rides alongside it as a role file.
-    if config.get("audio_policy") in A10_POLICIES and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
+    if audio_payload.get("schema_version") == "001short-audio-lock-v4":
+        expected_matrix = {
+            "SOURCE_ORDER_CLEAN_AUDIO": ("SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_CLIP"),
+            "A10_RETAINED_SYNC": ("SOURCE_ORDER_UNCHANGED_A10_RETAINED", "SOURCE_VOCAL_STEM"),
+            "A10_REASSEMBLED_SYNC": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
+            "A9_TTS_PLUS_A10_REASSEMBLED": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
+            "TTS_ONLY_MUTE_SOURCE": ("URAKKAI", "GENERATED_TTS"),
+        }
+        observed = (config.get("production_mode"), audio_payload.get("audio_source"))
+        if expected_matrix.get(config.get("audio_policy")) != observed or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):
+            raise RuntimeError("STAGE07_AUDIO_MODE_MATRIX_MISMATCH")
+    elif config.get("audio_policy") in STEM_POLICIES and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
         raise RuntimeError("STAGE07_VALIDATED_VOCAL_STEM_REQUIRED")
     return {
         "source_identity": source_identity, "approved_timeline": approved_timeline,
@@ -1822,6 +1900,12 @@ def swap_provisional_video_only(config: dict) -> dict:
         "upload_ready": False,
         "build_manifest_path": str(Path(config["build_manifest_path"]).resolve()),
         "build_manifest_sha256": _sha(Path(config["build_manifest_path"]).resolve()),
+        "audio_lock_path": str(pre["audio_lock"].resolve()),
+        "audio_lock_sha256": _sha(pre["audio_lock"]),
+        "caption_lock_path": str(pre["caption_lock"].resolve()),
+        "caption_lock_sha256": _sha(pre["caption_lock"]),
+        "final_srt_path": str(pre["final_srt"].resolve()),
+        "final_srt_sha256": _sha(pre["final_srt"]),
     })
     contract["required_asset_paths"] = [
         "Resources/media/clean_video.mp4" if path.endswith("/source.mp4") else path

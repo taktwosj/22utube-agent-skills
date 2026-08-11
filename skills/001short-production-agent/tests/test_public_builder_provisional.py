@@ -68,6 +68,102 @@ def bind_state_artifacts(
     audio_lock: Path,
     caption_lock: Path,
 ) -> None:
+    episode = build_manifest.parent
+    manifest_payload = json.loads(build_manifest.read_text(encoding="utf-8"))
+    audio_payload = json.loads(audio_lock.read_text(encoding="utf-8"))
+    caption_payload = json.loads(caption_lock.read_text(encoding="utf-8"))
+    timeline_payload = json.loads(timeline.read_text(encoding="utf-8"))
+    timeline_cues = {row.get("cue_id"): row for row in timeline_payload["segments"] if row.get("cue_id")}
+    for cue in caption_payload.get("cues", []):
+        row = timeline_cues[cue["cue_id"]]
+        cue["start_us"], cue["end_us"] = row["start"], row["start"] + row["duration"]
+    def srt_stamp(value: int) -> str:
+        milliseconds = value // 1000
+        hours, milliseconds = divmod(milliseconds, 3_600_000)
+        minutes, milliseconds = divmod(milliseconds, 60_000)
+        seconds, milliseconds = divmod(milliseconds, 1000)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
+    srt_path = audio_lock.parent / caption_payload["final_srt_path"]
+    srt_path.write_text("\n\n".join(
+        f"{cue['cue_id']}\n{srt_stamp(cue['start_us'])} --> {srt_stamp(cue['end_us'])}\n{cue['text']}"
+        for cue in caption_payload.get("cues", [])
+    ) + "\n", encoding="utf-8")
+    caption_payload["final_srt_sha256"] = sha(srt_path)
+    clips = manifest_payload["urakkai"]["video_clips"]
+    mixed = any(row.get("role") == "A9" for row in audio_payload.get("role_files", []))
+    policy = "A9_TTS_PLUS_A10_REASSEMBLED" if mixed else "A10_REASSEMBLED_SYNC"
+    asset_key = "source_video" if manifest_payload["visual_asset_mode"] == "SOURCE_VIDEO_PROVISIONAL" else "clean_video"
+    plan_rows = []
+    for index, clip in enumerate(clips):
+        placements = [
+            {"anchor": "VIDEO", "operation": "replace_media_and_range", "asset_key": asset_key, "source_range_us": clip["source_range_us"], "target_range_us": clip["target_range_us"], "volume": 1},
+            {"anchor": "A10", "operation": "replace_media_and_range", "asset_key": "reassembled_vocals", "source_range_us": clip["source_range_us"], "target_range_us": clip["target_range_us"], "volume": 0 if mixed and index == 0 else 1},
+        ]
+        if mixed and index == 0:
+            placements.append({"anchor": "A9", "operation": "replace_media_and_range", "asset_key": "tts", "source_range_us": [0, 1_000_000], "target_range_us": [0, 1_000_000], "volume": 1})
+        plan_rows.append({"segment_key": clip["clip_id"], "source_beat_id": "B02" if index == 0 else "B01", "target_segment_id": f"V{index + 1:02d}", "target_range_us": clip["target_range_us"], "placements": placements})
+    plan = episode / "production_plan.json"
+    write(plan, {
+        "schema_version": "001short-production-plan-v2", "episode_id": "EP", "root_profile": "home_windows",
+        "project_name": "project", "production_mode": "URAKKAI", "audio_policy": policy,
+        "audio_source": "REASSEMBLED_VOCAL_STEM", "visual_asset_mode": manifest_payload["visual_asset_mode"],
+        "total_duration_us": manifest_payload["urakkai"]["target_duration_us"],
+        "original_order": ["V1", "V2"], "order_signature": [clip["clip_id"] for clip in clips], "timeline": plan_rows,
+    })
+    reassembled = episode / "reassembled_stem_manifest.json"
+    write(reassembled, {
+        "schema_version": "001short-reassembled-stem-manifest-v2", "status": "PASS", "episode_id": "EP",
+        "full_stem_manifest_path": audio_payload["vocal_stem_manifest_path"],
+        "full_stem_manifest_sha256": audio_payload["vocal_stem_manifest_sha256"],
+        "build_manifest_path": str(build_manifest), "build_manifest_sha256": sha(build_manifest),
+        "production_plan_path": str(plan), "production_plan_sha256": sha(plan),
+        "production_plan_path": str(plan), "production_plan_sha256": sha(plan),
+        "reassembled_audio_path": audio_payload["audio_path"], "reassembled_audio_sha256": audio_payload["audio_sha256"],
+        "target_duration_us": audio_payload["measured_duration_us"],
+        "mapping": [{"source_beat_id": "B02" if index == 0 else "B01", "target_segment_id": f"V{index + 1:02d}", "source_range_us": clip["source_range_us"], "target_range_us": clip["target_range_us"]} for index, clip in enumerate(clips)],
+    })
+    identity = episode / "source_identity.json"
+    audio_payload.update({
+        "schema_version": "001short-audio-lock-v4", "production_mode": "URAKKAI", "audio_policy": policy,
+        "audio_source": "REASSEMBLED_VOCAL_STEM", "source_identity_path": str(identity),
+        "source_identity_sha256": sha(identity), "reassembled_stem_manifest_path": str(reassembled),
+        "reassembled_stem_manifest_sha256": sha(reassembled),
+    })
+    write(audio_lock, audio_payload)
+    original_grid = episode / "20_script" / "original-capcut-grid.md"
+    urakkai_grid = episode / "20_script" / "urakkai-capcut-grid.md"
+    timing = episode / "caption_timing_evidence.json"
+    mapping = [{"mapping_id": f"M{index + 1}", "source_beat_id": "B02" if index == 0 else "B01", "target_segment_id": f"V{index + 1:02d}", "source_range_us": clip["source_range_us"], "target_range_us": clip["target_range_us"]} for index, clip in enumerate(clips)]
+    cue_receipts = []
+    for cue in caption_payload.get("cues", []):
+        map_index = 0 if cue["start_us"] < 1_000_000 else 1
+        selected_mapping = mapping[map_index]
+        source_start = selected_mapping["source_range_us"][0] + cue["start_us"] - selected_mapping["target_range_us"][0]
+        source_range = [source_start, source_start + cue["end_us"] - cue["start_us"]]
+        cue_receipts.append({
+            "cue_id": cue["cue_id"], "text": cue["text"],
+            "authority": "TTS" if cue.get("layer") == "A9_TEXT" else "SPEECH_AUDIO",
+            "mapping_id": mapping[map_index]["mapping_id"], "source_range_us": source_range,
+            "target_range_us": [cue["start_us"], cue["end_us"]],
+            "bound_file_path": audio_payload["audio_path"], "bound_file_sha256": audio_payload["audio_sha256"],
+        })
+    write(timing, {
+        "schema_version": "001short-caption-timing-evidence-v2", "status": "PASS", "episode_id": "EP",
+        "source_identity_path": str(identity), "source_identity_sha256": sha(identity),
+        "approved_timeline_path": str(timeline), "approved_timeline_sha256": sha(timeline),
+        "build_manifest_path": str(build_manifest), "build_manifest_sha256": sha(build_manifest),
+        "production_plan_path": str(plan), "production_plan_sha256": sha(plan),
+        "original_grid_path": str(original_grid), "original_grid_sha256": sha(original_grid),
+        "urakkai_grid_path": str(urakkai_grid), "urakkai_grid_sha256": sha(urakkai_grid),
+        "tolerance_us": 0, "zero_caption": not caption_payload.get("cues"), "mapping": mapping, "cues": cue_receipts,
+    })
+    caption_payload.update({
+        "schema_version": "001short-caption-lock-v2", "audio_lock_sha256": sha(audio_lock),
+        "caption_timing_evidence_path": str(timing), "caption_timing_evidence_sha256": sha(timing),
+    })
+    write(caption_lock, caption_payload)
+    receipt = state.parent / "production_plan_validation.json"
+    write(receipt, {"status": "PASS", "errors": [], "evidence": {"episode_id": "EP", "production_plan_path": str(plan), "production_plan_sha256": sha(plan)}})
     payload = json.loads(state.read_text(encoding="utf-8"))
     payload.update({
         "approved_timeline_path": str(timeline),
@@ -80,6 +176,10 @@ def bind_state_artifacts(
         "audio_lock_sha256": sha(audio_lock),
         "caption_lock_path": str(caption_lock),
         "caption_lock_sha256": sha(caption_lock),
+        "production_plan_path": str(plan),
+        "production_plan_sha256": sha(plan),
+        "production_plan_validation_receipt_path": str(receipt),
+        "production_plan_validation_receipt_sha256": sha(receipt),
     })
     write(state, payload)
 
@@ -176,12 +276,12 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 {"segment_id": "T1", "timeline_order": 3, "role": "T1", "start": 0, "duration": 2_000_000, "source_ref": "SRC", "text": "title", "content_type": "TITLE"},
                 {"segment_id": "SCR_FX", "timeline_order": 4, "role": "SCREEN_EFFECT", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
                 {"segment_id": "SCR_WHITE", "timeline_order": 5, "role": "SCREEN_WHITE", "start": 0, "duration": 2_000_000, "source_ref": "SRC"},
-                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
+                {"segment_id": "SP1", "timeline_order": 6, "role": "A10_TEXT", "start": 0, "duration": 1_000_000, "source_ref": "SRC", "source_range_us": [1_000_000, 2_000_000], "cue_id": "1", "text": "hello", "content_type": "SPEAKER", "caption_role": "A10_TEXT", "speaker_id": "P1", "color_role": "WHITE"},
                 {"segment_id": "A10-1", "timeline_order": 7, "role": "A10", "start": 0, "duration": 1_000_000, "source_ref": "SRC"},
                 {"segment_id": "A10-2", "timeline_order": 8, "role": "A10", "start": 1_000_000, "duration": 1_000_000, "source_ref": "SRC"},
             ]
             timeline = episode / "approved_timeline.json"
-            write(timeline, {"schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": "fp", "audio_policy": "A10_RETAINED_SYNC", "primary_speaker_id": "P1", "segments": rows})
+            write(timeline, {"schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": "fp", "production_mode": "URAKKAI", "audio_policy": "A10_REASSEMBLED_SYNC", "primary_speaker_id": "P1", "segments": rows})
             handoff = episode / "design_handoff.json"
             write(handoff, {
                 "schema_version": "tikitaka-design-handoff-v1", "episode_id": "EP", "status": "PASS",
@@ -214,7 +314,27 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 state, timeline=timeline, build_manifest=build_manifest,
                 design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
             )
-            config = {"episode_id": "EP", "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL", "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "audio_policy": "A10_RETAINED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
+            config = {"episode_id": "EP", "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL", "duration_us": 2_000_000, "T1": "title", "T2": "subtitle", "state_cues": [], "project_name": "project", "episode_root": str(episode), "work_root": str(root / "work"), "local_capcut_root": str(root / "capcut"), "source_identity_path": str(identity), "approved_timeline_path": str(timeline), "design_handoff_path": str(handoff), "design_lock_evidence_path": str(evidence), "build_manifest_path": str(build_manifest), "state_path": str(state), "production_mode": "URAKKAI", "audio_policy": "A10_REASSEMBLED_SYNC", "root_contract_path": contract.name, "workspace_root": str(root), "root_profile": "home_windows"}
+            assembled = episode / "reassembled_stem_manifest.json"
+            def rebind_tampered_assembled(payload: dict) -> None:
+                write(assembled, payload)
+                audio_payload = json.loads(audio_lock.read_text(encoding="utf-8")); audio_payload["reassembled_stem_manifest_sha256"] = sha(assembled); write(audio_lock, audio_payload)
+                caption_payload = json.loads(caption.read_text(encoding="utf-8")); caption_payload["audio_lock_sha256"] = sha(audio_lock); write(caption, caption_payload)
+                state_payload = json.loads(state.read_text(encoding="utf-8")); state_payload.update(audio_lock_sha256=sha(audio_lock), caption_lock_sha256=sha(caption)); write(state, state_payload)
+            tampered = json.loads(assembled.read_text(encoding="utf-8"))
+            tampered["mapping"][0].update(source_beat_id="B99", target_segment_id="V99")
+            rebind_tampered_assembled(tampered)
+            with self.assertRaisesRegex(ValueError, "AUDIO_CAPTION_REASSEMBLED_STEM_AUTHORITY_MISMATCH"):
+                builder.validate_grid_harness(config)
+            self.assertFalse((root / "work").exists())
+            bind_state_artifacts(state, timeline=timeline, build_manifest=build_manifest, design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption)
+            foreign_plan = episode / "foreign_plan.json"; write(foreign_plan, json.loads((episode / "production_plan.json").read_text(encoding="utf-8")))
+            foreign = json.loads(assembled.read_text(encoding="utf-8")); foreign.update(production_plan_path=str(foreign_plan), production_plan_sha256=sha(foreign_plan))
+            rebind_tampered_assembled(foreign)
+            with self.assertRaisesRegex(ValueError, "AUDIO_CAPTION_REASSEMBLED_STEM_AUTHORITY_MISMATCH"):
+                builder.validate_grid_harness(config)
+            self.assertFalse((root / "work").exists())
+            bind_state_artifacts(state, timeline=timeline, build_manifest=build_manifest, design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption)
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
             ):
@@ -367,6 +487,10 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 "edit_lock_path": str(revision_edit_lock),
                 "T1": "mutable shared title",
             }
+            bind_state_artifacts(
+                v1_state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
             ):

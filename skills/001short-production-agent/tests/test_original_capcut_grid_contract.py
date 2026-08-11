@@ -126,7 +126,8 @@ class OriginalCapCutGridContractTest(unittest.TestCase):
     def test_state_only_requires_no_a9_or_a10_audio(self):
         text = STAGE07.read_text(encoding="utf-8")
         self.assertIn("STATE_LASER만 있으면 TTS 엔진을 호출하지 않는다", text)
-        self.assertIn("A10이 있을 때만 Demucs", text)
+        self.assertIn("Demucs는 사용자가 선택한 두 stem 모드에서만", text)
+        self.assertIn("CLEAN_ONLY`는 원본 A10을 그대로 쓰며 Demucs를 실행하지 않는다", text)
 
 
 if __name__ == "__main__":

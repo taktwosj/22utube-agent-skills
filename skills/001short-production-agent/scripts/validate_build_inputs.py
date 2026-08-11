@@ -100,6 +100,10 @@ def validate_build_inputs(
     contract_rows = contract.get("timeline", [])
     approved_by_id = {row.get("segment_id"): row for row in approved_rows}
     contract_by_id = {row.get("segment_id"): row for row in contract_rows}
+    locked_cue_ids = {row.get("cue_id") for row in caption.get("cues", [])}
+    binding_cue_ids = {row.get("cue_id") for row in contract.get("caption_bindings", [])}
+    if locked_cue_ids != binding_cue_ids or len(contract.get("caption_bindings", [])) != len(binding_cue_ids):
+        errors.append({"code": "BUILD_INPUTS_CAPTION_BINDING_SET_MISMATCH"})
     if set(approved_by_id) != set(contract.get("approved_actual_order", [])):
         errors.append({"code": "BUILD_INPUTS_TIMELINE_ORDER_MISMATCH"})
     if set(approved_by_id) != set(contract_by_id):

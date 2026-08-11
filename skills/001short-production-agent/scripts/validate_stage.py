@@ -6,7 +6,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from common import read_json, sha256_file, write_json
+from common import read_json, resolve_state_artifact, sha256_file, write_json
 from schema_runtime import validate_schema
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,7 +23,10 @@ def _contracts():
         if route.get("manual_only") is True:
             continue
         validators = route.get("validators") or [route["validator"]]
-        checks[stage] = tuple(Path(v).stem.removeprefix("validate_") for v in validators)
+        names = [Path(v).stem.removeprefix("validate_") for v in validators]
+        if route.get("protocol_validator"):
+            names.append("production_plan")
+        checks[stage] = tuple(names)
     stages = {row["id"]: row for row in protocol["stages"]}
     entry = {stage: stages[stage]["requires_state"] for stage in checks}
     ordered = [row["id"] for row in protocol["stages"]]
@@ -84,10 +87,7 @@ def _canonical_state_path(path: Path) -> bool:
 
 
 def _state_declared_path(state_path: Path, raw: str) -> Path:
-    path = Path(raw)
-    if path.is_absolute():
-        return path
-    return state_path.parent.parent / path
+    return resolve_state_artifact(state_path, raw)
 
 
 def _receipt_error(state, state_path, name):
@@ -111,9 +111,31 @@ def _receipt_error(state, state_path, name):
 
 
 def _run(check, a):
+    if check == "production_plan":
+        from validate_executable_protocol import load_protocol, validate_production_plan
+        if a.production_plan is None:
+            return {"status": "FAIL", "errors": [{"code": "PRODUCTION_PLAN_REQUIRED"}], "evidence": {}}
+        state = read_json(a.state)
+        plan_path = _state_declared_path(a.state.resolve(), str(a.production_plan))
+        try:
+            plan = read_json(plan_path)
+            errors = validate_production_plan(plan, load_protocol())
+            if plan.get("episode_id") != state.get("episode_id"):
+                errors.append("PRODUCTION_PLAN_EPISODE_MISMATCH")
+        except (OSError, TypeError, ValueError) as exc:
+            errors = [f"PRODUCTION_PLAN_READ:{exc}"]
+        return {
+            "status": "FAIL" if errors else "PASS",
+            "errors": [{"code": error} for error in errors],
+            "evidence": {
+                "episode_id": state.get("episode_id"),
+                "production_plan_path": str(plan_path),
+                "production_plan_sha256": sha256_file(plan_path) if plan_path.is_file() else "",
+            },
+        }
     module = importlib.import_module("validate_" + check)
     if check == "design_lock":
-        return module.validate_handoff(a.handoff, a.source_identity, a.timeline, a.evidence)
+        return module.validate_handoff(a.handoff, a.source_identity, a.timeline, a.design_lock_evidence)
     if check == "clean_visual":
         return module.validate_clean_visual(
             a.clean_visual_manifest,
@@ -149,16 +171,32 @@ def _emit(payload):
     return 0 if payload["status"] == "PASS" else (3 if payload["status"] == "WAIT" else 1)
 
 
-def _advance_state(state_path: Path, state: dict, stage: str, args) -> dict:
+def _advance_state(state_path: Path, state: dict, stage: str, args, results: dict) -> dict:
     transition = STAGE_TRANSITIONS[stage]
     if transition["next_stage"] is None:
         raise ValueError("STAGE_HAS_NO_NEXT_STAGE")
     advanced = dict(state)
     advanced["current_stage"] = transition["next_stage"]
     advanced["status"] = transition["pass_state"]
-    if stage == "07":
+    if stage == "05":
+        if args.design_lock_evidence is None or args.production_plan is None or args.production_plan_receipt is None:
+            raise ValueError("STAGE05_BINDING_ARGUMENT_REQUIRED")
+        design = resolve_state_artifact(state_path, str(args.design_lock_evidence))
+        plan = resolve_state_artifact(state_path, str(args.production_plan))
+        receipt = resolve_state_artifact(state_path, str(args.production_plan_receipt))
+        if not design.is_file() or not plan.is_file():
+            raise ValueError("STAGE05_BINDING_ARTIFACT_MISSING")
+        write_json(receipt, results["production_plan"])
+        for name, path in (
+            ("design_lock_evidence", design),
+            ("production_plan", plan),
+            ("production_plan_validation_receipt", receipt),
+        ):
+            advanced[f"{name}_path"] = str(path)
+            advanced[f"{name}_sha256"] = sha256_file(path)
+    elif stage == "07":
         for name, path in (("audio_lock", args.audio_lock), ("caption_lock", args.caption_lock)):
-            resolved = Path(path).resolve()
+            resolved = resolve_state_artifact(state_path, str(path))
             advanced[f"{name}_path"] = str(resolved)
             advanced[f"{name}_sha256"] = sha256_file(resolved)
     write_json(state_path, advanced)
@@ -169,6 +207,7 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--state", type=Path, required=True); p.add_argument("--stage", choices=tuple(STAGE_CHECKS)); p.add_argument("--check", choices=ALL_CHECKS)
     p.add_argument("--handoff", type=Path); p.add_argument("--source-identity", type=Path); p.add_argument("--timeline", type=Path)
+    p.add_argument("--production-plan", type=Path); p.add_argument("--production-plan-receipt", type=Path)
     p.add_argument("--clean-visual-manifest", type=Path); p.add_argument("--design-lock-evidence", type=Path)
     p.add_argument("--clean-visual-evidence", type=Path); p.add_argument("--approved-evidence-root", type=Path)
     p.add_argument("--audio-lock", type=Path); p.add_argument("--caption-lock", type=Path); p.add_argument("--srt", type=Path); p.add_argument("--build-contract", type=Path); p.add_argument("--build-manifest", type=Path)
@@ -182,6 +221,9 @@ def main() -> int:
         if not _canonical_state_path(state_path):
             raise ValueError("CANONICAL_STATE_PATH_REQUIRED")
         state = read_json(state_path)
+        for field in ("episode_id", "current_stage", "status"):
+            if not isinstance(state.get(field), str) or not state[field]:
+                raise ValueError(f"STATE_REQUIRED_FIELD_MISSING:{field}")
         raw_stage = str(state.get("current_stage", state.get("stage", ""))).strip()
         declared_stage = raw_stage.zfill(2) if raw_stage.isdigit() else raw_stage[:2]
         if declared_stage == "09":
@@ -193,6 +235,37 @@ def main() -> int:
         return _emit({"status": "FAIL", "errors": [{"code": "STATE_INVALID", "detail": str(exc)}], "evidence": {}, "stage_complete": False})
     if a.stage is not None and a.stage != stage:
         return _emit({"status": "FAIL", "errors": [{"code": "CALLER_STAGE_MISMATCH", "canonical_stage": stage, "caller_stage": a.stage}], "evidence": {}, "stage_complete": False})
+    if a.advance and stage == "05" and a.production_plan is not None:
+        try:
+            plan = read_json(_state_declared_path(state_path, str(a.production_plan)))
+        except (OSError, TypeError, ValueError) as exc:
+            return _emit({"status": "FAIL", "errors": [{"code": "PRODUCTION_PLAN_READ", "detail": str(exc)}], "evidence": {}, "stage": stage, "stage_complete": False})
+        if plan.get("schema_version") != "001short-production-plan-v2":
+            return _emit({"status": "FAIL", "errors": [{"code": "PRODUCTION_PLAN_MIGRATION_REQUIRED"}], "evidence": {}, "stage": stage, "stage_complete": False})
+    if a.advance and stage == "07":
+        migration_errors = []
+        caption_payload = None
+        for path, expected, code in (
+            (a.audio_lock, "001short-audio-lock-v4", "AUDIO_LOCK_MIGRATION_REQUIRED"),
+            (a.caption_lock, "001short-caption-lock-v2", "CAPTION_LOCK_MIGRATION_REQUIRED"),
+        ):
+            try:
+                payload = read_json(resolve_state_artifact(state_path, str(path)))
+            except (OSError, TypeError, ValueError):
+                continue
+            if payload.get("schema_version") != expected:
+                migration_errors.append({"code": code})
+            if expected == "001short-caption-lock-v2":
+                caption_payload = payload
+        if caption_payload is not None and caption_payload.get("schema_version") == "001short-caption-lock-v2":
+            try:
+                timing = read_json(resolve_state_artifact(state_path, str(caption_payload.get("caption_timing_evidence_path"))))
+            except (OSError, TypeError, ValueError):
+                timing = {}
+            if timing.get("schema_version") != "001short-caption-timing-evidence-v2":
+                migration_errors.append({"code": "CAPTION_TIMING_EVIDENCE_MIGRATION_REQUIRED"})
+        if migration_errors:
+            return _emit({"status": "FAIL", "errors": migration_errors, "evidence": {}, "stage": stage, "stage_complete": False})
     expected = STAGE_ENTRY_STATUS[stage]
     if not _entry_state_matches(state, expected):
         return _emit({"status": "FAIL", "errors": [{"code": "STATE_STATUS_MISMATCH", "stage": stage, "expected": expected, "actual": state.get("status")}], "evidence": {}, "stage": stage, "stage_complete": False})
@@ -235,7 +308,7 @@ def main() -> int:
         if status != "PASS" or a.check is not None:
             return _emit({"status": "FAIL", "errors": [{"code": "ADVANCE_REQUIRES_COMPLETE_STAGE_PASS"}], "evidence": evidence, "stage": stage, "stage_complete": False})
         try:
-            advanced = _advance_state(state_path, state, stage, a)
+            advanced = _advance_state(state_path, state, stage, a, results)
         except (OSError, TypeError, ValueError) as exc:
             return _emit({"status": "FAIL", "errors": [{"code": "STATE_ADVANCE_FAILED", "detail": str(exc)}], "evidence": evidence, "stage": stage, "stage_complete": False})
         evidence["state_transition"] = {"from_stage": stage, "to_stage": advanced["current_stage"], "status": advanced["status"], "state_path": str(state_path)}

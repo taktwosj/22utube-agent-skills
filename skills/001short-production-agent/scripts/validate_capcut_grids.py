@@ -336,6 +336,32 @@ def validate_locked_assembly(
     caption_cues = caption_lock.get("cues", [])
     empty_values = {"없음", "비움"}
 
+    caption_rows = [row for row in segments if row.get("role") in {"A9_TEXT", "A10_TEXT", "STATE"}]
+    timeline_cue_ids = [row.get("cue_id") for row in caption_rows]
+    locked_cue_ids = [row.get("cue_id") for row in caption_cues]
+    strict_caption_contract = caption_lock.get("schema_version") == "001short-caption-lock-v2"
+    if strict_caption_contract and (
+            any(not isinstance(cue_id, str) or not cue_id for cue_id in timeline_cue_ids + locked_cue_ids)
+            or len(set(timeline_cue_ids)) != len(timeline_cue_ids)
+            or len(set(locked_cue_ids)) != len(locked_cue_ids)
+            or set(timeline_cue_ids) != set(locked_cue_ids)):
+        errors.append(_error("CAPTION_LOCK_CUE_UNASSEMBLED", "urakkai", timeline_cue_ids=timeline_cue_ids, caption_lock_cue_ids=locked_cue_ids))
+    elif strict_caption_contract:
+        locked_by_id = {row["cue_id"]: row for row in caption_cues}
+        for row in caption_rows:
+            locked = locked_by_id[row["cue_id"]]
+            if (
+                locked.get("layer", locked.get("caption_role")) != row.get("role")
+                or _normalized_text(locked.get("text")) != _normalized_text(row.get("text"))
+                or locked.get("start_us") != row.get("start")
+                or locked.get("end_us") != row.get("start", 0) + row.get("duration", 0)
+            ):
+                errors.append(_error(
+                    "TABLE_CAPTION_TEXT_MISMATCH", "urakkai",
+                    cue_id=row["cue_id"], expected_text=_normalized_text(row.get("text")),
+                ))
+                break
+
     def timeline_rows(role: str, target: tuple[int, int]) -> list[dict]:
         matches: list[dict] = []
         for row in segments:

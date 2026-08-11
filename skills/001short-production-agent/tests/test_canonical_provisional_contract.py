@@ -78,6 +78,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             "30_audio_srt/audio_lock.json",
             "30_audio_srt/caption_lock.json",
             "30_audio_srt/final.srt",
+            "30_audio_srt/caption_timing_evidence.json",
         ])
         self.assertEqual(protocol["anchors"]["A12"], "reserved empty")
 

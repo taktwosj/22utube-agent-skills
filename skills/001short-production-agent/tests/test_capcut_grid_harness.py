@@ -364,6 +364,34 @@ class CapCutGridHarnessTest(unittest.TestCase):
                 self.assertFalse((root / "work").exists())
                 self.assertFalse((root / "capcut").exists())
 
+    def test_extra_caption_lock_cue_fails_before_writes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = _semantic_config(root, declare_mixed=True)
+            state_path = Path(config["state_path"])
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            caption = Path(state["caption_lock_path"])
+            payload = json.loads(caption.read_text(encoding="utf-8"))
+            payload["schema_version"] = "001short-caption-lock-v2"
+            payload["cues"].append({
+                "cue_id": "EXTRA", "start_us": 0, "end_us": 500_000,
+                "text": "extra", "layer": "STATE",
+            })
+            _write_json(caption, payload)
+            timeline = Path(config["approved_timeline_path"])
+            timeline_payload = json.loads(timeline.read_text(encoding="utf-8"))
+            for row in timeline_payload["segments"]:
+                if row.get("segment_id") in {"AW", "AY"}:
+                    row["cue_id"] = row["segment_id"]
+            _write_json(timeline, timeline_payload)
+            state["approved_timeline_sha256"] = _sha(timeline)
+            state["caption_lock_sha256"] = _sha(caption)
+            _write_json(state_path, state)
+            with self.assertRaisesRegex(ValueError, "CAPTION_LOCK_CUE_UNASSEMBLED"):
+                builder.build_episode(config)
+            self.assertFalse((root / "work").exists())
+            self.assertFalse((root / "capcut").exists())
+
     def test_missing_a9_audio_role_fails_before_writes(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
