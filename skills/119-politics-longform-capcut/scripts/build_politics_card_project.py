@@ -22,6 +22,7 @@ from typing import Any
 
 from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
 from root_bundle import ResolvedRoot, resolve_active_root
+from run_politics_assembly_preflight import verify_preflight_report
 
 
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
@@ -121,11 +122,20 @@ def capture_presentation_contract(
             )
         )
     ]
-    if len(ctas) != 1:
+    cta_policies = (
+        {str(card.get("cta_like_subscribe", "ON")).strip().upper() for card in cards}
+        if cards is not None
+        else {"ON"}
+    )
+    if len(cta_policies) != 1 or not cta_policies <= {"ON", "OFF"}:
+        raise RuntimeError("CTA_POLICY_MIXED_UNSUPPORTED")
+    cta_enabled = cta_policies == {"ON"}
+    expected_cta_count = 1 if cta_enabled else 0
+    if len(ctas) != expected_cta_count:
         raise RuntimeError(f"CTA_PRESENTATION_CONTRACT_INVALID:{len(ctas)}")
     return {
         "source_date_hud": sources,
-        "cta_hud": ctas[0],
+        "cta_hud": ctas[0] if cta_enabled else None,
         "lower_slots": lowers,
     }
 
@@ -556,6 +566,10 @@ def normalize_cards(
     if not isinstance(cards, list) or not cards:
         raise RuntimeError("CARDS_REQUIRED")
     ordered = sorted(copy.deepcopy(cards), key=lambda card: int(card["target_start_us"]))
+    global_cta = str(cards_doc.get("cta_like_subscribe", "ON")).strip().upper()
+    if global_cta not in {"ON", "OFF"}:
+        raise RuntimeError("CTA_POLICY_INVALID")
+    cta_values: set[str] = set()
     cursor = 0
     for card in ordered:
         card_type = card.get("card_type")
@@ -572,6 +586,11 @@ def normalize_cards(
         elif lower_mode == "COMMENTARY_2LINE":
             lower_mode = "VIDEO100_EXPLAINER"
         card["lower_mode"] = lower_mode
+        card_cta = str(card.get("cta_like_subscribe", global_cta)).strip().upper()
+        if card_cta not in {"ON", "OFF"}:
+            raise RuntimeError(f"CTA_POLICY_INVALID:{card.get('card_id', '?')}")
+        card["cta_like_subscribe"] = card_cta
+        cta_values.add(card_cta)
         if card_type not in CARD_TYPES or start != cursor or duration <= 0:
             raise RuntimeError(f"CARD_TIMELINE_INVALID:{card.get('card_id', '?')}")
         if lower_mode not in LOWER_MODES:
@@ -592,6 +611,8 @@ def normalize_cards(
             if not _srt_cues(srt):
                 raise RuntimeError("SRT_CUES_REQUIRED")
         cursor += duration
+    if len(cta_values) != 1:
+        raise RuntimeError("CTA_POLICY_MIXED_UNSUPPORTED")
     first = ordered[0]
     if first.get("card_type") == "INTRO":
         if content_start_us is not None and (
@@ -736,7 +757,10 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
         for card in cards
         if card["card_type"] != "CHAPTER_CARD"
     )
-    set_range(cta_segment, main_ui_start, total - main_ui_start)
+    if cards[0].get("cta_like_subscribe", "ON") == "ON":
+        set_range(cta_segment, main_ui_start, total - main_ui_start)
+    else:
+        remove_segment(cta_track, cta_segment)
     videos = document["materials"]["videos"]
     intro_video = next(item for item in videos if item.get("type") == "video")
     photo_video = next(item for item in videos if item.get("type") == "photo")
@@ -968,6 +992,7 @@ def build_report_payload(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cards", type=Path, required=True)
+    parser.add_argument("--assembly-preflight-report", type=Path)
     parser.add_argument("--workspace-root", type=Path, required=True)
     parser.add_argument("--capcut-root", type=Path, required=True)
     parser.add_argument("--media-dir", type=Path, required=True)
@@ -978,6 +1003,10 @@ def main() -> int:
     resolved_root = resolve_active_root(args.workspace_root)
     require_non_stock_builder_for_adapter_root(resolved_root)
     cards_doc = json_load(args.cards)
+    if cards_doc.get("execution_mode") == "ASSEMBLY_ONLY":
+        if args.assembly_preflight_report is None:
+            raise RuntimeError("ASSEMBLY_PREFLIGHT_REPORT_REQUIRED")
+        verify_preflight_report(args.cards, args.assembly_preflight_report)
     episode_id = str(cards_doc.get("episode_id", "")).strip()
     project_name = str(cards_doc.get("project_name", "")).strip()
     if not episode_id or not project_name or Path(project_name).name != project_name:
@@ -1041,6 +1070,9 @@ def main() -> int:
                 media_records=media_records,
                 static=static,
                 resolved_root=resolved_root,
+            )
+            report["ASSEMBLY_PREFLIGHT"] = (
+                "PASS" if cards_doc.get("execution_mode") == "ASSEMBLY_ONLY" else "NOT_REQUIRED"
             )
             json_write(args.report, report)
             print(json.dumps({"status": "PASS", "project": str(final_root), "media_dir": str(args.media_dir), "static": static}, ensure_ascii=False))

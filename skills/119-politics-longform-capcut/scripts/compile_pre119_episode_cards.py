@@ -13,14 +13,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-
 SHA256_RE = re.compile(r"^[0-9A-Fa-f]{64}$")
-ALLOWED_DISPLAY_TRANSFORMS = {
-    "SPLIT",
-    "CLAMP",
-    "LINE_BREAK",
-    "DIALOGUE_MARKER_REMOVAL",
-}
+ALLOWED_DISPLAY_TRANSFORMS = {"SPLIT", "CLAMP", "LINE_BREAK", "DIALOGUE_MARKER_REMOVAL"}
+CTA_VALUES = {"ON", "OFF"}
 
 
 def load_object(path: Path) -> dict[str, Any]:
@@ -44,7 +39,7 @@ def require_file_sha(card: dict[str, Any], path_field: str, sha_field: str, code
 
 
 def requested(value: Any) -> bool:
-    return value is True or str(value).strip().upper() in {"YES", "TRUE", "REQUESTED", "PASS", "ENABLED"}
+    return value is True or str(value).strip().upper() in {"YES", "TRUE", "REQUESTED", "PASS", "ENABLED", "ON"}
 
 
 def validate_lanes(plan: dict[str, Any], evidence: dict[str, Any]) -> None:
@@ -71,9 +66,17 @@ def validate_plan_bindings(plan: dict[str, Any], cards: list[dict[str, Any]]) ->
         raise RuntimeError("PRE119_PLAN_IMAGE_CARD_REQUIRED")
     if not image_requested and card_types & image_types:
         raise RuntimeError("PRE119_PLAN_IMAGE_CARD_FORBIDDEN")
-    expected_lower = plan.get("lower_mode")
+    expected_lower = str(plan.get("lower_mode", "")).strip().upper()
+    allowed_lower = {"SRT", "COMMENTARY_2LINE", "NONE"}
+    if expected_lower not in allowed_lower | {"MIXED"}:
+        raise RuntimeError("PRE119_PLAN_LOWER_MODE_INVALID")
     for card in cards:
-        if card.get("card_type") in {"SOURCE_VIDEO", "NARRATION_IMAGE", "NARRATION_VIDEO"} and card.get("lower_mode") != expected_lower:
+        if card.get("card_type") not in {"SOURCE_VIDEO", "NARRATION_IMAGE", "NARRATION_VIDEO"}:
+            continue
+        actual = str(card.get("lower_mode", "")).strip().upper()
+        if actual not in allowed_lower:
+            raise RuntimeError(f"PRE119_PLAN_LOWER_MODE_INVALID:{card.get('card_id', '?')}")
+        if expected_lower != "MIXED" and actual != expected_lower:
             raise RuntimeError(f"PRE119_PLAN_LOWER_MODE_MISMATCH:{card.get('card_id', '?')}")
 
 
@@ -96,9 +99,25 @@ def validate_source_provenance(card: dict[str, Any]) -> None:
     card["source_srt_sha256"] = str(card["display_srt_sha256"]).upper()
 
 
+def normalize_lower_text(card: dict[str, Any]) -> None:
+    if card.get("lower_mode") != "COMMENTARY_2LINE":
+        return
+    line1 = card.get("lower_line1")
+    line2 = card.get("lower_line2")
+    existing = card.get("lower_text")
+    if isinstance(existing, str) and existing.strip():
+        return
+    if not isinstance(line1, str) or not line1.strip() or not isinstance(line2, str) or not line2.strip():
+        raise RuntimeError(f"COMMENTARY_2LINE_FIELDS_REQUIRED:{card.get('card_id', '?')}")
+    if "\n" in line1 or "\n" in line2:
+        raise RuntimeError(f"COMMENTARY_2LINE_EMBEDDED_NEWLINE:{card.get('card_id', '?')}")
+    card["lower_text"] = f"{line1.strip()}\n{line2.strip()}"
+
+
 def validate_card(card: dict[str, Any]) -> None:
     card_id = str(card.get("card_id", "?"))
     kind = card.get("card_type")
+    normalize_lower_text(card)
     try:
         target_duration = int(card.get("target_duration_us", 0))
         target_start = int(card.get("target_start_us", -1))
@@ -106,7 +125,6 @@ def validate_card(card: dict[str, Any]) -> None:
         raise RuntimeError(f"CARD_TIMELINE_EVIDENCE_INVALID:{card_id}") from error
     if target_start < 0 or target_duration <= 0:
         raise RuntimeError(f"CARD_TIMELINE_EVIDENCE_INVALID:{card_id}")
-
     if kind == "SOURCE_VIDEO":
         require_file_sha(card, "source_file", "source_sha256", "SOURCE_ASSET_EVIDENCE_INVALID")
         try:
@@ -133,6 +151,22 @@ def validate_card(card: dict[str, Any]) -> None:
         raise RuntimeError(f"CARD_TYPE_INVALID:{card_id}")
 
 
+def normalize_cta_policy(cards: list[dict[str, Any]], plan: dict[str, Any]) -> str:
+    default = str(plan.get("cta_like_subscribe", "ON")).strip().upper()
+    if default not in CTA_VALUES:
+        raise RuntimeError("CTA_POLICY_INVALID")
+    values: set[str] = set()
+    for card in cards:
+        value = str(card.get("cta_like_subscribe", default)).strip().upper()
+        if value not in CTA_VALUES:
+            raise RuntimeError(f"CTA_POLICY_INVALID:{card.get('card_id', '?')}")
+        card["cta_like_subscribe"] = value
+        values.add(value)
+    if len(values) != 1:
+        raise RuntimeError("CTA_POLICY_MIXED_UNSUPPORTED")
+    return values.pop()
+
+
 def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
     if validation.get("status") != "PASS" or validation.get("route") != "PRE119":
         raise RuntimeError("WAIT_PRE119_VALIDATION_PASS_REQUIRED")
@@ -149,6 +183,7 @@ def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[
     for card in compiled:
         validate_card(card)
     validate_plan_bindings(plan, compiled)
+    cta_policy = normalize_cta_policy(compiled, plan)
     cursor = 0
     ordered = sorted(compiled, key=lambda item: int(item["target_start_us"]))
     for card in ordered:
@@ -157,8 +192,10 @@ def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[
         cursor += int(card["target_duration_us"])
     return {
         "schema": "politics-longform-episode-cards.v1",
+        "execution_mode": "ASSEMBLY_ONLY",
         "episode_id": plan["episode_id"],
         "project_name": plan["project_name"],
+        "cta_like_subscribe": cta_policy,
         "canvas": {"width": 1920, "height": 1080, "fps": 30},
         "pre119_validation_sha256": validation.get("handoff_sha256", "TEST_FIXTURE"),
         "cards": ordered,
