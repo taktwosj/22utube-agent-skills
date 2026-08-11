@@ -31,7 +31,9 @@ def validate_project(project: Path) -> dict:
                 if material.get("type") == "video":
                     videos.append((segment, material))
                 if material.get("type") in {"audio", "music", "extract_music"}:
-                    audio.append((segment, material, segment.get("role") in {"A10", "A11"} or "source_audio" in name))
+                    audio.append((segment, material, segment.get("role") in {"A10", "A11"} or any(
+                        token in name for token in ("source_audio", "a10_vocal_stem")
+                    )))
         for order, (segment, material) in enumerate(videos):
             if material.get("video_algorithm", {}).get("quality_enhance", {}).get("level") != 3:
                 errors.append({"code": "POLISH_AI_HD_MISSING", "segment": segment.get("id")})
@@ -50,10 +52,9 @@ def validate_project(project: Path) -> dict:
                 expected_volume = 0.0 if any(start < b and a < end for a, b in a9_ranges) else 1.0
                 if segment.get("volume") != expected_volume:
                     errors.append({"code": "POLISH_NARRATION_MUTE_MISSING", "segment": segment.get("id")})
-                vocal = _refs(index, segment, "vocal_separations")
-                if not any(row.get("choice") == 2 for row in vocal):
-                    errors.append({"code": "POLISH_VOCAL_RETAIN_MISSING", "segment": segment.get("id")})
-    return {"status": "PASS" if not errors else "FAIL", "errors": errors, "profile": "001short-capcut-polish-v2"}
+                if _refs(index, segment, "vocal_separations"):
+                    errors.append({"code": "POLISH_CAPCUT_VOCAL_METADATA_FORBIDDEN", "segment": segment.get("id")})
+    return {"status": "PASS" if not errors else "FAIL", "errors": errors, "profile": "001short-capcut-polish-v3"}
 
 
 def main() -> int:

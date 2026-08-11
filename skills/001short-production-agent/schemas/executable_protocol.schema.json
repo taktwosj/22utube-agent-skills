@@ -11,8 +11,9 @@
     "schemas",
     "session_handoff",
     "production_modes",
-    "urakkai_review_loop",
+    "urakkai_approval",
     "invariants",
+    "manual_finalization",
     "anchors",
     "stages",
     "completion_report",
@@ -86,7 +87,8 @@
       "type": "object",
       "required": [
         "URAKKAI",
-        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"
+        "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY",
+        "SOURCE_ORDER_UNCHANGED_A10_RETAINED"
       ],
       "additionalProperties": false,
       "properties": {
@@ -97,7 +99,7 @@
             "minimum_video_segments",
             "fake_split_forbidden",
             "approved_final_order_required",
-            "a10_sync_required_for_all_used_ranges"
+            "allowed_audio_policies"
           ],
           "properties": {
             "meaningful_reorder_required": {
@@ -113,8 +115,13 @@
             "approved_final_order_required": {
               "const": true
             },
-            "a10_sync_required_for_all_used_ranges": {
-              "const": true
+            "allowed_audio_policies": {
+              "type": "array",
+              "uniqueItems": true,
+              "minItems": 3,
+              "items": {
+                "enum": ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED"]
+              }
             }
           },
           "additionalProperties": true
@@ -150,65 +157,50 @@
             }
           },
           "additionalProperties": true
+        },
+        "SOURCE_ORDER_UNCHANGED_A10_RETAINED": {
+          "type": "object",
+          "required": ["source_order_unchanged", "video_audio_mapping_must_match", "video_duration", "a10_duration", "allowed_audio_policies", "source_order_change"],
+          "additionalProperties": true
         }
       }
     },
-    "urakkai_review_loop": {
+    "urakkai_approval": {
       "type": "object",
       "required": [
         "enabled_for",
-        "preferred_provider",
-        "preferred_model",
-        "effort",
-        "review_loop_count",
-        "reviews_per_loop",
-        "creator_machine",
+        "external_review_required",
         "approval_authority",
-        "fallback_provider",
-        "fallback_model",
-        "fallback_effort",
-        "fallback_on_claude_failure",
-        "evidence_path"
+        "auto_mode_skips_user_approval",
+        "required_report_artifacts",
+        "manual_pass_state",
+        "auto_pass_state"
       ],
       "properties": {
         "enabled_for": {
           "const": ["URAKKAI"]
         },
-        "preferred_provider": {
-          "const": "claude_cli"
-        },
-        "preferred_model": {
-          "const": "Claude Opus 5"
-        },
-        "effort": {
-          "const": "low"
-        },
-        "review_loop_count": {
-          "const": 1
-        },
-        "reviews_per_loop": {
-          "const": 1
-        },
-        "creator_machine": {
-          "const": "macmini"
+        "external_review_required": {
+          "const": false
         },
         "approval_authority": {
           "const": "user"
         },
-        "fallback_provider": {
-          "const": "codex_cli"
-        },
-        "fallback_model": {
-          "const": "gpt-5.6-sol"
-        },
-        "fallback_effort": {
-          "const": "low"
-        },
-        "fallback_on_claude_failure": {
+        "auto_mode_skips_user_approval": {
           "const": true
         },
-        "evidence_path": {
-          "const": "20_script/external-review.json"
+        "required_report_artifacts": {
+          "const": [
+            "20_script/original-capcut-grid.md",
+            "20_script/urakkai-capcut-grid.md",
+            "20_script/URAKKAI_BLUEPRINT.md"
+          ]
+        },
+        "manual_pass_state": {
+          "const": "WAIT_USER_URAKKAI_APPROVAL"
+        },
+        "auto_pass_state": {
+          "const": "URAKKAI_AUTO_APPROVED"
         }
       },
       "additionalProperties": false
@@ -238,7 +230,7 @@
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_sync_explicit_request_required",
-        "capcut_cloud_destination_by_writer_machine_required",
+        "capcut_cloud_destination_explicit_request_required",
         "capcut_cloud_row_readback_required_when_requested",
         "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
@@ -300,7 +292,7 @@
         "capcut_cloud_sync_explicit_request_required": {
           "const": true
         },
-        "capcut_cloud_destination_by_writer_machine_required": {
+        "capcut_cloud_destination_explicit_request_required": {
           "const": true
         },
         "capcut_cloud_row_readback_required_when_requested": {
@@ -310,6 +302,48 @@
           "const": true
         }
       }
+    },
+    "manual_finalization": {
+      "type": "object",
+      "required": [
+        "automation_terminal_state",
+        "clean_source_policy",
+        "user_only_actions",
+        "source_video_provisional_next_action",
+        "stage08_clean_swap_route"
+      ],
+      "properties": {
+        "automation_terminal_state": {"const": "WAIT_USER_CAPCUT_CHECK"},
+        "clean_source_policy": {
+          "type": "object",
+          "required": ["primary", "fallback", "user_override", "user_override_requires", "fallback_reasons", "sequence"],
+          "properties": {
+            "primary": {"const": "AGENT_PRIMARY_CLEAN_SOURCE"},
+            "fallback": {"const": "USER_FALLBACK_CLEAN_SOURCE"},
+            "user_override": {"const": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"},
+            "user_override_requires": {"const": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"]},
+            "fallback_reasons": {"const": ["VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE", "VMAKE_ACQUISITION_ISSUE", "VMAKE_VERIFICATION_ISSUE"]},
+            "sequence": {
+              "const": [
+                "VMAKE_SUBMIT_FIRST",
+                "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+                "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "user_only_actions": {
+          "const": [
+            "capcut_visual_review_and_refinement",
+            "render",
+            "upload"
+          ]
+        },
+        "source_video_provisional_next_action": {"const": "CLEAN_SOURCE_SWAP_NONBLOCKING"},
+        "stage08_clean_swap_route": {"const": "scripts/build_episode_capcut.py --swap-provisional-video-only"}
+      },
+      "additionalProperties": false
     },
     "stages": {
       "type": "array",

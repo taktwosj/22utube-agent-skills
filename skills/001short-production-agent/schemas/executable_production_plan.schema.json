@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://taktwosj.example/schemas/001short-executable-production-plan-v1.json",
+  "$id": "https://taktwosj.example/schemas/001short-executable-production-plan-v2.json",
   "title": "001short Executable Production Plan",
   "type": "object",
   "required": [
@@ -11,18 +11,33 @@
     "production_mode",
     "total_duration_us",
     "order_signature",
-    "timeline"
+    "timeline",
+    "audio_policy",
+    "audio_source"
   ],
   "properties": {
-    "schema_version": {"const": "001short-production-plan-v1"},
+    "schema_version": {"const": "001short-production-plan-v2"},
     "episode_id": {"type": "string", "minLength": 1},
     "root_profile": {"type": "string", "minLength": 1},
     "project_name": {"type": "string", "minLength": 1},
     "production_mode": {
-      "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
+      "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"]
     },
+    "audio_policy": {
+      "enum": ["SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED"]
+    },
+    "audio_source": {"enum": ["SOURCE_CLIP", "SOURCE_VOCAL_STEM", "REASSEMBLED_VOCAL_STEM", "GENERATED_TTS"]},
     "visual_asset_mode": {
-      "enum": ["VMAKE_CLEAN", "SOURCE_VIDEO_PROVISIONAL"]
+      "enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"]
+    },
+    "user_clean_override": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {"const": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"},
+        "evidence": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": true
     },
     "total_duration_us": {"type": "integer", "minimum": 1},
     "original_order": {"type": "array", "minItems": 1},
@@ -80,7 +95,7 @@
       },
       "allOf": [
         {
-          "if": {"properties": {"anchor": {"enum": ["VIDEO", "A10"]}}},
+          "if": {"properties": {"anchor": {"enum": ["VIDEO", "A9", "A10"]}}},
           "then": {"required": ["asset_key", "source_range_us", "volume"]}
         },
         {

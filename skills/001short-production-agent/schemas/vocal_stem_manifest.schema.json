@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short source vocal stem manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "episode_id",
+    "source_path",
+    "source_sha256",
+    "source_duration_us",
+    "separator",
+    "vocals_path",
+    "vocals_sha256",
+    "vocals_duration_us",
+    "vocals_codec",
+    "vocals_ffprobe_verified",
+    "capcut_audio_role",
+    "capcut_allowed_audio_path",
+    "a12_policy",
+    "human_listen_qc_required"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "001short-vocal-stem-manifest-v1"},
+    "status": {"type": "string", "const": "STEM_GENERATED"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "source_path": {"type": "string", "minLength": 1},
+    "source_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "source_duration_us": {"type": "integer"},
+    "separator": {
+      "type": "object",
+      "required": ["engine", "model", "python_executable"],
+      "properties": {
+        "engine": {"type": "string", "const": "demucs"},
+        "model": {"type": "string", "minLength": 1},
+        "python_executable": {"type": "string", "minLength": 1},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "vocals_path": {"type": "string", "minLength": 1},
+    "vocals_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "vocals_duration_us": {"type": "integer"},
+    "vocals_codec": {"type": "string", "minLength": 1},
+    "vocals_ffprobe_verified": {"type": "boolean", "const": true},
+    "residual_reference_path": {"type": "string"},
+    "residual_reference_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "capcut_audio_role": {"type": "string", "const": "A10"},
+    "capcut_allowed_audio_path": {"type": "string", "minLength": 1},
+    "a12_policy": {"type": "string", "const": "EMPTY"},
+    "human_listen_qc_required": {"type": "boolean", "const": true}
+  },
+  "additionalProperties": true
+}

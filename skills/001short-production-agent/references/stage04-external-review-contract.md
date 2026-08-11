@@ -1,11 +1,14 @@
-# Stage 04: Mac Mini Urakkai Review Contract
+# Stage 04: Current Local Runtime Urakkai Review Contract
 
-Load only for Stage 04 and only for `URAKKAI`. Run one creator-machine review before a user decision; never turn it into automatic approval.
+Load only for Stage 04 and only for `URAKKAI`. Run one review on the current local runtime before a user decision; never turn it into automatic approval.
 
 ## Execution and authority
 
-1. The Mac mini producer creates the candidate and calls Claude CLI with Claude Opus 5 / Low.
-2. If that CLI call fails because of authentication, quota, availability, or a non-zero exit, run one same-input fallback: Codex CLI `gpt-5.6-sol` / Low.
+1. The current local runtime that owns the episode writer lock creates the candidate and calls Claude CLI with Claude Opus 5 / Low. The prompt must precede the variadic `--tools` option:
+   `claude.cmd -p "<review-prompt>" --model opus --effort low --no-session-persistence --tools Read`
+2. If that CLI call fails because of authentication, quota, availability, or a non-zero exit, run one same-input fallback with Codex CLI `gpt-5.6-sol` / Low:
+   `codex.cmd --ask-for-approval never exec --ephemeral --sandbox read-only --model gpt-5.6-sol --config 'model_reasoning_effort="low"' "<review-prompt>"`
+   Classify a command syntax failure separately from a connectivity probe or review-call connectivity failure. A connectivity probe is not review evidence.
 3. A reviewer may recommend or rewrite copy. It cannot lock the design, change source ranges without evidence, or advance the episode.
 4. Report the revised `20_script/URAKKAI_BLUEPRINT.md` and review summary to the user. Remain at `WAIT_USER_URAKKAI_APPROVAL` until explicit approval.
 

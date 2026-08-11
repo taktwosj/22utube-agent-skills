@@ -14,6 +14,7 @@ MANIFEST_SCHEMA = SKILL_ROOT / "schemas" / "clean_visual_manifest.schema.json"
 SOURCE_SCHEMA = SKILL_ROOT / "schemas" / "source_identity.schema.json"
 DESIGN_SCHEMA = SKILL_ROOT / "schemas" / "design_lock_evidence.schema.json"
 RECEIPT_SCHEMA = SKILL_ROOT / "schemas" / "clean_visual_receipt.schema.json"
+ASPECT_RATIO_RELATIVE_TOLERANCE = 0.01
 
 
 def _probe_video(path: Path) -> tuple[bool, int | None, int | None, int | None]:
@@ -38,6 +39,21 @@ def _probe_video(path: Path) -> tuple[bool, int | None, int | None, int | None]:
         return duration_us > 0, duration_us, int(stream["width"]), int(stream["height"])
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return False, None, None, None
+
+
+def _portrait_aspect_compatible(
+    source_width: int,
+    source_height: int,
+    candidate_width: int,
+    candidate_height: int,
+) -> bool:
+    if min(source_width, source_height, candidate_width, candidate_height) <= 0:
+        return False
+    if source_width >= source_height or candidate_width >= candidate_height:
+        return False
+    source_ratio = source_width / source_height
+    candidate_ratio = candidate_width / candidate_height
+    return abs(candidate_ratio - source_ratio) / source_ratio <= ASPECT_RATIO_RELATIVE_TOLERANCE
 
 
 def validate_clean_visual(
@@ -104,8 +120,14 @@ def validate_clean_visual(
         errors.append({"code": "CLEAN_VISUAL_SOURCE_FINGERPRINT_MISMATCH"})
 
     source_media = resolved_declared_path(source_identity_path, source["media_path"])
+    source_video_valid = False
+    source_width = source_height = None
     if not source_media.is_file() or sha256_file(source_media).lower() != source["media_sha256"].lower():
         errors.append({"code": "CLEAN_VISUAL_SOURCE_MEDIA_INVALID"})
+    else:
+        source_video_valid, _, source_width, source_height = _probe_video(source_media)
+        if not source_video_valid:
+            errors.append({"code": "CLEAN_VISUAL_SOURCE_VIDEO_STREAM_INVALID"})
 
     clean_source = resolved_declared_path(manifest_path, manifest["clean_source_path"])
     clean_sha = ""
@@ -126,6 +148,10 @@ def validate_clean_visual(
                 errors.append({"code": "CLEAN_VISUAL_DURATION_MISMATCH"})
             if (width, height) != (manifest["expected_width"], manifest["expected_height"]):
                 errors.append({"code": "CLEAN_VISUAL_RESOLUTION_MISMATCH"})
+            if source_video_valid and not _portrait_aspect_compatible(
+                source_width, source_height, width, height
+            ):
+                errors.append({"code": "CLEAN_VISUAL_ASPECT_RATIO_MISMATCH"})
     if errors:
         return result(errors)
 

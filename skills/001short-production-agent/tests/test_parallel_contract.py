@@ -95,11 +95,11 @@ class ParallelContractTests(unittest.TestCase):
         self.assertIn("clean_visual_evidence", checks["08"]["optional_prerequisites"])
         self.assertEqual(
             checks["08"]["allowed_visual_asset_modes"],
-            ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL"],
+            ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"],
         )
         stages = {stage["id"]: stage for stage in json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))["stages"]}
         self.assertEqual(stages["07"]["requires_state"], "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY")
-        self.assertEqual(stages["08"]["requires_state"], "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL")
+        self.assertEqual(stages["08"]["requires_state"], "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE")
 
     def test_interim_capcut_never_waits_for_vmake_and_requires_clean_video_swap(self):
         interim = self.workflow["interim_capcut"]
@@ -108,39 +108,29 @@ class ParallelContractTests(unittest.TestCase):
         self.assertNotIn("vmake_remaining_minutes_strictly_greater_than", interim["allowed_when"])
         self.assertEqual(interim["video_asset"], "00_input/source.mp4")
         self.assertEqual(interim["video_volume"], 0)
-        self.assertEqual(interim["original_audio_anchor"], "A10")
-        self.assertEqual(interim["original_audio_volume"], 1)
+        self.assertEqual(interim["a10_anchor"], "A10_VALIDATED_DEMUCS_VOCAL_STEM")
+        self.assertEqual(interim["a10_volume"], 1)
         self.assertEqual(interim["status"], "SOURCE_VIDEO_PROVISIONAL")
         self.assertEqual(interim["on_clean_arrival"], "replace_existing_VIDEO_asset_only_keep_project_structure")
         self.assertEqual(interim["report_required"]["next_action"], "CLEAN_SOURCE_SWAP_NONBLOCKING")
-        self.assertEqual(interim["report_required"]["paperclip_status"], "IN_REVIEW")
+        self.assertNotIn("paperclip_status", interim["report_required"])
         self.assertTrue(interim["batch_nonblocking"])
         self.assertIn("SOURCE_PROVISIONAL_RENDER", interim["allows"])
         self.assertEqual(interim["quality_authority"], "user")
 
-    def test_stage08_postbuild_checks_are_read_only_and_stage09_is_serial(self):
+    def test_stage08_postbuild_checks_are_read_only_and_stage09_is_user_manual_only(self):
         postbuild = self.contract["fanout"]["stage08_postbuild"]
         self.assertEqual(postbuild["mode"], "read_only_validation")
         self.assertLessEqual(postbuild["workers"], self.contract["max_workers"])
         self.assertTrue(postbuild["immutable_snapshot_required"])
 
         stage09 = self.contract["stage09"]
-        self.assertEqual(stage09["mode"], "strict_serial")
-        self.assertEqual(stage09["max_workers"], 1)
+        self.assertEqual(stage09["mode"], "user_manual_only")
+        self.assertEqual(stage09["max_workers"], 0)
         self.assertFalse(stage09["fanout"])
-        self.assertEqual(
-            stage09["router_args"],
-            [
-                "--stage09-review-evidence",
-                "--stage09-review-sha256",
-                "--approved-evidence-root",
-                "--capcut-evidence",
-                "--capcut-sha256",
-                "--render",
-                "--render-sha256",
-                "--evidence",
-            ],
-        )
+        self.assertEqual(stage09["state_writer"], "user_only")
+        self.assertEqual(stage09["sequence"], ["WAIT_USER_CAPCUT_CHECK"])
+        self.assertEqual(stage09["router_args"], [])
 
     def test_runtime_guides_require_transcript_evidence_and_verified_gui_escalation(self):
         parallel = GUIDE.read_text(encoding="utf-8")

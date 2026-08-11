@@ -1,7 +1,9 @@
 {
   "schema_version": "001short-tools-v1",
   "capcut_root": "shrt white",
-  "root_zip": "00_asset_tools/templates/capcut/shrt_white_base_v1/shrt_white_base_v1_CAPCUT_20260709_openfix.zip",
+  "root_contract_required": true,
+  "root_profiles": ["home_windows", "macmini"],
+  "template_profile": "shrt_white_base_v2",
   "matrix": {"time_axis": "horizontal", "tool_axis": "vertical", "repeat": true, "coexist": true},
   "executable_protocol": {
     "file": "protocol.json",
@@ -38,6 +40,17 @@
       "select": "five_to_six_meaningfully_different_reaction_clusters",
       "failure": "COMMENTS_UNAVAILABLE_NONBLOCKING"
     }
+  },
+  "source_vocal_separation": {
+    "engine": "demucs",
+    "preflight": "scripts/separate_source_vocals.py --preflight",
+    "separator": "scripts/separate_source_vocals.py",
+    "validator": "scripts/validate_vocal_stem.py",
+    "when": "approved source speaker audio remains on A10",
+    "output": "{episode_root}/30_audio_srt/source_vocals/vocals.wav",
+    "capcut_role": "A10",
+    "A12": "EMPTY",
+    "automatic_claim_limit": "human listen QC required before completion"
   },
   "production_engine": {
     "skill": ".",
@@ -84,7 +97,7 @@
     "postbuild_validator": "scripts/validate_postbuild.py",
     "required_before_build": ["EDIT_LOCK_HELD", "CAPCUT_CLOSED", "FINAL_DESIGN_LOCKED", "AUDIO_CAPTION_VALIDATED", "ROOT_CONTRACT_VERIFIED", "MEDIA_NORMALIZED", "TRACK_MAPPING_VERIFIED"],
     "edit_lock": {
-      "required_fields": ["episode_id", "active_writer_machine", "lock_owner"],
+      "required_fields": ["episode_id", "lock_owner"],
       "conflict": "WAIT_EDIT_LOCK"
     },
     "root_contract": {
@@ -99,7 +112,8 @@
       "A9_A10_audio": {"container": "WAV", "codec": "PCM_S16LE", "sample_rate": 48000, "channels": 1}
     },
     "track_mapping": {
-      "required": ["VIDEO", "T1", "T2", "A9", "A10", "STATE", "A11", "A12", "SCREEN"],
+      "profile": "shrt_white_base_v2_15",
+      "required": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH", "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1", "A9", "A10", "A11", "A12_RESERVED_EMPTY"],
       "missing": "WAIT_CAPCUT_TRACK_MAPPING",
       "new_tracks": false
     },
@@ -114,15 +128,21 @@
     "static_validator": "scripts/validate_capcut_project.py"
   },
   "production_tools": [
-    {"id": "VIDEO", "role": "VMake clean visual", "audio": "mute"},
-    {"id": "T1", "role": "top title 1"},
+    {"id": "VIDEO", "role": "clean or provisional visual", "audio": "mute"},
+    {"id": "SCREEN_EFFECT", "role": "screen effect seed"},
+    {"id": "SCREEN_WHITE", "role": "white screen seed"},
+    {"id": "STATE_FLICKER", "role": "reserved empty physical state lane"},
+    {"id": "STATE_GLITCH", "role": "reserved empty physical state lane"},
+    {"id": "STATE_LASER", "role": "laser state caption"},
+    {"id": "A10_TEXT_WHITE", "role": "primary speaker caption"},
+    {"id": "A10_TEXT_YELLOW", "role": "other known speaker caption"},
+    {"id": "A9_TEXT", "role": "TTS caption"},
     {"id": "T2", "role": "top title 2"},
-    {"id": "A9", "role": "TTS and TTS caption"},
-    {"id": "A10", "role": "speaker caption and original point audio"},
-    {"id": "STATE", "role": "situation emotion status caption"},
+    {"id": "T1", "role": "top title 1"},
+    {"id": "A9", "role": "TTS audio"},
+    {"id": "A10", "role": "validated Demucs vocal stem"},
     {"id": "A11", "role": "sound effects"},
-    {"id": "A12", "role": "background music"},
-    {"id": "SCREEN", "role": "approved screen treatment"}
+    {"id": "A12_RESERVED_EMPTY", "role": "reserved empty"}
   ],
   "policies": {"new_tracks": false, "new_tools": false, "external_review_auto": false}
 }

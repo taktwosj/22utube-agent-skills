@@ -25,7 +25,7 @@ When the operator says the current system already clones the root and writes new
 Extract once from a verified immutable root and record:
 
 - `root_profile`, root archive/tree SHA-256, and schema version
-- logical anchor key (`VIDEO`, `T1`, `T2`, `A9`, `A10`, `STATE`, `A11`, `A12`, screen lanes)
+- logical anchor key (`VIDEO`, `T1`, `T2`, `A9`, `A10`, `STATE`, `A11`, `A12_RESERVED_EMPTY`, screen lanes)
 - template `track_id`, `segment_id`, and `material_id`
 - allowed replacement fields
 - preserved style fields
@@ -67,7 +67,7 @@ A CapCut root archive can contain heterogeneous `draft_content.json` documents:
 - active timeline mirror
 - subdrafts/compound clips with unrelated layouts
 
-Never assume every document has the root track count. In the Windows `shrt white` root bundled at commit `cd41d74`, root and active timeline have 12 tracks, while five subdraft documents each have one unrelated track. Applying `len(tracks) < 12` to every document deterministically raises `PINNED_TRACK_LAYOUT_INVALID`.
+**Legacy v1 12-track note:** in the Windows `shrt white` root bundled at commit `cd41d74`, root and active timeline had 12 tracks, while five subdraft documents each had one unrelated track. That layout is historical evidence only, not the current production contract. The current `shrt_white_base_v2_15` root has 15 physical tracks; unrelated subdrafts still must be classified by contracted anchor presence instead of a global track-count rule.
 
 Classify documents by contracted anchor presence:
 
@@ -90,7 +90,7 @@ Preserve font, size, position, color, stroke, background, animation, render/laye
 
 ## Audio and optional lanes
 
-Do not clear a lane unless the production plan explicitly omits it. If code clears A9, A11, or A12 template segments, it must repopulate them from approved placements before validation. A declared role in `ROLE_BY_TRACK` is not proof that the builder assembles that role.
+Do not clear A9 or A11 unless the production plan explicitly omits that lane. If code clears an approved A9 or A11 template segment, it must repopulate that lane from approved placements before validation. `A12_RESERVED_EMPTY` is different: it is a reserved physical lane, never a BGM or placement target, and validation must reject every A12 segment, material, or production-plan placement. A declared role in `ROLE_BY_TRACK` is not proof that the builder assembles that role.
 
 ## Transactional build
 
@@ -133,7 +133,8 @@ Before changing the builder, add a failing fixture test that uses the bundled ro
 - track reordering does not affect contract-based execution
 - one-track unrelated subdrafts are skipped, not rejected
 - T1/T2 rich-text style remains identical except text/style ranges
-- all required roles in the production plan are assembled (including A9/A11/A12)
+- all required roles in the production plan are assembled, including approved A9 and A11 placements
+- `A12_RESERVED_EMPTY` has zero placements, segments, and materials
 - source root remains byte/hash unchanged
 - failed staging leaves no final target
 - full root/timeline/ID mirror validation
@@ -148,7 +149,7 @@ Do not publish operations in `production_plan.schema.json` that the executor rej
 2. executor implementation
 3. actual root-fixture readback
 
-If only T1/T2 `replace_text_preserve_style` is implemented, label the result as a T1/T2 pilot. Do not claim the full production-plan integration until VIDEO, A9/A9_TEXT, A10/A10_TEXT, STATE, A11, and A12 placements have fixture tests and readback evidence. A direct defect fix (for example, skipping unrelated one-track subdrafts) is distinct from completion of the larger architecture.
+If only T1/T2 `replace_text_preserve_style` is implemented, label the result as a T1/T2 pilot. Do not claim the full production-plan integration until VIDEO, A9/A9_TEXT, A10/A10_TEXT, STATE, and A11 placements plus the empty `A12_RESERVED_EMPTY` readback have fixture tests and evidence. A direct defect fix (for example, skipping unrelated one-track subdrafts) is distinct from completion of the larger architecture.
 
 ## Cross-machine implementation handoff
 

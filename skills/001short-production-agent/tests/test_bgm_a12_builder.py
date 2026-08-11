@@ -1,4 +1,3 @@
-import copy
 import sys
 import unittest
 from pathlib import Path
@@ -11,39 +10,11 @@ import build_episode_capcut as builder
 
 
 class BgmA12BuilderTest(unittest.TestCase):
-    def test_populates_one_full_duration_a12_segment_and_material(self):
-        self.assertTrue(
-            hasattr(builder, "_populate_full_duration_audio"),
-            "builder must implement full-duration A12 population",
-        )
-        template_segment = {
-            "id": "template-segment",
-            "material_id": "material-1",
-            "target_timerange": {"start": 0, "duration": 1},
-            "source_timerange": {"start": 0, "duration": 1},
-        }
-        material = {"id": "material-1", "type": "music", "path": "old"}
-        track = {"segments": []}
-
-        builder._populate_full_duration_audio(
-            track,
-            copy.deepcopy(template_segment),
-            material,
-            portable_path="##_draftpath_placeholder_test_##/Resources/media/bgm.wav",
-            duration_us=15_074_000,
-            role="A12",
-            segment_id="a12-bgm",
-        )
-
-        self.assertEqual(len(track["segments"]), 1)
-        segment = track["segments"][0]
-        self.assertEqual(segment["id"], "a12-bgm")
-        self.assertEqual(segment["role"], "A12")
-        self.assertEqual(segment["target_timerange"], {"start": 0, "duration": 15_074_000})
-        self.assertEqual(segment["source_timerange"], {"start": 0, "duration": 15_074_000})
-        self.assertEqual(material["role"], "A12")
-        self.assertEqual(material["duration"], 15_074_000)
-        self.assertTrue(material["path"].endswith("Resources/media/bgm.wav"))
+    def test_a12_population_helper_is_absent_and_any_segment_is_rejected(self):
+        self.assertFalse(hasattr(builder, "_populate_full_duration_audio"))
+        with self.assertRaisesRegex(RuntimeError, "A12_RESERVED_EMPTY"):
+            builder.assert_a12_empty([{"id": "a12-bgm", "role": "A12"}])
+        builder.assert_a12_empty([])
 
     def test_cloud_prepare_creates_mirrors_and_scrubs_windows_cache_paths(self):
         self.assertTrue(hasattr(builder, "_prepare_cloud_project"))

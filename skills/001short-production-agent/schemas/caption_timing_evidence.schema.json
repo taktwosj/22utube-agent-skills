@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short deterministic caption timing receipt",
+  "type": "object",
+  "required": ["schema_version", "status", "episode_id", "source_identity_path", "source_identity_sha256", "tolerance_us", "zero_caption", "mapping", "cues"],
+  "properties": {
+    "schema_version": {"enum": ["001short-caption-timing-evidence-v1", "001short-caption-timing-evidence-v2"]},
+    "status": {"const": "PASS"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "source_identity_path": {"type": "string", "minLength": 1},
+    "source_identity_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "approved_timeline_path": {"type": "string", "minLength": 1},
+    "approved_timeline_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "build_manifest_path": {"type": "string", "minLength": 1},
+    "build_manifest_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "production_plan_path": {"type": "string", "minLength": 1},
+    "production_plan_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "original_grid_path": {"type": "string", "minLength": 1},
+    "original_grid_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "urakkai_grid_path": {"type": "string", "minLength": 1},
+    "urakkai_grid_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+    "tolerance_us": {"type": "integer"},
+    "zero_caption": {"type": "boolean"},
+    "mapping": {
+      "type": "array", "items": {"type": "object", "required": ["mapping_id", "source_beat_id", "target_segment_id", "source_range_us", "target_range_us"],
+        "properties": {"mapping_id": {"type": "string", "minLength": 1}, "source_beat_id": {"type": "string", "minLength": 1}, "target_segment_id": {"type": "string", "minLength": 1}, "source_range_us": {"type": "array", "minItems": 2}, "target_range_us": {"type": "array", "minItems": 2}}, "additionalProperties": true}
+    },
+    "cues": {
+      "type": "array", "items": {"type": "object", "required": ["cue_id", "text", "authority", "mapping_id", "source_range_us", "target_range_us", "bound_file_path", "bound_file_sha256"],
+        "properties": {"cue_id": {"type": "string", "minLength": 1}, "text": {"type": "string", "minLength": 1}, "authority": {"enum": ["BURNED_TEXT_FRAME", "SPEECH_AUDIO", "TTS", "STATE"]}, "mapping_id": {"type": "string", "minLength": 1}, "source_range_us": {"type": "array", "minItems": 2}, "target_range_us": {"type": "array", "minItems": 2}, "bound_file_path": {"type": "string", "minLength": 1}, "bound_file_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"}}, "additionalProperties": true}
+    }
+  },
+  "allOf": [{
+    "if": {"properties": {"schema_version": {"const": "001short-caption-timing-evidence-v2"}}},
+    "then": {"required": ["approved_timeline_path", "approved_timeline_sha256", "build_manifest_path", "build_manifest_sha256", "production_plan_path", "production_plan_sha256", "original_grid_path", "original_grid_sha256", "urakkai_grid_path", "urakkai_grid_sha256"]}
+  }],
+  "additionalProperties": true
+}

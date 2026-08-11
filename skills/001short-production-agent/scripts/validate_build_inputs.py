@@ -96,14 +96,21 @@ def validate_build_inputs(
         if cue_text not in approved_text:
             errors.append({"code": "BUILD_INPUTS_SUBTITLE_TEXT_NOT_IN_SRT", "text": cue_text})
             break
-    approved_rows = sorted(timeline.get("segments", []), key=lambda row: row.get("timeline_order", 0))
+    approved_rows = timeline.get("segments", [])
     contract_rows = contract.get("timeline", [])
-    if [row.get("segment_id") for row in approved_rows] != contract.get("approved_actual_order"):
+    approved_by_id = {row.get("segment_id"): row for row in approved_rows}
+    contract_by_id = {row.get("segment_id"): row for row in contract_rows}
+    locked_cue_ids = {row.get("cue_id") for row in caption.get("cues", [])}
+    binding_cue_ids = {row.get("cue_id") for row in contract.get("caption_bindings", [])}
+    if locked_cue_ids != binding_cue_ids or len(contract.get("caption_bindings", [])) != len(binding_cue_ids):
+        errors.append({"code": "BUILD_INPUTS_CAPTION_BINDING_SET_MISMATCH"})
+    if set(approved_by_id) != set(contract.get("approved_actual_order", [])):
         errors.append({"code": "BUILD_INPUTS_TIMELINE_ORDER_MISMATCH"})
-    if len(approved_rows) != len(contract_rows):
+    if set(approved_by_id) != set(contract_by_id):
         errors.append({"code": "BUILD_INPUTS_TIMELINE_CONTENT_MISMATCH"})
     else:
-        for approved, planned in zip(approved_rows, contract_rows):
+        for segment_id, approved in approved_by_id.items():
+            planned = contract_by_id[segment_id]
             if any(approved.get(field) != planned.get(field) for field in ("segment_id", "role", "start", "duration")):
                 errors.append({"code": "BUILD_INPUTS_TIMELINE_CONTENT_MISMATCH", "segment_id": approved.get("segment_id")})
     if errors:

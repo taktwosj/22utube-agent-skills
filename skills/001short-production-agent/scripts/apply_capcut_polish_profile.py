@@ -18,6 +18,7 @@ W_FLASH = {
     "request_id": "", "resource_id": "6724845376098013708",
     "source_platform": 1, "task_id": "", "third_resource_id": "6724845376098013708",
     "type": "transition", "video_path": "",
+    "role": "SCREEN_EFFECT", "desc": "001short approved W Flash transition",
 }
 
 
@@ -72,9 +73,15 @@ def _ensure_ref_material(materials: dict, segment: dict, group: str, kind: str, 
     row = next((index[ref][1] for ref in refs if ref in index and index[ref][0] == group
                 and index[ref][1].get("type") == kind), None)
     if row is None:
-        row = {"id": _id(f"{segment.get('id')}/{group}/{kind}"), "type": kind}
+        row = {
+            "id": _id(f"{segment.get('id')}/{group}/{kind}"), "type": kind,
+            "role": segment.get("role", "SCREEN_EFFECT"),
+            "desc": f"001short approved {kind}",
+        }
         materials[group].append(row)
         refs.append(row["id"])
+    row.setdefault("role", segment.get("role", "SCREEN_EFFECT"))
+    row.setdefault("desc", f"001short approved {kind}")
     row.update(data)
     return row
 
@@ -108,10 +115,30 @@ def _ensure_loudness(materials: dict, segment: dict, material: dict) -> None:
     })
 
 
-def _ensure_vocal_retain(materials: dict, segment: dict) -> None:
-    _ensure_ref_material(materials, segment, "vocal_separations", "vocal_separation", {
-        "choice": 2, "enter_from": "timeline_menu", "final_algorithm": "vocal_separate",
-    })
+def _remove_vocal_retain_metadata(materials: dict, segment: dict) -> None:
+    index = _material_index(materials)
+    refs = segment.get("extra_material_refs", [])
+    if not isinstance(refs, list):
+        return
+    removed = {
+        ref for ref in refs
+        if ref in index and index[ref][0] == "vocal_separations"
+        and index[ref][1].get("type") == "vocal_separation"
+    }
+    if not removed:
+        return
+    segment["extra_material_refs"] = [ref for ref in refs if ref not in removed]
+    still_referenced = {
+        ref for track in materials.get("_tracks_for_ref_scan", []) if isinstance(track, dict)
+        for row in track.get("segments", []) if isinstance(row, dict)
+        for ref in row.get("extra_material_refs", []) if isinstance(ref, str)
+    }
+    rows = materials.get("vocal_separations", [])
+    if isinstance(rows, list):
+        materials["vocal_separations"] = [
+            row for row in rows
+            if not (row.get("id") in removed and row.get("id") not in still_referenced)
+        ]
 
 
 def _range(segment: dict) -> tuple[int, int]:
@@ -122,6 +149,9 @@ def _range(segment: dict) -> tuple[int, int]:
 
 def _apply(value: dict) -> dict[str, int]:
     materials = value["materials"]
+    # Legacy profiles wrote a CapCut-only vocal-retain marker. It is not an
+    # audio separator, so remove it while preserving actual A10 media.
+    materials["_tracks_for_ref_scan"] = value["tracks"]
     index = _material_index(materials)
     a9_ranges: list[tuple[int, int]] = []
     videos: list[tuple[dict, dict]] = []
@@ -131,7 +161,9 @@ def _apply(value: dict) -> dict[str, int]:
             material = index.get(segment.get("material_id"), ("", {}))[1]
             name = Path(str(material.get("path", ""))).name.casefold()
             is_a9 = segment.get("role") == "A9" or "tts_narrator" in name
-            is_source = segment.get("role") in {"A10", "A11"} or "source_audio" in name
+            is_source = segment.get("role") in {"A10", "A11"} or any(
+                token in name for token in ("source_audio", "a10_vocal_stem")
+            )
             if is_a9:
                 a9_ranges.append(_range(segment))
             if material.get("type") == "video":
@@ -150,8 +182,8 @@ def _apply(value: dict) -> dict[str, int]:
         if is_source:
             start, end = _range(segment)
             segment["volume"] = 0.0 if any(start < a9_end and a9_start < end for a9_start, a9_end in a9_ranges) else 1.0
-            # Source speech is retained while BGM is separated. Never infer a no-vocals asset from A11.
-            _ensure_vocal_retain(materials, segment)
+            _remove_vocal_retain_metadata(materials, segment)
+    materials.pop("_tracks_for_ref_scan", None)
     return {"video_segments": len(videos), "audio_segments": len(audio), "a9_ranges": len(a9_ranges)}
 
 
@@ -168,7 +200,7 @@ def apply_project(project: Path) -> dict:
         for key, amount in result.items():
             counts[key] += amount
         changed.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()})
-    return {"status": "PASS", "profile": "001short-capcut-polish-v2", "project": str(project), "documents": changed, **counts}
+    return {"status": "PASS", "profile": "001short-capcut-polish-v3", "project": str(project), "documents": changed, **counts}
 
 
 def main() -> int:

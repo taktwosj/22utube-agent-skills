@@ -40,6 +40,20 @@ def iter_timeline_json(project_path: Path) -> Iterator[tuple[Path, Any]]:
             yield path, payload
 
 
+def iter_primary_draft_documents(project_path: Path) -> Iterator[tuple[Path, Any]]:
+    """Yield only root and direct Timelines/<id> editable draft documents."""
+    project_path = Path(project_path)
+    root = project_path / "draft_content.json"
+    yield root, load_json_file(root, required=True)
+    timelines = project_path / "Timelines"
+    if not timelines.is_dir():
+        return
+    for path in sorted(timelines.glob("*/draft_content.json")):
+        payload = load_json_file(path, required=False)
+        if payload is not None:
+            yield path, payload
+
+
 def required_json(project_path: Path) -> dict[str, Any]:
     payloads = {
         name: load_json_file(project_path / name, required=True)

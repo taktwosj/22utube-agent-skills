@@ -6,7 +6,7 @@ from pathlib import Path
 
 from common import inspect_write_target, read_json, resolved_declared_path, result, sha256_file, write_json
 from schema_runtime import validate_schema
-from validate_clean_visual import _probe_video
+from validate_clean_visual import _portrait_aspect_compatible, _probe_video
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -65,8 +65,8 @@ def validate_clean_candidate(
         elif source_ok:
             if abs(duration_us - source_duration_us) > 50_000:
                 errors.append({"code": "CLEAN_CANDIDATE_DURATION_MISMATCH"})
-            if (width, height) != (source_width, source_height):
-                errors.append({"code": "CLEAN_CANDIDATE_RESOLUTION_MISMATCH"})
+            if not _portrait_aspect_compatible(source_width, source_height, width, height):
+                errors.append({"code": "CLEAN_CANDIDATE_ASPECT_RATIO_MISMATCH"})
     if errors:
         return result(errors)
 
