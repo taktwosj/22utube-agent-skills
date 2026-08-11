@@ -1,9 +1,11 @@
 {
-  "schema_version": "001short-production-plan-v1",
+  "schema_version": "001short-production-plan-v2",
   "episode_id": "SH_URAKKAI_PASS",
   "root_profile": "shrt_white_root_01",
   "project_name": "SH_URAKKAI_PASS_Hermes",
   "production_mode": "URAKKAI",
+  "audio_policy": "A10_REASSEMBLED_SYNC",
+  "audio_source": "REASSEMBLED_VOCAL_STEM",
   "total_duration_us": 3000000,
   "original_order": ["1", "2", "3"],
   "order_signature": ["3", "1", "2"],

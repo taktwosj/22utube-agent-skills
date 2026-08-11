@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short source intake receipt",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "source_id", "intake_kind", "source_locator", "local_media_path", "local_media_sha256", "local_media_duration_us", "source_identity_path", "source_identity_sha256"],
+  "properties": {
+    "schema_version": {"const": "001short-source-intake-receipt-v1"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "source_id": {"type": "string", "minLength": 1},
+    "intake_kind": {"enum": ["GOOGLE_DRIVE", "URL", "DESKTOP"]},
+    "source_locator": {"type": "string", "minLength": 1},
+    "local_media_path": {"type": "string", "minLength": 1},
+    "local_media_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "local_media_duration_us": {"type": "integer", "minimum": 1},
+    "source_identity_path": {"type": "string", "minLength": 1},
+    "source_identity_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"}
+  },
+  "additionalProperties": true
+}

@@ -29,20 +29,169 @@ import validate_capcut_polish_profile
 import validate_postbuild
 import validate_prebuild
 import validate_clean_visual
+import validate_capcut_grids
 import validate_design_lock
-from capcut_io import iter_timeline_json
-from common import manifest_sha256, resolved_declared_path
+import validate_executable_protocol
+import resolve_shorts_capcut_root
+from capcut_io import iter_primary_draft_documents
+from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
+from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
-ROLE_BY_TRACK = [
-    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE", "A10_TEXT", "A9_TEXT",
-    "T2", "T1", "A9", "A10", "A11", "A12",
-]
+ROLE_BY_TRACK = list(CANONICAL_TRACKS)
+
+# A9 carries the narration we generate; A10 carries the retained source speech.
+# MIXED keeps both, so the source stem must still be present while A9 is built.
+AUDIO_POLICIES = frozenset({
+    "SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC",
+    "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED",
+})
+TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
+A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
+STEM_POLICIES = A10_POLICIES - {"SOURCE_ORDER_CLEAN_AUDIO"}
 
 
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def validate_grid_harness(config: dict) -> dict:
+    forbidden_overrides = (
+        "original_grid_path",
+        "urakkai_grid_path",
+    )
+    if any(key in config for key in forbidden_overrides):
+        raise ValueError("TABLE_PATH_OVERRIDE_FORBIDDEN")
+    episode_value = config.get("episode_root")
+    if not isinstance(episode_value, str) or not episode_value.strip():
+        raise ValueError("TABLE_EPISODE_ROOT_REQUIRED")
+    episode = Path(episode_value).resolve()
+    original = episode / "20_script" / "original-capcut-grid.md"
+    urakkai = episode / "20_script" / "urakkai-capcut-grid.md"
+    validation = validate_capcut_grids.validate_grids(original, urakkai)
+    if validation["status"] != "PASS":
+        first = validation["errors"][0]
+        details = ":".join(
+            str(first[key])
+            for key in ("table", "row", "column")
+            if key in first
+        )
+        suffix = f":{details}" if details else ""
+        raise ValueError(f"{first['code']}{suffix}")
+    required = (
+        "build_manifest_path", "approved_timeline_path", "design_lock_evidence_path", "state_path"
+    )
+    missing = [key for key in required if not isinstance(config.get(key), str) or not config[key].strip()]
+    if missing:
+        raise ValueError(f"TABLE_LOCKED_ARTIFACT_REQUIRED:{','.join(missing)}")
+    state_path = Path(config["state_path"]).resolve()
+    if not state_path.is_file():
+        raise ValueError("TABLE_LOCKED_ARTIFACT_REQUIRED:state_path")
+    state = read_json(state_path)
+    binding_specs = {
+        "approved_timeline": ("approved_timeline_path", "approved_timeline_sha256", Path(config["approved_timeline_path"]).resolve()),
+        "build_manifest": ("build_manifest_path", "build_manifest_sha256", Path(config["build_manifest_path"]).resolve()),
+        "design_lock_evidence": ("design_lock_evidence_path", "design_lock_evidence_sha256", Path(config["design_lock_evidence_path"]).resolve()),
+        "audio_lock": ("audio_lock_path", "audio_lock_sha256", None),
+        "caption_lock": ("caption_lock_path", "caption_lock_sha256", None),
+    }
+    artifact_paths: dict[str, Path] = {}
+    for name, (path_key, sha_key, expected_path) in binding_specs.items():
+        declared_value = state.get(path_key)
+        declared_sha = state.get(sha_key)
+        if not isinstance(declared_value, str) or not declared_value.strip() or not isinstance(declared_sha, str):
+            raise ValueError(f"TABLE_STATE_LOCK_MISSING:{name}")
+        declared_path = resolve_state_artifact(state_path, declared_value)
+        if expected_path is not None and declared_path != expected_path:
+            raise ValueError(f"TABLE_STATE_LOCK_PATH_MISMATCH:{name}")
+        if not declared_path.is_file() or _sha(declared_path).lower() != declared_sha.lower():
+            raise ValueError(f"TABLE_STATE_LOCK_SHA_MISMATCH:{name}")
+        artifact_paths[name] = declared_path
+    semantic_errors = validate_capcut_grids.validate_locked_assembly(
+        validation,
+        read_json(artifact_paths["build_manifest"]),
+        read_json(artifact_paths["approved_timeline"]),
+        read_json(artifact_paths["audio_lock"]),
+        read_json(artifact_paths["caption_lock"]),
+    )
+    if semantic_errors:
+        first = semantic_errors[0]
+        details = ":".join(
+            str(first[key]) for key in ("table", "row", "column") if key in first
+        )
+        suffix = f":{details}" if details else ""
+        raise ValueError(f"{first['code']}{suffix}")
+    audio_payload = read_json(artifact_paths["audio_lock"])
+    caption_payload = read_json(artifact_paths["caption_lock"])
+    if audio_payload.get("schema_version") != "001short-audio-lock-v4":
+        raise ValueError("AUDIO_LOCK_MIGRATION_REQUIRED")
+    if caption_payload.get("schema_version") != "001short-caption-lock-v2":
+        raise ValueError("CAPTION_LOCK_MIGRATION_REQUIRED")
+    timing_path = resolved_declared_path(
+        artifact_paths["caption_lock"],
+        str(caption_payload.get("caption_timing_evidence_path", "")),
+    )
+    try:
+        timing_payload = read_json(timing_path)
+    except (OSError, TypeError, ValueError):
+        raise ValueError("CAPTION_TIMING_EVIDENCE_MIGRATION_REQUIRED") from None
+    if timing_payload.get("schema_version") != "001short-caption-timing-evidence-v2":
+        raise ValueError("CAPTION_TIMING_EVIDENCE_MIGRATION_REQUIRED")
+    for name in ("production_plan", "production_plan_validation_receipt"):
+        path_key, sha_key = f"{name}_path", f"{name}_sha256"
+        declared = state.get(path_key)
+        expected_sha = state.get(sha_key)
+        if not isinstance(declared, str) or not declared or not isinstance(expected_sha, str):
+            raise ValueError(f"TABLE_STATE_LOCK_MISSING:{name}")
+        bound_path = resolve_state_artifact(state_path, declared)
+        if not bound_path.is_file() or _sha(bound_path).lower() != expected_sha.lower():
+            raise ValueError(f"TABLE_STATE_LOCK_SHA_MISMATCH:{name}")
+        artifact_paths[name] = bound_path
+    production_plan = read_json(artifact_paths["production_plan"])
+    if production_plan.get("schema_version") != "001short-production-plan-v2":
+        raise ValueError("PRODUCTION_PLAN_MIGRATION_REQUIRED")
+    if validate_executable_protocol.validate_production_plan(
+        production_plan, validate_executable_protocol.load_protocol()
+    ):
+        raise ValueError("PRODUCTION_PLAN_VALIDATION_RECEIPT_INVALID")
+    receipt = read_json(artifact_paths["production_plan_validation_receipt"])
+    receipt_evidence = receipt.get("evidence", {})
+    if (
+        receipt.get("status") != "PASS"
+        or receipt.get("errors") != []
+        or receipt_evidence.get("production_plan_path") != str(artifact_paths["production_plan"])
+        or str(receipt_evidence.get("production_plan_sha256", "")).lower()
+        != _sha(artifact_paths["production_plan"]).lower()
+    ):
+        raise ValueError("PRODUCTION_PLAN_VALIDATION_RECEIPT_INVALID")
+    design_required = ("source_identity_path", "design_handoff_path")
+    design_missing = [
+        key for key in design_required
+        if not isinstance(config.get(key), str) or not config[key].strip()
+    ]
+    if design_missing:
+        raise ValueError(f"TABLE_DESIGN_LOCK_REQUIRED:{','.join(design_missing)}")
+    design_result = validate_design_lock.validate_handoff(
+        Path(config["design_handoff_path"]).resolve(),
+        Path(config["source_identity_path"]).resolve(),
+        artifact_paths["approved_timeline"],
+    )
+    if design_result["status"] != "PASS":
+        first_code = design_result["errors"][0]["code"] if design_result.get("errors") else "UNKNOWN"
+        raise ValueError(f"TABLE_DESIGN_LOCK_INVALID:{first_code}")
+    audio_caption = validate_audio_caption.validate_audio_caption(
+        artifact_paths["audio_lock"], artifact_paths["caption_lock"],
+        expected_production_plan_path=artifact_paths["production_plan"],
+        expected_production_plan_sha256=state["production_plan_sha256"],
+        expected_production_plan_receipt_path=artifact_paths["production_plan_validation_receipt"],
+        expected_production_plan_receipt_sha256=state["production_plan_validation_receipt_sha256"],
+    )
+    if audio_caption["status"] != "PASS":
+        first_code = audio_caption["errors"][0]["code"] if audio_caption.get("errors") else "UNKNOWN"
+        raise ValueError(f"TABLE_AUDIO_CAPTION_LOCK_INVALID:{first_code}")
+    validation["locked_assembly"] = "PASS"
+    return validation
 
 
 def _sha(path: Path) -> str:
@@ -138,26 +287,129 @@ def _normalize_paths(value: Any, project: Path, draft_prefix: str) -> None:
             _normalize_paths(child, project, draft_prefix)
 
 
-def _validate_config(config: dict) -> None:
-    required = (
-        "episode_id", "clean_video", "duration_us", "T1", "T2", "state_cues",
-        "project_name", "template_zip", "episode_root", "work_root", "local_capcut_root",
-        "source_identity_path", "approved_timeline_path", "design_handoff_path",
-        "design_lock_evidence_path", "build_manifest_path",
+def _bind_portable_root_contract(config: dict) -> dict | None:
+    raw_contract = config.get("root_contract_path")
+    if raw_contract is None:
+        raise ValueError("ROOT_CONTRACT_PATH_MISSING")
+    raw_workspace = config.get("workspace_root")
+    profile = config.get("root_profile")
+    if not isinstance(raw_workspace, str) or not raw_workspace.strip():
+        raise ValueError("ROOT_CONTRACT_WORKSPACE_ROOT_MISSING")
+    if not isinstance(profile, str) or not profile.strip():
+        raise ValueError("ROOT_CONTRACT_PROFILE_MISSING")
+    workspace_root = Path(raw_workspace).resolve()
+    candidate = Path(str(raw_contract))
+    if candidate.is_absolute():
+        raise ValueError("ROOT_CONTRACT_PATH_MUST_BE_WORKSPACE_RELATIVE")
+    contract_path = workspace_root / candidate
+    resolved = resolve_shorts_capcut_root.resolve_root_contract(
+        workspace_root, profile, contract_path
     )
-    missing = [key for key in required if key not in config]
-    if missing:
-        raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
-    if config.get("audio_role", "A10") not in {"A10", "A12"}:
-        raise ValueError("AUDIO_ROLE_INVALID")
-    duration = config["duration_us"]
-    if not isinstance(duration, int) or duration <= 0:
-        raise ValueError("DURATION_INVALID")
-    cues = config["state_cues"]
-    if not isinstance(cues, list) or not cues:
+    if resolved.get("template_profile") != "shrt_white_base_v2":
+        raise ValueError("ROOT_CONTRACT_V2_PROFILE_REQUIRED")
+    declared = config.get("template_zip")
+    if declared is not None and Path(str(declared)).resolve() != Path(resolved["archive"]):
+        raise ValueError("ROOT_CONTRACT_TEMPLATE_MISMATCH")
+    config["template_zip"] = resolved["archive"]
+    config["_resolved_root_contract"] = {
+        "profile": resolved["profile"],
+        "template_profile": resolved["template_profile"],
+        "archive_sha256": resolved["archive_sha256"],
+    }
+    return resolved
+
+
+def resolve_visual_input(config: dict) -> dict:
+    mode = config.get("visual_asset_mode")
+    if mode == "SOURCE_VIDEO_PROVISIONAL":
+        identity_path = Path(config["source_identity_path"]).resolve()
+        identity = read_json(identity_path)
+        video = resolved_declared_path(identity_path, identity["media_path"])
+        expected_sha = identity.get("media_sha256")
+        if not video.is_file() or not isinstance(expected_sha, str) or _sha(video).lower() != expected_sha.lower():
+            raise RuntimeError("SOURCE_PROVISIONAL_SHA_MISMATCH")
+        return {
+            "visual_asset_mode": mode,
+            "video_asset_key": "source_video",
+            "video_input_path": video,
+            "video_input_sha256": expected_sha.lower(),
+            "resource_name": "source.mp4",
+            "upload_ready": False,
+        }
+    if mode == "CLEAN_VISUAL_READY":
+        raw = config.get("clean_video")
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("CLEAN_VIDEO_REQUIRED")
+        video = Path(raw).resolve()
+        if not video.is_file():
+            raise FileNotFoundError("CLEAN_VIDEO_MISSING")
+        return {
+            "visual_asset_mode": mode,
+            "video_asset_key": "clean_video",
+            "video_input_path": video,
+            "video_input_sha256": _sha(video),
+            "resource_name": "clean_video.mp4",
+            "upload_ready": False,
+        }
+    if mode == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+        raw = config.get("clean_video")
+        raw_override = config.get("user_clean_override_path")
+        if not isinstance(raw, str) or not raw:
+            raise ValueError("USER_CLEAN_VIDEO_REQUIRED")
+        if not isinstance(raw_override, str) or not raw_override:
+            raise ValueError("USER_CLEAN_OVERRIDE_REQUIRED")
+        video = Path(raw).resolve()
+        override_path = Path(raw_override).resolve()
+        if not video.is_file():
+            raise FileNotFoundError("USER_CLEAN_VIDEO_MISSING")
+        try:
+            override = read_json(override_path)
+        except (OSError, ValueError, TypeError) as exc:
+            raise RuntimeError(f"USER_CLEAN_OVERRIDE_INVALID:{exc}") from exc
+        authority = override.get("user_authority")
+        declared_video = resolved_declared_path(
+            override_path, override.get("episode_clean_source_path", "")
+        )
+        if (
+            override.get("schema_version") != "001short-user-clean-override-v1"
+            or override.get("episode_id") != config.get("episode_id")
+            or override.get("status") != mode
+            or not isinstance(authority, dict)
+            or not isinstance(authority.get("evidence"), str)
+            or not authority["evidence"].strip()
+            or not isinstance(authority.get("exact_text"), str)
+            or not authority["exact_text"].strip()
+            or declared_video != video
+            or str(override.get("clean_source_sha256", "")).lower() != _sha(video).lower()
+            or override.get("clean_visual_ready_claim") is not False
+        ):
+            raise RuntimeError("USER_CLEAN_OVERRIDE_AUTHORITY_INVALID")
+        return {
+            "visual_asset_mode": mode,
+            "video_asset_key": "user_approved_clean_video",
+            "video_input_path": video,
+            "video_input_sha256": _sha(video),
+            "resource_name": "clean_video.mp4",
+            "upload_ready": False,
+            "user_clean_override_path": override_path,
+            "user_clean_override_sha256": _sha(override_path),
+        }
+    raise ValueError(f"VISUAL_ASSET_MODE_INVALID:{mode}")
+
+
+def validate_state_cues(config: dict, timeline: dict) -> None:
+    cues = config.get("state_cues")
+    if not isinstance(cues, list):
         raise ValueError("STATE_CUES_INVALID")
+    state_rows = sorted(
+        (row for row in timeline.get("segments", []) if row.get("role") == "STATE"),
+        key=lambda row: row.get("timeline_order", 0),
+    )
+    if len(cues) != len(state_rows):
+        raise ValueError("STATE_CUES_TIMELINE_MISMATCH")
     previous_end = 0
-    for cue in cues:
+    duration = config["duration_us"]
+    for index, (cue, row) in enumerate(zip(cues, state_rows), start=1):
         if (
             not isinstance(cue, dict)
             or not isinstance(cue.get("text"), str)
@@ -167,15 +419,259 @@ def _validate_config(config: dict) -> None:
             or cue["start_us"] < previous_end
             or cue["end_us"] <= cue["start_us"]
             or cue["end_us"] > duration
-            or ("cue_id" in cue and (not isinstance(cue["cue_id"], str) or not cue["cue_id"]))
+            or len(cue["text"].splitlines()) > 2
+            or any(meaningful_text_length(line) > 15 for line in cue["text"].splitlines())
+            or cue.get("text") != row.get("text")
+            or cue["start_us"] != row.get("start")
+            or cue["end_us"] - cue["start_us"] != row.get("duration")
+            or str(cue.get("cue_id", index)) != str(row.get("cue_id", index))
         ):
             raise ValueError("STATE_CUES_INVALID")
-        # STATE is a punchy, present-scene cue, not a sentence-sized edit outline.
-        # Spaces and punctuation do not consume the eight Korean-character budget.
-        meaningful = "".join(char for char in cue["text"] if char.isalnum())
-        if len(meaningful) > 8:
-            raise ValueError("STATE_CUE_TOO_LONG")
         previous_end = cue["end_us"]
+
+
+def validate_tts_cues(config: dict, timeline: dict) -> None:
+    if config.get("audio_policy") not in TTS_POLICIES and not config.get("tts_cues"):
+        return
+    cues = config.get("tts_cues")
+    if not isinstance(cues, list) or not cues:
+        raise ValueError("TTS_CUES_REQUIRED")
+    audio_rows = {row.get("cue_id"): row for row in timeline.get("segments", []) if row.get("role") == "A9"}
+    text_rows = {row.get("cue_id"): row for row in timeline.get("segments", []) if row.get("role") == "A9_TEXT"}
+    if len(audio_rows) != len(cues) or set(audio_rows) != set(text_rows):
+        raise ValueError("TTS_CUE_PLAN_AUTHORITY_MISMATCH")
+    for cue in cues:
+        cue_id = cue.get("cue_id")
+        sound, caption = audio_rows.get(cue_id), text_rows.get(cue_id)
+        target_range = cue.get("target_range_us")
+        if (
+            sound is None or caption is None
+            or not isinstance(target_range, list) or len(target_range) != 2
+            or cue.get("text") != sound.get("text")
+            or cue.get("text") != caption.get("text")
+            or (sound.get("start"), sound.get("duration"))
+            != (target_range[0], target_range[1] - target_range[0])
+            or (caption.get("start"), caption.get("duration"))
+            != (target_range[0], target_range[1] - target_range[0])
+        ):
+            raise ValueError("TTS_CUE_PLAN_AUTHORITY_MISMATCH")
+
+
+def build_caption_bindings(config: dict, caption_lock_path: Path) -> list[dict]:
+    caption = read_json(caption_lock_path)
+    cues = caption.get("cues", [])
+    rows = [
+        row for row in _approved_rows(config)
+        if row.get("role") in {"STATE", "A10_TEXT", "A9_TEXT"}
+    ]
+    bindings: list[dict] = []
+    used_cues: set[str] = set()
+    for row in rows:
+        role = row["role"]
+        matches = [
+            cue for cue in cues
+            if cue.get("layer") == role
+            and cue.get("text") == row.get("text")
+            and cue.get("start_us") == row.get("start")
+            and cue.get("end_us") == row.get("start") + row.get("duration")
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
+        cue_id = str(matches[0].get("cue_id"))
+        if not cue_id or cue_id in used_cues:
+            raise RuntimeError(f"CAPTION_BINDING_AUTHORITY_MISMATCH:{row.get('segment_id')}")
+        used_cues.add(cue_id)
+        bindings.append({"segment_id": row["segment_id"], "cue_id": cue_id, "role": role})
+    locked_cues = {str(cue.get("cue_id")) for cue in cues}
+    if used_cues != locked_cues:
+        raise RuntimeError("CAPTION_LOCK_CUE_UNASSEMBLED")
+    return bindings
+
+
+def assert_a12_empty(segments: list[dict]) -> None:
+    if any(row.get("role") in {"A12", "A12_RESERVED_EMPTY"} for row in segments):
+        raise RuntimeError("A12_RESERVED_EMPTY")
+
+
+REVISION_ID_PATTERN = re.compile(r"v[1-9][0-9]*\Z")
+REVISION_SWAP_OVERRIDE_KEYS = frozenset({
+    "visual_asset_mode", "clean_video", "clean_asset_root", "clean_evidence_root",
+    "edit_lock_path",
+})
+
+
+def prepare_revision_config(config: dict) -> None:
+    """Resolve an optional rebuild revision without touching legacy builds."""
+    revision_id = config.get("revision_id")
+    if revision_id is None:
+        return
+    if not isinstance(revision_id, str) or not REVISION_ID_PATTERN.fullmatch(revision_id):
+        raise ValueError("REVISION_ID_INVALID")
+    episode = Path(config["episode_root"]).resolve()
+    canonical_state = episode / "90_workflow" / "state.json"
+    revision_state = episode / "90_workflow" / "revisions" / revision_id / "state.json"
+    configured_state = config.get("state_path")
+    if configured_state:
+        resolved_state = Path(configured_state).resolve()
+        if resolved_state not in {canonical_state, revision_state}:
+            raise ValueError("REVISION_STATE_PATH_INVALID")
+    project_name = config.get("project_name")
+    if not isinstance(project_name, str) or not project_name.strip():
+        raise ValueError("REVISION_PROJECT_NAME_INVALID")
+    base_project_name = re.sub(r"_v[1-9][0-9]*$", "", project_name)
+    build_root = episode / "50_capcut_project" / "revisions" / revision_id
+    config.update({
+        "state_path": str(revision_state),
+        "work_root": str(build_root / "build_work"),
+        "project_name": f"{base_project_name}_{revision_id}",
+        "_revision_context": {
+            "revision_id": revision_id,
+            "canonical_state_path": str(canonical_state),
+            "build_root": str(build_root),
+        },
+    })
+
+
+def _revision_snapshot_path(config: dict) -> Path | None:
+    context = config.get("_revision_context")
+    if not isinstance(context, dict):
+        return None
+    return Path(config["state_path"]).resolve().with_name("build_config.json")
+
+
+def _revision_snapshot_payload(config: dict) -> dict:
+    return {
+        key: copy.deepcopy(value)
+        for key, value in config.items()
+        if not key.startswith("_")
+    }
+
+
+def bind_revision_snapshot(config: dict, *, operation: str) -> None:
+    """Verify a revision's immutable config or load it for an allowed swap."""
+    snapshot_path = _revision_snapshot_path(config)
+    if snapshot_path is None:
+        return
+    state_path = Path(config["state_path"]).resolve()
+    if not snapshot_path.exists():
+        if state_path.exists():
+            raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
+        return
+    if not snapshot_path.is_file() or not state_path.is_file():
+        raise RuntimeError("REVISION_CONFIG_BINDING_MISSING")
+    state = read_json(state_path)
+    if (
+        Path(state.get("build_config_path", "")).resolve() != snapshot_path
+        or state.get("build_config_sha256") != _sha(snapshot_path)
+    ):
+        raise RuntimeError("REVISION_CONFIG_BINDING_INVALID")
+    snapshot = read_json(snapshot_path)
+    observed = _revision_snapshot_payload(config)
+    if operation == "build":
+        if observed != snapshot:
+            raise ValueError("REVISION_CONFIG_DRIFT")
+    elif operation == "swap":
+        overrides = {
+            key: copy.deepcopy(config[key])
+            for key in REVISION_SWAP_OVERRIDE_KEYS
+            if key in config
+        }
+        config.clear()
+        config.update(copy.deepcopy(snapshot))
+        config.update(overrides)
+        prepare_revision_config(config)
+    else:
+        raise ValueError("REVISION_OPERATION_INVALID")
+
+
+def initialize_revision_state(config: dict) -> None:
+    """Seed a new revision state from immutable Stage 07 evidence only once."""
+    context = config.get("_revision_context")
+    if not isinstance(context, dict):
+        return
+    revision_state = Path(config["state_path"]).resolve()
+    if revision_state.exists():
+        if not _revision_snapshot_path(config).is_file():
+            raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
+        return
+    canonical_state = Path(context["canonical_state_path"]).resolve()
+    if not canonical_state.is_file():
+        raise RuntimeError("REVISION_SOURCE_STATE_MISSING")
+    source_state = read_json(canonical_state)
+    if source_state.get("episode_id") != config["episode_id"]:
+        raise RuntimeError("REVISION_SOURCE_STATE_EPISODE_MISMATCH")
+    state = copy.deepcopy(source_state)
+    for key in ("local_capcut_project_path", "cloud_prepare", "video_asset_key", "upload_ready"):
+        state.pop(key, None)
+    for key in ("audio_lock_path", "caption_lock_path"):
+        value = state.get(key)
+        if isinstance(value, str) and value:
+            state[key] = str(resolve_state_artifact(canonical_state, value))
+    state.update({
+        "episode_id": config["episode_id"],
+        "revision_id": context["revision_id"],
+        "current_stage": "08",
+        "status": "AUDIO_CAPTION_VALIDATED",
+        "project_name": config["project_name"],
+        "stage09_user_approval": "NOT_RUN",
+        "next_action": "CAPCUT_BUILD",
+    })
+    snapshot_path = _revision_snapshot_path(config)
+    snapshot = _revision_snapshot_payload(config)
+    _write_json(snapshot_path, snapshot)
+    state["build_config_path"] = str(snapshot_path)
+    state["build_config_sha256"] = _sha(snapshot_path)
+    _write_json(revision_state, state)
+
+
+def _build_root(config: dict, episode: Path) -> Path:
+    context = config.get("_revision_context")
+    if isinstance(context, dict):
+        return Path(context["build_root"]).resolve()
+    return episode / "50_capcut_project"
+
+
+def _validate_config(config: dict, *, revision_operation: str = "build") -> None:
+    prepare_revision_config(config)
+    _bind_portable_root_contract(config)
+    bind_revision_snapshot(config, operation=revision_operation)
+    _bind_portable_root_contract(config)
+    required = (
+        "episode_id", "visual_asset_mode", "audio_policy", "duration_us", "T1", "T2", "state_cues",
+        "project_name", "template_zip", "episode_root", "work_root", "local_capcut_root",
+        "source_identity_path", "approved_timeline_path", "design_handoff_path",
+        "design_lock_evidence_path", "build_manifest_path", "state_path",
+    )
+    missing = [key for key in required if key not in config]
+    if missing:
+        raise ValueError(f"CONFIG_MISSING:{','.join(missing)}")
+    episode = Path(config["episode_root"]).resolve()
+    canonical_state = episode / "90_workflow" / "state.json"
+    context = config.get("_revision_context")
+    expected_state = (
+        episode / "90_workflow" / "revisions" / context["revision_id"] / "state.json"
+        if isinstance(context, dict)
+        else canonical_state
+    )
+    if Path(config["state_path"]).resolve() != expected_state:
+        raise ValueError("CANONICAL_STATE_PATH_REQUIRED")
+    if config.get("audio_role", "A10") not in {"A10", None}:
+        raise ValueError("AUDIO_ROLE_INVALID")
+    duration = config["duration_us"]
+    if not isinstance(duration, int) or duration <= 0:
+        raise ValueError("DURATION_INVALID")
+    timeline = read_json(Path(config["approved_timeline_path"]).resolve())
+    role_errors = validate_design_lock.validate_role_contract(timeline, expected_duration=duration)
+    if role_errors:
+        raise ValueError(f"APPROVED_TIMELINE_ROLE_CONTRACT:{role_errors}")
+    if (
+        config["audio_policy"] not in AUDIO_POLICIES
+        or timeline.get("audio_policy") != config["audio_policy"]
+    ):
+        raise ValueError("AUDIO_POLICY_TIMELINE_MISMATCH")
+    validate_state_cues(config, timeline)
+    validate_tts_cues(config, timeline)
+    config["_visual_input"] = resolve_visual_input(config)
 
 
 def _approved_rows(config: dict) -> list[dict]:
@@ -218,57 +714,43 @@ def _material_parent(value: Any, material_id: str) -> list[dict] | None:
     return None
 
 
+def _remove_material_ids(value: Any, material_ids: set[str]) -> None:
+    if isinstance(value, list):
+        value[:] = [
+            row for row in value
+            if not (isinstance(row, dict) and row.get("id") in material_ids)
+        ]
+        for child in value:
+            _remove_material_ids(child, material_ids)
+    elif isinstance(value, dict):
+        for child in value.values():
+            _remove_material_ids(child, material_ids)
+
+
 def _documents(project: Path) -> Iterator[tuple[Path, dict]]:
-    seen: set[Path] = set()
-    root = project / "draft_content.json"
-    payload = json.loads(root.read_text(encoding="utf-8"))
-    seen.add(root.resolve())
-    yield root, payload
-    for path, payload in iter_timeline_json(project):
-        if path.resolve() in seen:
-            continue
+    for path, payload in iter_primary_draft_documents(project):
         if isinstance(payload, dict) and isinstance(payload.get("tracks"), list):
-            seen.add(path.resolve())
             yield path, payload
 
 
 def _set_media(
-    material: dict, *, media_type: str, portable_path: str, role: str, duration_us: int
+    material: dict, *, media_type: str, portable_path: str, role: str, duration_us: int,
+    dimensions: tuple[int, int] | None = None,
 ) -> None:
     if media_type == "video":
         material["type"] = "video"
         material["media_path"] = ""
+        # The seed material carries the template's dimensions, not the swapped-in
+        # media's.  Leaving them stale makes CapCut scale the clip against the
+        # wrong intrinsic size, which shows up as a blank or mis-framed preview.
+        if dimensions is not None:
+            material["width"], material["height"] = dimensions
     elif material.get("type") not in {"music", "extract_music"}:
         material["type"] = "music"
     material["role"] = role
     material["desc"] = f"001short production {role}"
     material["path"] = portable_path
     material["duration"] = duration_us
-
-
-def _populate_full_duration_audio(
-    track: dict,
-    template_segment: dict,
-    material: dict,
-    *,
-    portable_path: str,
-    duration_us: int,
-    role: str,
-    segment_id: str,
-) -> None:
-    _set_media(
-        material,
-        media_type="audio",
-        portable_path=portable_path,
-        role=role,
-        duration_us=duration_us,
-    )
-    segment = copy.deepcopy(template_segment)
-    segment["id"] = segment_id
-    segment["role"] = role
-    segment["target_timerange"] = {"start": 0, "duration": duration_us}
-    segment["source_timerange"] = {"start": 0, "duration": duration_us}
-    track["segments"] = [segment]
 
 
 def _scrub_windows_cache_paths(value: object) -> int:
@@ -403,26 +885,85 @@ def _material_text(material: dict) -> str | None:
     return text.strip() if isinstance(text, str) and text.strip() else None
 
 
+def _ranges_overlap(left: list[int], right: list[int]) -> bool:
+    return max(left[0], right[0]) < min(left[1], right[1])
+
+
+def _range_fully_covered(inner: list[int], outer: list[int]) -> bool:
+    return outer[0] <= inner[0] and outer[1] >= inner[1]
+
+
+def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
+    if config.get("audio_policy") not in {"A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"}:
+        return
+    narration_ranges = [cue["target_range_us"] for cue in config.get("tts_cues", [])]
+    for row in build_manifest.get("source_audio", []):
+        target_range = row.get("target_range_us")
+        if not isinstance(target_range, list) or len(target_range) != 2:
+            continue
+        overlapping_ranges = [
+            cue_range for cue_range in narration_ranges
+            if _ranges_overlap(target_range, cue_range)
+        ]
+        if any(
+            not _range_fully_covered(target_range, cue_range)
+            for cue_range in overlapping_ranges
+        ):
+            raise RuntimeError(
+                f"MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED:{row.get('clip_id')}"
+            )
+        overlaps_narration = bool(overlapping_ranges)
+        if overlaps_narration and row.get("mode") != "duck":
+            raise RuntimeError(f"MIXED_A10_MUTE_REQUIRED_UNDER_A9:{row.get('clip_id')}")
+        if not overlaps_narration and row.get("mode") != "on":
+            raise RuntimeError(f"MIXED_A10_RESTORE_REQUIRED_OUTSIDE_A9:{row.get('clip_id')}")
+
+
 def _normalize_source(
-    project: Path, config: dict, audio_source: Path, build_manifest: dict
+    project: Path, config: dict, audio_source: Path | None, build_manifest: dict
 ) -> list[dict]:
+    _validate_mixed_audio_modes(config, build_manifest)
     duration = config["duration_us"]
     approved = _approved_rows(config)
     approved_by_id = {row["segment_id"]: row for row in approved}
     media = project / "Resources" / "media"
     media.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(Path(config["clean_video"]), media / "clean_video.mp4")
-    audio_suffix = audio_source.suffix.lower() or ".wav"
-    audio_name = f"source_audio{audio_suffix}"
-    shutil.copy2(audio_source, media / audio_name)
+    visual = config["_visual_input"]
+    video_input = Path(visual["video_input_path"])
+    video_resource = visual["resource_name"]
+    shutil.copy2(video_input, media / video_resource)
+    video_dimensions = _video_dimensions(video_input)
+    policy = config.get("audio_policy")
+    build_a9 = policy in TTS_POLICIES
+    keep_a10 = policy in A10_POLICIES
+    audio_name = ""
+    if keep_a10:
+        if audio_source is None:
+            raise RuntimeError("SOURCE_AUDIO_REQUIRED")
+        audio_suffix = audio_source.suffix.lower() or ".wav"
+        # This is the externally separated Demucs vocal stem, not the raw
+        # source audio.  Keep that distinction visible in the portable asset.
+        audio_name = (
+            f"a10_source_clean_audio{audio_suffix}"
+            if policy == "SOURCE_ORDER_CLEAN_AUDIO"
+            else f"a10_vocal_stem{audio_suffix}"
+        )
+        shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)
 
     root_rows: list[dict] = []
     for document_index, (path, payload) in enumerate(_documents(project)):
         tracks = payload["tracks"]
-        if len(tracks) < 12:
+        if len(tracks) != len(ROLE_BY_TRACK):
             raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
         payload["duration"] = duration
+        draft_config = payload.get("config")
+        if not isinstance(draft_config, dict):
+            draft_config = {}
+            payload["config"] = draft_config
+        # Preserve CapCut's clip mute toggle in addition to the per-segment
+        # zero-volume layer. The source MP4 remains intact; A10 is audible.
+        draft_config["video_mute"] = True
         material_map = {
             row.get("id"): row for row in _materials(payload.get("materials", {}))
             if isinstance(row.get("id"), str)
@@ -435,27 +976,50 @@ def _normalize_source(
                 if material is not None:
                     material["role"] = role
                     material["desc"] = f"001short production {role}"
+        seed_segments = {
+            index: copy.deepcopy(track["segments"][0])
+            for index, track in enumerate(tracks)
+            if track.get("segments")
+        }
+        empty_audio_material_ids = {
+            segment.get("material_id")
+            for track_index in (TRACK_INDEX["A11"], A12_INDEX)
+            for segment in tracks[track_index].get("segments", [])
+            if isinstance(segment.get("material_id"), str)
+        }
 
-        a12_template_segment = None
-        a12_material = None
-        if config.get("audio_role", "A10") == "A12":
-            if not tracks[11].get("segments"):
-                raise RuntimeError("PINNED_A12_TEMPLATE_SEGMENT_MISSING")
-            a12_template_segment = copy.deepcopy(tracks[11]["segments"][0])
-            a12_material = material_map.get(a12_template_segment.get("material_id"))
-            if a12_material is None:
-                raise RuntimeError("PINNED_A12_TEMPLATE_MATERIAL_MISSING")
+        a9_text_template_segment = None
+        a9_text_template_material = None
+        a9_text_parent = None
+        a9_template_segment = None
+        a9_template_material = None
+        a9_parent = None
+        if build_a9:
+            if not tracks[TRACK_INDEX["A9_TEXT"]].get("segments") or not tracks[TRACK_INDEX["A9"]].get("segments"):
+                raise RuntimeError("PINNED_A9_TEMPLATE_SEGMENT_MISSING")
+            a9_text_template_segment = copy.deepcopy(tracks[TRACK_INDEX["A9_TEXT"]]["segments"][0])
+            a9_template_segment = copy.deepcopy(tracks[TRACK_INDEX["A9"]]["segments"][0])
+            a9_text_template_material = material_map.get(a9_text_template_segment.get("material_id"))
+            a9_template_material = material_map.get(a9_template_segment.get("material_id"))
+            if a9_text_template_material is None or a9_template_material is None:
+                raise RuntimeError("PINNED_A9_TEMPLATE_MATERIAL_MISSING")
+            a9_text_parent = _material_parent(payload["materials"], a9_text_template_material["id"])
+            a9_parent = _material_parent(payload["materials"], a9_template_material["id"])
+            if a9_text_parent is None or a9_parent is None:
+                raise RuntimeError("PINNED_A9_MATERIAL_CONTAINER_MISSING")
 
-        # Existing template lanes only: no track is added.
-        for index in (4, 5, 8, 10, 11):
-            tracks[index]["segments"] = []
+        # Existing v2 lanes only: no track is added.  Every generated lane is
+        # rebuilt from the approved plan; A12 is always empty.
+        for index in range(3, 15):
+            if index not in (9, 10):
+                tracks[index]["segments"] = []
 
-        base_video_segment = tracks[0]["segments"][0]
+        base_video_segment = tracks[TRACK_INDEX["VIDEO"]]["segments"][0]
         video_material = material_map[base_video_segment["material_id"]]
         _set_media(
             video_material, media_type="video",
-            portable_path=_portable_resource_path(draft_prefix, "Resources/media/clean_video.mp4"),
-            role="VIDEO", duration_us=duration,
+            portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{video_resource}"),
+            role="VIDEO", duration_us=duration, dimensions=video_dimensions,
         )
         video_segments = []
         for clip in sorted(build_manifest["urakkai"]["video_clips"], key=lambda row: row["target_range_us"][0]):
@@ -477,35 +1041,62 @@ def _normalize_source(
                 "start": clip["source_range_us"][0],
                 "duration": clip["source_range_us"][1] - clip["source_range_us"][0],
             }
+            video_segment["volume"] = 0.0
+            video_segment["last_nonzero_volume"] = 0.0
             video_segments.append(video_segment)
-        tracks[0]["segments"] = video_segments
+        tracks[TRACK_INDEX["VIDEO"]]["segments"] = video_segments
 
-        for index, role in ((1, "SCREEN_EFFECT"), (2, "SCREEN_WHITE")):
-            if not any(row.get("role") == role for row in approved):
-                tracks[index]["segments"] = []
-                continue
+        for role in ("SCREEN_EFFECT", "SCREEN_WHITE"):
+            index = TRACK_INDEX[role]
+            matches = [row for row in approved if row.get("role") == role]
+            if len(matches) != 1:
+                raise RuntimeError(f"FULL_SPAN_ANCHOR_INVALID:{role}")
             segment = tracks[index]["segments"][0]
-            segment["id"] = _approved_id(config, approved, role)
-            row = approved_by_id[segment["id"]]
+            row = matches[0]
+            segment["id"] = row["segment_id"]
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
 
-        for index, key in ((6, "T2"), (7, "T1")):
+        # The pinned white-frame material arrives from CapCut with an online
+        # cache path.  The template archive already carries its portable copy;
+        # bind that copy explicitly before generic path scrubbing can blank it.
+        white_segments = tracks[TRACK_INDEX["SCREEN_WHITE"]]["segments"]
+        if white_segments:
+            white_resource = "transparent_center_white_1080x1920.png"
+            white_asset = media / white_resource
+            if not white_asset.is_file():
+                raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
+            white_material = material_map[white_segments[0]["material_id"]]
+            white_material["name"] = white_resource
+            white_material["path"] = _portable_resource_path(
+                draft_prefix, f"Resources/media/{white_resource}"
+            )
+            white_material["media_path"] = ""
+            white_material["role"] = "SCREEN_WHITE"
+            white_material["desc"] = "001short production SCREEN_WHITE"
+
+        for key in ("T2", "T1"):
+            index = TRACK_INDEX[key]
             segment = tracks[index]["segments"][0]
             segment["id"] = _approved_id(config, approved, key)
-            _set_text(material_map[segment["material_id"]], config[key], key)
             row = approved_by_id[segment["id"]]
+            if row.get("text") != config[key] or not config[key].strip():
+                raise RuntimeError(f"TITLE_PLAN_AUTHORITY_MISMATCH:{key}")
+            _set_text(material_map[segment["material_id"]], row["text"], key)
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
 
-        state_track = tracks[3]
-        base_segment = state_track["segments"][0]
-        base_material = material_map[base_segment["material_id"]]
-        parent = _material_parent(payload["materials"], base_material["id"])
-        if parent is None:
-            raise RuntimeError("STATE_MATERIAL_CONTAINER_MISSING")
-        state_segments = []
+        state_templates = {}
+        for effect, index in STATE_TRACK_BY_EFFECT.items():
+            if index not in seed_segments:
+                raise RuntimeError("STATE_TEMPLATE_SEGMENT_MISSING")
+            seed = copy.deepcopy(seed_segments[index])
+            seed_material = material_map.get(seed.get("material_id"))
+            if seed_material is None:
+                raise RuntimeError("STATE_TEMPLATE_MATERIAL_MISSING")
+            parent = _material_parent(payload["materials"], seed_material["id"])
+            if parent is None:
+                raise RuntimeError("STATE_MATERIAL_CONTAINER_MISSING")
+            state_templates[effect] = (index, seed, seed_material, parent)
         for cue_index, cue in enumerate(config["state_cues"]):
-            segment = copy.deepcopy(base_segment)
-            material = copy.deepcopy(base_material)
             segment_id = cue.get("segment_id") or _approved_id(config, approved, "STATE", cue_index)
             approved_row = approved_by_id.get(segment_id)
             if (
@@ -514,6 +1105,12 @@ def _normalize_source(
                 or approved_row.get("duration") != cue["end_us"] - cue["start_us"]
             ):
                 raise RuntimeError(f"STATE_CUE_AUTHORITY_MISMATCH:{segment_id}")
+            effect = approved_row.get("state_effect")
+            if effect not in state_templates:
+                raise RuntimeError(f"STATE_EFFECT_INVALID:{segment_id}")
+            track_index, seed, seed_material, parent = state_templates[effect]
+            segment = copy.deepcopy(seed)
+            material = copy.deepcopy(seed_material)
             material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:state-material:{cue_index}"))
             segment["id"] = segment_id
             segment["material_id"] = material_id
@@ -523,50 +1120,152 @@ def _normalize_source(
             }
             material["id"] = material_id
             _set_text(material, cue["text"], "STATE")
+            material["state_effect"] = effect
             parent.append(material)
             material_map[material_id] = material
-            state_segments.append(segment)
-        state_track["segments"] = state_segments
+            tracks[track_index]["segments"].append(segment)
 
-        base_a10_segment = tracks[9]["segments"][0]
-        a10_material = material_map[base_a10_segment["material_id"]]
-        _set_media(
-            a10_material, media_type="audio",
-            portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
-            role="A10", duration_us=duration,
-        )
-        a10_segments = []
-        for audio_index, audio_plan in enumerate(build_manifest["source_audio"]):
-            if audio_plan.get("mode") not in {"on", "duck"}:
+        # Speaker utterances are generated only on their approved color lane.
+        for color, track_index in A10_TEXT_TRACK_BY_COLOR.items():
+            rows = [row for row in approved if row.get("role") == "A10_TEXT" and row.get("color_role") == color]
+            if not rows:
                 continue
-            capcut_source_range = audio_plan.get("capcut_source_range_us", audio_plan["source_range_us"])
-            a10_segment = copy.deepcopy(base_a10_segment)
-            a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
-            a10_segment["role"] = "A10"
-            a10_segment["target_timerange"] = {
-                "start": audio_plan["target_range_us"][0],
-                "duration": audio_plan["target_range_us"][1] - audio_plan["target_range_us"][0],
-            }
-            a10_segment["source_timerange"] = {
-                "start": capcut_source_range[0],
-                "duration": capcut_source_range[1] - capcut_source_range[0],
-            }
-            a10_segments.append(a10_segment)
-        tracks[9]["segments"] = a10_segments
+            original = seed_segments.get(track_index)
+            if original is None:
+                raise RuntimeError(f"A10_TEXT_TEMPLATE_SEGMENT_MISSING:{color}")
+            original_material = material_map.get(original.get("material_id"))
+            if original_material is None:
+                raise RuntimeError(f"A10_TEXT_TEMPLATE_MATERIAL_MISSING:{color}")
+            parent = _material_parent(payload["materials"], original_material["id"])
+            if parent is None:
+                raise RuntimeError(f"A10_TEXT_MATERIAL_CONTAINER_MISSING:{color}")
+            generated = []
+            for row_index, row in enumerate(rows):
+                segment = copy.deepcopy(original)
+                material = copy.deepcopy(original_material)
+                material_id = str(uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{config['episode_id']}:a10-text:{color}:{document_index}:{row_index}",
+                ))
+                segment.update({
+                    "id": row["segment_id"], "material_id": material_id,
+                    "role": "A10_TEXT",
+                    "target_timerange": {"start": row["start"], "duration": row["duration"]},
+                })
+                material["id"] = material_id
+                _set_text(material, row["text"], "A10_TEXT")
+                material["color_role"] = color
+                material["speaker_id"] = row["speaker_id"]
+                parent.append(material)
+                material_map[material_id] = material
+                generated.append(segment)
+            tracks[track_index]["segments"] = generated
 
-        if config.get("audio_role", "A10") == "A12":
-            assert a12_template_segment is not None and a12_material is not None
-            _populate_full_duration_audio(
-                tracks[11],
-                a12_template_segment,
-                a12_material,
-                portable_path=_portable_resource_path(
-                    draft_prefix, f"Resources/media/{audio_name}"
-                ),
-                duration_us=duration,
-                role="A12",
-                segment_id=_approved_id(config, approved, "A12"),
+        if build_a9:
+            assert a9_text_template_segment is not None and a9_text_template_material is not None
+            assert a9_text_parent is not None and a9_template_segment is not None
+            assert a9_template_material is not None and a9_parent is not None
+            captions, tts_segments = [], []
+            cues = config.get("tts_cues")
+            if not isinstance(cues, list) or not cues:
+                raise RuntimeError("TTS_CUES_REQUIRED")
+            for cue_index, cue in enumerate(cues):
+                cue_id = str(cue.get("cue_id") or f"TTS_{cue_index + 1:02d}")
+                text = cue.get("text")
+                audio_path = Path(str(cue.get("audio_path", "")))
+                resource_name = str(cue.get("resource_name") or f"tts_{cue_index + 1:02d}.wav")
+                start_us, end_us = cue.get("target_range_us", [None, None])
+                if (
+                    not isinstance(text, str) or not text.strip() or not audio_path.is_file()
+                    or not isinstance(start_us, int) or not isinstance(end_us, int) or end_us <= start_us
+                ):
+                    raise RuntimeError(f"TTS_CUE_INVALID:{cue_id}")
+                tts_row = approved_by_id.get(_approved_id(config, approved, "A9", cue_index))
+                text_row = approved_by_id.get(_approved_id(config, approved, "A9_TEXT", cue_index))
+                if (
+                    tts_row is None or text_row is None or tts_row.get("start") != start_us
+                    or text_row.get("start") != start_us or tts_row.get("duration") != end_us - start_us
+                    or text_row.get("duration") != end_us - start_us
+                ):
+                    raise RuntimeError(f"TTS_CUE_AUTHORITY_MISMATCH:{cue_id}")
+                shutil.copy2(audio_path, media / resource_name)
+                text_material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:a9-text:{document_index}:{cue_index}"))
+                audio_material_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{config['episode_id']}:a9-audio:{document_index}:{cue_index}"))
+                text_material = copy.deepcopy(a9_text_template_material)
+                audio_material = copy.deepcopy(a9_template_material)
+                text_material["id"] = text_material_id
+                audio_material["id"] = audio_material_id
+                _set_text(text_material, text, "A9_TEXT")
+                _set_media(
+                    audio_material, media_type="audio",
+                    portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{resource_name}"),
+                    role="A9", duration_us=end_us - start_us,
+                )
+                a9_text_parent.append(text_material)
+                a9_parent.append(audio_material)
+                material_map[text_material_id] = text_material
+                material_map[audio_material_id] = audio_material
+                caption = copy.deepcopy(a9_text_template_segment)
+                caption["id"] = _approved_id(config, approved, "A9_TEXT", cue_index)
+                caption["material_id"] = text_material_id
+                caption["role"] = "A9_TEXT"
+                caption["target_timerange"] = {"start": start_us, "duration": end_us - start_us}
+                sound = copy.deepcopy(a9_template_segment)
+                sound["id"] = _approved_id(config, approved, "A9", cue_index)
+                sound["material_id"] = audio_material_id
+                sound["role"] = "A9"
+                sound["target_timerange"] = {"start": start_us, "duration": end_us - start_us}
+                sound["source_timerange"] = {"start": 0, "duration": end_us - start_us}
+                sound["volume"] = 1.0
+                sound["last_nonzero_volume"] = 1.0
+                captions.append(caption)
+                tts_segments.append(sound)
+            tracks[TRACK_INDEX["A9_TEXT"]]["segments"] = captions
+            tracks[TRACK_INDEX["A9"]]["segments"] = tts_segments
+            if not keep_a10:
+                tracks[TRACK_INDEX["A10"]]["segments"] = []
+        if keep_a10:
+            # The A10 template seed must be captured before generated lanes are
+            # cleared.  v2 pins A10 at physical track 12.
+            base_a10_segment = seed_segments.get(TRACK_INDEX["A10"])
+            if base_a10_segment is None:
+                raise RuntimeError("PINNED_A10_TEMPLATE_SEGMENT_MISSING")
+            a10_material = material_map[base_a10_segment["material_id"]]
+            _set_media(
+                a10_material, media_type="audio",
+                portable_path=_portable_resource_path(draft_prefix, f"Resources/media/{audio_name}"),
+                role="A10", duration_us=duration,
             )
+            a10_material["name"] = audio_name
+            a10_segments = []
+            for audio_index, audio_plan in enumerate(build_manifest["source_audio"]):
+                if audio_plan.get("mode") not in {"on", "duck"}:
+                    continue
+                # A10 plays the reordered stem, whose length equals the final
+                # timeline (STAGE07_AUTHORITY_MISMATCH already enforces that), so
+                # its source range is the target range - not the original media's.
+                capcut_source_range = audio_plan.get(
+                    "capcut_source_range_us", audio_plan["target_range_us"]
+                )
+                a10_segment = copy.deepcopy(base_a10_segment)
+                a10_segment["id"] = _approved_id(config, approved, "A10", audio_index)
+                a10_segment["role"] = "A10"
+                a10_segment["volume"] = 0.0 if audio_plan["mode"] == "duck" else 1.0
+                a10_segment["target_timerange"] = {
+                    "start": audio_plan["target_range_us"][0],
+                    "duration": audio_plan["target_range_us"][1] - audio_plan["target_range_us"][0],
+                }
+                a10_segment["source_timerange"] = {
+                    "start": capcut_source_range[0],
+                    "duration": capcut_source_range[1] - capcut_source_range[0],
+                }
+                a10_segments.append(a10_segment)
+            tracks[TRACK_INDEX["A10"]]["segments"] = a10_segments
+        tracks[TRACK_INDEX["A11"]]["segments"] = []
+        tracks[A12_INDEX]["segments"] = []
+        _remove_material_ids(payload["materials"], empty_audio_material_ids)
+        for material_id in empty_audio_material_ids:
+            material_map.pop(material_id, None)
 
         # Keep every retained local template material self-contained.
         retained_ids = {
@@ -612,10 +1311,11 @@ def _normalize_source(
     _write_json(meta_path, meta)
 
     actual = sorted(root_rows, key=lambda row: (row["start"], row["segment_id"]))
-    expected = [
+    assert_a12_empty(actual)
+    expected = sorted([
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in approved
-    ]
+    ], key=lambda row: (row["start"], row["segment_id"]))
     observed = [
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in actual
@@ -664,10 +1364,10 @@ def _srt_time(microseconds: int) -> str:
 def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -> dict:
     del source_rows
     episode_id = config["episode_id"]
-    clean_video = Path(config["clean_video"]).resolve()
-    audio_source = Path(config.get("source_audio") or config["clean_video"]).resolve()
+    visual = config["_visual_input"]
+    video_input = Path(visual["video_input_path"]).resolve()
     duration = config["duration_us"]
-    width, height = _video_dimensions(clean_video)
+    width, height = _video_dimensions(video_input)
     source_identity = Path(config["source_identity_path"]).resolve()
     approved_timeline = Path(config["approved_timeline_path"]).resolve()
     handoff = Path(config["design_handoff_path"]).resolve()
@@ -688,14 +1388,6 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     ):
         raise RuntimeError("STAGE05_EVIDENCE_MISMATCH")
 
-    # Heavy VMake media remains machine-local; the episode folder retains only
-    # its manifests and pointers.  A missing override preserves legacy tests.
-    clean_root = Path(config.get("clean_asset_root", episode / "40_assets_used")).resolve()
-    clean_evidence_root = Path(config.get("clean_evidence_root", clean_root)).resolve()
-    try:
-        clean_video.relative_to(clean_root.resolve())
-    except ValueError:
-        raise RuntimeError("STAGE06_CLEAN_OUTPUT_OUTSIDE_ASSET_ROOT") from None
     build_manifest_path = Path(config["build_manifest_path"]).resolve()
     prebuild = validate_prebuild.validate_prebuild(build_manifest_path)
     if prebuild["status"] != "PASS":
@@ -705,79 +1397,156 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
         build_manifest.get("episode_id") != episode_id
         or build_manifest["source"].get("sha256", "").lower()
         != stored_evidence["source_media_sha256"].lower()
+        or build_manifest.get("visual_asset_mode") != visual["visual_asset_mode"]
+        or Path(build_manifest["source"]["path"]).resolve()
+        != Path(stored_evidence["source_media_path"]).resolve()
         or Path(build_manifest["template"]["root_zip_path"]).resolve()
         != Path(config["template_zip"]).resolve()
         or build_manifest["template"]["root_zip_sha256"].lower()
         != _sha(Path(config["template_zip"])).lower()
-        or Path(build_manifest["vmake"]["output_path"]).resolve() != clean_video
-        or build_manifest["vmake"]["output_sha256"].lower() != _sha(clean_video).lower()
     ):
         raise RuntimeError("STAGE08_BUILD_MANIFEST_AUTHORITY_MISMATCH")
+    if visual["visual_asset_mode"] == "SOURCE_VIDEO_PROVISIONAL":
+        if video_input != Path(stored_evidence["source_media_path"]).resolve():
+            raise RuntimeError("STAGE08_SOURCE_PROVISIONAL_AUTHORITY_MISMATCH")
+    elif visual["visual_asset_mode"] == "CLEAN_VISUAL_READY":
+        clean_source = build_manifest.get("clean_source", {})
+        if (
+            Path(clean_source.get("output_path", "")).resolve() != video_input
+            or str(clean_source.get("output_sha256", "")).lower() != _sha(video_input).lower()
+        ):
+            raise RuntimeError("STAGE08_BUILD_MANIFEST_AUTHORITY_MISMATCH")
+        clean_root = Path(config.get("clean_asset_root", episode / "40_assets_used")).resolve()
+        clean_evidence_root = Path(config.get("clean_evidence_root", clean_root)).resolve()
+        try:
+            video_input.relative_to(clean_root)
+        except ValueError:
+            raise RuntimeError("STAGE06_CLEAN_OUTPUT_OUTSIDE_ASSET_ROOT") from None
+        clean_manifest = clean_evidence_root / "clean_visual_manifest.json"
+        clean_receipt = clean_evidence_root / "clean_visual_receipt.json"
+        if not clean_manifest.is_file() or not clean_receipt.is_file():
+            raise RuntimeError("STAGE06_EVIDENCE_MISSING")
+        clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
+        clean_manifest_payload = read_json(clean_manifest)
+        stored_clean_receipt = read_json(clean_receipt)
+        expected_receipt = clean.get("evidence", {})
+        if clean["status"] != "PASS" or stored_clean_receipt.get("status") != "PASS" or any(
+            stored_clean_receipt.get(field) != expected_receipt.get(field)
+            for field in expected_receipt
+        ):
+            raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
+        if (
+            clean_manifest_payload.get("clean_source_origin") != clean_source.get("origin")
+            or clean_manifest_payload.get("fallback_reason") != clean_source.get("fallback_reason")
+            or clean_manifest_payload.get("clean_source_sha256", "").lower()
+            != str(clean_source.get("output_sha256", "")).lower()
+        ):
+            raise RuntimeError("STAGE06_CLEAN_SOURCE_ORIGIN_MISMATCH")
+    else:
+        clean_source = build_manifest.get("clean_source", {})
+        override_path = Path(visual["user_clean_override_path"]).resolve()
+        if (
+            clean_source.get("origin") != "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"
+            or Path(clean_source.get("output_path", "")).resolve() != video_input
+            or str(clean_source.get("output_sha256", "")).lower() != _sha(video_input).lower()
+            or Path(clean_source.get("user_clean_override_path", "")).resolve() != override_path
+            or str(clean_source.get("user_clean_override_sha256", "")).lower()
+            != _sha(override_path).lower()
+        ):
+            raise RuntimeError("STAGE08_USER_CLEAN_OVERRIDE_AUTHORITY_MISMATCH")
 
-    clean_manifest = clean_evidence_root / "clean_visual_manifest.json"
-    clean_receipt = clean_evidence_root / "clean_visual_receipt.json"
-    if not clean_manifest.is_file() or not clean_receipt.is_file():
-        raise RuntimeError("STAGE06_EVIDENCE_MISSING")
-    clean = validate_clean_visual.validate_clean_visual(clean_manifest, source_identity, design_evidence)
-    stored_clean_receipt = json.loads(clean_receipt.read_text(encoding="utf-8"))
-    expected_receipt = clean.get("evidence", {})
-    if clean["status"] != "PASS" or stored_clean_receipt.get("status") != "PASS" or any(
-        stored_clean_receipt.get(field) != expected_receipt.get(field)
-        for field in expected_receipt
+    state_path = Path(config["state_path"]).resolve()
+    state = read_json(state_path)
+    expected_state = "CAPCUT_STATIC_VALIDATED" if config.get("_clean_swap_from_provisional") else "AUDIO_CAPTION_VALIDATED"
+    if state.get("episode_id") != episode_id or state.get("status") != expected_state:
+        raise RuntimeError(
+            "STAGE08_STATE_INVALID:"
+            f"expected episode_id={episode_id} status={expected_state},"
+            f" got episode_id={state.get('episode_id')} status={state.get('status')}"
+        )
+    audio_lock = resolve_state_artifact(state_path, state.get("audio_lock_path", ""))
+    caption_lock = resolve_state_artifact(state_path, state.get("caption_lock_path", ""))
+    if (
+        not audio_lock.is_file() or not caption_lock.is_file()
+        or _sha(audio_lock).lower() != str(state.get("audio_lock_sha256", "")).lower()
+        or _sha(caption_lock).lower() != str(state.get("caption_lock_sha256", "")).lower()
     ):
-        raise RuntimeError("STAGE06_RECEIPT_AUTHORITY_MISMATCH")
-    if clean["status"] != "PASS":
-        raise RuntimeError(f"STAGE06:{clean}")
-
-    audio_root = episode / "30_audio_srt"
-    audio_lock = audio_root / "audio_lock.json"
-    final_srt = audio_root / "final.srt"
-    caption_lock = audio_root / "caption_lock.json"
-    cues = config["state_cues"]
-    if not all(path.is_file() for path in (audio_lock, final_srt, caption_lock)):
         raise RuntimeError("STAGE07_EVIDENCE_MISSING")
-    audio = validate_audio_caption.validate_audio_caption(audio_lock, caption_lock)
+    plan_path = resolve_state_artifact(state_path, state.get("production_plan_path", ""))
+    plan_receipt_path = resolve_state_artifact(
+        state_path, state.get("production_plan_validation_receipt_path", "")
+    )
+    audio = validate_audio_caption.validate_audio_caption(
+        audio_lock, caption_lock,
+        expected_production_plan_path=plan_path,
+        expected_production_plan_sha256=state.get("production_plan_sha256"),
+        expected_production_plan_receipt_path=plan_receipt_path,
+        expected_production_plan_receipt_sha256=state.get("production_plan_validation_receipt_sha256"),
+    )
     if audio["status"] != "PASS":
         raise RuntimeError(f"STAGE07:{audio}")
     audio_payload = json.loads(audio_lock.read_text(encoding="utf-8"))
     caption_payload = json.loads(caption_lock.read_text(encoding="utf-8"))
-    expected_cues = [
-        {"cue_id": cue.get("cue_id", str(index)), "start_us": cue["start_us"],
-         "end_us": cue["end_us"], "text": cue["text"]}
-        for index, cue in enumerate(cues, start=1)
-    ]
+    final_srt = resolved_declared_path(caption_lock, caption_payload["final_srt_path"])
+    audio_source = resolved_declared_path(audio_lock, audio_payload["audio_path"])
     if (
         audio_payload.get("episode_id") != episode_id
-        or resolved_declared_path(audio_lock, audio_payload["audio_path"]) != audio_source
         or audio_payload.get("audio_sha256") != _sha(audio_source)
         or audio_payload.get("measured_duration_us") != duration
         or caption_payload.get("episode_id") != episode_id
-        or caption_payload.get("cues") != expected_cues
+        or not final_srt.is_file()
     ):
         raise RuntimeError("STAGE07_AUTHORITY_MISMATCH")
-    return locals()
+    # Any policy that keeps A10 must bind the primary audio to the separated stem;
+    # under MIXED the generated A9 narration rides alongside it as a role file.
+    if audio_payload.get("schema_version") == "001short-audio-lock-v4":
+        expected_matrix = {
+            "SOURCE_ORDER_CLEAN_AUDIO": ("SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_CLIP"),
+            "A10_RETAINED_SYNC": ("SOURCE_ORDER_UNCHANGED_A10_RETAINED", "SOURCE_VOCAL_STEM"),
+            "A10_REASSEMBLED_SYNC": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
+            "A9_TTS_PLUS_A10_REASSEMBLED": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
+            "TTS_ONLY_MUTE_SOURCE": ("URAKKAI", "GENERATED_TTS"),
+        }
+        observed = (config.get("production_mode"), audio_payload.get("audio_source"))
+        if expected_matrix.get(config.get("audio_policy")) != observed or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):
+            raise RuntimeError("STAGE07_AUDIO_MODE_MATRIX_MISMATCH")
+    elif config.get("audio_policy") in STEM_POLICIES and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
+        raise RuntimeError("STAGE07_VALIDATED_VOCAL_STEM_REQUIRED")
+    return {
+        "source_identity": source_identity, "approved_timeline": approved_timeline,
+        "design_evidence": design_evidence, "build_manifest": build_manifest,
+        "audio_lock": audio_lock, "caption_lock": caption_lock, "final_srt": final_srt,
+        "audio_source": audio_source, "video_input": video_input,
+        "width": width, "height": height,
+    }
 
 
 def _build_episode_once(config: dict) -> dict:
     _ensure_media_tools()
     _validate_config(config)
-    clean_video = Path(config["clean_video"]).resolve()
-    audio_source = Path(config.get("source_audio") or clean_video).resolve()
-    if not clean_video.is_file() or not audio_source.is_file():
+    video_input = Path(config["_visual_input"]["video_input_path"])
+    if not video_input.is_file():
         raise FileNotFoundError("INPUT_MEDIA_MISSING")
     episode = Path(config["episode_root"]).resolve()
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
     episode.mkdir(parents=True, exist_ok=True)
-    build_root = episode / "50_capcut_project"
+    build_root = _build_root(config, episode)
     evidence_root = build_root / "evidence"
     evidence_root.mkdir(parents=True, exist_ok=True)
     work_root = Path(config["work_root"]).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
     source = _extract_template(Path(config["template_zip"]).resolve(), work_root / "source_authority")
     pre = _stage_prerequisites(config, episode, [])
-    source_rows = _normalize_source(source, config, audio_source, pre["build_manifest"])
+    source_rows = _normalize_source(source, config, pre["audio_source"], pre["build_manifest"])
+    # The protected structure snapshot includes the approved polish bindings.
+    # Apply them to the extracted authority before cloning; the later target
+    # application is idempotent and produces the user-facing receipt.
+    apply_capcut_polish_profile.apply_project(source)
+    source_polish = validate_capcut_polish_profile.validate_project(source)
+    if source_polish["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_POLISH_SOURCE:{source_polish}")
 
     working = work_root / "working_project"
     cloned = clone_and_sync.clone_project(source, working)
@@ -848,6 +1617,20 @@ def _build_episode_once(config: dict) -> dict:
     receipt_path = build_root / "build_inputs_receipt.json"
     contract = {
         "schema_version": "001short-build-contract-v1", "episode_id": config["episode_id"],
+        "track_layout_version": TRACK_LAYOUT,
+        "root_contract_path": config["root_contract_path"],
+        "workspace_root": str(Path(config["workspace_root"]).resolve()),
+        "root_profile": config["root_profile"],
+        "root_template_profile": config["_resolved_root_contract"]["template_profile"],
+        "visual_asset_mode": config["_visual_input"]["visual_asset_mode"],
+        "video_asset_key": config["_visual_input"]["video_asset_key"],
+        "video_input_path": str(pre["video_input"]),
+        "video_input_sha256": _sha(pre["video_input"]),
+        "upload_ready": config["_visual_input"]["upload_ready"],
+        **({
+            "user_clean_override_path": str(config["_visual_input"]["user_clean_override_path"]),
+            "user_clean_override_sha256": config["_visual_input"]["user_clean_override_sha256"],
+        } if config["_visual_input"]["visual_asset_mode"] == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE" else {}),
         "source_project_path": str(source.resolve()), "working_project_path": str(target.resolve()),
         "evidence_root_path": str(evidence_root.resolve()), "source_core_sha256": source_manifest,
         "source_root_sha256": source_root_sha, "template_sha256": template_sha,
@@ -867,18 +1650,22 @@ def _build_episode_once(config: dict) -> dict:
         "structure_snapshot_sha256": _sha(snapshot_path), "project_id": project_id,
         "draft_id": draft_id, "main_timeline_id": timeline_id,
         "required_asset_paths": sorted(required_assets), "approved_text": sorted(approved_text),
+        "approved_role_text": {"T1": config["T1"], "T2": config["T2"]},
+        "approved_segment_text": {
+            row["segment_id"]: {
+                "role": row["role"], "start": row["start"], "duration": row["duration"],
+                "text": row["text"],
+                **({"color_role": row["color_role"]} if row["role"] == "A10_TEXT" else {}),
+                **({"state_effect": row["state_effect"]} if row["role"] == "STATE" else {}),
+            }
+            for row in _approved_rows(config)
+            if row.get("role") in {"A9_TEXT", "A10_TEXT", "STATE"}
+        },
         "approved_actual_order": [row["segment_id"] for row in ordered], "timeline": ordered,
         "primary_timeline_roles": ["VIDEO"], "authorized_gaps": [],
         "authorized_overlaps": [], "parallel_pairs": [],
-        "subtitle_roles": ["STATE"],
-        "caption_bindings": [
-            {
-                "segment_id": cue.get("segment_id")
-                or _approved_id(config, _approved_rows(config), "STATE", index - 1),
-                "cue_id": cue.get("cue_id", str(index)),
-            }
-            for index, cue in enumerate(config["state_cues"], start=1)
-        ],
+        "subtitle_roles": ["STATE", "A9_TEXT", "A10_TEXT"],
+        "caption_bindings": build_caption_bindings(config, pre["caption_lock"]),
     }
     _write_json(contract_path, contract)
     inputs = validate_build_inputs.validate_build_inputs(
@@ -913,17 +1700,47 @@ def _build_episode_once(config: dict) -> dict:
         target.parent,
         build_root / "root_meta_info.before.json",
     )
-    state = {
+    state_path = Path(config["state_path"]).resolve()
+    state = read_json(state_path)
+    state.update({
         "episode_id": config["episode_id"], "current_stage": "09",
-        "status": "WAIT_USER_CAPCUT_CHECK", "project_name": config["project_name"],
+        "status": "CAPCUT_STATIC_VALIDATED", "project_name": config["project_name"],
         "local_capcut_project_path": str(target), "stage09_user_approval": "NOT_RUN",
+        "visual_asset_mode": config["_visual_input"]["visual_asset_mode"],
+        "video_asset_key": config["_visual_input"]["video_asset_key"],
+        "upload_ready": config["_visual_input"]["upload_ready"],
         "cloud_prepare": cloud_prepare,
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    })
+    report_path = build_root / "build_report.json"
+    report = {
+        "episode_id": config["episode_id"], "status": "CAPCUT_STATIC_VALIDATED",
+        "current_stage": "09", "project_name": config["project_name"],
+        "project_path": str(target),
+        "media_source_path": str(pre["video_input"]),
+        "visual_asset_mode": state["visual_asset_mode"],
+        "video_asset_key": state["video_asset_key"],
+        "upload_ready": state["upload_ready"],
+        "capcut_evidence_path": str(capcut_evidence),
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
     }
-    _write_json(episode / "episode_state.json", state)
+    _write_json(report_path, report)
+    _write_json(state_path, state)
     return {
         "status": state["status"], "current_stage": "09", "stage08_validation": "PASS",
+        "visual_asset_mode": state["visual_asset_mode"], "upload_ready": state["upload_ready"],
         "project_path": str(target), "capcut_evidence_path": str(capcut_evidence),
+        "media_source_path": str(pre["video_input"]),
+        "build_report_path": str(report_path), "next_action": "WAIT_USER_CAPCUT_CHECK",
     }
+
+
+def _remove_generated_tree(path: Path) -> None:
+    def make_writable_and_retry(function, raw_path, _exc_info):
+        os.chmod(raw_path, 0o700)
+        function(raw_path)
+
+    shutil.rmtree(path, onerror=make_writable_and_retry)
 
 
 def _cleanup_generated_work(work_root: Path) -> None:
@@ -933,7 +1750,7 @@ def _cleanup_generated_work(work_root: Path) -> None:
         if candidate.parent != work_root:
             raise RuntimeError("UNSAFE_GENERATED_WORK_PATH")
         if candidate.is_dir():
-            shutil.rmtree(candidate)
+            _remove_generated_tree(candidate)
         elif candidate.exists():
             candidate.unlink()
 
@@ -944,7 +1761,7 @@ def _reset_source_authority(work_root: Path) -> None:
     if candidate.parent != work_root:
         raise RuntimeError("UNSAFE_SOURCE_AUTHORITY_PATH")
     if candidate.is_dir():
-        shutil.rmtree(candidate)
+        _remove_generated_tree(candidate)
     elif candidate.exists():
         candidate.unlink()
 
@@ -959,9 +1776,22 @@ def _assert_optional_edit_lock(config: dict) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("episode_id") != config["episode_id"]:
         raise RuntimeError("EDIT_LOCK_EPISODE_MISMATCH")
-    expected_writer = config.get("active_writer_machine")
-    if expected_writer and payload.get("active_writer_machine") != expected_writer:
-        raise RuntimeError("EDIT_LOCK_WRITER_MISMATCH")
+
+
+def _assert_clean_swap_lock(config: dict, target: Path) -> None:
+    raw_path = config.get("edit_lock_path")
+    if not isinstance(raw_path, str) or not raw_path:
+        raise RuntimeError("CLEAN_SWAP_EDIT_LOCK_REQUIRED")
+    path = Path(raw_path).resolve()
+    if not path.is_file():
+        raise RuntimeError("CLEAN_SWAP_EDIT_LOCK_MISSING")
+    payload = read_json(path)
+    if (
+        payload.get("episode_id") != config["episode_id"]
+        or payload.get("action") != "STAGE08_VIDEO_ONLY_SWAP"
+        or Path(payload.get("project_path", "")).resolve() != target.resolve()
+    ):
+        raise RuntimeError("CLEAN_SWAP_EDIT_LOCK_INVALID")
 
 
 def _assert_capcut_closed_for_target(target: Path) -> None:
@@ -983,11 +1813,170 @@ def _assert_capcut_closed_for_target(target: Path) -> None:
         raise RuntimeError("CAPCUT_PROCESS_OPEN")
 
 
+def _replace_video_material_only(target: Path, clean_video: Path, duration_us: int) -> None:
+    media = target / "Resources" / "media"
+    media.mkdir(parents=True, exist_ok=True)
+    resource_name = "clean_video.mp4"
+    shutil.copy2(clean_video, media / resource_name)
+    dimensions = _video_dimensions(clean_video)
+    changed = 0
+    for path, payload in _documents(target):
+        tracks = payload["tracks"]
+        if len(tracks) != len(ROLE_BY_TRACK):
+            raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
+        material_map = {
+            row.get("id"): row for row in _materials(payload.get("materials", {}))
+            if isinstance(row.get("id"), str)
+        }
+        video_ids = {
+            segment.get("material_id") for segment in tracks[TRACK_INDEX["VIDEO"]].get("segments", [])
+            if isinstance(segment.get("material_id"), str)
+        }
+        if not video_ids:
+            raise RuntimeError("CLEAN_SWAP_VIDEO_MATERIAL_MISSING")
+        prefix = _draft_path_prefix(target)
+        for material_id in video_ids:
+            material = material_map.get(material_id)
+            if material is None:
+                raise RuntimeError("CLEAN_SWAP_VIDEO_MATERIAL_MISSING")
+            _set_media(
+                material, media_type="video",
+                portable_path=_portable_resource_path(prefix, f"Resources/media/{resource_name}"),
+                role="VIDEO", duration_us=duration_us, dimensions=dimensions,
+            )
+            changed += 1
+        _write_json(path, payload)
+    if changed == 0:
+        raise RuntimeError("CLEAN_SWAP_VIDEO_MATERIAL_MISSING")
+    provisional_resource = media / "source.mp4"
+    if provisional_resource.is_file():
+        provisional_resource.unlink()
+
+
+def swap_provisional_video_only(config: dict) -> dict:
+    validate_grid_harness(config)
+    _ensure_media_tools()
+    _validate_config(config, revision_operation="swap")
+    if config["visual_asset_mode"] != "CLEAN_VISUAL_READY":
+        raise RuntimeError("CLEAN_SWAP_CLEAN_VISUAL_REQUIRED")
+    target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
+    if not target.is_dir():
+        raise RuntimeError("CLEAN_SWAP_PROVISIONAL_PROJECT_MISSING")
+    _assert_clean_swap_lock(config, target)
+    _assert_capcut_closed_for_target(target)
+    episode = Path(config["episode_root"]).resolve()
+    build_root = _build_root(config, episode)
+    snapshot_path = build_root / "structure_snapshot.json"
+    contract_path = build_root / "build_contract.json"
+    state_path = Path(config["state_path"]).resolve()
+    state = read_json(state_path)
+    if (
+        state.get("episode_id") != config["episode_id"]
+        or state.get("status") != "CAPCUT_STATIC_VALIDATED"
+        or state.get("visual_asset_mode") != "SOURCE_VIDEO_PROVISIONAL"
+        or state.get("next_action") != "WAIT_USER_CAPCUT_CHECK"
+    ):
+        raise RuntimeError("CLEAN_SWAP_PROVISIONAL_STATE_REQUIRED")
+    contract = read_json(contract_path)
+    if (
+        contract.get("visual_asset_mode") != "SOURCE_VIDEO_PROVISIONAL"
+        or contract.get("video_asset_key") != "source_video"
+        or contract.get("upload_ready") is not False
+        or Path(contract.get("working_project_path", "")).resolve() != target
+    ):
+        raise RuntimeError("CLEAN_SWAP_PROVISIONAL_CONTRACT_REQUIRED")
+    config["_clean_swap_from_provisional"] = True
+    try:
+        pre = _stage_prerequisites(config, episode, [])
+    finally:
+        config.pop("_clean_swap_from_provisional", None)
+    clean_video = Path(pre["video_input"]).resolve()
+    _replace_video_material_only(target, clean_video, config["duration_us"])
+    contract.update({
+        "visual_asset_mode": "CLEAN_VISUAL_READY",
+        "video_asset_key": "clean_video",
+        "video_input_path": str(clean_video),
+        "video_input_sha256": _sha(clean_video),
+        "upload_ready": False,
+        "build_manifest_path": str(Path(config["build_manifest_path"]).resolve()),
+        "build_manifest_sha256": _sha(Path(config["build_manifest_path"]).resolve()),
+        "audio_lock_path": str(pre["audio_lock"].resolve()),
+        "audio_lock_sha256": _sha(pre["audio_lock"]),
+        "caption_lock_path": str(pre["caption_lock"].resolve()),
+        "caption_lock_sha256": _sha(pre["caption_lock"]),
+        "final_srt_path": str(pre["final_srt"].resolve()),
+        "final_srt_sha256": _sha(pre["final_srt"]),
+    })
+    contract["required_asset_paths"] = [
+        "Resources/media/clean_video.mp4" if path.endswith("/source.mp4") else path
+        for path in contract["required_asset_paths"]
+    ]
+    contract["build_inputs_receipt_sha256"] = "0" * 64
+    _write_json(contract_path, contract)
+    inputs = validate_build_inputs.validate_build_inputs(
+        Path(contract["caption_lock_path"]), Path(contract["final_srt_path"]), contract_path,
+        Path(contract["approved_timeline_path"]),
+    )
+    if inputs["status"] != "PASS":
+        raise RuntimeError(f"CLEAN_SWAP_INPUTS:{inputs}")
+    receipt_path = Path(contract["build_inputs_receipt_path"])
+    _write_json(receipt_path, inputs)
+    contract["build_inputs_receipt_sha256"] = _sha(receipt_path)
+    _write_json(contract_path, contract)
+    _prepare_cloud_project(
+        target, project_name=config["project_name"], capcut_root=target.parent,
+        draft_id=contract["draft_id"], duration_us=config["duration_us"],
+    )
+    evidence_root = build_root / "evidence"
+    capcut_evidence = evidence_root / "capcut_project_evidence.json"
+    if capcut_evidence.exists():
+        if not capcut_evidence.is_file() or capcut_evidence.parent.resolve() != evidence_root.resolve():
+            raise RuntimeError("UNSAFE_PREVIOUS_CAPCUT_EVIDENCE")
+        capcut_evidence.unlink()
+    checked = validate_capcut_project.validate_capcut_project(
+        target, snapshot_path, contract_path, capcut_evidence, evidence_root
+    )
+    if checked["status"] != "PASS":
+        raise RuntimeError(f"CLEAN_SWAP_VALIDATE:{checked}")
+    postbuild = validate_postbuild.validate_postbuild(Path(config["build_manifest_path"]), target)
+    if postbuild["status"] != "PASS":
+        raise RuntimeError(f"CLEAN_SWAP_POSTBUILD:{postbuild}")
+    state.update({
+        "current_stage": "09", "status": "CAPCUT_STATIC_VALIDATED",
+        "visual_asset_mode": "CLEAN_VISUAL_READY", "video_asset_key": "clean_video",
+        "upload_ready": False, "stage09_user_approval": "NOT_RUN",
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    })
+    report_path = build_root / "build_report.json"
+    _write_json(report_path, {
+        "episode_id": config["episode_id"], "status": "CAPCUT_STATIC_VALIDATED",
+        "current_stage": "09", "project_name": config["project_name"],
+        "project_path": str(target), "media_source_path": str(clean_video),
+        "visual_asset_mode": "CLEAN_VISUAL_READY", "video_asset_key": "clean_video",
+        "upload_ready": False, "capcut_evidence_path": str(capcut_evidence),
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    })
+    _write_json(state_path, state)
+    return {
+        "status": "CAPCUT_STATIC_VALIDATED", "current_stage": "09", "stage08_validation": "PASS",
+        "visual_asset_mode": "CLEAN_VISUAL_READY", "upload_ready": False,
+        "project_path": str(target), "capcut_evidence_path": str(capcut_evidence),
+        "media_source_path": str(clean_video), "build_report_path": str(report_path),
+        "next_action": "WAIT_USER_CAPCUT_CHECK",
+    }
+
+
 def build_episode(config: dict) -> dict:
+    validate_grid_harness(config)
     _validate_config(config)
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
+    initialize_revision_state(config)
+    _validate_mixed_audio_modes(
+        config,
+        read_json(Path(config["build_manifest_path"]).resolve()),
+    )
     _assert_optional_edit_lock(config)
     work_root = Path(config["work_root"]).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
@@ -1002,8 +1991,10 @@ def build_episode(config: dict) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--swap-provisional-video-only", action="store_true")
     args = parser.parse_args()
-    payload = build_episode(json.loads(args.config.read_text(encoding="utf-8")))
+    config = json.loads(args.config.read_text(encoding="utf-8"))
+    payload = swap_provisional_video_only(config) if args.swap_provisional_video_only else build_episode(config)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 

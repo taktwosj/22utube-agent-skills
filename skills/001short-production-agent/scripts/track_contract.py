@@ -1,0 +1,24 @@
+"""Single executable authority for the shrt_white_base_v2 physical tracks."""
+
+CANONICAL_TRACKS = (
+    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
+    "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
+    "A9", "A10", "A11", "A12_RESERVED_EMPTY",
+)
+
+LOGICAL_ROLE_BY_TRACK = (
+    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE", "STATE", "STATE",
+    "A10_TEXT", "A10_TEXT", "A9_TEXT", "T2", "T1", "A9", "A10", "A11",
+    "A12_RESERVED_EMPTY",
+)
+
+A12_INDEX = 14
+TRACK_LAYOUT = "shrt_white_base_v2_15"
+TRACK_INDEX = {name: index for index, name in enumerate(CANONICAL_TRACKS)}
+STATE_TRACK_BY_EFFECT = {
+    "LASER_CUT": TRACK_INDEX["STATE_LASER"],
+}
+A10_TEXT_TRACK_BY_COLOR = {
+    "WHITE": TRACK_INDEX["A10_TEXT_WHITE"],
+    "YELLOW": TRACK_INDEX["A10_TEXT_YELLOW"],
+}

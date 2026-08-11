@@ -19,11 +19,11 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def make_video(path: Path, color: str) -> None:
+def make_video(path: Path, color: str, size: str = "16x28") -> None:
     subprocess.run(
         [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
-            "-i", f"color=c={color}:s=16x16:d=0.4", "-r", "10", "-pix_fmt", "yuv420p", str(path),
+            "-i", f"color=c={color}:s={size}:d=0.4", "-r", "10", "-pix_fmt", "yuv420p", str(path),
         ],
         check=True,
     )
@@ -46,6 +46,65 @@ class CleanCandidateTests(unittest.TestCase):
             encoding="utf-8",
         )
         return identity
+
+    def _design_lock(self, root: Path, identity: Path, source: Path) -> Path:
+        handoff = root / "handoff.json"
+        timeline = root / "timeline.json"
+        handoff.write_text("{}", encoding="utf-8")
+        timeline.write_text("{}", encoding="utf-8")
+        design = root / "design.json"
+        design.write_text(
+            json.dumps(
+                {
+                    "schema_version": "001short-design-lock-evidence-v1",
+                    "status": "PASS",
+                    "episode_id": "candidate-fixture",
+                    "handoff_path": handoff.name,
+                    "handoff_sha256": sha256(handoff),
+                    "source_identity_path": identity.name,
+                    "source_identity_sha256": sha256(identity),
+                    "source_media_path": source.name,
+                    "source_media_sha256": sha256(source),
+                    "timeline_path": timeline.name,
+                    "timeline_sha256": sha256(timeline),
+                    "source_fingerprint": "fixture-fingerprint",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return design
+
+    def _clean_manifest(
+        self,
+        root: Path,
+        identity: Path,
+        design: Path,
+        clean: Path,
+        width: int,
+        height: int,
+        duration_us: int = 400000,
+    ) -> Path:
+        manifest = root / "manifest.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": "001short-clean-visual-manifest-v1",
+                    "episode_id": "candidate-fixture",
+                    "source_identity_path": identity.name,
+                    "source_identity_sha256": sha256(identity),
+                    "design_lock_evidence_path": design.name,
+                    "design_lock_evidence_sha256": sha256(design),
+                    "clean_source_path": clean.name,
+                    "clean_source_sha256": sha256(clean),
+                    "clean_source_origin": "AGENT_PRIMARY_CLEAN_SOURCE",
+                    "expected_duration_us": duration_us,
+                    "expected_width": width,
+                    "expected_height": height,
+                }
+            ),
+            encoding="utf-8",
+        )
+        return manifest
 
     def test_pass_is_technical_only_and_requires_user_visual_review(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -74,6 +133,107 @@ class CleanCandidateTests(unittest.TestCase):
             payload = validate_clean_candidate(self._source_identity(root, source), source)
             self.assertEqual(payload["status"], "FAIL")
             self.assertIn("CLEAN_CANDIDATE_SAME_AS_SOURCE", [row["code"] for row in payload["errors"]])
+
+    def test_lower_resolution_vmake_candidate_preserves_portrait_aspect(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            candidate = root / "candidate.mp4"
+            make_video(source, "red", "1080x1920")
+            make_video(candidate, "blue", "608x1080")
+
+            payload = validate_clean_candidate(self._source_identity(root, source), candidate)
+
+            self.assertEqual(payload["status"], "PASS")
+            self.assertEqual(payload["evidence"]["width"], 608)
+            self.assertEqual(payload["evidence"]["height"], 1080)
+
+    def test_landscape_candidate_is_rejected_as_aspect_incompatible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            candidate = root / "candidate.mp4"
+            make_video(source, "red", "108x192")
+            make_video(candidate, "blue", "192x108")
+
+            payload = validate_clean_candidate(self._source_identity(root, source), candidate)
+
+            self.assertEqual(payload["status"], "FAIL")
+            self.assertIn(
+                "CLEAN_CANDIDATE_ASPECT_RATIO_MISMATCH",
+                [row["code"] for row in payload["errors"]],
+            )
+
+    def test_wrong_portrait_aspect_candidate_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            candidate = root / "candidate.mp4"
+            make_video(source, "red", "108x192")
+            make_video(candidate, "blue", "72x108")
+
+            payload = validate_clean_candidate(self._source_identity(root, source), candidate)
+
+            self.assertEqual(payload["status"], "FAIL")
+            self.assertIn(
+                "CLEAN_CANDIDATE_ASPECT_RATIO_MISMATCH",
+                [row["code"] for row in payload["errors"]],
+            )
+
+    def test_final_clean_visual_accepts_recorded_lower_resolution_portrait(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            clean = root / "clean.mp4"
+            make_video(source, "red", "1080x1920")
+            make_video(clean, "blue", "608x1080")
+            identity = self._source_identity(root, source)
+            design = self._design_lock(root, identity, source)
+            manifest = self._clean_manifest(root, identity, design, clean, 608, 1080, 600000)
+
+            payload = validate_clean_visual(manifest, identity, design)
+
+            self.assertEqual(payload["status"], "PASS")
+            self.assertEqual(payload["evidence"]["width"], 608)
+            self.assertEqual(payload["evidence"]["height"], 1080)
+
+    def test_final_clean_visual_rejects_landscape_even_when_manifest_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            clean = root / "clean.mp4"
+            make_video(source, "red", "108x192")
+            make_video(clean, "blue", "192x108")
+            identity = self._source_identity(root, source)
+            design = self._design_lock(root, identity, source)
+            manifest = self._clean_manifest(root, identity, design, clean, 192, 108, 600000)
+
+            payload = validate_clean_visual(manifest, identity, design)
+
+            self.assertEqual(payload["status"], "FAIL")
+            self.assertIn(
+                "CLEAN_VISUAL_ASPECT_RATIO_MISMATCH",
+                [row["code"] for row in payload["errors"]],
+            )
+
+    def test_final_clean_visual_rejects_wrong_portrait_aspect(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source.mp4"
+            clean = root / "clean.mp4"
+            make_video(source, "red", "108x192")
+            make_video(clean, "blue", "72x108")
+            identity = self._source_identity(root, source)
+            design = self._design_lock(root, identity, source)
+            manifest = self._clean_manifest(root, identity, design, clean, 72, 108, 600000)
+
+            payload = validate_clean_visual(manifest, identity, design)
+
+            self.assertEqual(payload["status"], "FAIL")
+            self.assertIn(
+                "CLEAN_VISUAL_ASPECT_RATIO_MISMATCH",
+                [row["code"] for row in payload["errors"]],
+            )
 
     def test_final_clean_visual_validator_also_rejects_source_substitution(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -117,9 +277,10 @@ class CleanCandidateTests(unittest.TestCase):
                         "design_lock_evidence_sha256": sha256(design),
                         "clean_source_path": source.name,
                         "clean_source_sha256": sha256(source),
+                        "clean_source_origin": "AGENT_PRIMARY_CLEAN_SOURCE",
                         "expected_duration_us": 400000,
                         "expected_width": 16,
-                        "expected_height": 16,
+                        "expected_height": 28,
                     }
                 ),
                 encoding="utf-8",

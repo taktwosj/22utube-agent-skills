@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://taktwosj.example/schemas/001short-executable-production-plan-v1.json",
+  "title": "001short legacy executable production plan v1",
+  "type": "object",
+  "required": ["schema_version", "episode_id", "root_profile", "project_name", "production_mode", "total_duration_us", "order_signature", "timeline"],
+  "properties": {
+    "schema_version": {"const": "001short-production-plan-v1"},
+    "episode_id": {"type": "string", "minLength": 1},
+    "root_profile": {"type": "string", "minLength": 1},
+    "project_name": {"type": "string", "minLength": 1},
+    "production_mode": {"enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]},
+    "audio_policy": {"enum": ["A10_RETAINED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"]},
+    "audio_source": {"not": {}},
+    "total_duration_us": {"type": "integer", "minimum": 1},
+    "original_order": {"type": "array", "minItems": 1},
+    "order_signature": {"type": "array", "minItems": 1},
+    "timeline": {"type": "array", "minItems": 1},
+    "cleared_anchors": {"type": "array", "uniqueItems": true},
+    "locks": {"type": "object"}
+  },
+  "additionalProperties": true
+}

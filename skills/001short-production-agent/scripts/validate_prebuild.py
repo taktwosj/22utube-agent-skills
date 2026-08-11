@@ -41,7 +41,7 @@ def _coalesced_clip_count(clips: list[dict]) -> int:
 def _manifest_errors(manifest: object) -> tuple[list[dict], dict | None]:
     if not isinstance(manifest, dict):
         return [_error("E_MANIFEST_INVALID", field="root")], None
-    required = ("schema_version", "episode_id", "source", "template", "vmake", "urakkai", "source_audio")
+    required = ("schema_version", "episode_id", "visual_asset_mode", "source", "template", "urakkai", "source_audio")
     if any(field not in manifest for field in required):
         return [_error("E_MANIFEST_INVALID", field="required")], None
     if manifest.get("schema_version") != "001short-build-manifest-v1":
@@ -63,9 +63,22 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
 
     source = payload["source"]
     template = payload["template"]
-    vmake = payload["vmake"]
+    visual_mode = payload["visual_asset_mode"]
+    vmake = payload.get("vmake")
+    clean_source = payload.get("clean_source")
     urakkai = payload["urakkai"]
-    if not isinstance(source, dict) or not isinstance(template, dict) or not isinstance(vmake, dict) or not isinstance(urakkai, dict):
+    production_mode = payload.get("production_mode", urakkai.get("production_type") if isinstance(urakkai, dict) else None)
+    if (
+        visual_mode not in {
+            "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
+            "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+        }
+        or not isinstance(source, dict) or not isinstance(template, dict) or not isinstance(urakkai, dict)
+        or (
+            visual_mode in {"CLEAN_VISUAL_READY", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"}
+            and not isinstance(clean_source, dict)
+        )
+    ):
         return result([_error("E_MANIFEST_INVALID", field="sections")])
     source_path = Path(source.get("path", "")).resolve()
     source_sha = source.get("sha256")
@@ -85,31 +98,103 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     ):
         errors.append(_error("E_MANIFEST_INVALID", field="template"))
 
-    receipt_path = Path(vmake.get("receipt_path", "")).resolve()
-    output_path = Path(vmake.get("output_path", "")).resolve()
-    try:
-        receipt = read_json(receipt_path)
-    except (OSError, ValueError, TypeError):
-        receipt = None
-    binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
-    if (
-        not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
-        or not vmake.get("final_download") or not receipt.get("final_download")
-        or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
-        or receipt.get("run_id") != vmake.get("run_id")
-        or receipt.get("job_id") != vmake.get("job_id")
-        or receipt.get("uploaded_source_sha256", "").lower() != str(vmake.get("input_sha256", "")).lower()
-        or receipt.get("downloaded_output_sha256", "").lower() != str(vmake.get("output_sha256", "")).lower()
-        or str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower()
-        or not output_path.is_file() or output_path.is_symlink()
-        or sha256_file(output_path).lower() != str(vmake.get("output_sha256", "")).lower()
-        or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
-    ):
-        errors.append(_error("E_VMAKE_BINDING"))
+    if visual_mode == "CLEAN_VISUAL_READY":
+        assert isinstance(clean_source, dict)
+        origin = clean_source.get("origin")
+        output_path = Path(clean_source.get("output_path", "")).resolve()
+        output_sha = clean_source.get("output_sha256")
+        if (
+            origin not in {"AGENT_PRIMARY_CLEAN_SOURCE", "USER_FALLBACK_CLEAN_SOURCE"}
+            or not isinstance(output_sha, str) or len(output_sha) != 64
+            or not output_path.is_file() or output_path.is_symlink()
+            or sha256_file(output_path).lower() != output_sha.lower()
+            or output_sha.lower() == str(source_sha).lower()
+        ):
+            errors.append(_error("E_CLEAN_SOURCE_BINDING"))
+        if origin == "USER_FALLBACK_CLEAN_SOURCE":
+            if clean_source.get("fallback_reason") not in {
+                "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+                "VMAKE_ACQUISITION_ISSUE",
+                "VMAKE_VERIFICATION_ISSUE",
+            }:
+                errors.append(_error("E_USER_FALLBACK_REASON"))
+            if vmake is not None:
+                errors.append(_error("E_USER_FALLBACK_VMAKE_RECEIPT_FORBIDDEN"))
+        elif origin == "AGENT_PRIMARY_CLEAN_SOURCE":
+            if "fallback_reason" in clean_source:
+                errors.append(_error("E_AGENT_PRIMARY_FALLBACK_REASON_FORBIDDEN"))
+            if not isinstance(vmake, dict):
+                errors.append(_error("E_VMAKE_BINDING"))
+                vmake = None
+        if not isinstance(vmake, dict):
+            vmake = None
+        if vmake is not None:
+            receipt_path = Path(vmake.get("receipt_path", "")).resolve()
+            vmake_output_path = Path(vmake.get("output_path", "")).resolve()
+            try:
+                receipt = read_json(receipt_path)
+            except (OSError, ValueError, TypeError):
+                receipt = None
+            binding_fields = ("run_id", "job_id", "input_sha256", "output_sha256")
+            if (
+                not isinstance(receipt, dict) or receipt.get("provider") != "vmake"
+                or not vmake.get("final_download") or not receipt.get("final_download")
+                or any(not isinstance(vmake.get(field), str) or not vmake[field] for field in binding_fields)
+                or receipt.get("run_id") != vmake.get("run_id")
+                or receipt.get("job_id") != vmake.get("job_id")
+                or receipt.get("uploaded_source_sha256", "").lower() != str(vmake.get("input_sha256", "")).lower()
+                or receipt.get("downloaded_output_sha256", "").lower() != str(vmake.get("output_sha256", "")).lower()
+                or str(vmake.get("input_sha256", "")).lower() != str(source_sha).lower()
+                or vmake_output_path != output_path
+                or str(vmake.get("output_sha256", "")).lower() != str(output_sha).lower()
+                or not vmake_output_path.is_file() or vmake_output_path.is_symlink()
+                or sha256_file(vmake_output_path).lower() != str(vmake.get("output_sha256", "")).lower()
+                or str(vmake.get("output_sha256", "")).lower() == str(source_sha).lower()
+            ):
+                errors.append(_error("E_VMAKE_BINDING"))
+
+    if visual_mode == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+        assert isinstance(clean_source, dict)
+        output_path = Path(clean_source.get("output_path", "")).resolve()
+        output_sha = clean_source.get("output_sha256")
+        override_path = Path(clean_source.get("user_clean_override_path", "")).resolve()
+        override_sha = clean_source.get("user_clean_override_sha256")
+        try:
+            override = read_json(override_path)
+        except (OSError, ValueError, TypeError):
+            override = None
+        authority = override.get("user_authority") if isinstance(override, dict) else None
+        declared_output = (
+            Path(override_path.parent / override.get("episode_clean_source_path", "")).resolve()
+            if isinstance(override, dict) else None
+        )
+        if (
+            clean_source.get("origin") != visual_mode
+            or not output_path.is_file() or output_path.is_symlink()
+            or not isinstance(output_sha, str)
+            or sha256_file(output_path).lower() != output_sha.lower()
+            or not override_path.is_file()
+            or not isinstance(override_sha, str)
+            or sha256_file(override_path).lower() != override_sha.lower()
+            or not isinstance(override, dict)
+            or override.get("schema_version") != "001short-user-clean-override-v1"
+            or override.get("episode_id") != payload["episode_id"]
+            or override.get("status") != visual_mode
+            or not isinstance(authority, dict)
+            or not isinstance(authority.get("evidence"), str)
+            or not authority["evidence"].strip()
+            or not isinstance(authority.get("exact_text"), str)
+            or not authority["exact_text"].strip()
+            or declared_output != output_path
+            or str(override.get("clean_source_sha256", "")).lower() != output_sha.lower()
+            or override.get("clean_visual_ready_claim") is not False
+            or vmake is not None
+        ):
+            errors.append(_error("E_USER_CLEAN_OVERRIDE_BINDING"))
 
     clips = urakkai.get("video_clips")
     target_duration = urakkai.get("target_duration_us")
-    if urakkai.get("production_type") != "URAKKAI" or not isinstance(clips, list) or not clips:
+    if production_mode not in {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"} or not isinstance(clips, list) or not clips:
         errors.append(_error("E_MANIFEST_INVALID", field="urakkai"))
         clips = []
     if not isinstance(target_duration, int) or isinstance(target_duration, bool) or target_duration <= 0:
@@ -142,8 +227,20 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         target_cursor = clip["target_range_us"][1]
     if target_cursor != target_duration:
         errors.append(_error("E_VIDEO_RANGE", detail="target_end"))
-    if _coalesced_clip_count(normalized_clips) < 2:
+    if production_mode == "URAKKAI" and _coalesced_clip_count(normalized_clips) < 2:
         errors.append(_error("E_EFFECTIVE_CLIP"))
+
+    if production_mode != "URAKKAI":
+        if target_duration != source_duration:
+            errors.append(_error("E_SOURCE_ORDER_DURATION"))
+        if any(row.get("source_range_us") != row.get("target_range_us") for row in normalized_clips):
+            errors.append(_error("E_SOURCE_ORDER_CHANGED"))
+        expected_matrix = {
+            "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": ("SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
+            "SOURCE_ORDER_UNCHANGED_A10_RETAINED": ("A10_RETAINED_SYNC", "SOURCE_VOCAL_STEM"),
+        }
+        if (payload.get("audio_policy"), payload.get("audio_source")) != expected_matrix[production_mode]:
+            errors.append(_error("E_AUDIO_MODE_MATRIX"))
 
     if urakkai.get("reorder_required"):
         permutation = urakkai.get("locked_permutation")
@@ -157,13 +254,19 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     audio_by_clip: dict[str, list[dict]] = {}
     for row in audio_rows:
         if not isinstance(row, dict) or row.get("mode") not in {"on", "duck", "mute"}:
-            errors.append(_error("E_AUDIO_BINDING"))
+            errors.append(_error(
+                "E_AUDIO_BINDING", clip_id=(row or {}).get("clip_id") if isinstance(row, dict) else None,
+                detail="source_audio[].mode must be one of on/duck/mute",
+            ))
             continue
         audio_by_clip.setdefault(str(row.get("clip_id")), []).append(row)
     for clip in normalized_clips:
         rows = audio_by_clip.get(clip["clip_id"], [])
         if len(rows) != 1:
-            errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
+            errors.append(_error(
+                "E_AUDIO_BINDING", clip_id=clip["clip_id"],
+                detail="exactly one source_audio row must reuse this VIDEO clip_id",
+            ))
             continue
         row = rows[0]
         if row.get("mode") in {"on", "duck"} and (
@@ -171,7 +274,10 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
             or row.get("source_range_us") != clip["source_range_us"]
             or row.get("target_range_us") != clip["target_range_us"]
         ):
-            errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
+            errors.append(_error(
+                "E_AUDIO_BINDING", clip_id=clip["clip_id"],
+                detail="source_sha256 must equal the source VIDEO sha and the ranges must match the clip",
+            ))
         capcut_source_range = row.get("capcut_source_range_us")
         if capcut_source_range is not None:
             normalized_capcut_range = _range(capcut_source_range)
@@ -183,7 +289,11 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
                 != target_range[1] - target_range[0]
             ):
                 errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
-    return result(errors, {"build_manifest_path": str(path), "episode_id": payload["episode_id"]})
+    return result(errors, {
+        "build_manifest_path": str(path), "episode_id": payload["episode_id"],
+        "visual_asset_mode": visual_mode,
+        "production_mode": production_mode,
+    })
 
 
 def main() -> int:

@@ -1,9 +1,11 @@
 {
-  "schema_version": "001short-production-plan-v1",
+  "schema_version": "001short-production-plan-v2",
   "episode_id": "SH_PROTOCOL_PASS",
   "root_profile": "shrt_white_root_01",
   "project_name": "SH_PROTOCOL_PASS_Hermes",
   "production_mode": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY",
+  "audio_policy": "SOURCE_ORDER_CLEAN_AUDIO",
+  "audio_source": "SOURCE_CLIP",
   "total_duration_us": 8000000,
   "order_signature": ["1"],
   "timeline": [

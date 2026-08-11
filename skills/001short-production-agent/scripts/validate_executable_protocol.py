@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import re
@@ -10,8 +11,40 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+SCRIPT_ROOT = Path(__file__).resolve().parent
+if str(SCRIPT_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_ROOT))
+
+from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
+from schema_runtime import validate_schema
+
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
+CURRENT_PLAN_SCHEMA = SKILL_ROOT / "schemas" / "executable_production_plan.schema.json"
+LEGACY_PLAN_SCHEMA = SKILL_ROOT / "schemas" / "executable_production_plan_v1.schema.json"
+ALLOWED_URAKKAI_AUDIO_POLICIES = [
+    "A10_REASSEMBLED_SYNC",
+    "TTS_ONLY_MUTE_SOURCE",
+    "A9_TTS_PLUS_A10_REASSEMBLED",
+]
+A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED"}
+
+
+def _ranges_overlap(left: object, right: object) -> bool:
+    return (
+        isinstance(left, list) and len(left) == 2
+        and isinstance(right, list) and len(right) == 2
+        and all(isinstance(value, int) and not isinstance(value, bool) for value in left + right)
+        and max(left[0], right[0]) < min(left[1], right[1])
+    )
+
+
+def _range_fully_covered(inner: object, outer: object) -> bool:
+    return (
+        isinstance(inner, list) and len(inner) == 2
+        and isinstance(outer, list) and len(outer) == 2
+        and outer[0] <= inner[0] and outer[1] >= inner[1]
+    )
 
 
 def read_json(path: Path) -> Dict[str, Any]:
@@ -37,6 +70,50 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_OWNER_SKILL")
     if protocol.get("lane") != "general_shorts_production":
         errors.append("PROTOCOL_LANE")
+    expected_tracks = list(CANONICAL_TRACKS)
+    if protocol.get("track_layout") != TRACK_LAYOUT:
+        errors.append("PROTOCOL_TRACK_LAYOUT")
+    if protocol.get("canonical_tracks") != expected_tracks:
+        errors.append("PROTOCOL_CANONICAL_TRACKS")
+    if protocol.get("visual_asset_modes") != [
+        "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
+        "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+    ]:
+        errors.append("PROTOCOL_VISUAL_ASSET_MODES")
+    if protocol.get("stage07_outputs") != ["audio_lock.json", "caption_lock.json", "final.srt", "caption_timing_evidence.json"]:
+        errors.append("PROTOCOL_STAGE07_OUTPUTS")
+    if protocol.get("a12_policy") != "EMPTY":
+        errors.append("PROTOCOL_A12_POLICY")
+    if protocol.get("anchors", {}).get("A10") != "explicit mode-bound source clean audio, full Demucs stem, or mapped reassembled Demucs stem":
+        errors.append("PROTOCOL_A10_AUTHORITY")
+    expected_manual_finalization = {
+        "automation_terminal_state": "WAIT_USER_CAPCUT_CHECK",
+        "clean_source_policy": {
+            "primary": "AGENT_PRIMARY_CLEAN_SOURCE",
+            "fallback": "USER_FALLBACK_CLEAN_SOURCE",
+            "user_override": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+            "user_override_requires": ["EXPLICIT_USER_APPROVAL", "FILE_SHA_BINDING"],
+            "fallback_reasons": [
+                "VMAKE_CURRENT_WORK_WINDOW_INCOMPLETE",
+                "VMAKE_ACQUISITION_ISSUE",
+                "VMAKE_VERIFICATION_ISSUE",
+            ],
+            "sequence": [
+                "VMAKE_SUBMIT_FIRST",
+                "SOURCE_VIDEO_PROVISIONAL_BUILD_NONBLOCKING",
+                "VALIDATE_CLEAN_SOURCE_THEN_VIDEO_ONLY_SWAP_OR_REASSEMBLY",
+            ],
+        },
+        "stage08_clean_swap_route": "scripts/build_episode_capcut.py --swap-provisional-video-only",
+        "user_only_actions": [
+            "capcut_visual_review_and_refinement",
+            "render",
+            "upload",
+        ],
+        "source_video_provisional_next_action": "CLEAN_SOURCE_SWAP_NONBLOCKING",
+    }
+    if protocol.get("manual_finalization") != expected_manual_finalization:
+        errors.append("PROTOCOL_MANUAL_FINALIZATION_POLICY")
 
     session_handoff = protocol.get("session_handoff")
     expected_session_handoff = {
@@ -60,15 +137,18 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
                 errors.append(f"PROTOCOL_SESSION_HANDOFF_GATE:{key}")
 
     modes = protocol.get("production_modes")
-    expected_modes = {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"}
+    expected_modes = {"URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"}
     if not isinstance(modes, dict) or set(modes) != expected_modes:
         errors.append("PROTOCOL_MODES")
     else:
         urakkai = modes["URAKKAI"]
         clean_only = modes["SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"]
-        for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required", "a10_sync_required_for_all_used_ranges"):
+        source_order_stem = modes["SOURCE_ORDER_UNCHANGED_A10_RETAINED"]
+        for key in ("meaningful_reorder_required", "fake_split_forbidden", "approved_final_order_required"):
             if urakkai.get(key) is not True:
                 errors.append(f"PROTOCOL_URAKKAI_GATE_FALSE:{key}")
+        if urakkai.get("allowed_audio_policies") != ALLOWED_URAKKAI_AUDIO_POLICIES:
+            errors.append("PROTOCOL_URAKKAI_AUDIO_POLICIES_INVALID")
         if urakkai.get("minimum_video_segments", 0) < 2:
             errors.append("PROTOCOL_URAKKAI_MINIMUM_CUTS")
         expected_clean = {
@@ -82,30 +162,36 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         for key, value in expected_clean.items():
             if clean_only.get(key) != value:
                 errors.append(f"PROTOCOL_CLEAN_ONLY_GATE:{key}")
+        if source_order_stem.get("allowed_audio_policies") != ["A10_RETAINED_SYNC"]:
+            errors.append("PROTOCOL_SOURCE_ORDER_STEM_AUDIO_POLICY")
 
-    review = protocol.get("urakkai_review_loop")
-    if not isinstance(review, dict):
-        errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP")
+    approval = protocol.get("urakkai_approval")
+    expected_artifacts = [
+        "20_script/original-capcut-grid.md",
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md",
+    ]
+    if not isinstance(approval, dict):
+        errors.append("PROTOCOL_URAKKAI_APPROVAL")
     else:
-        expected_review = {
+        expected_approval = {
             "enabled_for": ["URAKKAI"],
-            "preferred_provider": "claude_cli",
-            "preferred_model": "Claude Opus 5",
-            "effort": "low",
-            "reviews_per_loop": 1,
-            "creator_machine": "macmini",
+            "external_review_required": False,
             "approval_authority": "user",
-            "fallback_provider": "codex_cli",
-            "fallback_model": "gpt-5.6-sol",
-            "fallback_effort": "low",
-            "fallback_on_claude_failure": True,
-            "evidence_path": "20_script/external-review.json",
+            "auto_mode_skips_user_approval": True,
+            "required_report_artifacts": expected_artifacts,
+            "manual_pass_state": "WAIT_USER_URAKKAI_APPROVAL",
+            "auto_pass_state": "URAKKAI_AUTO_APPROVED",
         }
-        if review.get("review_loop_count") != 1:
-            errors.append("PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT")
-        for key, value in expected_review.items():
-            if review.get(key) != value:
-                errors.append(f"PROTOCOL_URAKKAI_REVIEW_GATE:{key}")
+        for key, value in expected_approval.items():
+            if approval.get(key) != value:
+                errors.append(
+                    "PROTOCOL_URAKKAI_EXTERNAL_REVIEW_FORBIDDEN"
+                    if key == "external_review_required"
+                    else "PROTOCOL_URAKKAI_APPROVAL_ARTIFACTS"
+                    if key == "required_report_artifacts"
+                    else f"PROTOCOL_URAKKAI_APPROVAL_GATE:{key}"
+                )
 
     stages = protocol.get("stages")
     expected_stages = [f"{number:02d}" for number in range(1, 10)]
@@ -114,8 +200,15 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_STAGE_ORDER")
     elif stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
-    elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_CLEAN_OR_SOURCE_VIDEO_PROVISIONAL":
+    elif stages[6].get("produces") != [
+        "30_audio_srt/audio_lock.json", "30_audio_srt/caption_lock.json", "30_audio_srt/final.srt",
+        "30_audio_srt/caption_timing_evidence.json",
+    ]:
+        errors.append("PROTOCOL_STAGE07_OUTPUTS")
+    elif stages[7].get("requires_state") != "AUDIO_CAPTION_VALIDATED_WITH_ACCEPTED_VISUAL_MODE":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_CAPCUT_GATE")
+    elif stages[8].get("produces") != [] or "validators" in stages[8]:
+        errors.append("PROTOCOL_STAGE09_MANUAL_TERMINAL")
 
     completion = protocol.get("completion_report")
     required_completion = [
@@ -140,11 +233,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     expected_cloud_sync = {
         "default_status": "NOT_REQUESTED",
         "requires_explicit_user_request": True,
-        "destination_by_writer_machine": {
-            "macmini": "macmini",
-            "home_windows": "home",
-            "office_windows": "ofc",
-        },
+        "destination_must_be_explicit": True,
         "forbid_preemptive_sync": True,
         "synced_status": "SYNCED",
     }
@@ -176,10 +265,12 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "vmake_final_download_evidence_required",
         "vmake_substitute_file_forbidden",
         "capcut_visual_confirmation_required_before_completion",
+        "source_audio_vocal_stem_required_when_retained",
+        "capcut_vocal_retain_metadata_not_audio_separation",
         "capcut_root_immutable",
         "capcut_project_media_internal",
         "capcut_cloud_sync_explicit_request_required",
-        "capcut_cloud_destination_by_writer_machine_required",
+        "capcut_cloud_destination_explicit_request_required",
         "capcut_cloud_row_readback_required_when_requested",
         "capcut_cloud_reopen_playback_required_when_requested",
         "public_upload_requires_explicit_approval",
@@ -188,6 +279,16 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     if not isinstance(invariants, dict):
         errors.append("PROTOCOL_INVARIANTS")
     else:
+        if invariants.get("paperclip_disabled") is not True:
+            errors.append("PROTOCOL_PAPERCLIP_NOT_DISABLED")
+        if any(
+            key in invariants
+            for key in (
+                "paperclip_user_requested_only",
+                "paperclip_entry_required_before_stage_01",
+            )
+        ):
+            errors.append("PROTOCOL_PAPERCLIP_LEGACY_ROUTE_PRESENT")
         for key in required_invariants:
             if invariants.get(key) is not True:
                 errors.append(f"PROTOCOL_INVARIANT_FALSE:{key}")
@@ -206,9 +307,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     authority = protocol.get("authority", {})
     schemas = protocol.get("schemas", {})
     session_handoff = protocol.get("session_handoff", {})
-    review = protocol.get("urakkai_review_loop", {})
-    review_loop_count = review.get("review_loop_count") if isinstance(review, dict) else None
-    reviews_per_loop = review.get("reviews_per_loop") if isinstance(review, dict) else None
+    approval = protocol.get("urakkai_approval", {})
     required_paths = [
         authority.get("policy"),
         authority.get("machine_contract"),
@@ -218,8 +317,13 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("production_plan"),
         schemas.get("completion_report"),
         schemas.get("session_handoff"),
+        schemas.get("vocal_stem_manifest"),
+        schemas.get("source_intake_receipt"),
         session_handoff.get("validator"),
         session_handoff.get("template"),
+        "scripts/validate_source_intake.py",
+        "references/production-orchestrator.md",
+        "steps/04-user-approval.md",
         "tools.json",
     ]
     for relative in required_paths:
@@ -237,6 +341,8 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         schemas.get("production_plan"),
         schemas.get("completion_report"),
         schemas.get("session_handoff"),
+        schemas.get("vocal_stem_manifest"),
+        schemas.get("source_intake_receipt"),
         "tools.json",
     ]:
         if isinstance(relative, str) and (root / relative).is_file():
@@ -249,32 +355,53 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     if skill_path.is_file():
         skill_text = skill_path.read_text(encoding="utf-8")
         for token in [
-            "## Executable Protocol (Mandatory)",
+            "references/production-orchestrator.md",
             "STOP_PROTOCOL_CONFLICT",
-            "URAKKAI_STRUCTURE_UNCHANGED",
-            "UPLOAD_METADATA_MISSING",
-            "PUBLIC_UPLOAD_NOT_APPROVED",
+            "PAPERCLIP_DISABLED",
             "## New Session Handoff Bootstrap",
             "scripts/validate_conversation_handoff.py",
             "HANDOFF_SECRET_MATERIAL_FORBIDDEN",
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
-        review_contract = re.search(
-            r"Stage 04의 검토 개선 loop는 정확히 (\d+)회 실행한다\.", skill_text
-        )
-        if (
-            not isinstance(review_loop_count, int)
-            or isinstance(review_loop_count, bool)
-            or review_contract is None
-            or int(review_contract.group(1)) != review_loop_count
+        if "외부 AI 검토를 호출하지 않는다" not in skill_text:
+            errors.append("PROTOCOL_SKILL_EXTERNAL_REVIEW_DISABLED_MISSING")
+
+    orchestrator_path = root / "references/production-orchestrator.md"
+    if orchestrator_path.is_file():
+        orchestrator_text = orchestrator_path.read_text(encoding="utf-8")
+        for token in [
+            "0000shrt",
+            "scripts/validate_source_intake.py",
+            "GOOGLE_DRIVE",
+            "URL",
+            "DESKTOP",
+            "A11=SFX",
+            "A12=EMPTY",
+        ]:
+            if token not in orchestrator_text:
+                errors.append(f"PROTOCOL_ORCHESTRATOR_TOKEN_MISSING:{token}")
+
+    stage04_path = root / "steps" / "04-user-approval.md"
+    if stage04_path.is_file():
+        stage04_text = stage04_path.read_text(encoding="utf-8")
+        for token in (
+            "original-capcut-grid.md", "urakkai-capcut-grid.md",
+            "WAIT_USER_URAKKAI_APPROVAL", "URAKKAI_AUTO_APPROVED",
         ):
-            errors.append("PROTOCOL_SKILL_REVIEW_LOOP_COUNT_MISMATCH")
+            if token not in stage04_text:
+                errors.append(f"PROTOCOL_STAGE04_TOKEN_MISSING:{token}")
+        if "claude.cmd" in stage04_text or "codex.cmd" in stage04_text:
+            errors.append("PROTOCOL_STAGE04_EXTERNAL_REVIEW_COMMAND_FORBIDDEN")
 
     workflow_path = root / str(authority.get("state_machine", "workflow.json"))
     if workflow_path.is_file():
         try:
             workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+            if "paperclip" in workflow.get("runtime", {}):
+                errors.append("PROTOCOL_WORKFLOW_PAPERCLIP_ROUTE_PRESENT")
+            if "paperclip_status" in workflow.get("interim_capcut", {}).get("report_required", {}):
+                errors.append("PROTOCOL_WORKFLOW_PAPERCLIP_REPORT_PRESENT")
             executable = workflow.get("executable_protocol", {})
             if executable.get("path") != authority.get("machine_contract"):
                 errors.append("PROTOCOL_WORKFLOW_PATH_MISMATCH")
@@ -286,6 +413,18 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_FIELDS_MISMATCH")
             if workflow.get("completion_gate", {}).get("validator_pass_required") is not True:
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_GATE_DISABLED")
+            if workflow.get("manual_finalization") != protocol.get("manual_finalization"):
+                errors.append("PROTOCOL_WORKFLOW_MANUAL_FINALIZATION_MISMATCH")
+            stage09 = workflow.get("parallel_execution", {}).get("stage09", {})
+            if stage09.get("sequence") != ["WAIT_USER_CAPCUT_CHECK"]:
+                errors.append("PROTOCOL_WORKFLOW_STAGE09_AUTOMATION_NOT_STOPPED")
+            stages = {row.get("id"): row for row in workflow.get("production_stages", []) if isinstance(row, dict)}
+            if stages.get("09", {}).get("pass") != "WAIT_USER_CAPCUT_CHECK":
+                errors.append("PROTOCOL_WORKFLOW_STAGE09_MANUAL_WAIT_MISSING")
+            if workflow.get("validation", {}).get("checks", {}).get("09") != {
+                "reference": "references/checks/render.md", "manual_only": True,
+            }:
+                errors.append("PROTOCOL_WORKFLOW_STAGE09_MANUAL_ROUTER_MISSING")
             bootstrap = workflow.get("session_bootstrap", {})
             if bootstrap.get("env_file") != session_handoff.get("env_file"):
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_ENV_MISMATCH")
@@ -293,13 +432,26 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_VALIDATOR_MISMATCH")
             if bootstrap.get("resume_requires_episode_id_and_explicit_request") is not True:
                 errors.append("PROTOCOL_WORKFLOW_HANDOFF_RESUME_GATE_DISABLED")
-            external_review = workflow.get("blueprint_frontend", {}).get("external_review", {})
-            if external_review.get("loop_count") != review_loop_count:
-                errors.append("PROTOCOL_WORKFLOW_REVIEW_LOOP_COUNT_MISMATCH")
-            if external_review.get("reviews_per_loop") != reviews_per_loop:
-                errors.append("PROTOCOL_WORKFLOW_REVIEWS_PER_LOOP_MISMATCH")
+            if workflow.get("blueprint_frontend", {}).get("assembly", {}).get("a10_authority") != "validated_demucs_source_vocal_stem":
+                errors.append("PROTOCOL_WORKFLOW_A10_AUTHORITY_MISMATCH")
+            interim = workflow.get("interim_capcut", {})
+            if interim.get("a10_anchor") != "A10_VALIDATED_DEMUCS_VOCAL_STEM":
+                errors.append("PROTOCOL_WORKFLOW_A10_ANCHOR_MISMATCH")
+            user_approval = workflow.get("blueprint_frontend", {}).get("user_approval", {})
+            if user_approval.get("external_review_required") is not False:
+                errors.append("PROTOCOL_WORKFLOW_EXTERNAL_REVIEW_NOT_DISABLED")
+            if user_approval.get("auto_mode_skips_user_approval") is not True:
+                errors.append("PROTOCOL_WORKFLOW_AUTO_APPROVAL_BYPASS_MISSING")
+            if user_approval.get("required_report_artifacts") != approval.get("required_report_artifacts"):
+                errors.append("PROTOCOL_WORKFLOW_URAKKAI_REPORT_ARTIFACTS_MISMATCH")
         except Exception:
             pass
+
+    if (root / "scripts" / "validate_paperclip_entry.py").exists():
+        errors.append("PROTOCOL_PAPERCLIP_VALIDATOR_PRESENT")
+    paperclip_reference = root / "references" / "vmake-dom-clean-video-automation.md"
+    if paperclip_reference.is_file() and "OneDrive Paperclip handoff" in paperclip_reference.read_text(encoding="utf-8"):
+        errors.append("PROTOCOL_PAPERCLIP_REFERENCE_ROUTE_PRESENT")
 
     tools_path = root / "tools.json"
     if tools_path.is_file():
@@ -319,6 +471,18 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_TOOLS_HANDOFF_VALIDATOR_MISMATCH")
             if handoff_tool.get("env_file") != session_handoff.get("env_file"):
                 errors.append("PROTOCOL_TOOLS_HANDOFF_ENV_MISMATCH")
+            mapping = tools.get("capcut_preflight", {}).get("track_mapping", {})
+            if mapping.get("profile") != TRACK_LAYOUT:
+                errors.append("PROTOCOL_TOOLS_TRACK_LAYOUT_MISMATCH")
+            if mapping.get("required") != list(CANONICAL_TRACKS):
+                errors.append("PROTOCOL_TOOLS_TRACKS_MISMATCH")
+            production_ids = [row.get("id") for row in tools.get("production_tools", []) if isinstance(row, dict)]
+            if production_ids != list(CANONICAL_TRACKS):
+                errors.append("PROTOCOL_TOOLS_PRODUCTION_TRACKS_MISMATCH")
+            if tools.get("root_profiles") != ["home_windows", "macmini"]:
+                errors.append("PROTOCOL_TOOLS_ROOT_PROFILES_MISMATCH")
+            if tools.get("template_profile") != "shrt_white_base_v2":
+                errors.append("PROTOCOL_TOOLS_TEMPLATE_PROFILE_MISMATCH")
         except Exception:
             pass
     return errors
@@ -447,6 +611,26 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     if not isinstance(plan, dict):
         return ["PRODUCTION_PLAN_OBJECT_REQUIRED"]
 
+    version = plan.get("schema_version")
+    if version == "001short-production-plan-v1":
+        if validate_schema(plan, read_json(LEGACY_PLAN_SCHEMA)):
+            return ["PRODUCTION_PLAN_V1_CURRENT_FIELDS_FORBIDDEN"]
+        plan = copy.deepcopy(plan)
+        if plan.get("production_mode") == "URAKKAI":
+            plan["audio_policy"] = {
+                "A10_RETAINED_SYNC": "A10_REASSEMBLED_SYNC",
+                "A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED",
+            }.get(plan.get("audio_policy"), plan.get("audio_policy"))
+            plan["audio_source"] = "GENERATED_TTS" if plan.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE" else "REASSEMBLED_VOCAL_STEM"
+        else:
+            plan["audio_policy"] = "SOURCE_ORDER_CLEAN_AUDIO"
+            plan["audio_source"] = "SOURCE_CLIP"
+    elif version == "001short-production-plan-v2":
+        if validate_schema(plan, read_json(CURRENT_PLAN_SCHEMA)):
+            return ["PRODUCTION_PLAN_V2_SCHEMA_INVALID"]
+    else:
+        return ["PRODUCTION_PLAN_SCHEMA_VERSION_INVALID"]
+
     mode = plan.get("production_mode")
     modes = protocol.get("production_modes", {})
     if mode not in modes:
@@ -469,16 +653,30 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
+    tts = _segments(tracks, "A9")
+    if _segments(tracks, "A12"):
+        errors.append("A12_RESERVED_EMPTY")
 
     invariants = protocol.get("invariants", {})
     if isinstance(invariants, dict) and invariants.get("vmake_direct_insert_required") is True:
-        visual_mode = plan.get("visual_asset_mode", "VMAKE_CLEAN")
+        visual_mode = plan.get("visual_asset_mode", "CLEAN_VISUAL_READY")
         if visual_mode == "SOURCE_VIDEO_PROVISIONAL":
             expected_asset_key = invariants.get("source_provisional_video_asset_key", "source_video")
             error_prefix = "SOURCE_PROVISIONAL_ASSET_INVALID"
-        elif visual_mode == "VMAKE_CLEAN":
+        elif visual_mode == "CLEAN_VISUAL_READY":
             expected_asset_key = invariants.get("vmake_direct_insert_asset_key", "clean_video")
             error_prefix = "VMAKE_DIRECT_INSERT_ASSET_INVALID"
+        elif visual_mode == "USER_APPROVED_NONMATCHING_CLEAN_SOURCE":
+            override = plan.get("user_clean_override")
+            if (
+                not isinstance(override, dict)
+                or override.get("status") != visual_mode
+                or not isinstance(override.get("evidence"), str)
+                or not override["evidence"].strip()
+            ):
+                errors.append("USER_CLEAN_OVERRIDE_EVIDENCE_INVALID")
+            expected_asset_key = "user_approved_clean_video"
+            error_prefix = "USER_CLEAN_OVERRIDE_ASSET_INVALID"
         else:
             errors.append(f"VISUAL_ASSET_MODE_INVALID:{visual_mode}")
             expected_asset_key = None
@@ -497,9 +695,13 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
             errors.append("URAKKAI_VIDEO_SEGMENT_COUNT")
         if config.get("fake_split_forbidden") and _effective_video_groups(video) < minimum:
             errors.append("URAKKAI_FAKE_SPLIT")
-        if config.get("video_audio_mapping_must_match") and len(video) != len(audio):
-            errors.append("URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH")
-        if config.get("a10_sync_required_for_all_used_ranges"):
+        audio_policy = plan.get("audio_policy", "A10_RETAINED_SYNC")
+        if audio_policy not in config.get("allowed_audio_policies", []):
+            errors.append("URAKKAI_AUDIO_POLICY_INVALID")
+            return errors
+        if audio_policy in A10_AUDIO_POLICIES:
+            if config.get("video_audio_mapping_must_match") and len(video) != len(audio):
+                errors.append("URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH")
             audio_by_target: Dict[tuple, List[Dict[str, Any]]] = {}
             for segment in audio:
                 target = segment.get("target_range_us")
@@ -511,9 +713,66 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
                     errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
                     break
+            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED" and not tts:
+                errors.append("URAKKAI_MIXED_A9_REQUIRED")
+            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED":
+                if _segments(tracks, "A11"):
+                    errors.append("URAKKAI_MIXED_A11_FORBIDDEN")
+                for retained in audio:
+                    overlapping_tts = [
+                        narration for narration in tts
+                        if _ranges_overlap(
+                            retained.get("target_range_us"),
+                            narration.get("target_range_us"),
+                        )
+                    ]
+                    if any(
+                        not _range_fully_covered(
+                            retained.get("target_range_us"),
+                            narration.get("target_range_us"),
+                        )
+                        for narration in overlapping_tts
+                    ):
+                        errors.append("URAKKAI_MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED")
+                        break
+                    if overlapping_tts and retained.get("volume") != 0:
+                        errors.append("URAKKAI_MIXED_A10_NOT_MUTED_UNDER_A9")
+                        break
+                    if not overlapping_tts and retained.get("volume") != 1:
+                        errors.append("URAKKAI_MIXED_A10_NOT_RESTORED_OUTSIDE_A9")
+                        break
+        else:
+            if audio:
+                errors.append("URAKKAI_TTS_ONLY_A10_FORBIDDEN")
+            if any(segment.get("volume") != 0 for segment in video):
+                errors.append("URAKKAI_TTS_ONLY_VIDEO_NOT_MUTED")
+            if not tts:
+                errors.append("URAKKAI_TTS_ONLY_A9_REQUIRED")
+            if _segments(tracks, "A11") or _segments(tracks, "A12"):
+                errors.append("URAKKAI_TTS_ONLY_FORBIDDEN_AUDIO_PRESENT")
+            cleared = set(plan.get("cleared_anchors", []))
+            if not {"A10", "A11", "A12"}.issubset(cleared):
+                errors.append("URAKKAI_TTS_ONLY_CLEAR_ANCHOR_MISSING")
+        return errors
+
+    if mode == "SOURCE_ORDER_UNCHANGED_A10_RETAINED":
+        if original_order != final_order:
+            errors.append("SOURCE_ORDER_STEM_ORDER_CHANGED")
+        if plan.get("audio_policy") != "A10_RETAINED_SYNC" or plan.get("audio_source") != "SOURCE_VOCAL_STEM":
+            errors.append("SOURCE_ORDER_STEM_AUDIO_MATRIX_INVALID")
+        if not video or len(video) != len(audio):
+            errors.append("SOURCE_ORDER_STEM_VIDEO_AUDIO_COUNT_MISMATCH")
+        for visual, retained in zip(video, audio):
+            if visual.get("source_range_us") != retained.get("source_range_us") or visual.get("target_range_us") != retained.get("target_range_us"):
+                errors.append("SOURCE_ORDER_STEM_VIDEO_AUDIO_MAPPING_MISMATCH")
+                break
+        if video and (video[0].get("target_range_us", [None])[0] != 0 or video[-1].get("target_range_us", [None, None])[1] != duration):
+            errors.append("SOURCE_ORDER_STEM_DURATION_MISMATCH")
         return errors
 
     config = modes[mode]
+    if plan.get("audio_policy") != "SOURCE_ORDER_CLEAN_AUDIO" or plan.get("audio_source") != "SOURCE_CLIP":
+        errors.append("CLEAN_ONLY_AUDIO_MATRIX_INVALID")
     if isinstance(original_order, list) and isinstance(final_order, list) and original_order != final_order:
         errors.append("CLEAN_ONLY_SOURCE_ORDER_CHANGED")
     if len(video) != config.get("video_segments", 1):
@@ -729,16 +988,14 @@ def validate_completion_report(
     if sync_status not in {sync.get("default_status"), sync.get("synced_status")}:
         errors.append("CAPCUT_CLOUD_SYNC_STATUS_INVALID")
     elif sync_status == sync.get("synced_status"):
-        mapping = sync.get("destination_by_writer_machine", {})
-        writer_machine = report.get("writer_machine")
         if report.get("capcut_cloud_sync_requested") is not True:
             errors.append("CAPCUT_CLOUD_SYNC_EXPLICIT_REQUEST_REQUIRED")
-        if mapping.get(writer_machine) != report.get("capcut_cloud_destination"):
-            errors.append("CAPCUT_CLOUD_DESTINATION_MISMATCH")
+        if _missing(report.get("capcut_cloud_destination")):
+            errors.append("CAPCUT_CLOUD_DESTINATION_MISSING")
         row = report.get("capcut_cloud_row")
         if not isinstance(row, dict) or any(_missing(row.get(field)) for field in config.get("cloud_sync_row_required_fields", [])):
             errors.append("CAPCUT_CLOUD_ROW_MISSING")
-    elif any(field in report for field in ("capcut_cloud_sync_requested", "writer_machine")):
+    elif "capcut_cloud_sync_requested" in report:
         errors.append("CAPCUT_CLOUD_SYNC_UNREQUESTED")
 
     status = report.get("public_upload_status")

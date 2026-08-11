@@ -44,27 +44,6 @@ Stage08 read-only preflight는 root ZIP, 내부 화이트 asset, edit lock, 입�
 
 ## Stage09 직렬 계약
 
-Stage09는 작업자 fanout을 사용하지 않는다. 다음 순서를 한 조정자와 동일 GUI 소유자가 직렬로 수행한다.
-
-1. `WAIT_USER_CAPCUT_CHECK`
-2. `USER_VISUAL_CHECKED`
-3. `WAIT_CAPCUT_CLOSE_FOR_REVALIDATION`
-4. `CAPCUT_POST_OPEN_REVALIDATED`
-5. `USER_APPROVED`
-6. `RENDER_VALIDATED`
-7. `WAIT_UPLOAD_APPROVAL`
-
-Stage09 router는 아래 인자를 한 번의 canonical 검증 호출에 함께 받는다.
-
-```text
---stage09-review-evidence
---stage09-review-sha256
---approved-evidence-root
---capcut-evidence
---capcut-sha256
---render
---render-sha256
---evidence
-```
+Stage09는 자동 작업자나 router를 사용하지 않는다. `CAPCUT_STATIC_VALIDATED` 뒤 자동화는 `WAIT_USER_CAPCUT_CHECK`에서 끝난다. `AGENT_PRIMARY_CLEAN_SOURCE`는 verified VMake asset의 VIDEO-only swap/reassembly을, `USER_FALLBACK_CLEAN_SOURCE`는 validated supplied asset의 같은 작업을 Stage08 계약으로 허용한다. CapCut visual review/refinement, render, upload는 사용자 수동 작업이다.
 
 review evidence의 순서·체인·SHA-256, 닫힌 CapCut snapshot, render evidence를 따로 병렬 확정하지 않는다. Stage09의 어느 상태도 앞 상태를 건너뛰거나 미리 기록하지 않는다.
