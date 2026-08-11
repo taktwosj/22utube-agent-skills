@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import shutil
 import subprocess
@@ -6,6 +7,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -413,11 +415,46 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(json.loads(state.read_text(encoding="utf-8"))["current_stage"], "09")
 
             canonical_state_before_revisions = sha(state)
-            revision_v1 = {**config, "revision_id": "v1"}
+            canonical_build_manifest_before_revisions = sha(build_manifest)
+            clean_root = episode / "40_assets_used"; clean_root.mkdir()
+            user_clean_video = clean_root / "user_clean_video.mp4"
+            subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=360x640:r=30:d=2", "-y", str(user_clean_video)], check=True)
+            user_override = clean_root / "user_clean_override.json"
+            write(user_override, {
+                "schema_version": "001short-user-clean-override-v1", "episode_id": "EP",
+                "status": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "episode_clean_source_path": user_clean_video.name,
+                "clean_source_sha256": sha(user_clean_video), "clean_visual_ready_claim": False,
+                "user_authority": {"evidence": "user supplied file", "exact_text": "use this clean video"},
+            })
+            revision_manifest = episode / "build_manifest.user-clean-v1.json"
+            revision_manifest_payload = json.loads(build_manifest.read_text(encoding="utf-8"))
+            revision_manifest_payload.update({
+                "visual_asset_mode": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "clean_source": {
+                    "origin": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                    "output_path": str(user_clean_video), "output_sha256": sha(user_clean_video),
+                    "user_clean_override_path": str(user_override),
+                    "user_clean_override_sha256": sha(user_override),
+                },
+            })
+            write(revision_manifest, revision_manifest_payload)
+            revision_v1 = {
+                **{key: value for key, value in config.items() if not key.startswith("_")},
+                "revision_id": "v1",
+                "visual_asset_mode": "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
+                "clean_video": str(user_clean_video),
+                "user_clean_override_path": str(user_override),
+                "build_manifest_path": str(revision_manifest),
+            }
+            revision_config_path = root / "revision_v1_config.json"
+            write(revision_config_path, revision_v1)
+            output = io.StringIO()
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
                 builder, "_register_capcut_project", return_value=None
-            ):
-                v1_result = builder.build_episode(revision_v1)
+            ), patch.object(sys, "argv", ["build_episode_capcut.py", "--config", str(revision_config_path)]), redirect_stdout(output):
+                self.assertEqual(builder.main(), 0)
+            v1_result = json.loads(output.getvalue())
             v1_project = root / "capcut" / "project_v1"
             v1_state = episode / "90_workflow" / "revisions" / "v1" / "state.json"
             self.assertEqual(Path(v1_result["project_path"]), v1_project)
@@ -425,6 +462,65 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             v1_project_before_v2 = sha(v1_project / "draft_content.json")
             v1_state_before_v2 = sha(v1_state)
             self.assertEqual(sha(state), canonical_state_before_revisions)
+            self.assertEqual(sha(build_manifest), canonical_build_manifest_before_revisions)
+
+            invalid_revision = {
+                **revision_v1, "revision_id": "v3",
+                "user_clean_override_path": str(clean_root / "missing_override.json"),
+            }
+            with self.assertRaisesRegex((ValueError, RuntimeError), "USER_CLEAN_OVERRIDE"):
+                builder.build_episode(invalid_revision)
+            self.assertFalse((episode / "90_workflow" / "revisions" / "v3").exists())
+            self.assertFalse((root / "capcut" / "project_v3").exists())
+
+            bad_sha_manifest = episode / "build_manifest.bad-sha.json"
+            bad_sha_payload = json.loads(revision_manifest.read_text(encoding="utf-8"))
+            bad_sha_payload["clean_source"]["output_sha256"] = "0" * 64
+            write(bad_sha_manifest, bad_sha_payload)
+            bad_sha_revision = {
+                **revision_v1, "revision_id": "v4",
+                "build_manifest_path": str(bad_sha_manifest),
+            }
+            with self.assertRaisesRegex(RuntimeError, "STAGE08_PREBUILD"):
+                builder.build_episode(bad_sha_revision)
+            self.assertFalse((episode / "90_workflow" / "revisions" / "v4").exists())
+            self.assertFalse((root / "capcut" / "project_v4").exists())
+
+            bad_archive = root / "root_14_tracks.zip"
+            with zipfile.ZipFile(archive) as source_zip, zipfile.ZipFile(bad_archive, "w") as target_zip:
+                for info in source_zip.infolist():
+                    data = source_zip.read(info.filename)
+                    if info.filename.endswith("draft_content.json"):
+                        payload = json.loads(data.decode("utf-8"))
+                        payload["tracks"] = payload["tracks"][:-1]
+                        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                    target_zip.writestr(info, data)
+            bad_root_manifest = root / "root_14_manifest.json"
+            write(bad_root_manifest, {"sha256": sha(bad_archive), "template_profile": "shrt_white_base_v2"})
+            bad_root_contract = root / "root_14_contract.json"
+            write(bad_root_contract, {
+                "schema_version": "shorts-capcut-root-contract-v1", "workspace_relative": True,
+                "assembly_mode": "clean_staging_copy", "profiles": {"bad_windows": {
+                    "archive_relative_path": bad_archive.name,
+                    "manifest_relative_path": bad_root_manifest.name,
+                    "archive_sha256": sha(bad_archive), "template_profile": "shrt_white_base_v2",
+                }},
+            })
+            bad_track_manifest = episode / "build_manifest.bad-tracks.json"
+            bad_track_payload = json.loads(revision_manifest.read_text(encoding="utf-8"))
+            bad_track_payload["template"].update(
+                root_zip_path=str(bad_archive), root_zip_sha256=sha(bad_archive),
+            )
+            write(bad_track_manifest, bad_track_payload)
+            bad_track_revision = {
+                **revision_v1, "revision_id": "v5", "root_profile": "bad_windows",
+                "root_contract_path": bad_root_contract.name, "template_zip": str(bad_archive),
+                "build_manifest_path": str(bad_track_manifest),
+            }
+            with self.assertRaisesRegex(RuntimeError, "PINNED_TRACK_LAYOUT_INVALID"):
+                builder.build_episode(bad_track_revision)
+            self.assertFalse((episode / "90_workflow" / "revisions" / "v5").exists())
+            self.assertFalse((root / "capcut" / "project_v5").exists())
 
             revision_v2 = {**config, "revision_id": "v2"}
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
@@ -438,8 +534,9 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(sha(v1_project / "draft_content.json"), v1_project_before_v2)
             self.assertEqual(sha(v1_state), v1_state_before_v2)
             self.assertEqual(sha(state), canonical_state_before_revisions)
+            self.assertEqual(sha(build_manifest), canonical_build_manifest_before_revisions)
 
-            clean_root = episode / "40_assets_used"; clean_root.mkdir()
+            clean_root = episode / "40_assets_used"
             clean_video = clean_root / "clean_video.mp4"
             subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=blue:s=1080x1920:r=30:d=2", "-y", str(clean_video)], check=True)
             clean_manifest = clean_root / "clean_visual_manifest.json"
@@ -475,11 +572,11 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
             self.assertEqual(swapped["next_action"], "WAIT_USER_CAPCUT_CHECK")
             self.assertFalse(swapped["upload_ready"])
 
-            revision_edit_lock = episode / "90_workflow" / "clean_swap_lock_v1.json"
-            write(revision_edit_lock, {"episode_id": "EP", "action": "STAGE08_VIDEO_ONLY_SWAP", "project_path": str(v1_project)})
+            revision_edit_lock = episode / "90_workflow" / "clean_swap_lock_v2.json"
+            write(revision_edit_lock, {"episode_id": "EP", "action": "STAGE08_VIDEO_ONLY_SWAP", "project_path": str(v2_project)})
             revision_swap = {
                 **config,
-                "revision_id": "v1",
+                "revision_id": "v2",
                 "visual_asset_mode": "CLEAN_VISUAL_READY",
                 "clean_video": str(clean_video),
                 "clean_asset_root": str(clean_root),
@@ -488,7 +585,7 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 "T1": "mutable shared title",
             }
             bind_state_artifacts(
-                v1_state, timeline=timeline, build_manifest=build_manifest,
+                v2_state, timeline=timeline, build_manifest=build_manifest,
                 design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
             )
             with patch.object(builder, "_assert_capcut_closed_for_target", return_value=None), patch.object(
@@ -497,7 +594,7 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 revision_swapped = builder.swap_provisional_video_only(revision_swap)
             self.assertEqual(revision_swapped["status"], "CAPCUT_STATIC_VALIDATED")
             self.assertEqual(revision_swap["T1"], "title")
-            self.assertTrue((v1_project / "Resources" / "media" / "clean_video.mp4").is_file())
+            self.assertTrue((v2_project / "Resources" / "media" / "clean_video.mp4").is_file())
 
 
 if __name__ == "__main__":

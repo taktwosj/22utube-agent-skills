@@ -49,6 +49,10 @@ AUDIO_POLICIES = frozenset({
 TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
 A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
 STEM_POLICIES = A10_POLICIES - {"SOURCE_ORDER_CLEAN_AUDIO"}
+SOURCE_ORDER_PRODUCTION_MODES = frozenset({
+    "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED",
+})
+REQUIRED_TEMPLATE_SEED_ROLES = ("VIDEO", "A9", "A10")
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -56,7 +60,7 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def validate_grid_harness(config: dict) -> dict:
+def validate_grid_harness(config: dict, *, state_payload: dict | None = None) -> dict:
     forbidden_overrides = (
         "original_grid_path",
         "urakkai_grid_path",
@@ -86,9 +90,9 @@ def validate_grid_harness(config: dict) -> dict:
     if missing:
         raise ValueError(f"TABLE_LOCKED_ARTIFACT_REQUIRED:{','.join(missing)}")
     state_path = Path(config["state_path"]).resolve()
-    if not state_path.is_file():
+    if state_payload is None and not state_path.is_file():
         raise ValueError("TABLE_LOCKED_ARTIFACT_REQUIRED:state_path")
-    state = read_json(state_path)
+    state = copy.deepcopy(state_payload) if state_payload is not None else read_json(state_path)
     binding_specs = {
         "approved_timeline": ("approved_timeline_path", "approved_timeline_sha256", Path(config["approved_timeline_path"]).resolve()),
         "build_manifest": ("build_manifest_path", "build_manifest_sha256", Path(config["build_manifest_path"]).resolve()),
@@ -235,6 +239,65 @@ def _extract_template(template_zip: Path, destination: Path) -> Path:
     if not white.is_file():
         raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
     return candidates[0]
+
+
+def _validate_template_track_layout(template_zip: Path) -> None:
+    """Preflight every primary draft in the pinned archive without writing files."""
+    try:
+        with zipfile.ZipFile(template_zip) as archive:
+            root_candidates = []
+            for name in archive.namelist():
+                parts = name.replace("\\", "/").split("/")
+                if parts[-1] == "draft_content.json" and "Timelines" not in parts and "subdraft" not in parts:
+                    root_candidates.append(name)
+            if len(root_candidates) != 1:
+                raise RuntimeError(f"PINNED_TEMPLATE_ROOT_AMBIGUOUS:{len(root_candidates)}")
+            root_name = root_candidates[0]
+            root_parent = root_name.replace("\\", "/").split("/")[:-1]
+            timeline_candidates = []
+            for name in archive.namelist():
+                parts = name.replace("\\", "/").split("/")
+                if (
+                    parts[:len(root_parent)] == root_parent
+                    and len(parts) == len(root_parent) + 3
+                    and parts[len(root_parent)] == "Timelines"
+                    and parts[-1] == "draft_content.json"
+                ):
+                    timeline_candidates.append(name)
+            if not timeline_candidates:
+                raise RuntimeError("PINNED_TEMPLATE_TIMELINE_MISSING")
+            documents = [
+                (name, json.loads(archive.read(name).decode("utf-8")))
+                for name in [root_name, *sorted(timeline_candidates)]
+            ]
+    except (OSError, zipfile.BadZipFile, KeyError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("PINNED_TEMPLATE_ROOT_INVALID") from exc
+    for _name, payload in documents:
+        tracks = payload.get("tracks") if isinstance(payload, dict) else None
+        if (
+            not isinstance(tracks, list) or len(tracks) != len(ROLE_BY_TRACK)
+            or any(
+                not isinstance(track, dict)
+                or not isinstance(track.get("id"), str)
+                or not isinstance(track.get("segments"), list)
+                for track in tracks
+            )
+        ):
+            raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
+        material_map = {
+            row.get("id"): row for row in _materials(payload.get("materials", {}))
+            if isinstance(row, dict) and isinstance(row.get("id"), str)
+        }
+        for role in REQUIRED_TEMPLATE_SEED_ROLES:
+            segments = tracks[TRACK_INDEX[role]]["segments"]
+            if (
+                not segments or not isinstance(segments[0], dict)
+                or not isinstance(segments[0].get("id"), str)
+                or not isinstance(segments[0].get("material_id"), str)
+            ):
+                raise RuntimeError(f"PINNED_TEMPLATE_ANCHOR_MISSING:{role}")
+            if segments[0]["material_id"] not in material_map:
+                raise RuntimeError(f"PINNED_TEMPLATE_MATERIAL_MISSING:{role}")
 
 
 def _scrub_remote(value: Any) -> None:
@@ -584,16 +647,16 @@ def bind_revision_snapshot(config: dict, *, operation: str) -> None:
         raise ValueError("REVISION_OPERATION_INVALID")
 
 
-def initialize_revision_state(config: dict) -> None:
-    """Seed a new revision state from immutable Stage 07 evidence only once."""
+def prepare_revision_state_payload(config: dict) -> tuple[dict, dict] | None:
+    """Build a fresh revision state and config snapshot without filesystem writes."""
     context = config.get("_revision_context")
     if not isinstance(context, dict):
-        return
+        return None
     revision_state = Path(config["state_path"]).resolve()
     if revision_state.exists():
         if not _revision_snapshot_path(config).is_file():
             raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
-        return
+        return read_json(revision_state), read_json(_revision_snapshot_path(config))
     canonical_state = Path(context["canonical_state_path"]).resolve()
     if not canonical_state.is_file():
         raise RuntimeError("REVISION_SOURCE_STATE_MISSING")
@@ -603,10 +666,25 @@ def initialize_revision_state(config: dict) -> None:
     state = copy.deepcopy(source_state)
     for key in ("local_capcut_project_path", "cloud_prepare", "video_asset_key", "upload_ready"):
         state.pop(key, None)
-    for key in ("audio_lock_path", "caption_lock_path"):
+    for key in (
+        "approved_timeline_path", "build_manifest_path", "design_lock_evidence_path",
+        "audio_lock_path", "caption_lock_path", "production_plan_path",
+        "production_plan_validation_receipt_path",
+    ):
         value = state.get(key)
         if isinstance(value, str) and value:
             state[key] = str(resolve_state_artifact(canonical_state, value))
+    for name, config_key in (
+        ("approved_timeline", "approved_timeline_path"),
+        ("build_manifest", "build_manifest_path"),
+        ("design_lock_evidence", "design_lock_evidence_path"),
+    ):
+        raw_path = config.get(config_key)
+        if not isinstance(raw_path, str) or not raw_path:
+            continue
+        path = Path(raw_path).resolve()
+        state[f"{name}_path"] = str(path)
+        state[f"{name}_sha256"] = _sha(path)
     state.update({
         "episode_id": config["episode_id"],
         "revision_id": context["revision_id"],
@@ -618,8 +696,28 @@ def initialize_revision_state(config: dict) -> None:
     })
     snapshot_path = _revision_snapshot_path(config)
     snapshot = _revision_snapshot_payload(config)
-    _write_json(snapshot_path, snapshot)
     state["build_config_path"] = str(snapshot_path)
+    return state, snapshot
+
+
+def initialize_revision_state(
+    config: dict, prepared: tuple[dict, dict] | None = None,
+) -> None:
+    """Persist a validated fresh revision state and immutable config snapshot."""
+    context = config.get("_revision_context")
+    if not isinstance(context, dict):
+        return
+    revision_state = Path(config["state_path"]).resolve()
+    if revision_state.exists():
+        if not _revision_snapshot_path(config).is_file():
+            raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
+        return
+    payload = prepared if prepared is not None else prepare_revision_state_payload(config)
+    if payload is None:
+        return
+    state, snapshot = payload
+    snapshot_path = _revision_snapshot_path(config)
+    _write_json(snapshot_path, snapshot)
     state["build_config_sha256"] = _sha(snapshot_path)
     _write_json(revision_state, state)
 
@@ -1361,7 +1459,9 @@ def _srt_time(microseconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
 
 
-def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -> dict:
+def _stage_prerequisites(
+    config: dict, episode: Path, source_rows: list[dict], *, state_payload: dict | None = None,
+) -> dict:
     del source_rows
     episode_id = config["episode_id"]
     visual = config["_visual_input"]
@@ -1456,7 +1556,7 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
             raise RuntimeError("STAGE08_USER_CLEAN_OVERRIDE_AUTHORITY_MISMATCH")
 
     state_path = Path(config["state_path"]).resolve()
-    state = read_json(state_path)
+    state = copy.deepcopy(state_payload) if state_payload is not None else read_json(state_path)
     expected_state = "CAPCUT_STATIC_VALIDATED" if config.get("_clean_swap_from_provisional") else "AUDIO_CAPTION_VALIDATED"
     if state.get("episode_id") != episode_id or state.get("status") != expected_state:
         raise RuntimeError(
@@ -1489,10 +1589,19 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     caption_payload = json.loads(caption_lock.read_text(encoding="utf-8"))
     final_srt = resolved_declared_path(caption_lock, caption_payload["final_srt_path"])
     audio_source = resolved_declared_path(audio_lock, audio_payload["audio_path"])
+    measured_duration = audio_payload.get("measured_duration_us")
+    duration_matches = (
+        isinstance(measured_duration, int) and not isinstance(measured_duration, bool)
+        and (
+            abs(measured_duration - duration) <= validate_prebuild.SOURCE_ORDER_DURATION_TOLERANCE_US
+            if config.get("production_mode") in SOURCE_ORDER_PRODUCTION_MODES
+            else measured_duration == duration
+        )
+    )
     if (
         audio_payload.get("episode_id") != episode_id
         or audio_payload.get("audio_sha256") != _sha(audio_source)
-        or audio_payload.get("measured_duration_us") != duration
+        or not duration_matches
         or caption_payload.get("episode_id") != episode_id
         or not final_srt.is_file()
     ):
@@ -1521,7 +1630,7 @@ def _stage_prerequisites(config: dict, episode: Path, source_rows: list[dict]) -
     }
 
 
-def _build_episode_once(config: dict) -> dict:
+def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> dict:
     _ensure_media_tools()
     _validate_config(config)
     video_input = Path(config["_visual_input"]["video_input_path"])
@@ -1538,7 +1647,7 @@ def _build_episode_once(config: dict) -> dict:
     work_root = Path(config["work_root"]).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
     source = _extract_template(Path(config["template_zip"]).resolve(), work_root / "source_authority")
-    pre = _stage_prerequisites(config, episode, [])
+    pre = prerequisites if prerequisites is not None else _stage_prerequisites(config, episode, [])
     source_rows = _normalize_source(source, config, pre["audio_source"], pre["build_manifest"])
     # The protected structure snapshot includes the approved polish bindings.
     # Apply them to the extracted authority before cloning; the later target
@@ -1854,9 +1963,13 @@ def _replace_video_material_only(target: Path, clean_video: Path, duration_us: i
 
 
 def swap_provisional_video_only(config: dict) -> dict:
-    validate_grid_harness(config)
+    if config.get("revision_id") is None:
+        validate_grid_harness(config)
+        _validate_config(config, revision_operation="swap")
+    else:
+        _validate_config(config, revision_operation="swap")
+        validate_grid_harness(config)
     _ensure_media_tools()
-    _validate_config(config, revision_operation="swap")
     if config["visual_asset_mode"] != "CLEAN_VISUAL_READY":
         raise RuntimeError("CLEAN_SWAP_CLEAN_VISUAL_REQUIRED")
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
@@ -1967,23 +2080,36 @@ def swap_provisional_video_only(config: dict) -> dict:
 
 
 def build_episode(config: dict) -> dict:
-    validate_grid_harness(config)
-    _validate_config(config)
+    _ensure_media_tools()
+    if config.get("revision_id") is None:
+        validate_grid_harness(config)
+        _validate_config(config)
+    else:
+        _validate_config(config)
+    _validate_template_track_layout(Path(config["template_zip"]).resolve())
+    prepared_revision = prepare_revision_state_payload(config)
+    revision_state = prepared_revision[0] if prepared_revision is not None else None
+    if prepared_revision is not None:
+        validate_grid_harness(config, state_payload=revision_state)
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
-    initialize_revision_state(config)
     _validate_mixed_audio_modes(
         config,
         read_json(Path(config["build_manifest_path"]).resolve()),
     )
     _assert_optional_edit_lock(config)
+    episode = Path(config["episode_root"]).resolve()
+    prerequisites = _stage_prerequisites(
+        config, episode, [], state_payload=revision_state,
+    )
+    initialize_revision_state(config, prepared_revision)
     work_root = Path(config["work_root"]).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
     _cleanup_generated_work(work_root)
     _reset_source_authority(work_root)
     try:
-        return _build_episode_once(config)
+        return _build_episode_once(config, prerequisites=prerequisites)
     finally:
         _cleanup_generated_work(work_root)
 

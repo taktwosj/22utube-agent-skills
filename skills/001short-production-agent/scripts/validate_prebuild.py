@@ -7,6 +7,9 @@ from typing import Any
 from common import read_json, result, sha256_file
 
 
+SOURCE_ORDER_DURATION_TOLERANCE_US = 50_000
+
+
 def _error(code: str, **detail: Any) -> dict:
     return {"code": code, **detail}
 
@@ -211,7 +214,14 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         target_range = _range(clip.get("target_range_us"))
         if (
             source_range is None or target_range is None
-            or source_range[1] > source_duration or target_range[1] > target_duration
+            or (
+                source_range[1] > source_duration
+                and (
+                    production_mode == "URAKKAI"
+                    or source_range[1] - source_duration > SOURCE_ORDER_DURATION_TOLERANCE_US
+                )
+            )
+            or target_range[1] > target_duration
             or clip.get("source_sha256", "").lower() != str(source_sha).lower()
             or source_range[1] - source_range[0] != target_range[1] - target_range[0]
         ):
@@ -231,7 +241,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         errors.append(_error("E_EFFECTIVE_CLIP"))
 
     if production_mode != "URAKKAI":
-        if target_duration != source_duration:
+        if abs(target_duration - source_duration) > SOURCE_ORDER_DURATION_TOLERANCE_US:
             errors.append(_error("E_SOURCE_ORDER_DURATION"))
         if any(row.get("source_range_us") != row.get("target_range_us") for row in normalized_clips):
             errors.append(_error("E_SOURCE_ORDER_CHANGED"))

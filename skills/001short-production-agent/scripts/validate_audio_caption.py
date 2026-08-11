@@ -193,8 +193,11 @@ def _authoritative_mapping(
         if len(plan_matches) != 1:
             errors.append({"code": "CAPTION_TIMING_PLAN_MAPPING_MISMATCH", "target_segment_id": target_id})
         expected.append((source_id, target_id, source_range, target_range))
+    # In a zero-caption receipt, mapping describes caption-cue provenance and is
+    # therefore empty.  VIDEO/audio B->V authority is still checked above
+    # against both the build manifest and production plan.
     observed = [_mapping_signature(row) for row in evidence.get("mapping", [])]
-    if sorted(observed) != sorted(expected):
+    if not evidence.get("zero_caption") and sorted(observed) != sorted(expected):
         errors.append({"code": "CAPTION_TIMING_BUILD_MAPPING_MISMATCH"})
     return timeline, set(expected)
 
