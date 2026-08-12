@@ -148,8 +148,10 @@ def _authoritative_mapping(
         return timeline, set()
     original = resolved_declared_path(evidence_path, original_raw)
     urakkai = resolved_declared_path(evidence_path, urakkai_raw)
+    has_manifest_binding = any(key in evidence for key in ("build_manifest_path", "build_manifest_sha256"))
     if (
-        timeline is None or manifest is None or plan is None or not original.is_file() or not urakkai.is_file()
+        timeline is None or plan is None or not original.is_file() or not urakkai.is_file()
+        or (has_manifest_binding and manifest is None)
         or sha256_file(original) != original_sha or sha256_file(urakkai) != urakkai_sha
     ):
         errors.append({"code": "CAPTION_TIMING_AUTHORITY_BINDING_INVALID"})
@@ -165,7 +167,7 @@ def _authoritative_mapping(
         errors.append({"code": "CAPTION_TIMING_GRID_INVALID"})
         return timeline, set()
     source_ranges = [_header_range_us("original", header) for header in grids["original"].headers]
-    clips = manifest.get("urakkai", {}).get("video_clips", [])
+    clips = manifest.get("urakkai", {}).get("video_clips", []) if manifest is not None else []
     expected: list[tuple] = []
     for index, header in enumerate(grids["urakkai"].headers, start=1):
         match = HEADER_PATTERNS["urakkai"].fullmatch(header)
@@ -177,7 +179,7 @@ def _authoritative_mapping(
         source_range = source_ranges[source_index]
         target_range = _header_range_us("urakkai", header)
         matches = [clip for clip in clips if tuple(clip.get("source_range_us", ())) == source_range and tuple(clip.get("target_range_us", ())) == target_range]
-        if len(matches) != 1:
+        if has_manifest_binding and len(matches) != 1:
             errors.append({"code": "CAPTION_TIMING_BUILD_MAPPING_MISMATCH", "target_segment_id": target_id})
         plan_matches = [
             row for row in plan.get("timeline", [])
@@ -194,7 +196,7 @@ def _authoritative_mapping(
             errors.append({"code": "CAPTION_TIMING_PLAN_MAPPING_MISMATCH", "target_segment_id": target_id})
         expected.append((source_id, target_id, source_range, target_range))
     observed = [_mapping_signature(row) for row in evidence.get("mapping", [])]
-    if sorted(observed) != sorted(expected):
+    if not evidence.get("zero_caption") and sorted(observed) != sorted(expected):
         errors.append({"code": "CAPTION_TIMING_BUILD_MAPPING_MISMATCH"})
     return timeline, set(expected)
 

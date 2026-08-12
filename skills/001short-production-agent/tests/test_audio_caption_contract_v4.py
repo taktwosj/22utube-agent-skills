@@ -72,6 +72,64 @@ def zero_caption(root: Path, audio_lock: Path, episode_id: str) -> Path:
 
 
 class AudioCaptionContractV4Test(unittest.TestCase):
+    def test_v2_prebuild_timing_is_valid_without_future_build_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "source.wav"; duration = wav(source)
+            identity = root / "source_identity.json"
+            write(identity, {
+                "schema_version": "source-identity-v1", "episode_id": "EP", "source_id": "S",
+                "source_fingerprint": sha(source), "media_path": source.name,
+                "media_sha256": sha(source), "duration_us": duration,
+            })
+            audio_lock = root / "audio_lock.json"
+            role = {
+                "role": "A10", "audio_path": source.name, "audio_sha256": sha(source),
+                "measured_duration_us": duration, "audio_codec": "pcm_s16le", "ffprobe_verified": True,
+            }
+            write(audio_lock, {
+                "schema_version": "001short-audio-lock-v4", "episode_id": "EP", "status": "PASS",
+                "production_mode": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY",
+                "audio_policy": "SOURCE_ORDER_CLEAN_AUDIO", "audio_source": "SOURCE_CLIP",
+                "audio_path": source.name, "audio_sha256": sha(source), "measured_duration_us": duration,
+                "audio_codec": "pcm_s16le", "ffprobe_verified": True,
+                "source_identity_path": identity.name, "source_identity_sha256": sha(identity),
+                "role_files": [role],
+            })
+            timeline = root / "approved_timeline.json"
+            write(timeline, {
+                "schema_version": "approved-timeline-v1", "episode_id": "EP", "source_fingerprint": sha(source),
+                "segments": [{"segment_id": "video", "timeline_order": 1, "role": "VIDEO", "start": 0, "duration": duration, "source_ref": "B01", "source_range_us": [0, duration]}],
+            })
+            plan = root / "production_plan.json"
+            write(plan, {
+                "schema_version": "001short-production-plan-v2", "episode_id": "EP",
+                "timeline": [{"segment_key": "B01", "source_beat_id": "B01", "target_segment_id": "V01", "target_range_us": [0, duration], "placements": [{"anchor": "VIDEO", "source_range_us": [0, duration], "target_range_us": [0, duration]}]}],
+            })
+            original = root / "original-capcut-grid.md"; original.write_text(one_column_grid("original", duration), encoding="utf-8")
+            urakkai = root / "urakkai-capcut-grid.md"; urakkai.write_text(one_column_grid("urakkai", duration), encoding="utf-8")
+            final_srt = root / "final.srt"; final_srt.write_text("", encoding="utf-8")
+            timing = root / "caption_timing_evidence.json"
+            write(timing, {
+                "schema_version": "001short-caption-timing-evidence-v2", "status": "PASS", "episode_id": "EP",
+                "source_identity_path": identity.name, "source_identity_sha256": sha(identity),
+                "approved_timeline_path": timeline.name, "approved_timeline_sha256": sha(timeline),
+                "production_plan_path": plan.name, "production_plan_sha256": sha(plan),
+                "original_grid_path": original.name, "original_grid_sha256": sha(original),
+                "urakkai_grid_path": urakkai.name, "urakkai_grid_sha256": sha(urakkai),
+                "tolerance_us": 0, "zero_caption": True, "mapping": [], "cues": [],
+            })
+            caption = root / "caption_lock.json"
+            write(caption, {
+                "schema_version": "001short-caption-lock-v2", "episode_id": "EP", "status": "PASS",
+                "audio_lock_path": audio_lock.name, "audio_lock_sha256": sha(audio_lock),
+                "final_srt_path": final_srt.name, "final_srt_sha256": sha(final_srt),
+                "final_cue_count": 0, "cues": [], "all_cues_within_measured_audio": True, "no_overlap_verified": True,
+                "caption_timing_evidence_path": timing.name, "caption_timing_evidence_sha256": sha(timing),
+            })
+            actual = validate_audio_caption(audio_lock, caption)
+            self.assertEqual(actual["status"], "PASS", actual)
+
     def test_urakkai_reassembled_stem_is_bound_to_valid_full_stem_and_mapping(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
