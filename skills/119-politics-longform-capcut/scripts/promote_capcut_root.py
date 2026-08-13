@@ -44,6 +44,9 @@ LEGACY_FONT_RE = re.compile(
     r"(?:/|\\\\)CapCut(?:/|\\\\)User Data(?:/|\\\\)Projects(?:/|\\\\)com\.lveditor\.draft"
     r"(?:/|\\\\)[^/\\\\]+(?:/|\\\\)Resources(?:/|\\\\)fonts(?:/|\\\\)lower-panel-font\.ttf"
 )
+EMBEDDED_RESOURCE_RE = re.compile(
+    r"(?i)^(?:[A-Za-z]:|/).*[\\/]Resources[\\/](?P<relative>.+)$"
+)
 PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 VERSION_RE = re.compile(r"^v([1-9][0-9]*)$")
 BUNDLE_RELATIVE = DEFAULT_ACTIVE_POINTER.parent
@@ -146,6 +149,29 @@ def rewrite_legacy_font_paths(value: Any, final_root: Path) -> Any:
             posix(final_root / "Resources" / "fonts" / "lower-panel-font.ttf"), value
         )
     return value
+
+
+def rewrite_embedded_resource_paths(value: Any, final_root: Path) -> Any:
+    """Rebase self-contained Resources paths from an older CapCut root."""
+    if isinstance(value, dict):
+        return {
+            key: rewrite_embedded_resource_paths(item, final_root)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [rewrite_embedded_resource_paths(item, final_root) for item in value]
+    if not isinstance(value, str):
+        return value
+    match = EMBEDDED_RESOURCE_RE.fullmatch(value)
+    if match is None:
+        return value
+    parts = [part for part in re.split(r"[\\/]+", match.group("relative")) if part]
+    if not parts or any(
+        part in {".", ".."} or ":" in part or Path(part).drive
+        for part in parts
+    ):
+        return value
+    return posix(final_root / "Resources" / Path(*parts))
 
 
 def strip_external_video_materials(document: dict[str, Any], final_root: Path) -> None:
@@ -681,6 +707,7 @@ def prepare_candidate(
                 relative = Path("Timelines", new_timeline_id, *relative.parts[2:])
             destination = stage / relative
             value = rewrite_value(value, id_map, replacements)
+            value = rewrite_embedded_resource_paths(value, paths["root"])
             value = rewrite_legacy_font_paths(value, paths["root"])
             if isinstance(value, dict) and "tracks" in value and len(value.get("materials", {}).get("videos", [])) >= 2:
                 value["name"] = paths["root"].name

@@ -831,6 +831,9 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
                 channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
                 if not channel or not date:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
+                chapter_label = str(card.get("chapter_label", "")).strip()
+                if chapter_label:
+                    clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
                 clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
         elif kind == "NARRATION_IMAGE":
             if record is None:

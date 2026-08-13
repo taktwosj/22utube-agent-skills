@@ -108,6 +108,23 @@ class PromotionWorkspace:
         ):
             write_json(path, document)
 
+    def document_paths(self) -> list[Path]:
+        timeline = next((self.source_root / "Timelines").iterdir())
+        return [
+            self.source_root / "draft_content.json",
+            self.source_root / "template-2.tmp",
+            timeline / "draft_content.json",
+            timeline / "template-2.tmp",
+        ]
+
+    def add_legacy_resource_paths(self) -> None:
+        legacy = "C:/Users/legacy/AppData/Local/CapCut/User Data/Projects/com.lveditor.draft/P0_OLD"
+        for path in self.document_paths():
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["materials"]["videos"][0]["path"] = legacy + "/Resources/media/intro.mp4"
+            document["materials"]["videos"][1]["path"] = legacy + "/Resources/media/main.png"
+            write_json(path, document)
+
     def relative(self, path: Path) -> Path:
         return path.relative_to(self.workspace)
 
@@ -218,6 +235,41 @@ class PromoteCapcutRootTests(unittest.TestCase):
 
     def assert_pointer_unchanged(self, before: bytes) -> None:
         self.assertEqual(self.pointer_bytes(), before)
+
+    def test_prepare_rebases_embedded_resources_from_an_older_root(self):
+        self.fixture.add_legacy_resource_paths()
+
+        candidate = self.prepare()
+
+        draft = json.loads(
+            (candidate.capcut_project_path / "draft_content.json").read_text(encoding="utf-8")
+        )
+        paths = [item["path"] for item in draft["materials"]["videos"]]
+        self.assertEqual(
+            paths,
+            [
+                (candidate.capcut_project_path / "Resources/media/intro.mp4").as_posix(),
+                (candidate.capcut_project_path / "Resources/media/main.png").as_posix(),
+            ],
+        )
+
+    def test_rebase_embedded_resource_paths_accepts_single_backslashes_only_for_safe_relative_paths(self):
+        root = Path("C:/new-root")
+        self.assertEqual(
+            promoter.rewrite_embedded_resource_paths(
+                r"C:\old\Resources\media\main.png", root
+            ),
+            "C:/new-root/Resources/media/main.png",
+        )
+        for unsafe in (
+            "C:/old/Resources/D:/escape.mp4",
+            r"C:\old\Resources\..\escape.mp4",
+            "C:/old/Resources/./escape.mp4",
+        ):
+            with self.subTest(unsafe=unsafe):
+                self.assertEqual(
+                    promoter.rewrite_embedded_resource_paths(unsafe, root), unsafe
+                )
 
     def test_prepare_requires_version_profile_base_layout_and_parent_contract(self):
         required = (

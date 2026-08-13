@@ -19,6 +19,84 @@ import build_politics_card_project as builder
 
 
 class BuilderRootBundleSeamTests(unittest.TestCase):
+    def minimal_document_for_chapter_titles(self) -> dict:
+        def text(material_id: str, value: str) -> dict:
+            return {
+                "id": material_id,
+                "content": json.dumps(
+                    {"text": value, "styles": [{"range": [0, len(value)]}]},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+            }
+
+        def segment(segment_id: str, material_id: str) -> dict:
+            return {
+                "id": segment_id,
+                "material_id": material_id,
+                "target_timerange": {"start": 0, "duration": 1_000_000},
+                "source_timerange": {"start": 0, "duration": 1_000_000},
+                "clip": {},
+            }
+
+        return {
+            "materials": {
+                "texts": [
+                    text("T_INTRO", "__INTRO_HOOK_LINE_1__"),
+                    text("T_CHAPTER", "__CHAPTER__"),
+                    text("T_SOURCE", "출처 __SOURCE__\n__DATE__"),
+                    text("T_LOWER", "__LOWER_LINE_1__\n__LOWER_LINE_2__"),
+                    text("T_CTA", "구독은 fixture"),
+                ],
+                "videos": [
+                    {"id": "V_MAIN", "type": "video", "duration": 1_000_000},
+                    {"id": "V_PHOTO", "type": "photo", "duration": 1_000_000},
+                ],
+            },
+            "tracks": [
+                {"id": "INTRO", "type": "text", "segments": [segment("S_INTRO", "T_INTRO")]},
+                {"id": "CHAPTER", "type": "text", "segments": [segment("S_CHAPTER", "T_CHAPTER")]},
+                {"id": "SOURCE", "type": "text", "segments": [segment("S_SOURCE", "T_SOURCE")]},
+                {"id": "LOWER", "type": "text", "segments": [segment("S_LOWER", "T_LOWER")]},
+                {"id": "CTA", "type": "text", "segments": [segment("S_CTA", "T_CTA")]},
+                {"id": "V_MAIN_TRACK", "type": "video", "segments": [segment("S_MAIN", "V_MAIN")]},
+                {"id": "V_PHOTO_TRACK", "type": "video", "segments": [segment("S_PHOTO", "V_PHOTO")]},
+            ],
+        }
+
+    @staticmethod
+    def source_record() -> dict:
+        return {
+            "offline_path": "C:/relink/C027.mp4",
+            "filename": "C027.mp4",
+            "width": 1920,
+            "height": 1080,
+            "source_start": 0,
+            "source_duration": 24_000_000,
+            "duration_us": 24_000_000,
+            "has_audio": True,
+        }
+
+    def test_source_video_chapter_label_emits_chapter_track_text_at_c027_timing(self):
+        start, duration = 449_360_000, 24_000_000
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(),
+            [{
+                "card_id": "C027", "card_type": "SOURCE_VIDEO", "chapter_label": "결론의 기준",
+                "target_start_us": start, "target_duration_us": duration,
+                "source_channel": "겸손은힘들다 뉴스공장", "source_date": "2026.08.13", "lower_mode": "NONE",
+            }],
+            start + duration,
+            {"C027": self.source_record()},
+            "chapter-title-regression",
+        )
+        text_by_id = {material["id"]: builder.text_of(material) for material in built["materials"]["texts"]}
+        chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+        self.assertEqual(len(chapter_track["segments"]), 1)
+        chapter_segment = chapter_track["segments"][0]
+        self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
+        self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
+
     def invoke_main(self, arguments: list[str]) -> int:
         with mock.patch.object(sys, "argv", [str(BUILDER_PATH), *arguments]), mock.patch.object(
             builder, "require_capcut_closed", return_value=None
