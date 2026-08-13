@@ -62,6 +62,15 @@
     "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
     "A9", "A10", "A11", "A12_RESERVED_EMPTY"
   ],
+  "track_layout_extension_policy": {
+    "base_track_count": 15,
+    "schema_version": "001short-user-provided-media-overlay-layout-v1",
+    "role": "USER_PROVIDED_MEDIA_OVERLAY",
+    "append_after_index": 14,
+    "evidence_bound": true,
+    "undeclared_extra_tracks": "FORBIDDEN",
+    "user_audio_overlap_a10": "A10_ON_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
+  },
   "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"],
   "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt", "caption_timing_evidence.json"],
   "a12_policy": "EMPTY",

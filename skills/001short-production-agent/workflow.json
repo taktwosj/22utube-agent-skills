@@ -518,7 +518,15 @@
     },
     "assembly": {
       "template": "shrt white",
-      "new_tracks": false,
+      "new_tracks": "VERSIONED_USER_PROVIDED_MEDIA_OVERLAY_ONLY",
+      "track_extension_policy": {
+        "base_track_count": 15,
+        "schema_version": "001short-user-provided-media-overlay-layout-v1",
+        "append_after_index": 14,
+        "evidence_bound": true,
+        "undeclared_extra_tracks": "FORBIDDEN",
+        "user_audio_overlap_a10": "A10_ON_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
+      },
       "new_tools": false,
       "a10_authority": "validated_demucs_source_vocal_stem",
       "capcut_polish_profile": "001short-capcut-polish-v3",
