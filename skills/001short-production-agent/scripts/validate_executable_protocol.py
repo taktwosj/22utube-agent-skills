@@ -75,6 +75,17 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_TRACK_LAYOUT")
     if protocol.get("canonical_tracks") != expected_tracks:
         errors.append("PROTOCOL_CANONICAL_TRACKS")
+    expected_extension_policy = {
+        "base_track_count": 15,
+        "schema_version": "001short-user-provided-media-overlay-layout-v1",
+        "role": "USER_PROVIDED_MEDIA_OVERLAY",
+        "append_after_index": 14,
+        "evidence_bound": True,
+        "undeclared_extra_tracks": "FORBIDDEN",
+        "user_audio_overlap_a10": "A10_ON_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK",
+    }
+    if protocol.get("track_layout_extension_policy") != expected_extension_policy:
+        errors.append("PROTOCOL_TRACK_LAYOUT_EXTENSION_POLICY")
     if protocol.get("visual_asset_modes") != [
         "CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL",
         "USER_APPROVED_NONMATCHING_CLEAN_SOURCE",
@@ -476,6 +487,22 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_TOOLS_TRACK_LAYOUT_MISMATCH")
             if mapping.get("required") != list(CANONICAL_TRACKS):
                 errors.append("PROTOCOL_TOOLS_TRACKS_MISMATCH")
+            expected_tools_extension = {
+                "base_template_new_tracks": False,
+                "base_track_count": 15,
+                "schema_version": "001short-user-provided-media-overlay-layout-v1",
+                "append_after_index": 14,
+                "evidence_bound": True,
+                "undeclared_extra_tracks": "FORBIDDEN",
+            }
+            policies = tools.get("policies", {})
+            if (
+                mapping.get("new_tracks") != "VERSIONED_USER_PROVIDED_MEDIA_OVERLAY_ONLY"
+                or mapping.get("track_extension_policy") != expected_tools_extension
+                or policies.get("new_tracks") != "VERSIONED_USER_PROVIDED_MEDIA_OVERLAY_ONLY"
+                or policies.get("track_extension_policy") != expected_tools_extension
+            ):
+                errors.append("PROTOCOL_TOOLS_TRACK_EXTENSION_POLICY_MISMATCH")
             production_ids = [row.get("id") for row in tools.get("production_tools", []) if isinstance(row, dict)]
             if production_ids != list(CANONICAL_TRACKS):
                 errors.append("PROTOCOL_TOOLS_PRODUCTION_TRACKS_MISMATCH")

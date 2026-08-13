@@ -45,7 +45,7 @@ Every cell: real value, `없음`, or `비움`; empty/placeholders/`미확인` fa
 
 - `scripts/build_episode_capcut.py` validates both tables before work-root or draft writes.
 - It binds normalized text, cue/layer/color/effect, and path/SHA locks for timeline, manifest, design, audio, and captions.
-- Keep the `shrt_white_base_v2_15` physical 15-track contract. Route STATE only to `STATE_LASER`; keep `STATE_GLITCH`, `STATE_FLICKER`, and A12 empty.
+- Preserve the 15 canonical base tracks. Only evidence-bound `001short-user-provided-media-overlay-layout-v1` may append declared overlays after index 14; reject undeclared tracks. Route STATE only to `STATE_LASER`; keep `STATE_GLITCH`, `STATE_FLICKER`, and A12 empty. Overlapping user audio keeps A10 on for manual adjustment; never auto-duck it.
 - A9/A9_TEXT require narration audio. STATE_LASER is silent situation text; never request TTS for STATE-only screens.
 - Select one explicit audio matrix; never fall back between modes:
   - `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` + `SOURCE_ORDER_CLEAN_AUDIO`: full source-identity-bound raw A10; no Demucs.

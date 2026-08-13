@@ -59,7 +59,10 @@ class BgmA12BuilderTest(unittest.TestCase):
             self.assertEqual(updated["draft_id"], "draft-new")
             self.assertEqual(updated["draft_name"], "test-project")
             self.assertEqual(updated["tm_duration"], 15_074_000)
-            self.assertFalse((project / "subdraft").exists())
+            # Existing CapCut combination registrations are authoritative and
+            # must survive cloud preparation; deleting them triggers open-time
+            # reconstruction from stale seed metadata.
+            self.assertTrue((subdraft / "draft_content.json").is_file())
 
 
 if __name__ == "__main__":

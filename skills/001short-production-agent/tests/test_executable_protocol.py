@@ -178,6 +178,23 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "{episode_root}/90_reports/completion_report.json",
         )
 
+    def test_tools_track_extension_policy_is_enforced(self):
+        module = load_validator()
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as directory:
+            copied_skill = Path(directory) / "001short-production-agent"
+            shutil.copytree(SKILL, copied_skill)
+            tools_path = copied_skill / "tools.json"
+            tools = json.loads(tools_path.read_text(encoding="utf-8"))
+            tools["capcut_preflight"]["track_mapping"]["new_tracks"] = False
+            tools["policies"]["new_tracks"] = False
+            tools_path.write_text(json.dumps(tools), encoding="utf-8")
+
+            self.assertIn(
+                "PROTOCOL_TOOLS_TRACK_EXTENSION_POLICY_MISMATCH",
+                module.validate_skill_contract(copied_skill, protocol),
+            )
+
     def test_protocol_declares_modes_nine_stages_and_completion_gate(self):
         self.assertTrue(PROTOCOL.is_file(), "protocol.json must exist")
         self.assertTrue(SCHEMA.is_file(), "executable protocol schema must exist")

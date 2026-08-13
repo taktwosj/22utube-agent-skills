@@ -33,6 +33,7 @@ import validate_capcut_grids
 import validate_design_lock
 import validate_executable_protocol
 import resolve_shorts_capcut_root
+import user_provided_media_overlay
 from capcut_io import iter_primary_draft_documents
 from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
 from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
@@ -825,6 +826,45 @@ def _remove_material_ids(value: Any, material_ids: set[str]) -> None:
             _remove_material_ids(child, material_ids)
 
 
+def _remove_extra_material_ref_types(
+    segment: dict, material_map: dict[str, dict], forbidden_types: set[str]
+) -> None:
+    def forbidden(material_id: object) -> bool:
+        return (
+            isinstance(material_id, str)
+            and isinstance(material_map.get(material_id), dict)
+            and material_map[material_id].get("type") in forbidden_types
+        )
+
+    def scrub(value: object) -> object:
+        if isinstance(value, list):
+            return [scrub(child) for child in value if not forbidden(child)]
+        if not isinstance(value, dict):
+            return value
+        cleaned = {}
+        for key, child in value.items():
+            normalized = str(key).lower()
+            if normalized == "material_id" or normalized.endswith("_material_id"):
+                if forbidden(child):
+                    continue
+                if isinstance(child, list):
+                    cleaned[key] = [item for item in child if not forbidden(item)]
+                else:
+                    cleaned[key] = child
+            else:
+                cleaned[key] = scrub(child)
+        return cleaned
+
+    reference_keys = {
+        "effects", "effect", "animations", "animation", "transition", "transitions",
+        "extra_material_refs", "extra_material_ids",
+    }
+    for key in list(segment):
+        normalized = str(key).lower()
+        if normalized in reference_keys or "material_ref" in normalized:
+            segment[key] = scrub(segment[key])
+
+
 def _documents(project: Path) -> Iterator[tuple[Path, dict]]:
     for path, payload in iter_primary_draft_documents(project):
         if isinstance(payload, dict) and isinstance(payload.get("tracks"), list):
@@ -843,12 +883,124 @@ def _set_media(
         # wrong intrinsic size, which shows up as a blank or mis-framed preview.
         if dimensions is not None:
             material["width"], material["height"] = dimensions
-    elif material.get("type") not in {"music", "extract_music"}:
-        material["type"] = "music"
+    else:
+        # CapCut's UI-created local-audio schema uses extract_music plus a
+        # draft_meta_info local-material row.  A bare inherited music material
+        # is interpreted as a preset/combination and is rewritten on open.
+        material["type"] = "extract_music"
     material["role"] = role
     material["desc"] = f"001short production {role}"
     material["path"] = portable_path
     material["duration"] = duration_us
+
+
+def _project_media_path(project: Path, raw_path: str) -> Path | None:
+    normalized = raw_path.replace("\\", "/")
+    match = re.match(r"^##_draftpath_placeholder_[^#]+_##/(Resources/.+)$", normalized)
+    candidate = project / Path(match.group(1)) if match else Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = project / candidate
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(project.resolve())
+    except ValueError:
+        return None
+    return candidate
+
+
+def _measured_audio_duration_us(path: Path) -> int:
+    completed = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "format=duration", "-of", "json", str(path),
+        ],
+        capture_output=True, text=True, check=False,
+    )
+    try:
+        duration = float(json.loads(completed.stdout)["format"]["duration"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        duration = 0.0
+    if completed.returncode or duration <= 0:
+        raise RuntimeError(f"AUDIO_MATERIAL_DECODE_FAILED:{path.name}")
+    return round(duration * 1_000_000)
+
+
+def register_project_local_audio_materials(
+    project: Path, *, project_key: str | None = None
+) -> dict:
+    """Register generated audio using CapCut's UI-created direct-local schema."""
+    project = Path(project).resolve()
+    meta_path = project / "draft_meta_info.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    project_key = str(project_key or meta.get("draft_id") or project.name)
+    registrations: dict[str, dict] = {}
+    for path, payload in iter_primary_draft_documents(project):
+        referenced_ids = {
+            segment.get("material_id")
+            for track in payload.get("tracks", [])
+            if isinstance(track, dict)
+            for segment in track.get("segments", [])
+            if isinstance(segment, dict) and isinstance(segment.get("material_id"), str)
+        }
+        changed = False
+        for material in _materials(payload.get("materials", {})):
+            if not isinstance(material, dict):
+                continue
+            if material.get("id") not in referenced_ids:
+                continue
+            name = str(material.get("name", ""))
+            role = material.get("role")
+            if role not in {"A9", "A10", "USER_PROVIDED_AUDIO"}:
+                continue
+            raw_path = material.get("path")
+            media_path = _project_media_path(project, raw_path) if isinstance(raw_path, str) else None
+            if media_path is None or not media_path.is_file():
+                raise RuntimeError(f"AUDIO_MATERIAL_LOCAL_FILE_MISSING:{name}")
+            relative = media_path.relative_to(project).as_posix()
+            duration = _measured_audio_duration_us(media_path)
+            local_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL, f"001short:{project_key}:local-audio:{relative}"
+            ))
+            material_id = str(material["id"])
+            material.update({
+                "type": "extract_music", "duration": duration,
+                "local_material_id": local_id, "music_id": material_id,
+                "resource_id": "", "third_resource_id": "", "remote_url": None,
+                "source_platform": 0, "category_id": "", "category_name": "local",
+                "request_id": "", "team_id": "", "check_flag": 1,
+                "copyright_limit_type": "none",
+            })
+            if "local_resource_id" in material:
+                material["local_resource_id"] = local_id
+            registrations[material_id] = {
+                "ai_group_type": "", "create_time": -1, "duration": duration,
+                "enter_from": 0, "extra_info": media_path.name,
+                "file_Path": media_path.as_posix(), "height": 0, "id": material_id,
+                "import_time": -1, "import_time_ms": -1, "item_source": 1,
+                "material_color_tag": "", "md5": "", "metetype": "music",
+                "roughcut_time_range": {"start": 0, "duration": duration},
+                "sub_time_range": {"start": -1, "duration": -1},
+                "type": 0, "width": 0,
+            }
+            changed = True
+        if changed:
+            _write_json(path, payload)
+
+    groups = meta.setdefault("draft_materials", [])
+    local_group = next(
+        (row for row in groups if isinstance(row, dict) and row.get("type") == 0),
+        None,
+    )
+    if local_group is None:
+        local_group = {"type": 0, "value": []}
+        groups.append(local_group)
+    existing = [
+        row for row in local_group.get("value", [])
+        if isinstance(row, dict) and row.get("id") not in registrations
+    ]
+    local_group["value"] = existing + list(registrations.values())
+    _write_json(meta_path, meta)
+    return {"registered_audio_count": len(registrations)}
 
 
 def _scrub_windows_cache_paths(value: object) -> int:
@@ -894,9 +1046,6 @@ def _prepare_cloud_project(
     duration_us: int,
 ) -> dict:
     project = Path(project).resolve()
-    subdraft = project / "subdraft"
-    if subdraft.is_dir():
-        shutil.rmtree(subdraft)
     shutil.copy2(project / "draft_content.json", project / "draft_info.json")
     shutil.copy2(project / "draft_content.json", project / "template-2.tmp")
     for content in (project / "Timelines").glob("*/draft_content.json"):
@@ -914,6 +1063,15 @@ def _prepare_cloud_project(
         if current:
             _write_json(path, payload)
             changed += current
+    registration = register_project_local_audio_materials(project, project_key=draft_id)
+    # Registration happens after generic Windows-cache scrubbing so its
+    # project-local absolute file_Path values are preserved. Refresh every
+    # CapCut mirror from the now-registered primary documents.
+    shutil.copy2(project / "draft_content.json", project / "draft_info.json")
+    shutil.copy2(project / "draft_content.json", project / "template-2.tmp")
+    for content in (project / "Timelines").glob("*/draft_content.json"):
+        shutil.copy2(content, content.with_name("draft_info.json"))
+        shutil.copy2(content, content.with_name("template-2.tmp"))
     meta_path = project / "draft_meta_info.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     meta.update({
@@ -930,7 +1088,10 @@ def _prepare_cloud_project(
         "cloud_draft_sync": False,
     })
     _write_json(meta_path, meta)
-    return {"windows_paths_scrubbed": changed, "draft_meta": meta}
+    return {
+        "windows_paths_scrubbed": changed, "draft_meta": meta,
+        "audio_material_registration": registration,
+    }
 
 
 def _register_capcut_project(project: Path, capcut_root: Path, backup_path: Path) -> None:
@@ -1020,6 +1181,23 @@ def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
 def _normalize_source(
     project: Path, config: dict, audio_source: Path | None, build_manifest: dict
 ) -> list[dict]:
+    checked_overlay = user_provided_media_overlay.validate_bundle(
+        build_manifest.get("user_provided_media_overlay"),
+        episode_id=config["episode_id"],
+        timeline_duration_us=config["duration_us"],
+    )
+    if checked_overlay["status"] != "PASS":
+        first = checked_overlay["errors"][0]["code"] if checked_overlay.get("errors") else "UNKNOWN"
+        raise RuntimeError(f"USER_MEDIA_OVERLAY_INVALID:{first}")
+    user_media_overlay = checked_overlay["items"]
+    config["user_provided_media_overlay"] = user_media_overlay
+    a10_policy_errors = user_provided_media_overlay.validate_a10_overlap_policy(
+        build_manifest.get("source_audio"), user_media_overlay,
+    )
+    if a10_policy_errors:
+        raise RuntimeError(
+            f"USER_MEDIA_OVERLAY_A10_ON_REQUIRED:{a10_policy_errors[0].get('clip_id')}"
+        )
     _validate_mixed_audio_modes(config, build_manifest)
     duration = config["duration_us"]
     approved = _approved_rows(config)
@@ -1105,6 +1283,25 @@ def _normalize_source(
             a9_parent = _material_parent(payload["materials"], a9_template_material["id"])
             if a9_text_parent is None or a9_parent is None:
                 raise RuntimeError("PINNED_A9_MATERIAL_CONTAINER_MISSING")
+
+        overlay_audio_seed = seed_segments.get(TRACK_INDEX["A9"])
+        overlay_visual_seed = seed_segments.get(TRACK_INDEX["VIDEO"])
+        if user_media_overlay:
+            if overlay_audio_seed is None or overlay_visual_seed is None:
+                raise RuntimeError("USER_MEDIA_OVERLAY_TEMPLATE_MISSING")
+            overlay_audio_material = material_map.get(overlay_audio_seed.get("material_id"))
+            overlay_visual_material = material_map.get(overlay_visual_seed.get("material_id"))
+            overlay_audio_parent = _material_parent(
+                payload["materials"], overlay_audio_seed.get("material_id")
+            )
+            overlay_visual_parent = _material_parent(
+                payload["materials"], overlay_visual_seed.get("material_id")
+            )
+            if (
+                overlay_audio_material is None or overlay_visual_material is None
+                or overlay_audio_parent is None or overlay_visual_parent is None
+            ):
+                raise RuntimeError("USER_MEDIA_OVERLAY_TEMPLATE_MISSING")
 
         # Existing v2 lanes only: no track is added.  Every generated lane is
         # rebuilt from the approved plan; A12 is always empty.
@@ -1357,8 +1554,74 @@ def _normalize_source(
                     "start": capcut_source_range[0],
                     "duration": capcut_source_range[1] - capcut_source_range[0],
                 }
+                _remove_extra_material_ref_types(
+                    a10_segment, material_map, {"combination"}
+                )
                 a10_segments.append(a10_segment)
             tracks[TRACK_INDEX["A10"]]["segments"] = a10_segments
+
+        for item in user_media_overlay:
+            is_audio = item["media_kind"] == "audio"
+            seed_track_index = TRACK_INDEX["A9"] if is_audio else TRACK_INDEX["VIDEO"]
+            seed_segment = overlay_audio_seed if is_audio else overlay_visual_seed
+            seed_material = overlay_audio_material if is_audio else overlay_visual_material
+            parent = overlay_audio_parent if is_audio else overlay_visual_parent
+            assert seed_segment is not None and seed_material is not None and parent is not None
+            track = copy.deepcopy(tracks[seed_track_index])
+            track_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"{config['episode_id']}:user-media-track:{item['overlay_id']}",
+            ))
+            track["id"] = track_id
+            track["segments"] = []
+            resource_name = (
+                f"user_overlay_{item['track_index']:02d}"
+                f"{Path(item['source_path']).suffix.lower()}"
+            )
+            shutil.copy2(Path(item["source_path"]), media / resource_name)
+            material = copy.deepcopy(seed_material)
+            material_id = str(uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"{config['episode_id']}:user-media-material:{item['overlay_id']}",
+            ))
+            material["id"] = material_id
+            _set_media(
+                material,
+                media_type="audio" if is_audio else "video",
+                portable_path=_portable_resource_path(
+                    draft_prefix, f"Resources/media/{resource_name}"
+                ),
+                role=item["role"],
+                duration_us=item["target_range_us"][1] - item["target_range_us"][0],
+                dimensions=(
+                    item["dimensions"]["width"], item["dimensions"]["height"]
+                ) if not is_audio else None,
+            )
+            material["name"] = resource_name
+            parent.append(material)
+            material_map[material_id] = material
+            segment = copy.deepcopy(seed_segment)
+            segment["id"] = item["segment_id"]
+            segment["material_id"] = material_id
+            segment["track_id"] = track_id
+            segment["role"] = item["role"]
+            segment["target_timerange"] = {
+                "start": item["target_range_us"][0],
+                "duration": item["target_range_us"][1] - item["target_range_us"][0],
+            }
+            if item.get("source_range_us") is not None:
+                segment["source_timerange"] = {
+                    "start": item["source_range_us"][0],
+                    "duration": item["source_range_us"][1] - item["source_range_us"][0],
+                }
+            else:
+                segment.pop("source_timerange", None)
+            segment["volume"] = 1.0 if is_audio else 0.0
+            segment["last_nonzero_volume"] = segment["volume"]
+            if is_audio:
+                _remove_extra_material_ref_types(segment, material_map, {"combination"})
+            track["segments"].append(segment)
+            tracks.append(track)
         tracks[TRACK_INDEX["A11"]]["segments"] = []
         tracks[A12_INDEX]["segments"] = []
         _remove_material_ids(payload["materials"], empty_audio_material_ids)
@@ -1413,6 +1676,14 @@ def _normalize_source(
     expected = sorted([
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in approved
+    ] + [
+        {
+            "segment_id": item["segment_id"],
+            "role": item["role"],
+            "start": item["target_range_us"][0],
+            "duration": item["target_range_us"][1] - item["target_range_us"][0],
+        }
+        for item in user_media_overlay
     ], key=lambda row: (row["start"], row["segment_id"]))
     observed = [
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
@@ -1727,6 +1998,9 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
     contract = {
         "schema_version": "001short-build-contract-v1", "episode_id": config["episode_id"],
         "track_layout_version": TRACK_LAYOUT,
+        "track_layout_extension": user_provided_media_overlay.build_track_layout_extension(
+            config.get("user_provided_media_overlay", [])
+        ),
         "root_contract_path": config["root_contract_path"],
         "workspace_root": str(Path(config["workspace_root"]).resolve()),
         "root_profile": config["root_profile"],

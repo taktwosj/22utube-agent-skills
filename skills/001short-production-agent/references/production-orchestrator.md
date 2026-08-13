@@ -36,9 +36,12 @@ may differ from the source in this mode; that difference is recorded, not used a
 a rejection gate. This mode is not VMake evidence, is not
 `CLEAN_VISUAL_READY`, and remains `upload_ready=false` until manual CapCut review.
 
-The canonical physical layout stays at 15 tracks. Only `STATE_LASER` is
+The canonical base layout stays at 15 tracks. Only an evidence-bound
+`001short-user-provided-media-overlay-layout-v1` may append declared overlays
+after index 14; every undeclared extra track fails. Only `STATE_LASER` is
 routable for STATE cues (`LASER_CUT`); `STATE_FLICKER` and `STATE_GLITCH` stay
-physically present and empty. Retained-speaker captions use the two
+physically present and empty. Overlapping user audio keeps A10 on for manual
+volume adjustment and is never auto-ducked. Retained-speaker captions use the two
 `A10_TEXT_WHITE` and `A10_TEXT_YELLOW` lanes while A10 remains one audio stem.
 
 ## Urakkai Editorial Authority

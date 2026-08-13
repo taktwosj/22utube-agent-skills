@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import re
 import subprocess
@@ -11,6 +12,7 @@ from capcut_model import (
     ProjectError,
     capture_structure,
     capture_structure_from_content,
+    collect_material_references,
     is_full_content_timeline_mirror,
     iter_materials,
     load_project,
@@ -24,6 +26,7 @@ from schema_runtime import validate_schema
 from validate_design_lock import validate_handoff
 from validate_audio_caption import validate_audio_caption
 from validate_build_inputs import validate_build_inputs
+import user_provided_media_overlay
 from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, LOGICAL_ROLE_BY_TRACK, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
@@ -54,7 +57,12 @@ def _segments(model) -> list[dict]:
 def validate_v2_role_routing(model, contract: dict) -> list[dict]:
     if contract.get("track_layout_version") != TRACK_LAYOUT:
         return [_error("V2_TRACK_LAYOUT_REQUIRED")]
-    if len(model.tracks) != len(LOGICAL_ROLE_BY_TRACK):
+    declared_extensions, extension_errors = user_provided_media_overlay.declared_track_layout_extension(
+        contract.get("track_layout_extension")
+    )
+    if extension_errors:
+        return extension_errors
+    if len(model.tracks) != len(LOGICAL_ROLE_BY_TRACK) + len(declared_extensions):
         return [_error("V2_TRACK_LAYOUT_MISMATCH", observed=len(model.tracks))]
     errors: list[dict] = []
     materials = {
@@ -77,6 +85,8 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
             errors.append(_error("FULL_SPAN_ANCHOR_MISMATCH", role=role))
     for segment in _segments(model):
         index = segment["_actual_track_index"]
+        if index >= len(LOGICAL_ROLE_BY_TRACK):
+            continue
         expected = LOGICAL_ROLE_BY_TRACK[index]
         if index == A12_INDEX or segment.get("role") != expected:
             errors.append(_error(
@@ -120,6 +130,12 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
             )
         ):
             errors.append(_error("CAPTION_SEGMENT_AUTHORITY_MISMATCH", segment_id=segment_id))
+    if declared_extensions:
+        extension_result = user_provided_media_overlay.validate_project_tracks(
+            model.tracks, model.materials, project_root=model.path,
+            declared_items=declared_extensions,
+        )
+        errors.extend(extension_result.get("errors", []))
     return errors
 
 
@@ -453,6 +469,20 @@ def _probe_stream_types(path: Path) -> set[str]:
     }
 
 
+def _audio_decodes(path: Path) -> bool:
+    try:
+        completed = subprocess.run(
+            [
+                "ffmpeg", "-v", "error", "-xerror", "-err_detect", "explode",
+                "-i", str(path), "-map", "0:a:0", "-f", "null", "-",
+            ],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
 def _resolve_required_asset(project: Path, raw_path: str) -> Path | None:
     normalized = raw_path.replace("\\", "/")
     match = re.match(r"^##_draftpath_placeholder_[^#]+_##/(Resources/.+)$", normalized)
@@ -489,6 +519,319 @@ def _referenced_media_paths(model, project: Path) -> set[str]:
         if candidate is not None:
             referenced.add(candidate.relative_to(project).as_posix())
     return referenced
+
+
+def validate_audio_material_registration(
+    project: Path, *, declared_items: list[dict] | None = None,
+    a10_required: bool | None = None, content: dict | None = None,
+    meta: dict | None = None, project_managed_ids: set[str] | None = None,
+) -> list[dict]:
+    """Validate CapCut's persisted local-audio registration surface."""
+    project = Path(project).resolve()
+    if content is None or meta is None:
+        try:
+            content = read_json(project / "draft_content.json")
+            meta = read_json(project / "draft_meta_info.json")
+        except (OSError, ValueError, TypeError):
+            return [_error("AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID", detail="draft_read_failed")]
+
+    all_materials = [
+        row for row in iter_materials(content.get("materials", {}))
+        if isinstance(row, dict)
+    ]
+    material_groups: dict[str, list[dict]] = {}
+    for row in all_materials:
+        if isinstance(row.get("id"), str):
+            material_groups.setdefault(row["id"], []).append(row)
+    material_map = {material_id: rows[0] for material_id, rows in material_groups.items()}
+    referenced_ids = {
+        segment.get("material_id")
+        for track in content.get("tracks", [])
+        if isinstance(track, dict)
+        for segment in track.get("segments", [])
+        if isinstance(segment, dict) and isinstance(segment.get("material_id"), str)
+    }
+    managed = [
+        row for row in material_map.values()
+        if isinstance(row, dict)
+        and row.get("id") in referenced_ids
+        and row.get("role") in {"A9", "A10", "USER_PROVIDED_AUDIO"}
+    ]
+    errors: list[dict] = []
+    registration_invalid = False
+    conflicting_material_ids: set[str] = set()
+    identity_fields = (
+        "type", "role", "name", "path", "duration", "local_material_id", "music_id",
+    )
+    for material_id, rows in material_groups.items():
+        if len(rows) > 1 and any(
+            any(row.get(field) != rows[0].get(field) for field in identity_fields)
+            for row in rows[1:]
+        ):
+            registration_invalid = True
+            conflicting_material_ids.add(material_id)
+
+    combination_rows = [
+        row for row in managed
+        if "/Resources/combination/" in str(row.get("path", "")).replace("\\", "/")
+        or str(row.get("path", "")).replace("\\", "/").startswith("Resources/combination/")
+    ]
+    for row in combination_rows:
+        raw_path = row.get("path")
+        candidate = _resolve_required_asset(project, raw_path) if isinstance(raw_path, str) else None
+        if (
+            candidate is None or not candidate.is_file()
+            or "audio" not in _probe_stream_types(candidate)
+            or not _audio_decodes(candidate)
+        ):
+            errors.append(_error(
+                "COMBINATION_AUDIO_DECODE_FAILED",
+                material_id=row.get("id"), path=raw_path,
+            ))
+
+    overlay_rows = [
+        row for row in managed
+        if row.get("role") == "USER_PROVIDED_AUDIO"
+    ]
+    overlay_paths = {str(row.get("path", "")) for row in overlay_rows}
+    overlay_material_ids = [row.get("id") for row in overlay_rows]
+    overlay_local_ids = [
+        row.get("local_material_id") for row in overlay_rows
+        if isinstance(row.get("local_material_id"), str) and row.get("local_material_id")
+    ]
+    if len(overlay_rows) > 1 and (
+        len(set(overlay_material_ids)) != len(overlay_rows)
+        or len(set(overlay_paths)) != len(overlay_rows)
+        or (overlay_local_ids and len(set(overlay_local_ids)) != len(overlay_local_ids))
+    ):
+        errors.append(_error("USER_AUDIO_OVERLAY_COLLAPSED", count=len(overlay_rows)))
+    if conflicting_material_ids & {
+        row.get("id") for rows in material_groups.values() for row in rows
+        if row.get("role") == "USER_PROVIDED_AUDIO"
+    }:
+        errors.append(_error("USER_AUDIO_OVERLAY_COLLAPSED", count=len(overlay_rows)))
+
+    overlay_indices = {
+        int(match.group(1))
+        for row in overlay_rows
+        if (match := re.match(r"user_overlay_(\d+)\.", str(row.get("name", ""))))
+    }
+    a10_rows = [
+        row for row in managed
+        if row.get("role") == "A10"
+    ]
+    managed_ids = [row.get("id") for row in managed]
+    managed_paths = [str(row.get("path", "")) for row in managed]
+    if overlay_indices == {15, 16, 17} and (
+        len(managed) != 4
+        or len(set(managed_ids)) != 4
+        or len(set(managed_paths)) != 4
+        or len(a10_rows) != 1
+        or a10_rows[0].get("id") in set(overlay_material_ids)
+    ):
+        errors.append(_error("USER_AUDIO_OVERLAY_COLLAPSED", count=len(overlay_rows)))
+    if declared_items:
+        expected_overlay_indices = {
+            row.get("track_index") for row in declared_items
+            if isinstance(row, dict) and row.get("media_kind") == "audio"
+        }
+        expected_managed_count = len(expected_overlay_indices) + (1 if a10_required else 0)
+        if (
+            overlay_indices != expected_overlay_indices
+            or len(overlay_rows) != len(expected_overlay_indices)
+            or len(a10_rows) != (1 if a10_required else 0)
+            or len(set(managed_ids)) != expected_managed_count
+            or len(set(managed_paths)) != expected_managed_count
+        ):
+            errors.append(_error(
+                "USER_AUDIO_OVERLAY_COLLAPSED",
+                observed=len(set(managed_ids)), expected=expected_managed_count,
+            ))
+
+    managed_id_set = {row.get("id") for row in managed}
+    for reference in collect_material_references(content.get("tracks", [])):
+        segment_id = reference.get("segment_id")
+        segment = next(
+            (
+                row for track in content.get("tracks", []) if isinstance(track, dict)
+                for row in track.get("segments", [])
+                if isinstance(row, dict) and row.get("id") == segment_id
+            ),
+            None,
+        )
+        if not isinstance(segment, dict) or segment.get("material_id") not in managed_id_set:
+            continue
+        referenced = material_map.get(reference.get("material_id"))
+        if reference.get("field") == "material_id":
+            continue
+        if isinstance(referenced, dict) and (
+            referenced.get("type") == "combination"
+            or "/Resources/combination/" in str(referenced.get("path", "")).replace("\\", "/")
+        ):
+            errors.append(_error(
+                "AUDIO_MATERIAL_COMBINATION_REFERENCE_FORBIDDEN",
+                segment_id=segment_id, material_id=segment.get("material_id"),
+            ))
+
+    draft_materials = meta.get("draft_materials", [])
+    if not isinstance(draft_materials, list):
+        draft_materials = []
+    local_rows: dict[str, dict] = {}
+    local_row_counts: dict[str, int] = {}
+    combination_meta: list[dict] = []
+    for group in draft_materials:
+        if not isinstance(group, dict) or not isinstance(group.get("value"), list):
+            continue
+        if group.get("type") == 0:
+            for row in group["value"]:
+                if isinstance(row, dict) and isinstance(row.get("id"), str):
+                    local_rows[row["id"]] = row
+                    local_row_counts[row["id"]] = local_row_counts.get(row["id"], 0) + 1
+        if group.get("type") == 18:
+            combination_meta.extend(row for row in group["value"] if isinstance(row, dict))
+
+    expected_meta_ids = project_managed_ids if project_managed_ids is not None else managed_id_set
+    if any(local_row_counts.get(material_id) != 1 for material_id in expected_meta_ids):
+        registration_invalid = True
+
+    for a10 in a10_rows[:1]:
+        expected = a10.get("duration")
+        for row in combination_meta:
+            if not str(row.get("extra_info", "")).startswith("a10_"):
+                continue
+            rough = row.get("roughcut_time_range", {}).get("duration")
+            if (
+                isinstance(expected, int) and isinstance(rough, int)
+                and abs(expected - rough) > 50_000
+            ):
+                errors.append(_error(
+                    "A10_SUBDRAFT_DURATION_MISMATCH",
+                    material_duration_us=expected, rough_cut_duration_us=rough,
+                ))
+                break
+
+    registration_invalid = registration_invalid or bool(combination_rows)
+    observed_local_ids: list[str] = []
+    for row in managed:
+        material_id = row.get("id")
+        local_id = row.get("local_material_id")
+        if not isinstance(local_id, str) or not local_id:
+            registration_invalid = True
+            continue
+        observed_local_ids.append(local_id)
+        registered = local_rows.get(material_id)
+        raw_path = row.get("path")
+        candidate = _resolve_required_asset(project, raw_path) if isinstance(raw_path, str) else None
+        registered_path = registered.get("file_Path") if isinstance(registered, dict) else None
+        registered_candidate = (
+            _resolve_required_asset(project, registered_path)
+            if isinstance(registered_path, str) else None
+        )
+        rough = registered.get("roughcut_time_range", {}).get("duration") if isinstance(registered, dict) else None
+        material_exact = {
+            "resource_id": "", "third_resource_id": "", "remote_url": None,
+            "source_platform": 0, "category_id": "", "category_name": "local",
+            "request_id": "", "team_id": "", "check_flag": 1,
+            "copyright_limit_type": "none",
+        }
+        meta_exact = {
+            "ai_group_type": "", "create_time": -1, "enter_from": 0,
+            "import_time": -1, "import_time_ms": -1,
+            "material_color_tag": "", "md5": "",
+        }
+        if (
+            registered is None
+            or row.get("type") != "extract_music"
+            or row.get("music_id") != material_id
+            or local_id == material_id
+            or registered.get("metetype") != "music"
+            or registered.get("item_source") != 1
+            or registered.get("type") != 0
+            or registered.get("extra_info") != candidate.name
+            or registered.get("sub_time_range") != {"start": -1, "duration": -1}
+            or registered.get("width") != 0
+            or registered.get("height") != 0
+            or any(key not in row or row.get(key) != value for key, value in material_exact.items())
+            or any(key not in registered or registered.get(key) != value for key, value in meta_exact.items())
+            or "\\" in str(registered_path)
+            or candidate is None
+            or registered_candidate != candidate
+            or not isinstance(row.get("duration"), int)
+            or not isinstance(registered.get("duration"), int)
+            or not isinstance(rough, int)
+            or registered.get("roughcut_time_range", {}).get("start") != 0
+            or row["duration"] != rough
+            or registered["duration"] != rough
+        ):
+            registration_invalid = True
+            continue
+        actual_duration = _probe_duration_us(candidate) if candidate is not None and candidate.is_file() else None
+        if actual_duration is None or row["duration"] != actual_duration:
+            registration_invalid = True
+    if len(observed_local_ids) != len(set(observed_local_ids)):
+        registration_invalid = True
+    if registration_invalid:
+        errors.append(_error("AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID"))
+    return errors
+
+
+def validate_primary_document_audio_surfaces(project: Path, contract: dict) -> list[dict]:
+    """Validate extension tracks and managed audio in every editable draft document."""
+    project = Path(project).resolve()
+    try:
+        meta = read_json(project / "draft_meta_info.json")
+    except (OSError, ValueError, TypeError):
+        return [_error("AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID", detail="draft_meta_read_failed")]
+    declared_items, declaration_errors = (
+        user_provided_media_overlay.declared_track_layout_extension(
+            contract.get("track_layout_extension")
+        )
+    )
+    errors = list(declaration_errors)
+    a10_required = any(
+        isinstance(row, dict) and row.get("role") == "A10"
+        for row in contract.get("timeline", [])
+    )
+    try:
+        documents = list(iter_primary_draft_documents(project))
+    except (OSError, ValueError, TypeError):
+        return errors + [_error(
+            "AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID", detail="draft_read_failed",
+        )]
+    project_managed_ids: set[str] = set()
+    for _, payload in documents:
+        if not isinstance(payload, dict):
+            continue
+        document_references = {
+            segment.get("material_id")
+            for track in payload.get("tracks", []) if isinstance(track, dict)
+            for segment in track.get("segments", []) if isinstance(segment, dict)
+            if isinstance(segment.get("material_id"), str)
+        }
+        project_managed_ids.update(
+            row["id"] for row in iter_materials(payload.get("materials", {}))
+            if isinstance(row.get("id"), str)
+            and row["id"] in document_references
+            and row.get("role") in {"A9", "A10", "USER_PROVIDED_AUDIO"}
+        )
+    for document_path, payload in documents:
+        if not isinstance(payload, dict):
+            errors.append(_error(
+                "AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID",
+                document=document_path.relative_to(project).as_posix(),
+            ))
+            continue
+        track_result = user_provided_media_overlay.validate_project_tracks(
+            payload.get("tracks"), payload.get("materials"), project_root=project,
+            declared_items=declared_items,
+        )
+        document_name = document_path.relative_to(project).as_posix()
+        errors.extend({**row, "document": document_name} for row in track_result.get("errors", []))
+        errors.extend({**row, "document": document_name} for row in validate_audio_material_registration(
+            project, declared_items=declared_items, a10_required=a10_required,
+            content=payload, meta=meta, project_managed_ids=project_managed_ids,
+        ))
+    return errors
 
 
 def validate_segment_material_types_and_durations(
@@ -875,7 +1218,18 @@ def validate_capcut_project(
         for key in ("project_id", "draft_id", "main_timeline_id")
     ):
         errors.append(_error("PROJECT_ID_MISMATCH"))
-    errors.extend(validate_structure(model, snapshot))
+    declared_extensions, extension_declaration_errors = (
+        user_provided_media_overlay.declared_track_layout_extension(
+            contract.get("track_layout_extension")
+        )
+    )
+    errors.extend(extension_declaration_errors)
+    structure_model = model
+    if declared_extensions:
+        structure_model = copy.copy(model)
+        structure_model.content = dict(model.content)
+        structure_model.content["tracks"] = model.tracks[:len(LOGICAL_ROLE_BY_TRACK)]
+    errors.extend(validate_structure(structure_model, snapshot))
     snapshot_track_surface = {
         "schema_version": snapshot.get("schema_version"),
         "track_order": snapshot.get("track_order"),
@@ -886,7 +1240,11 @@ def validate_capcut_project(
             continue
         if not is_full_content_timeline_mirror(mirror_content, mirror_file):
             continue
-        mirror_structure = capture_structure_from_content(mirror_content)
+        structure_content = mirror_content
+        if declared_extensions:
+            structure_content = dict(mirror_content)
+            structure_content["tracks"] = mirror_content.get("tracks", [])[:len(LOGICAL_ROLE_BY_TRACK)]
+        mirror_structure = capture_structure_from_content(structure_content)
         mirror_surface = {
             "schema_version": mirror_structure["schema_version"],
             "track_order": mirror_structure["track_order"],
@@ -896,6 +1254,7 @@ def validate_capcut_project(
             errors.append(_error("STRUCTURE_SNAPSHOT_AUTHORITY_MISMATCH"))
             break
     errors.extend(validate_materials(model, project_path))
+    errors.extend(validate_primary_document_audio_surfaces(project_path, contract))
     errors.extend(validate_segment_material_types_and_durations(model, project_path, contract))
     declared_assets = {
         candidate.relative_to(project_path).as_posix()

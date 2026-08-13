@@ -115,7 +115,15 @@
       "profile": "shrt_white_base_v2_15",
       "required": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH", "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1", "A9", "A10", "A11", "A12_RESERVED_EMPTY"],
       "missing": "WAIT_CAPCUT_TRACK_MAPPING",
-      "new_tracks": false
+      "new_tracks": "VERSIONED_USER_PROVIDED_MEDIA_OVERLAY_ONLY",
+      "track_extension_policy": {
+        "base_template_new_tracks": false,
+        "base_track_count": 15,
+        "schema_version": "001short-user-provided-media-overlay-layout-v1",
+        "append_after_index": 14,
+        "evidence_bound": true,
+        "undeclared_extra_tracks": "FORBIDDEN"
+      }
     },
     "id_policy": {
       "replacement_material_id": "NEW",
@@ -144,5 +152,17 @@
     {"id": "A11", "role": "sound effects"},
     {"id": "A12_RESERVED_EMPTY", "role": "reserved empty"}
   ],
-  "policies": {"new_tracks": false, "new_tools": false, "external_review_auto": false}
+  "policies": {
+    "new_tracks": "VERSIONED_USER_PROVIDED_MEDIA_OVERLAY_ONLY",
+    "track_extension_policy": {
+      "base_template_new_tracks": false,
+      "base_track_count": 15,
+      "schema_version": "001short-user-provided-media-overlay-layout-v1",
+      "append_after_index": 14,
+      "evidence_bound": true,
+      "undeclared_extra_tracks": "FORBIDDEN"
+    },
+    "new_tools": false,
+    "external_review_auto": false
+  }
 }

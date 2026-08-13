@@ -17,6 +17,44 @@
     "schema_version": {"type": "string", "const": "001short-build-contract-v1"},
     "episode_id": {"type": "string", "minLength": 1},
     "track_layout_version": {"type": "string", "const": "shrt_white_base_v2_15"},
+    "track_layout_extension": {
+      "type": "object",
+      "required": ["schema_version", "base_track_count", "items"],
+      "properties": {
+        "schema_version": {"const": "001short-user-provided-media-overlay-layout-v1"},
+        "base_track_count": {"const": 15},
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["overlay_id", "media_kind", "track_index", "segment_id", "role", "source_sha256", "source_range_us", "target_range_us", "dimensions"],
+            "properties": {
+              "overlay_id": {"type": "string", "minLength": 1},
+              "media_kind": {"enum": ["audio", "image", "video"]},
+              "track_index": {"type": "integer", "minimum": 15},
+              "segment_id": {"type": "string", "minLength": 1},
+              "role": {"enum": ["USER_PROVIDED_AUDIO", "USER_PROVIDED_VISUAL"]},
+              "source_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+              "source_range_us": {
+                "oneOf": [
+                  {"type": "null"},
+                  {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}}
+                ]
+              },
+              "target_range_us": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}},
+              "dimensions": {
+                "type": "object",
+                "required": ["width", "height"],
+                "properties": {"width": {"type": "integer", "minimum": 0}, "height": {"type": "integer", "minimum": 0}},
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "root_contract_path": {"type": "string", "minLength": 1},
     "workspace_root": {"type": "string", "minLength": 1},
     "root_profile": {"type": "string", "minLength": 1},
