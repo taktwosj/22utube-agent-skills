@@ -82,6 +82,9 @@ class CapcutMaterialPathTests(unittest.TestCase):
 
     def test_rebases_only_safe_absolute_legacy_resources_paths(self) -> None:
         legacy = r"C:\old\CapCut\P0_OLD\Resources\media\main.png"
+        target = self.project_root / "Resources" / "media" / "main.png"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"main")
         document = self.document({"path": legacy})
 
         result = self.enforce(document, rebase_legacy_resources=True)
@@ -91,6 +94,17 @@ class CapcutMaterialPathTests(unittest.TestCase):
             (self.project_root / "Resources" / "media" / "main.png").as_posix(),
         )
         self.assertEqual(document["materials"]["videos"][0]["path"], legacy)
+
+    def test_rebase_rejects_missing_staged_resource_with_original_evidence(self) -> None:
+        legacy = "D:/foreign/Resources/media/ghost.mp4"
+
+        with self.assertRaisesRegex(RuntimeError, "TARGET_MISSING") as raised:
+            self.enforce(
+                self.document({"path": legacy}),
+                rebase_legacy_resources=True,
+            )
+
+        self.assertIn(repr(legacy), str(raised.exception))
 
     def test_rebase_rejects_drive_relative_empty_and_unsafe_resources_suffixes(self) -> None:
         cases = (
@@ -108,6 +122,8 @@ class CapcutMaterialPathTests(unittest.TestCase):
     def test_exact_rewrites_apply_only_to_an_exact_path_value(self) -> None:
         cached = "C:/Users/test/AppData/Local/CapCut/User Data/Cache/item.png"
         target = (self.project_root / "Resources" / "media" / "item.png").as_posix()
+        Path(target).parent.mkdir(parents=True)
+        Path(target).write_bytes(b"item")
         document = self.document({"path": cached})
 
         result = self.enforce(document, exact_rewrites={cached: target})

@@ -84,6 +84,7 @@ def _enforce_path_value(
     allowed_roots: Sequence[str],
 ) -> Any:
     original = value
+    rewritten_to_project = False
     if not isinstance(value, str):
         raise _error("NON_STRING", location, original)
     if not value:
@@ -95,11 +96,16 @@ def _enforce_path_value(
         if not isinstance(replacement, str):
             raise _error("NON_STRING", location, original)
         value = replacement
+        rewritten_to_project = True
         _validate_lexical_path(value, location, original)
 
     suffix = _legacy_resources_suffix(value) if rebase_legacy_resources else None
     if suffix is not None:
         value = (project_root / "Resources" / Path(*suffix)).as_posix()
+        rewritten_to_project = True
+
+    if rewritten_to_project and project_root.is_dir() and not Path(value).is_file():
+        raise _error("TARGET_MISSING", location, original)
 
     if not _is_absolute(value):
         return value

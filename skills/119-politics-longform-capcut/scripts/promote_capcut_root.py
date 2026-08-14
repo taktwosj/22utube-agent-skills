@@ -328,7 +328,9 @@ def validate_root(root: Path, content_start_us: int, *, path_reference: Path | N
 
 
 def copy_required_resources(source_root: Path, stage: Path, ffmpeg: str, final_root: Path) -> dict[str, str]:
-    cache = Path(os.environ["LOCALAPPDATA"]) / "CapCut" / "User Data" / "Cache"
+    cache = (
+        Path(os.environ["LOCALAPPDATA"]) / "CapCut" / "User Data" / "Cache"
+    ).resolve(strict=False)
     intro_source = cache / "onlineMaterial" / "ef5698ccb230899728b7a842abf9ec39.mp4"
     main_slot_source = cache / "onlineMaterial" / "1e65543d3133b8129357b0b0b4c1211e.png"
     texture_source = cache / "onlineMaterial" / "74ce29b9d8294a2c88c345a10249e987"
@@ -363,11 +365,12 @@ def copy_required_resources(source_root: Path, stage: Path, ffmpeg: str, final_r
         "onlineMaterial/74ce29b9d8294a2c88c345a10249e987": posix(final_root / "Resources" / "textures" / "lower-panel-texture.bin"),
         "effect/7528305055972199681/0e4893968fe2d82714917f69c69826aa/font.ttf": posix(final_root / "Resources" / "fonts" / "lower-panel-font.ttf"),
     }
-    user_profile_root = Path.home().as_posix()
-    return {
-        f"{user_profile_root}/AppData/Local/CapCut/User Data/Cache/{suffix}": target
-        for suffix, target in targets.items()
-    }
+    replacements: dict[str, str] = {}
+    for suffix, target in targets.items():
+        source = cache / Path(suffix)
+        replacements[source.as_posix()] = target
+        replacements[str(source)] = target
+    return replacements
 
 
 def archive_root(root: Path, archive: Path) -> None:
@@ -627,12 +630,22 @@ def prepare_candidate(
         duration_us = int(json_load(stage / "draft_content.json").get("duration", 0))
         if duration_us <= content_start_us:
             raise RuntimeError("ROOT_DURATION_NOT_LONGER_THAN_INTRO")
+        stage_replacements = {
+            source_path: posix(stage / Path(target_path).relative_to(paths["root"]))
+            for source_path, target_path in replacements.items()
+        }
         for old_path, value in parsed.items():
             relative = old_path.relative_to(stage)
             if len(relative.parts) >= 2 and relative.parts[:2] == ("Timelines", old_timeline_id):
                 relative = Path("Timelines", new_timeline_id, *relative.parts[2:])
             destination = stage / relative
             if isinstance(value, dict) and "materials" in value:
+                enforce_material_paths(
+                    value,
+                    project_root=stage,
+                    rebase_legacy_resources=True,
+                    exact_rewrites=stage_replacements,
+                )
                 value = enforce_material_paths(
                     value,
                     project_root=paths["root"],

@@ -254,6 +254,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
     def test_build_validator_rejects_relink_substring_spoof_and_nested_serialized_path(self):
         unsafe_materials = (
             ({"videos": [{"id": "V", "path": "D:/foreign/__CAPCUT_RELINK_REQUIRED__/C001.mp4"}]}, "FOREIGN"),
+            ({"videos": [], "audios": [{"id": "A", "path": "D:/foreign/Resources/media/ghost.wav"}]}, "FOREIGN"),
             ({"videos": [], "audios": [{"id": "A", "path": "Resources/../escape.wav"}]}, "TRAVERSAL"),
             ({
                 "videos": [],

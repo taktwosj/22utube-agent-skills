@@ -18,6 +18,9 @@ import promote_capcut_root as promoter
 from test_root_bundle import BundleWorkspace, sha256_file, write_json
 
 
+REAL_COPY_REQUIRED_RESOURCES = promoter.copy_required_resources
+
+
 def clip() -> dict:
     return {
         "scale": {"x": 1.0, "y": 1.0},
@@ -256,6 +259,70 @@ class PromoteCapcutRootTests(unittest.TestCase):
             [
                 (candidate.capcut_project_path / "Resources/media/intro.mp4").as_posix(),
                 (candidate.capcut_project_path / "Resources/media/main.png").as_posix(),
+            ],
+        )
+
+    def test_prepare_rejects_missing_external_legacy_resource_before_candidate_pass(self):
+        foreign = "D:/foreign/Resources/media/ghost.mp4"
+        self.fixture.mutate_documents(
+            lambda document: document["materials"]["videos"][0].update(path=foreign)
+        )
+        before = self.pointer_bytes()
+
+        with self.assertRaisesRegex(RuntimeError, "TARGET_MISSING") as raised:
+            self.prepare()
+
+        self.assertIn(foreign, str(raised.exception))
+        self.assert_pointer_unchanged(before)
+        paths = promoter._candidate_paths(
+            self.fixture.workspace,
+            self.fixture.capcut_root,
+            "v6",
+            "jungchilong_v6_candidate",
+        )
+        self.assertTrue(all(not path.exists() for path in paths.values()))
+
+    def test_prepare_exact_cache_rewrite_uses_redirected_localappdata_source(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            local_appdata = Path(temporary) / "redirected-local-appdata"
+            cache = local_appdata / "CapCut" / "User Data" / "Cache"
+            required = {
+                "onlineMaterial/ef5698ccb230899728b7a842abf9ec39.mp4": b"intro-source",
+                "onlineMaterial/1e65543d3133b8129357b0b0b4c1211e.png": b"main-source",
+                "onlineMaterial/74ce29b9d8294a2c88c345a10249e987": b"texture-source",
+                "effect/7528305055972199681/0e4893968fe2d82714917f69c69826aa/font.ttf": b"font-source",
+            }
+            for relative, payload in required.items():
+                path = cache / Path(relative)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(payload)
+            actual_intro = (cache / "onlineMaterial/ef5698ccb230899728b7a842abf9ec39.mp4").as_posix()
+            actual_main = (cache / "onlineMaterial/1e65543d3133b8129357b0b0b4c1211e.png").as_posix()
+            self.fixture.mutate_documents(
+                lambda document: (
+                    document["materials"]["videos"][0].update(path=actual_intro),
+                    document["materials"]["videos"][1].update(path=actual_main),
+                )
+            )
+
+            def fake_ffmpeg(command, **kwargs):
+                del kwargs
+                Path(command[-1]).write_bytes(b"intro-output")
+                return mock.Mock(returncode=0, stdout="", stderr="")
+
+            with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(local_appdata)}), mock.patch.object(
+                promoter, "copy_required_resources", side_effect=REAL_COPY_REQUIRED_RESOURCES
+            ), mock.patch.object(promoter.subprocess, "run", side_effect=fake_ffmpeg):
+                candidate = self.prepare()
+
+        draft = json.loads(
+            (candidate.capcut_project_path / "draft_content.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            [material["path"] for material in draft["materials"]["videos"]],
+            [
+                (candidate.capcut_project_path / "Resources/media/123123.mp4").as_posix(),
+                (candidate.capcut_project_path / "Resources/media/main-video-slot.png").as_posix(),
             ],
         )
 
