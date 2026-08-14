@@ -125,6 +125,12 @@ class PromotionWorkspace:
             document["materials"]["videos"][1]["path"] = legacy + "/Resources/media/main.png"
             write_json(path, document)
 
+    def mutate_documents(self, mutate) -> None:
+        for path in self.document_paths():
+            document = json.loads(path.read_text(encoding="utf-8"))
+            mutate(document)
+            write_json(path, document)
+
     def relative(self, path: Path) -> Path:
         return path.relative_to(self.workspace)
 
@@ -253,23 +259,105 @@ class PromoteCapcutRootTests(unittest.TestCase):
             ],
         )
 
-    def test_rebase_embedded_resource_paths_accepts_single_backslashes_only_for_safe_relative_paths(self):
-        root = Path("C:/new-root")
-        self.assertEqual(
-            promoter.rewrite_embedded_resource_paths(
-                r"C:\old\Resources\media\main.png", root
-            ),
-            "C:/new-root/Resources/media/main.png",
+    def test_prepare_rejects_foreign_video_without_deleting_original_evidence(self):
+        foreign = "D:/foreign/original.mp4"
+        self.fixture.mutate_documents(
+            lambda document: document["materials"]["videos"][0].update(path=foreign)
         )
-        for unsafe in (
-            "C:/old/Resources/D:/escape.mp4",
-            r"C:\old\Resources\..\escape.mp4",
-            "C:/old/Resources/./escape.mp4",
-        ):
-            with self.subTest(unsafe=unsafe):
-                self.assertEqual(
-                    promoter.rewrite_embedded_resource_paths(unsafe, root), unsafe
-                )
+        source_bytes = {path: path.read_bytes() for path in self.fixture.document_paths()}
+        before = self.pointer_bytes()
+
+        with self.assertRaisesRegex(RuntimeError, "FOREIGN") as raised:
+            self.prepare()
+
+        self.assertIn(foreign, str(raised.exception))
+        self.assert_pointer_unchanged(before)
+        self.assertEqual(source_bytes, {path: path.read_bytes() for path in self.fixture.document_paths()})
+        paths = promoter._candidate_paths(
+            self.fixture.workspace,
+            self.fixture.capcut_root,
+            "v6",
+            "jungchilong_v6_candidate",
+        )
+        self.assertTrue(all(not path.exists() for path in paths.values()))
+
+    def test_prepare_rejects_foreign_audio_and_nested_material_metadata(self):
+        mutations = (
+            lambda document: document["materials"].update(
+                audios=[{"id": "A", "path": "D:/foreign/audio.wav"}]
+            ),
+            lambda document: document["materials"]["videos"][0].update(
+                metadata={"nested": {"local_path": "D:/foreign/nested.wav"}}
+            ),
+            lambda document: document["materials"]["videos"][0].update(
+                metadata=json.dumps(json.dumps({"local_path": "D:/foreign/double.wav"}))
+            ),
+        )
+        for mutate in mutations:
+            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as temporary:
+                fixture = PromotionWorkspace(Path(temporary))
+                fixture.mutate_documents(mutate)
+                with mock.patch.object(
+                    promoter, "copy_required_resources", side_effect=fake_copy_resources
+                ), mock.patch.object(
+                    promoter, "update_root_meta", side_effect=fake_update_root_meta
+                ), mock.patch.object(promoter, "ensure_capcut_closed", return_value=None):
+                    with self.assertRaisesRegex(RuntimeError, "FOREIGN"):
+                        promoter.prepare_candidate(**fixture.prepare_kwargs())
+
+    def test_prepare_rejects_traversal_drive_relative_and_malformed_wrapper_before_rewrite(self):
+        cases = (
+            (lambda document: document["materials"]["videos"][0].update(path="Resources/../escape.mp4"), "TRAVERSAL"),
+            (lambda document: document["materials"]["videos"][0].update(path=r"C:old\Resources\media\main.mp4"), "DRIVE_RELATIVE"),
+            (lambda document: document["materials"]["videos"][0].update(metadata='{"path":'), "JSON_INVALID"),
+            (
+                lambda document: document["materials"]["videos"][0].update(
+                    metadata=json.dumps(json.dumps(json.dumps({"path": "Resources/a"})))
+                ),
+                "DEPTH_EXCEEDED",
+            ),
+        )
+        for mutate, code in cases:
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as temporary:
+                fixture = PromotionWorkspace(Path(temporary))
+                fixture.mutate_documents(mutate)
+                with mock.patch.object(
+                    promoter, "copy_required_resources", side_effect=fake_copy_resources
+                ), mock.patch.object(
+                    promoter, "update_root_meta", side_effect=fake_update_root_meta
+                ), mock.patch.object(promoter, "ensure_capcut_closed", return_value=None):
+                    with self.assertRaisesRegex(RuntimeError, code):
+                        promoter.prepare_candidate(**fixture.prepare_kwargs())
+
+    def test_prepare_rejects_lexical_candidate_root_prefix_collision(self):
+        candidate_root = promoter._candidate_paths(
+            self.fixture.workspace,
+            self.fixture.capcut_root,
+            "v6",
+            "jungchilong_v6_candidate",
+        )["root"]
+        collision = candidate_root.with_name(candidate_root.name + "-evil") / "escape.wav"
+        self.fixture.mutate_documents(
+            lambda document: document["materials"].update(
+                audios=[{"id": "A", "path": collision.as_posix()}]
+            )
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "FOREIGN"):
+            self.prepare()
+
+    def test_prepare_does_not_decode_arbitrary_display_strings(self):
+        self.fixture.mutate_documents(
+            lambda document: document["materials"]["videos"][0].update(
+                name="[Intro]",
+                text="{literal material name",
+                visible=json.dumps({"local_path": "D:/display-only.wav"}),
+            )
+        )
+
+        candidate = self.prepare()
+
+        self.assertEqual(candidate.status, "CANDIDATE_ROOT_BUNDLE_PREPARED")
 
     def test_prepare_requires_version_profile_base_layout_and_parent_contract(self):
         required = (

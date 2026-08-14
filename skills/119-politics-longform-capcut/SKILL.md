@@ -18,6 +18,10 @@ description: Use only when a political-longform request explicitly contains CapC
 5. PRE-119가 아니고 승인 대본도 없을 때만 [direct-script.md](references/direct-script.md)를 읽는다.
 6. 현재 단계의 reference만 읽으며 관련 없는 문서를 미리 읽지 않는다.
 
+## 에피소드 저장 루트
+
+앞으로 시작하는 모든 119 정치롱폼 에피소드의 경량 산출물과 작업 루트는 `<factory-root>\0000jungchi\<episode_id>`다. 시작할 때 해당 에피소드 폴더를 만들며, 기존 에피소드 파일은 이동하지 않는다. 원본 CapCut draft·cache·원본 MP4·Media 폴더 등 무거운 로컬 미디어는 소유 계약이 달리 정하지 않는 한 계속 machine-local에 둔다.
+
 | 관찰 가능한 상태 | 읽을 문서 | 상태 |
 |---|---|---|
 | PRE-119 강한 표식 1개 또는 보조 표식 2개 이상 | `pre119-handoff-contract.md` | `PRE119_VALIDATION` |
@@ -169,7 +173,7 @@ scripts/render_democratic_blue_card.py
 - 한 회차에는 active writer 한 명만 둔다.
 - CapCut 또는 백그라운드 프로세스가 열려 있으면 draft를 만들거나 고치지 않는다.
 - active pointer가 선택한 검증 완료 근본만 사용한다.
-- 원본 MP4, Media 폴더, CapCut draft, cache, 계정 정보는 로컬에 둔다.
+- 원본 MP4, Media 폴더, CapCut draft, cache, 계정 정보는 소유 계약이 달리 정하지 않는 한 machine-local에 둔다.
 - portable JSON에는 사용자 프로필 절대경로와 cache 경로를 넣지 않는다.
 - ASR cue가 편집 컷을 정하지 않는다. 실제 컷에서 자막을 split 또는 clamp한다.
 - 목표 길이·원본/나레이션 비율은 사용자 절대 LOCK이 아니면 `[EST]`다.
