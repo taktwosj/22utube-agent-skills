@@ -29,6 +29,59 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
     "A9_TTS_PLUS_A10_REASSEMBLED",
 ]
 A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED"}
+EXPECTED_SOURCE_AUTHORITY_LINE = (
+    r"Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`"
+)
+EXPECTED_SOURCE_REPOSITORY_LINE = r"Worktree source repository: `C:\Users\arajun\agent-skills`"
+EXPECTED_RUNTIME_ENTRYPOINT_LINES = {
+    "Codex": r"Codex: C:\Users\arajun\.codex\skills\001short-production-agent",
+    "Claude": r"Claude: C:\Users\arajun\.claude\skills\001short-production-agent",
+    "Hermes": r"Hermes: C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent",
+}
+EXPECTED_ESCALATION_OPTION_LINES = [
+    "1. 별도 승인 — 이번 작업만",
+    "2. 일단 정지 — 어떤 문제인지 보고만",
+    "3. 스킬 수정하기 — 스킬 수정 폴더에서",
+]
+EXPECTED_RELEASE_RECIPE_LINES = [
+    r"1. Isolated worktree derived from `C:\Users\arajun\agent-skills`",
+    "2. Tests",
+    "3. Independent review",
+    "4. Approved revision on GitHub `main`",
+    "5. `python -B scripts/skill_release.py publish`",
+    "6. `python -B scripts/skill_release.py activate --target all`",
+    "7. `python -B scripts/skill_release.py verify --target all --self-check`",
+]
+RELEASE_RECIPE_INTRO_LINE = (
+    "Never edit those entrypoints or active runtime release contents. "
+    "Release only in this order after the required user approvals:"
+)
+DIVERGENCE_GATE_LINE = (
+    "If the plan, contract, validator, or proposed action diverges, stop before any skill source, runtime, "
+    "or episode draft mutation. Report `mismatch`, `expected`, `actual`, `impact`, and `safe options`, then ask exactly:"
+)
+EXPECTED_RELEASE_RECIPE_BLOCK_LINES = [
+    RELEASE_RECIPE_INTRO_LINE,
+    "",
+    *EXPECTED_RELEASE_RECIPE_LINES,
+    "",
+    DIVERGENCE_GATE_LINE,
+]
+EXPECTED_ESCALATION_OPTION_BLOCK_LINES = [
+    DIVERGENCE_GATE_LINE,
+    "",
+    "```text",
+    *EXPECTED_ESCALATION_OPTION_LINES,
+    "```",
+]
+
+
+def _has_exact_bounded_block(lines: List[str], expected: List[str]) -> bool:
+    starts = [index for index, line in enumerate(lines) if line == expected[0]]
+    if len(starts) != 1:
+        return False
+    start = starts[0]
+    return lines[start:start + len(expected)] == expected
 
 
 def _ranges_overlap(left: object, right: object) -> bool:
@@ -382,6 +435,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
     orchestrator_path = root / "references/production-orchestrator.md"
     if orchestrator_path.is_file():
         orchestrator_text = orchestrator_path.read_text(encoding="utf-8")
+        orchestrator_lines = orchestrator_text.splitlines()
         for token in [
             "0000shrt",
             "scripts/validate_source_intake.py",
@@ -393,6 +447,28 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         ]:
             if token not in orchestrator_text:
                 errors.append(f"PROTOCOL_ORCHESTRATOR_TOKEN_MISSING:{token}")
+        authority_lines = [line for line in orchestrator_lines if line.startswith("Source authority:")]
+        repository_lines = [line for line in orchestrator_lines if line.startswith("Worktree source repository:")]
+        if authority_lines != [EXPECTED_SOURCE_AUTHORITY_LINE] or repository_lines != [EXPECTED_SOURCE_REPOSITORY_LINE]:
+            errors.append("PROTOCOL_ORCHESTRATOR_SOURCE_AUTHORITY_MISMATCH")
+        for label, expected_line in EXPECTED_RUNTIME_ENTRYPOINT_LINES.items():
+            observed = [line for line in orchestrator_lines if line.startswith(f"{label}:")]
+            if observed != [expected_line]:
+                errors.append(f"PROTOCOL_ORCHESTRATOR_RUNTIME_ENTRYPOINT_MISMATCH:{label}")
+        if not _has_exact_bounded_block(orchestrator_lines, EXPECTED_ESCALATION_OPTION_BLOCK_LINES):
+            errors.append("PROTOCOL_ORCHESTRATOR_ESCALATION_OPTIONS_MISMATCH")
+        if not _has_exact_bounded_block(orchestrator_lines, EXPECTED_RELEASE_RECIPE_BLOCK_LINES):
+            errors.append("PROTOCOL_ORCHESTRATOR_RELEASE_RECIPE_MISMATCH")
+        for token in (
+            "episode-only override and changes no skill",
+            "evidence-only and makes no mutation",
+            "production waits through independent review",
+            "User-provided audio, images, and TTS are declared episode-only overlay exceptions",
+            "root template, canonical base 15 tracks, and default audio policy unchanged",
+            "never mutate a draft while CapCut or its background processes are open",
+        ):
+            if token not in orchestrator_text:
+                errors.append(f"PROTOCOL_ORCHESTRATOR_AUTHORITY_POLICY_MISSING:{token}")
 
     stage04_path = root / "steps" / "04-user-approval.md"
     if stage04_path.is_file():

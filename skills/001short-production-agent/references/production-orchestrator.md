@@ -2,6 +2,42 @@
 
 `protocol.json` is the machine contract and `workflow.json` owns stage transitions. Resolve one internal stage and load exactly its direct stage document. Conflicting instructions stop at `STOP_PROTOCOL_CONFLICT`.
 
+## Source authority and divergence gate
+
+Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`
+
+Worktree source repository: `C:\Users\arajun\agent-skills`
+
+Modify the skill only in an isolated Git worktree derived from that repository. The installed entrypoints and active runtime releases are immutable, read-only entrypoints:
+
+```text
+Codex: C:\Users\arajun\.codex\skills\001short-production-agent
+Claude: C:\Users\arajun\.claude\skills\001short-production-agent
+Hermes: C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent
+```
+
+Never edit those entrypoints or active runtime release contents. Release only in this order after the required user approvals:
+
+1. Isolated worktree derived from `C:\Users\arajun\agent-skills`
+2. Tests
+3. Independent review
+4. Approved revision on GitHub `main`
+5. `python -B scripts/skill_release.py publish`
+6. `python -B scripts/skill_release.py activate --target all`
+7. `python -B scripts/skill_release.py verify --target all --self-check`
+
+If the plan, contract, validator, or proposed action diverges, stop before any skill source, runtime, or episode draft mutation. Report `mismatch`, `expected`, `actual`, `impact`, and `safe options`, then ask exactly:
+
+```text
+1. 별도 승인 — 이번 작업만
+2. 일단 정지 — 어떤 문제인지 보고만
+3. 스킬 수정하기 — 스킬 수정 폴더에서
+```
+
+Never self-select. Option 1 records an episode-only override and changes no skill. Option 2 is evidence-only and makes no mutation. Option 3 opens a separate canonical worktree change; production waits through independent review, GitHub `main`, publish, activation, and verification.
+
+User-provided audio, images, and TTS are declared episode-only overlay exceptions. Keep the root template, canonical base 15 tracks, and default audio policy unchanged. Never promote an exception into the global contract. No option bypasses safety: never mutate a draft while CapCut or its background processes are open.
+
 ## Intake and root
 
 The final 001 episode root is `{factory_root}/0000shrt/<YYMMDD_short-title_source-id>`. Use `scripts/resolve_episode_root.py`; source media, source identity, and receipt live in `00_input/`.
@@ -24,6 +60,18 @@ work-root or local-draft write.
 After assembly, report current validator/readback evidence, then separate code
 blocks for the 프로젝트 파일명 and 프로젝트 전체 경로. Missing readback is
 `NOT RUN`, never `PASS`.
+
+## Build and audio contract
+
+`scripts/build_episode_capcut.py` validates both tables before work-root or draft writes. It binds normalized text, cue/layer/color/effect, and path/SHA locks for the timeline, manifest, design, audio, and captions. Require timeline/caption cue bijection and source-time evidence. Zero captions require empty timeline cues, lock cues, and `final.srt`. Keep VIDEO embedded audio muted.
+
+A9/A9_TEXT require narration audio. STATE_LASER is silent situation text; never request TTS for STATE-only screens. Select one explicit audio matrix without fallback:
+
+- `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` + `SOURCE_ORDER_CLEAN_AUDIO`: full source-identity-bound raw A10; no Demucs.
+- `SOURCE_ORDER_UNCHANGED_A10_RETAINED` + `A10_RETAINED_SYNC`: validated full Demucs stem.
+- `URAKKAI` + `A10_REASSEMBLED_SYNC`: mapped reassembly derived from that full stem.
+
+Run Demucs once per explicit stem mode and reuse its manifest. For mixed generated A9, use `source_audio[].mode=duck` under narration and `source_audio[].mode=on` elsewhere; partial overlap is `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`. Validated file/SHA/duration/range-bound user audio keeps A10 on at 1.0 with no auto-duck, mute, or split and stops at `WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT`.
 
 ## VMake Direct-Insert Contract
 

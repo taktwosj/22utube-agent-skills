@@ -5,12 +5,12 @@ Git source of truth for 22utube/11utube production skills and selected personal 
 ## Roles
 
 - Git repo: official skill source under `skills/<skill>`.
-- Codex runtime: copy installed to `$HOME/.codex/skills`.
-- Claude runtime: copy installed to `$HOME/.claude/skills`.
-- Hermes runtime: copy installed to `%LOCALAPPDATA%/Hermes/skills/22utube` on Windows and `$HOME/.hermes/skills/22utube` on macOS/default Unix hosts.
+- Codex runtime: read-only entrypoints under `$HOME/.codex/skills`.
+- Claude runtime: read-only entrypoints under `$HOME/.claude/skills`.
+- Hermes runtime: read-only entrypoints under `%LOCALAPPDATA%/Hermes/skills/22utube` on Windows and `$HOME/.hermes/skills/22utube` on macOS/default Unix hosts.
 - OneDrive: lightweight production handoff data only, including manifests, reports, scripts, captions, CapCut draft manifests/snapshots/restore notes, and upload copy.
 
-Runtime folders are install targets, not edit targets. Edit skills in this repo, then run install/update/verify.
+Runtime entrypoints and active release contents are immutable, not edit targets. Edit only an isolated worktree derived from this repo, then follow the release flow below after tests, independent review, and approval of the GitHub `main` revision.
 
 ## Managed Skill Set
 
@@ -75,73 +75,34 @@ Windows:
 
 ```powershell
 git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME\agent-skills"
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\install.ps1" -Target all
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target all
+Set-Location "$HOME\agent-skills"
 ```
 
 macOS:
 
 ```bash
 git clone https://github.com/taktwosj/22utube-agent-skills.git "$HOME/agent-skills"
-bash "$HOME/agent-skills/scripts/install.sh" --target all
-bash "$HOME/agent-skills/scripts/verify.sh" --target all
+cd "$HOME/agent-skills"
 ```
 
-## Update
+After the reviewed revision is on GitHub `main`, use the same release flow as an update.
 
-Windows:
+## Release Flow
 
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target all -Prune
-```
+From a clean checkout of the approved GitHub `main` revision, run exactly:
 
-macOS:
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target all --prune
-```
-
-## Strict Claude Match
-
-Claude CLI should not keep old 22utube production skills beside the Git-managed
-set. Use strict mode to make Claude's runtime match `manifests/skill-set.json`
-exactly:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target claude -Prune -Strict
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\verify.ps1" -Target claude -Strict
-```
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target claude --prune --strict
-bash "$HOME/agent-skills/scripts/verify.sh" --target claude --strict
-```
-
-Strict mode moves unmanaged skill folders with `SKILL.md` into the configured
-backup folder as `DISABLED_<skill>_<timestamp>`. It does not delete them.
-
-Use dry-run before prune:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File "$HOME\agent-skills\scripts\update.ps1" -Target all -Prune -DryRun
-```
-
-```bash
-bash "$HOME/agent-skills/scripts/update.sh" --target all --prune --dry-run
+```text
+python -B scripts/skill_release.py publish
+python -B scripts/skill_release.py activate --target all
+python -B scripts/skill_release.py verify --target all --self-check
 ```
 
 ## Safety Rules
 
-- Copy install only; symlink install is not supported.
-- `update` refuses dirty worktrees.
-- `git pull` uses `--ff-only`.
-- Automatic stash is not supported.
-- `--only` and `--prune` cannot be combined.
-- `--only` and strict mode cannot be combined.
-- Prune removes only folders with a managed marker file.
-- Strict mode disables any unmanaged skill folder under the selected target.
-- Existing runtime folders are backed up before overwrite.
-- `verify` failure makes update fail.
+- `publish` refuses a dirty source repository.
+- Activate only a published immutable release and always target `all` in this managed flow.
+- Never copy into or edit runtime entrypoints or active release contents.
+- A release is incomplete until `verify --target all --self-check` passes.
 
 ## Verification Status
 
