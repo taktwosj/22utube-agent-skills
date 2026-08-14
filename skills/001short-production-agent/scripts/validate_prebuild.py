@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from common import read_json, result, sha256_file
+import user_provided_media_overlay
 
 
 SOURCE_ORDER_DURATION_TOLERANCE_US = 50_000
@@ -299,6 +300,17 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
                 != target_range[1] - target_range[0]
             ):
                 errors.append(_error("E_AUDIO_BINDING", clip_id=clip["clip_id"]))
+    checked_overlay = user_provided_media_overlay.validate_bundle(
+        payload.get("user_provided_media_overlay"),
+        episode_id=payload["episode_id"],
+        timeline_duration_us=target_duration,
+    )
+    if checked_overlay["status"] != "PASS":
+        errors.extend(checked_overlay.get("errors", []))
+    else:
+        errors.extend(user_provided_media_overlay.validate_a10_overlap_policy(
+            audio_rows, checked_overlay.get("items", []),
+        ))
     return result(errors, {
         "build_manifest_path": str(path), "episode_id": payload["episode_id"],
         "visual_asset_mode": visual_mode,

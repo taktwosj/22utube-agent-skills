@@ -113,6 +113,23 @@ def _probe(path: Path) -> dict | None:
     }
 
 
+def _image_decodes(path: Path) -> bool:
+    try:
+        completed = subprocess.run(
+            [
+                "ffmpeg", "-v", "error", "-xerror", "-err_detect", "explode",
+                "-i", str(path), "-map", "0:v:0", "-frames:v", "1",
+                "-f", "null", "-",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
 def _normalized_item(item: object, *, ordinal: int, timeline_duration_us: int) -> tuple[dict | None, list[dict]]:
     errors: list[dict] = []
     if not isinstance(item, dict):
@@ -168,6 +185,9 @@ def _normalized_item(item: object, *, ordinal: int, timeline_duration_us: int) -
     elif kind == "image":
         if (
             "video" not in probe["stream_types"]
+            or probe["width"] <= 0
+            or probe["height"] <= 0
+            or not _image_decodes(path)
             or (declared_width, declared_height) != (probe["width"], probe["height"])
             or measured_duration != 0
             or "source_range_us" in item

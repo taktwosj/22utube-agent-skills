@@ -17,6 +17,7 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 from schema_runtime import validate_schema
+import user_provided_media_overlay
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROTOCOL = SKILL_ROOT / "protocol.json"
@@ -82,7 +83,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "append_after_index": 14,
         "evidence_bound": True,
         "undeclared_extra_tracks": "FORBIDDEN",
-        "user_audio_overlap_a10": "A10_ON_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK",
+        "user_audio_overlap_a10": "A10_ON_VOLUME_1_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK",
     }
     if protocol.get("track_layout_extension_policy") != expected_extension_policy:
         errors.append("PROTOCOL_TRACK_LAYOUT_EXTENSION_POLICY")
@@ -494,6 +495,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 "append_after_index": 14,
                 "evidence_bound": True,
                 "undeclared_extra_tracks": "FORBIDDEN",
+                "user_audio_overlap_a10": "A10_ON_VOLUME_1_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK",
             }
             policies = tools.get("policies", {})
             if (
@@ -582,6 +584,12 @@ def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     tracks: Dict[str, List[Dict[str, Any]]] = {}
+    overlay_items = (plan.get("user_provided_media_overlay") or {}).get("items", [])
+    user_audio_ranges = {
+        row.get("overlay_id"): row.get("target_range_us")
+        for row in overlay_items
+        if isinstance(row, dict) and row.get("media_kind") == "audio"
+    }
     observed_order: List[Any] = []
     for row_index, row in enumerate(timeline):
         if not isinstance(row, dict):
@@ -601,7 +609,21 @@ def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
             if not isinstance(anchor, str) or not anchor:
                 errors.append(f"TIMELINE_ANCHOR_MISSING:{row_index}:{placement_index}")
                 continue
-            if row_range is not None and placement.get("target_range_us") != row_range:
+            user_audio_placement = (
+                anchor == "A9"
+                and user_audio_ranges.get(placement.get("asset_key"))
+                == placement.get("target_range_us")
+            )
+            user_audio_caption = (
+                anchor == "A9_TEXT"
+                and placement.get("target_range_us") in user_audio_ranges.values()
+            )
+            if (
+                row_range is not None
+                and placement.get("target_range_us") != row_range
+                and not user_audio_placement
+                and not user_audio_caption
+            ):
                 errors.append(f"TIMELINE_TARGET_RANGE_MISMATCH:{row_index}:{anchor}")
             tracks.setdefault(anchor, []).append(placement)
 
@@ -667,6 +689,22 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
         errors.append("PRODUCTION_DURATION_INVALID")
         duration = 0
+
+    checked_user_overlay = user_provided_media_overlay.validate_bundle(
+        plan.get("user_provided_media_overlay"),
+        episode_id=plan.get("episode_id"),
+        timeline_duration_us=duration,
+    )
+    if checked_user_overlay["status"] != "PASS":
+        errors.extend(
+            f"USER_MEDIA_OVERLAY_INVALID:{row['code']}"
+            for row in checked_user_overlay.get("errors", [])
+        )
+    validated_user_audio = {
+        row["overlay_id"]: row
+        for row in checked_user_overlay.get("items", [])
+        if row.get("media_kind") == "audio"
+    }
 
     view = _normalize_plan(plan)
     errors.extend(view["errors"])
@@ -746,13 +784,30 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if _segments(tracks, "A11"):
                     errors.append("URAKKAI_MIXED_A11_FORBIDDEN")
                 for retained in audio:
+                    overlapping_user_tts = [
+                        narration for narration in tts
+                        if narration.get("asset_key") in validated_user_audio
+                        and validated_user_audio[narration["asset_key"]].get("target_range_us")
+                        == narration.get("target_range_us")
+                        and _ranges_overlap(
+                            retained.get("target_range_us"),
+                            narration.get("target_range_us"),
+                        )
+                    ]
                     overlapping_tts = [
                         narration for narration in tts
+                        if narration not in overlapping_user_tts
                         if _ranges_overlap(
                             retained.get("target_range_us"),
                             narration.get("target_range_us"),
                         )
                     ]
+                    if overlapping_user_tts:
+                        if retained.get("volume") != 1:
+                            errors.append("URAKKAI_USER_AUDIO_A10_ON_REQUIRED")
+                            break
+                        if not overlapping_tts:
+                            continue
                     if any(
                         not _range_fully_covered(
                             retained.get("target_range_us"),

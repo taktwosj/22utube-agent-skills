@@ -480,6 +480,39 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             module.validate_production_plan(partial_overlap, protocol),
         )
 
+        with tempfile.TemporaryDirectory() as temporary:
+            narration = Path(temporary) / "narration.wav"
+            subprocess.run([
+                "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                "-f", "lavfi", "-i", "sine=frequency=660:duration=0.5",
+                "-ac", "1", "-ar", "48000", "-c:a", "pcm_s16le", str(narration),
+            ], check=True)
+            user_partial_overlap = copy.deepcopy(partial_overlap)
+            for placement in user_partial_overlap["timeline"][0]["placements"]:
+                if placement["anchor"] == "A9":
+                    placement["asset_key"] = "user-narration"
+                if placement["anchor"] == "A10":
+                    placement["volume"] = 1
+            user_partial_overlap["user_provided_media_overlay"] = {
+                "schema_version": "001short-user-provided-media-overlay-v1",
+                "episode_id": user_partial_overlap["episode_id"],
+                "status": "WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT",
+                "user_authority": {
+                    "evidence": "operator supplied narration",
+                    "exact_text": "Keep A10 on and adjust volume manually in CapCut.",
+                },
+                "items": [{
+                    "overlay_id": "user-narration", "media_kind": "audio", "track_index": 15,
+                    "source_path": str(narration), "source_sha256": sha256(narration),
+                    "measured_duration_us": 500_000, "dimensions": {"width": 0, "height": 0},
+                    "source_range_us": [0, 500_000], "target_range_us": [500_000, 1_000_000],
+                }],
+            }
+            self.assertEqual(
+                module.validate_production_plan(user_partial_overlap, protocol),
+                [],
+            )
+
         mixed_a11 = copy.deepcopy(mixed)
         mixed_a11["timeline"][0]["placements"].append({
             "anchor": "A11", "operation": "clone_template_segment", "asset_key": "original_narration",

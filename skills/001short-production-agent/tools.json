@@ -122,7 +122,8 @@
         "schema_version": "001short-user-provided-media-overlay-layout-v1",
         "append_after_index": 14,
         "evidence_bound": true,
-        "undeclared_extra_tracks": "FORBIDDEN"
+        "undeclared_extra_tracks": "FORBIDDEN",
+        "user_audio_overlap_a10": "A10_ON_VOLUME_1_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
       }
     },
     "id_policy": {
@@ -160,7 +161,8 @@
       "schema_version": "001short-user-provided-media-overlay-layout-v1",
       "append_after_index": 14,
       "evidence_bound": true,
-      "undeclared_extra_tracks": "FORBIDDEN"
+      "undeclared_extra_tracks": "FORBIDDEN",
+      "user_audio_overlap_a10": "A10_ON_VOLUME_1_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
     },
     "new_tools": false,
     "external_review_auto": false

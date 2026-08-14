@@ -1155,15 +1155,38 @@ def _range_fully_covered(inner: list[int], outer: list[int]) -> bool:
 def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
     if config.get("audio_policy") not in {"A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"}:
         return
-    narration_ranges = [cue["target_range_us"] for cue in config.get("tts_cues", [])]
+    narration_cues = config.get("tts_cues", [])
+    user_audio_items = [
+        item for item in config.get("user_provided_media_overlay", [])
+        if item.get("media_kind") == "audio"
+    ]
+
+    def is_bound_user_audio(cue: dict) -> bool:
+        cue_path = cue.get("audio_path")
+        cue_range = cue.get("target_range_us")
+        if not isinstance(cue_path, str) or not isinstance(cue_range, list):
+            return False
+        resolved = str(Path(cue_path).resolve())
+        return any(
+            item.get("source_path") == resolved
+            and item.get("target_range_us") == cue_range
+            and item.get("measured_duration_us") == cue_range[1] - cue_range[0]
+            for item in user_audio_items
+        )
+
     for row in build_manifest.get("source_audio", []):
         target_range = row.get("target_range_us")
         if not isinstance(target_range, list) or len(target_range) != 2:
             continue
-        overlapping_ranges = [
-            cue_range for cue_range in narration_ranges
-            if _ranges_overlap(target_range, cue_range)
+        overlapping_cues = [
+            cue for cue in narration_cues
+            if _ranges_overlap(target_range, cue.get("target_range_us"))
         ]
+        if overlapping_cues and all(is_bound_user_audio(cue) for cue in overlapping_cues):
+            if row.get("mode") != "on":
+                raise RuntimeError(f"USER_MEDIA_OVERLAY_A10_ON_REQUIRED:{row.get('clip_id')}")
+            continue
+        overlapping_ranges = [cue["target_range_us"] for cue in overlapping_cues]
         if any(
             not _range_fully_covered(target_range, cue_range)
             for cue_range in overlapping_ranges
@@ -1178,9 +1201,7 @@ def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
             raise RuntimeError(f"MIXED_A10_RESTORE_REQUIRED_OUTSIDE_A9:{row.get('clip_id')}")
 
 
-def _normalize_source(
-    project: Path, config: dict, audio_source: Path | None, build_manifest: dict
-) -> list[dict]:
+def _bind_user_media_overlay(config: dict, build_manifest: dict) -> list[dict]:
     checked_overlay = user_provided_media_overlay.validate_bundle(
         build_manifest.get("user_provided_media_overlay"),
         episode_id=config["episode_id"],
@@ -1198,6 +1219,13 @@ def _normalize_source(
         raise RuntimeError(
             f"USER_MEDIA_OVERLAY_A10_ON_REQUIRED:{a10_policy_errors[0].get('clip_id')}"
         )
+    return user_media_overlay
+
+
+def _normalize_source(
+    project: Path, config: dict, audio_source: Path | None, build_manifest: dict
+) -> list[dict]:
+    user_media_overlay = _bind_user_media_overlay(config, build_manifest)
     _validate_mixed_audio_modes(config, build_manifest)
     duration = config["duration_us"]
     approved = _approved_rows(config)
@@ -2001,6 +2029,8 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
         "track_layout_extension": user_provided_media_overlay.build_track_layout_extension(
             config.get("user_provided_media_overlay", [])
         ),
+        "audio_policy": config.get("audio_policy"),
+        "source_audio": pre["build_manifest"].get("source_audio", []),
         "root_contract_path": config["root_contract_path"],
         "workspace_root": str(Path(config["workspace_root"]).resolve()),
         "root_profile": config["root_profile"],
@@ -2368,10 +2398,9 @@ def build_episode(config: dict) -> dict:
     target = Path(config["local_capcut_root"]).resolve() / config["project_name"]
     if target.exists():
         raise RuntimeError("LOCAL_CAPCUT_PROJECT_EXISTS")
-    _validate_mixed_audio_modes(
-        config,
-        read_json(Path(config["build_manifest_path"]).resolve()),
-    )
+    build_manifest = read_json(Path(config["build_manifest_path"]).resolve())
+    _bind_user_media_overlay(config, build_manifest)
+    _validate_mixed_audio_modes(config, build_manifest)
     _assert_optional_edit_lock(config)
     episode = Path(config["episode_root"]).resolve()
     prerequisites = _stage_prerequisites(
