@@ -97,6 +97,73 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
         self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
 
+    def chapter_states(self, cards: list[dict], media: dict[str, dict]) -> list[tuple[str, dict]]:
+        total = max(card["target_start_us"] + card["target_duration_us"] for card in cards)
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(), cards, total, media, "chapter-state-test"
+        )
+        text_by_id = {
+            material["id"]: builder.text_of(material)
+            for material in built["materials"]["texts"]
+        }
+        chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+        return [
+            (text_by_id[segment["material_id"]], segment["target_timerange"])
+            for segment in chapter_track["segments"]
+        ]
+
+    def chapter_transition_cards(self, chapter_label, source_label) -> tuple[list[dict], dict]:
+        cards = [
+            {
+                "card_id": "C001",
+                "card_type": "CHAPTER_CARD",
+                "chapter_label": chapter_label,
+                "chapter_hook": "hook",
+                "target_start_us": 0,
+                "target_duration_us": 3_000_000,
+                "lower_mode": "NONE",
+            },
+            {
+                "card_id": "C002",
+                "card_type": "SOURCE_VIDEO",
+                "chapter_label": source_label,
+                "target_start_us": 3_000_000,
+                "target_duration_us": 7_000_000,
+                "source_channel": "channel",
+                "source_date": "2026.08.14",
+                "lower_mode": "NONE",
+            },
+        ]
+        return cards, {"C001": self.source_record(), "C002": self.source_record()}
+
+    def test_null_chapter_card_label_never_emits_none_and_preserves_following_source_label(self):
+        cards, media = self.chapter_transition_cards(None, "Chapter B")
+
+        states = self.chapter_states(cards, media)
+
+        self.assertEqual(states, [("Chapter B", {"start": 3_000_000, "duration": 7_000_000})])
+        self.assertNotIn("None", [text for text, _ in states])
+
+    def test_same_label_chapter_to_source_is_one_non_overlapping_state(self):
+        cards, media = self.chapter_transition_cards("Chapter A", "Chapter A")
+
+        states = self.chapter_states(cards, media)
+
+        self.assertEqual(states, [("Chapter A", {"start": 0, "duration": 10_000_000})])
+
+    def test_different_label_chapter_to_source_preserves_each_exact_interval(self):
+        cards, media = self.chapter_transition_cards("Chapter A", "Chapter B")
+
+        states = self.chapter_states(cards, media)
+
+        self.assertEqual(
+            states,
+            [
+                ("Chapter A", {"start": 0, "duration": 3_000_000}),
+                ("Chapter B", {"start": 3_000_000, "duration": 7_000_000}),
+            ],
+        )
+
     def invoke_main(self, arguments: list[str]) -> int:
         with mock.patch.object(sys, "argv", [str(BUILDER_PATH), *arguments]), mock.patch.object(
             builder, "require_capcut_closed", return_value=None
@@ -116,6 +183,129 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
             "--report",
             str(root / "report.json"),
         ]
+
+    @staticmethod
+    def write_validation_project(root: Path, extra_materials: dict) -> None:
+        timeline = root / "Timelines" / "TIMELINE"
+        timeline.mkdir(parents=True)
+        text = {"id": "TCTA", "content": json.dumps({"text": "구독은 fixture", "styles": []})}
+        materials = {"texts": [text], "videos": []}
+        materials.update(extra_materials)
+        document = {
+            "duration": 1_000_000,
+            "materials": materials,
+            "tracks": [
+                {
+                    "id": "CTA",
+                    "type": "text",
+                    "segments": [
+                        {
+                            "id": "SCTA",
+                            "material_id": "TCTA",
+                            "target_timerange": {"start": 0, "duration": 1_000_000},
+                            "clip": {},
+                        }
+                    ],
+                }
+            ],
+        }
+        payload = json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+        for path in (
+            root / "draft_content.json",
+            root / "template-2.tmp",
+            timeline / "draft_content.json",
+            timeline / "template-2.tmp",
+        ):
+            path.write_text(payload, encoding="utf-8")
+
+    def test_build_validator_allows_only_exact_relink_root_and_all_material_types(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_validation_project(
+                root,
+                {
+                    "videos": [{"id": "V", "path": "C:/__CAPCUT_RELINK_REQUIRED__/C001.mp4"}],
+                    "audios": [{"id": "A", "path": "D:/foreign/audio.wav"}],
+                },
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "FOREIGN") as raised:
+                builder.validate_build(root, {}, 1_000_000)
+
+            self.assertIn("$.materials.audios[0].path", str(raised.exception))
+
+    def test_build_validator_accepts_exact_relink_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_validation_project(
+                root,
+                {
+                    "videos": [],
+                    "audios": [
+                        {"id": "A", "path": "C:/__CAPCUT_RELINK_REQUIRED__/episode/Media/A.wav"}
+                    ],
+                },
+            )
+
+            result = builder.validate_build(root, {}, 1_000_000)
+
+            self.assertEqual(result["status"], "PASS")
+
+    def test_build_validator_rejects_relink_substring_spoof_and_nested_serialized_path(self):
+        unsafe_materials = (
+            ({"videos": [{"id": "V", "path": "D:/foreign/__CAPCUT_RELINK_REQUIRED__/C001.mp4"}]}, "FOREIGN"),
+            ({"videos": [], "audios": [{"id": "A", "path": "Resources/../escape.wav"}]}, "TRAVERSAL"),
+            ({
+                "videos": [],
+                "audios": [
+                    {"id": "A", "path": "C:/__CAPCUT_RELINK_REQUIRED__-evil/escape.wav"}
+                ],
+            }, "FOREIGN"),
+            ({
+                "videos": [],
+                "audios": [
+                    {
+                        "id": "A",
+                        "metadata": json.dumps(
+                            json.dumps({"local_path": "D:/foreign/double.wav"})
+                        ),
+                    }
+                ],
+            }, "FOREIGN"),
+        )
+        for materials, code in unsafe_materials:
+            with self.subTest(materials=materials), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                self.write_validation_project(root, materials)
+                with self.assertRaisesRegex(RuntimeError, code):
+                    builder.validate_build(root, {}, 1_000_000)
+
+    def test_build_validator_rejects_malformed_wrapper_but_ignores_display_strings(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_validation_project(
+                root,
+                {"audios": [{"id": "A", "metadata": '{"local_path":'}]},
+            )
+            with self.assertRaisesRegex(RuntimeError, "JSON_INVALID"):
+                builder.validate_build(root, {}, 1_000_000)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_validation_project(
+                root,
+                {
+                    "audios": [
+                        {
+                            "id": "A",
+                            "name": "[Intro]",
+                            "text": "{literal material name",
+                            "visible": json.dumps({"local_path": "D:/display-only.wav"}),
+                        }
+                    ]
+                },
+            )
+            self.assertEqual(builder.validate_build(root, {}, 1_000_000)["status"], "PASS")
 
     def test_builder_resolves_archive_only_from_workspace_active_pointer(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from capcut_material_paths import enforce_material_paths
 from root_bundle import (
     DEFAULT_ACTIVE_POINTER,
     ResolvedRoot,
@@ -39,14 +40,6 @@ UUID_RE = re.compile(
     r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"
 )
 JUNK_RE = re.compile(r"(?i)(\.bak$|^\.before_|^before_|_backup_|^helper_)")
-LEGACY_FONT_RE = re.compile(
-    r"C:(?:/|\\\\)Users(?:/|\\\\)[^/\\\\]+(?:/|\\\\)AppData(?:/|\\\\)Local"
-    r"(?:/|\\\\)CapCut(?:/|\\\\)User Data(?:/|\\\\)Projects(?:/|\\\\)com\.lveditor\.draft"
-    r"(?:/|\\\\)[^/\\\\]+(?:/|\\\\)Resources(?:/|\\\\)fonts(?:/|\\\\)lower-panel-font\.ttf"
-)
-EMBEDDED_RESOURCE_RE = re.compile(
-    r"(?i)^(?:[A-Za-z]:|/).*[\\/]Resources[\\/](?P<relative>.+)$"
-)
 PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 VERSION_RE = re.compile(r"^v([1-9][0-9]*)$")
 BUNDLE_RELATIVE = DEFAULT_ACTIVE_POINTER.parent
@@ -136,66 +129,6 @@ def rewrite_value(value: Any, id_map: dict[str, str], replacements: dict[str, st
             value = value.replace(old, new)
         return UUID_RE.sub(lambda match: id_map.get(match.group(0), match.group(0)), value)
     return value
-
-
-def rewrite_legacy_font_paths(value: Any, final_root: Path) -> Any:
-    """Keep every text material self-contained after a draft was cloned."""
-    if isinstance(value, dict):
-        return {key: rewrite_legacy_font_paths(item, final_root) for key, item in value.items()}
-    if isinstance(value, list):
-        return [rewrite_legacy_font_paths(item, final_root) for item in value]
-    if isinstance(value, str):
-        return LEGACY_FONT_RE.sub(
-            posix(final_root / "Resources" / "fonts" / "lower-panel-font.ttf"), value
-        )
-    return value
-
-
-def rewrite_embedded_resource_paths(value: Any, final_root: Path) -> Any:
-    """Rebase self-contained Resources paths from an older CapCut root."""
-    if isinstance(value, dict):
-        return {
-            key: rewrite_embedded_resource_paths(item, final_root)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [rewrite_embedded_resource_paths(item, final_root) for item in value]
-    if not isinstance(value, str):
-        return value
-    match = EMBEDDED_RESOURCE_RE.fullmatch(value)
-    if match is None:
-        return value
-    parts = [part for part in re.split(r"[\\/]+", match.group("relative")) if part]
-    if not parts or any(
-        part in {".", ".."} or ":" in part or Path(part).drive
-        for part in parts
-    ):
-        return value
-    return posix(final_root / "Resources" / Path(*parts))
-
-
-def strip_external_video_materials(document: dict[str, Any], final_root: Path) -> None:
-    """A relink probe's test media must never leak into a reusable root."""
-    root_prefix = posix(final_root).lower().rstrip("/") + "/"
-    videos = document.get("materials", {}).get("videos", [])
-    removed_ids = {
-        item.get("id")
-        for item in videos
-        if item.get("path")
-        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
-    }
-    if not removed_ids:
-        return
-    document["materials"]["videos"] = [item for item in videos if item.get("id") not in removed_ids]
-    cleaned_tracks: list[dict[str, Any]] = []
-    for track in document.get("tracks", []):
-        segments = [
-            segment for segment in track.get("segments", []) if segment.get("material_id") not in removed_ids
-        ]
-        if segments or track.get("type") != "video":
-            track["segments"] = segments
-            cleaned_tracks.append(track)
-    document["tracks"] = cleaned_tracks
 
 
 def content_text(material: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -335,15 +268,11 @@ def validate_root(root: Path, content_start_us: int, *, path_reference: Path | N
         raise RuntimeError("JSON_MIRROR_MISMATCH")
 
     document = json_load(root / "draft_content.json")
-    root_prefix = posix(path_reference or root).lower().rstrip("/") + "/"
-    foreign_video_paths = [
-        item.get("path", "")
-        for item in document.get("materials", {}).get("videos", [])
-        if item.get("path")
-        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
-    ]
-    if foreign_video_paths:
-        raise RuntimeError("FOREIGN_VIDEO_PATH_PRESENT:" + " | ".join(foreign_video_paths[:3]))
+    enforce_material_paths(
+        document,
+        project_root=path_reference or root,
+        rebase_legacy_resources=False,
+    )
     duration_us = int(document["duration"])
     text_by_id = {item.get("id"): item for item in document["materials"].get("texts", [])}
     ids = material_ids(document)
@@ -675,9 +604,6 @@ def prepare_candidate(
                 shutil.rmtree(path) if path.is_dir() else path.unlink()
 
         replacements = copy_required_resources(source, stage, ffmpeg, paths["root"])
-        source_posix = posix(source)
-        replacements[source_posix] = posix(paths["root"])
-        replacements[source_posix.replace("/", "\\")] = posix(paths["root"])
         parsed: dict[Path, Any] = {}
         found: set[str] = set()
         for path in stage.rglob("*"):
@@ -706,13 +632,17 @@ def prepare_candidate(
             if len(relative.parts) >= 2 and relative.parts[:2] == ("Timelines", old_timeline_id):
                 relative = Path("Timelines", new_timeline_id, *relative.parts[2:])
             destination = stage / relative
-            value = rewrite_value(value, id_map, replacements)
-            value = rewrite_embedded_resource_paths(value, paths["root"])
-            value = rewrite_legacy_font_paths(value, paths["root"])
+            if isinstance(value, dict) and "materials" in value:
+                value = enforce_material_paths(
+                    value,
+                    project_root=paths["root"],
+                    rebase_legacy_resources=True,
+                    exact_rewrites=replacements,
+                )
+            value = rewrite_value(value, id_map, {})
             if isinstance(value, dict) and "tracks" in value and len(value.get("materials", {}).get("videos", [])) >= 2:
                 value["name"] = paths["root"].name
                 normalize_content(value, duration_us=duration_us, content_start_us=content_start_us)
-                strip_external_video_materials(value, paths["root"])
             if isinstance(value, dict) and value.get("draft_name") == source.name:
                 value["draft_name"] = paths["root"].name
             json_write(destination, value)

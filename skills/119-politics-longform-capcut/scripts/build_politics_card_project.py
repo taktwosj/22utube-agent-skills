@@ -20,6 +20,7 @@ import zipfile
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
+from capcut_material_paths import enforce_material_paths
 from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
 from root_bundle import ResolvedRoot, resolve_active_root
 from run_politics_assembly_preflight import verify_preflight_report
@@ -802,6 +803,29 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
                 set_range(segment, start, total - start)
 
     first_visual_index = 1 if has_intro else 0
+    chapter_states: dict[int, tuple[str, int]] = {}
+    for card_index, card in enumerate(cards[first_visual_index:], start=first_visual_index):
+        if card["card_type"] != "CHAPTER_CARD":
+            continue
+        label = "" if card.get("chapter_label") is None else str(card["chapter_label"]).strip()
+        if not label:
+            continue
+        state_end = total
+        for next_card in cards[card_index + 1 :]:
+            next_label = (
+                ""
+                if next_card.get("chapter_label") is None
+                else str(next_card.get("chapter_label", "")).strip()
+            )
+            if next_card["card_type"] == "CHAPTER_CARD" or (
+                next_card["card_type"] == "SOURCE_VIDEO"
+                and next_label
+                and next_label != label
+            ):
+                state_end = int(next_card["target_start_us"])
+                break
+        chapter_states[card_index] = (label, state_end)
+
     for card_index, card in enumerate(cards[first_visual_index:], start=first_visual_index):
         start, duration = int(card["target_start_us"]), int(card["target_duration_us"])
         kind = card["card_type"]
@@ -811,17 +835,17 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             if record is None:
                 raise RuntimeError(f"CHAPTER_IMAGE_REQUIRED:{card['card_id']}")
             clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
-            next_chapter_start = next(
-                (
-                    int(next_card["target_start_us"])
-                    for next_card in cards[card_index + 1 :]
-                    if next_card["card_type"] == "CHAPTER_CARD"
-                ),
-                total,
-            )
-            # A chapter is a state, not a 3-second flash: keep its concise
-            # upper title across the following source-video block.
-            clone_text(document, text_chapter, chapter_segment, chapter_track, str(card["chapter_label"]), start, next_chapter_start - start)
+            if card_index in chapter_states:
+                chapter_label, chapter_end = chapter_states[card_index]
+                clone_text(
+                    document,
+                    text_chapter,
+                    chapter_segment,
+                    chapter_track,
+                    chapter_label,
+                    start,
+                    chapter_end - start,
+                )
             clone_text(document, text_intro, intro_segment, intro_track, str(card["chapter_hook"]), start, duration)
         elif kind in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
             if record is None:
@@ -831,8 +855,14 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
                 channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
                 if not channel or not date:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
-                chapter_label = str(card.get("chapter_label", "")).strip()
-                if chapter_label:
+                chapter_label = "" if card.get("chapter_label") is None else str(card.get("chapter_label", "")).strip()
+                covered_by_chapter_state = any(
+                    label == chapter_label
+                    and int(cards[index]["target_start_us"]) <= start
+                    and state_end >= start + duration
+                    for index, (label, state_end) in chapter_states.items()
+                )
+                if chapter_label and not covered_by_chapter_state:
                     clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
                 clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
         elif kind == "NARRATION_IMAGE":
@@ -880,16 +910,12 @@ def validate_build(
     if len(hashes) != 1:
         raise RuntimeError("PROJECT_MIRROR_MISMATCH")
     document = json_load(root / "draft_content.json")
-    root_prefix = str(path_reference or root).replace("\\", "/").lower().rstrip("/") + "/"
-    foreign_root_media = [
-        item.get("path", "")
-        for item in document.get("materials", {}).get("videos", [])
-        if item.get("path")
-        and "__CAPCUT_RELINK_REQUIRED__" not in item["path"]
-        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
-    ]
-    if foreign_root_media:
-        raise RuntimeError("FOREIGN_ROOT_MEDIA_PATH:" + " | ".join(foreign_root_media[:3]))
+    enforce_material_paths(
+        document,
+        project_root=path_reference or root,
+        rebase_legacy_resources=False,
+        allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
+    )
     if int(document["duration"]) != total:
         raise RuntimeError("PROJECT_DURATION_INVALID")
     valid_ids = {item.get("id") for group in document.get("materials", {}).values() if isinstance(group, list) for item in group if isinstance(item, dict)}
