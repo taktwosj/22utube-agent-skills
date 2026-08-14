@@ -20,7 +20,7 @@ import zipfile
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
+from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256, validate_material_path_containment
 from root_bundle import ResolvedRoot, resolve_active_root
 from run_politics_assembly_preflight import verify_preflight_report
 
@@ -821,7 +821,9 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             )
             # A chapter is a state, not a 3-second flash: keep its concise
             # upper title across the following source-video block.
-            clone_text(document, text_chapter, chapter_segment, chapter_track, str(card["chapter_label"]), start, next_chapter_start - start)
+            chapter_label = str(card.get("chapter_label") or "").strip()
+            if chapter_label:
+                clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, next_chapter_start - start)
             clone_text(document, text_intro, intro_segment, intro_track, str(card["chapter_hook"]), start, duration)
         elif kind in {"SOURCE_VIDEO", "NARRATION_VIDEO"}:
             if record is None:
@@ -831,9 +833,33 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
                 channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
                 if not channel or not date:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
-                chapter_label = str(card.get("chapter_label", "")).strip()
+                chapter_label = str(card.get("chapter_label") or "").strip()
                 if chapter_label:
-                    clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
+                    chapter_text_by_id = {
+                        item["id"]: text_of(item) for item in document["materials"]["texts"]
+                    }
+                    overlaps = [
+                        row
+                        for row in chapter_track.get("segments", [])
+                        if int(row.get("target_timerange", {}).get("start", 0)) < start + duration
+                        and start
+                        < int(row.get("target_timerange", {}).get("start", 0))
+                        + int(row.get("target_timerange", {}).get("duration", 0))
+                    ]
+                    matching_overlap = any(
+                        chapter_text_by_id.get(row.get("material_id")) == chapter_label
+                        for row in overlaps
+                    )
+                    for row in overlaps:
+                        if chapter_text_by_id.get(row.get("material_id")) == chapter_label:
+                            continue
+                        row_start = int(row.get("target_timerange", {}).get("start", 0))
+                        if row_start < start:
+                            set_range(row, row_start, start - row_start)
+                        else:
+                            chapter_track["segments"].remove(row)
+                    if not matching_overlap:
+                        clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
                 clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
         elif kind == "NARRATION_IMAGE":
             if record is None:
@@ -880,16 +906,11 @@ def validate_build(
     if len(hashes) != 1:
         raise RuntimeError("PROJECT_MIRROR_MISMATCH")
     document = json_load(root / "draft_content.json")
-    root_prefix = str(path_reference or root).replace("\\", "/").lower().rstrip("/") + "/"
-    foreign_root_media = [
-        item.get("path", "")
-        for item in document.get("materials", {}).get("videos", [])
-        if item.get("path")
-        and "__CAPCUT_RELINK_REQUIRED__" not in item["path"]
-        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
-    ]
-    if foreign_root_media:
-        raise RuntimeError("FOREIGN_ROOT_MEDIA_PATH:" + " | ".join(foreign_root_media[:3]))
+    validate_material_path_containment(
+        document,
+        path_reference or root,
+        allowed_prefixes=("C:/__CAPCUT_RELINK_REQUIRED__/",),
+    )
     if int(document["duration"]) != total:
         raise RuntimeError("PROJECT_DURATION_INVALID")
     valid_ids = {item.get("id") for group in document.get("materials", {}).values() if isinstance(group, list) for item in group if isinstance(item, dict)}

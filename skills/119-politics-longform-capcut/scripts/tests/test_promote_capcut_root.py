@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -123,6 +124,20 @@ class PromotionWorkspace:
             document = json.loads(path.read_text(encoding="utf-8"))
             document["materials"]["videos"][0]["path"] = legacy + "/Resources/media/intro.mp4"
             document["materials"]["videos"][1]["path"] = legacy + "/Resources/media/main.png"
+            write_json(path, document)
+
+    def set_material_path(
+        self, group: str, index: int, value: str, *, field: str = "path"
+    ) -> None:
+        for path in self.document_paths():
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["materials"][group][index][field] = value
+            write_json(path, document)
+
+    def add_material(self, group: str, material: dict) -> None:
+        for path in self.document_paths():
+            document = json.loads(path.read_text(encoding="utf-8"))
+            document["materials"].setdefault(group, []).append(material)
             write_json(path, document)
 
     def relative(self, path: Path) -> Path:
@@ -262,6 +277,7 @@ class PromoteCapcutRootTests(unittest.TestCase):
             "C:/new-root/Resources/media/main.png",
         )
         for unsafe in (
+            r"C:old\Resources\media\main.png",
             "C:/old/Resources/D:/escape.mp4",
             r"C:\old\Resources\..\escape.mp4",
             "C:/old/Resources/./escape.mp4",
@@ -270,6 +286,107 @@ class PromoteCapcutRootTests(unittest.TestCase):
                 self.assertEqual(
                     promoter.rewrite_embedded_resource_paths(unsafe, root), unsafe
                 )
+
+    def test_prepare_rejects_drive_relative_resource_material_path(self):
+        self.fixture.set_material_path(
+            "videos", 0, r"C:old\Resources\media\intro.mp4"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "UNSAFE_MATERIAL_PATH"):
+            self.prepare()
+
+    def test_prepare_rejects_material_path_traversal_before_rebasing(self):
+        self.fixture.set_material_path(
+            "videos", 0, "Resources/../escape.mp4"
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "UNSAFE_MATERIAL_PATH"):
+            self.prepare()
+
+    def test_prepare_rejects_secondary_material_path_field_before_rebasing(self):
+        original = (self.fixture.source_root / "Resources/../escape.mp4").as_posix()
+        self.fixture.set_material_path(
+            "videos", 0, original, field="local_path"
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError, "UNSAFE_MATERIAL_PATH:" + re.escape(original)
+        ):
+            self.prepare()
+
+    def test_prepare_rejects_foreign_audio_material_path(self):
+        self.fixture.add_material(
+            "audios", {"id": "AFOREIGN", "path": "D:/foreign/audio.wav"}
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT"):
+            self.prepare()
+
+    def test_prepare_rejects_foreign_video_instead_of_silently_stripping_it(self):
+        original = "D:/foreign/leak.mp4"
+        self.fixture.set_material_path("videos", 0, original)
+
+        with self.assertRaisesRegex(
+            RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT:" + re.escape(original)
+        ):
+            self.prepare()
+
+    def test_prepare_rejects_nested_foreign_material_path(self):
+        original = r"D:\foreign\nested-audio.wav"
+        self.fixture.add_material(
+            "audios", {"id": "ANESTED", "metadata": {"local_path": original}}
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT:" + re.escape(original)
+        ):
+            self.prepare()
+
+    def test_prepare_rejects_foreign_path_inside_serialized_material_value(self):
+        original = "D:/foreign/serialized-audio.wav"
+        self.fixture.add_material(
+            "audios", {"id": "ASERIALIZED", "metadata": json.dumps({"path": original})}
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT:" + re.escape(original)
+        ):
+            self.prepare()
+
+    def test_prepare_rejects_unparseable_serialized_material_value(self):
+        malformed = '{"path":"D:/foreign/audio.wav"'
+        self.fixture.add_material(
+            "audios", {"id": "AMALFORMED", "metadata": malformed}
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "UNSAFE_SERIALIZED_MATERIAL_VALUE"):
+            self.prepare()
+
+    def test_prepare_rejects_lexical_candidate_root_prefix_collision(self):
+        candidate_name = "P0_ROOT_v6_jungchilong_v6_candidate"
+        collision = (self.fixture.capcut_root / f"{candidate_name}-evil/leak.wav").as_posix()
+        self.fixture.add_material(
+            "audios", {"id": "APREFIX", "path": collision}
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT"):
+            self.prepare()
+
+    def test_prepare_does_not_reparse_literal_brace_text_inside_valid_serialized_content(self):
+        self.fixture.add_material(
+            "texts", text_material("TLITERAL", "{literal text")
+        )
+
+        candidate = self.prepare()
+        self.assertEqual(candidate.status, "CANDIDATE_ROOT_BUNDLE_PREPARED")
+
+    def test_prepare_rejects_non_string_material_path_value(self):
+        self.fixture.add_material(
+            "audios", {"id": "AMALFORMEDPATH", "path": {"unexpected": "shape"}}
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "UNSAFE_MATERIAL_PATH_VALUE"):
+            self.prepare()
 
     def test_prepare_requires_version_profile_base_layout_and_parent_contract(self):
         required = (

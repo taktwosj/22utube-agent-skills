@@ -77,6 +77,65 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
             "has_audio": True,
         }
 
+    @staticmethod
+    def write_minimal_validation_project(root: Path, extra_materials: dict | None = None) -> None:
+        timeline = root / "Timelines" / "TIMELINE"
+        timeline.mkdir(parents=True)
+        text = {"id": "TCTA", "content": json.dumps({"text": "구독은 fixture", "styles": []})}
+        materials = {"texts": [text], "videos": []}
+        materials.update(extra_materials or {})
+        document = {
+            "duration": 1_000_000,
+            "materials": materials,
+            "tracks": [{
+                "id": "CTA", "type": "text", "segments": [{
+                    "id": "SCTA", "material_id": "TCTA",
+                    "target_timerange": {"start": 0, "duration": 1_000_000}, "clip": {},
+                }],
+            }],
+        }
+        payload = json.dumps(document, ensure_ascii=False, separators=(",", ":"))
+        for path in (
+            root / "draft_content.json",
+            root / "template-2.tmp",
+            timeline / "draft_content.json",
+            timeline / "template-2.tmp",
+        ):
+            path.write_text(payload, encoding="utf-8")
+
+    def build_chapter_transition(
+        self, chapter_label: str | None, source_label: str | None
+    ) -> tuple[dict, int, int, int]:
+        chapter_start, chapter_duration, source_duration = 10_000_000, 3_000_000, 24_000_000
+        source_start = chapter_start + chapter_duration
+        cards = [
+            {
+                "card_id": "C001", "card_type": "SOURCE_VIDEO", "chapter_label": None,
+                "target_start_us": 0, "target_duration_us": chapter_start,
+                "source_channel": "fixture channel", "source_date": "2026.08.14", "lower_mode": "NONE",
+            },
+            {
+                "card_id": "C002", "card_type": "CHAPTER_CARD", "chapter_label": chapter_label,
+                "chapter_hook": "What changed?", "target_start_us": chapter_start,
+                "target_duration_us": chapter_duration, "lower_mode": "NONE",
+            },
+            {
+                "card_id": "C003", "card_type": "SOURCE_VIDEO", "chapter_label": source_label,
+                "target_start_us": source_start, "target_duration_us": source_duration,
+                "source_channel": "fixture channel", "source_date": "2026.08.14", "lower_mode": "NONE",
+            },
+        ]
+        chapter_image = {
+            "offline_path": "C:/root/Resources/media/chapter.png", "filename": "chapter.png",
+            "width": 1920, "height": 1080, "duration_us": chapter_duration,
+        }
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(), cards, source_start + source_duration,
+            {"C001": self.source_record(), "C002": chapter_image, "C003": self.source_record()},
+            "chapter-transition-regression",
+        )
+        return built, chapter_start, chapter_duration, source_duration
+
     def test_source_video_chapter_label_emits_chapter_track_text_at_c027_timing(self):
         start, duration = 449_360_000, 24_000_000
         built = builder.build_document(
@@ -96,6 +155,132 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         chapter_segment = chapter_track["segments"][0]
         self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
         self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
+
+    def test_source_video_null_chapter_label_emits_no_chapter_text(self):
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(),
+            [{
+                "card_id": "C001", "card_type": "SOURCE_VIDEO", "chapter_label": None,
+                "target_start_us": 0, "target_duration_us": 24_000_000,
+                "source_channel": "fixture channel", "source_date": "2026.08.14", "lower_mode": "NONE",
+            }],
+            24_000_000,
+            {"C001": self.source_record()},
+            "null-chapter-label-regression",
+        )
+
+        chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+        self.assertEqual(chapter_track["segments"], [])
+
+    def test_chapter_card_title_is_not_duplicated_by_following_source_video(self):
+        built, chapter_start, chapter_duration, source_duration = self.build_chapter_transition(
+            "Chapter Two", "Chapter Two"
+        )
+        text_by_id = {material["id"]: builder.text_of(material) for material in built["materials"]["texts"]}
+        chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+        self.assertEqual(len(chapter_track["segments"]), 1)
+        chapter_segment = chapter_track["segments"][0]
+        self.assertEqual(text_by_id[chapter_segment["material_id"]], "Chapter Two")
+        self.assertEqual(
+            chapter_segment["target_timerange"],
+            {"start": chapter_start, "duration": chapter_duration + source_duration},
+        )
+
+    def test_chapter_card_null_label_emits_no_none_text(self):
+        built, _, _, _ = self.build_chapter_transition(None, None)
+        chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+        self.assertEqual(chapter_track["segments"], [])
+
+    def test_following_source_with_different_label_replaces_chapter_card_title_without_overlap(self):
+        built, chapter_start, chapter_duration, source_duration = self.build_chapter_transition(
+            "Chapter A", "Chapter B"
+        )
+        source_start = chapter_start + chapter_duration
+        text_by_id = {material["id"]: builder.text_of(material) for material in built["materials"]["texts"]}
+        chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+        visible = [
+            (text_by_id[segment["material_id"]], segment["target_timerange"])
+            for segment in chapter_track["segments"]
+        ]
+        self.assertEqual(visible, [
+            ("Chapter A", {"start": chapter_start, "duration": chapter_duration}),
+            ("Chapter B", {"start": source_start, "duration": source_duration}),
+        ])
+
+    def test_static_validation_rejects_foreign_audio_material_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_minimal_validation_project(
+                root, {"audios": [{"id": "AFOREIGN", "path": "D:/foreign/audio.wav"}]}
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT"):
+                builder.validate_build(root, {}, 1_000_000)
+
+    def test_static_validation_rejects_root_prefixed_traversal_material_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            unsafe = (root / "Resources/../escape.wav").as_posix()
+            self.write_minimal_validation_project(
+                root, {"audios": [{"id": "ATRAVERSAL", "path": unsafe}]}
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "UNSAFE_MATERIAL_PATH"):
+                builder.validate_build(root, {}, 1_000_000)
+
+    def test_static_validation_rejects_lexical_root_prefix_collision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            collision = root.as_posix() + "-evil/leak.wav"
+            self.write_minimal_validation_project(
+                root, {"audios": [{"id": "APREFIX", "path": collision}]}
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT"):
+                builder.validate_build(root, {}, 1_000_000)
+
+    def test_static_validation_rejects_nested_serialized_foreign_material_path(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            foreign = "D:/foreign/serialized.wav"
+            self.write_minimal_validation_project(
+                root,
+                {"audios": [{
+                    "id": "ASERIALIZED",
+                    "metadata": json.dumps({"nested": {"local_path": foreign}}),
+                }]},
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT"):
+                builder.validate_build(root, {}, 1_000_000)
+
+    def test_static_validation_allows_declared_offline_relink_placeholder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_minimal_validation_project(
+                root,
+                {"audios": [{
+                    "id": "ARELINK",
+                    "path": "C:/__CAPCUT_RELINK_REQUIRED__/episode/Media/narration.wav",
+                }]},
+            )
+
+            result = builder.validate_build(root, {}, 1_000_000)
+            self.assertEqual(result["status"], "PASS")
+
+    def test_static_validation_rejects_foreign_path_that_only_contains_relink_marker(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_minimal_validation_project(
+                root,
+                {"audios": [{
+                    "id": "ASPOOFED",
+                    "path": "D:/foreign/__CAPCUT_RELINK_REQUIRED__/spoofed.wav",
+                }]},
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "FOREIGN_MATERIAL_PATH_PRESENT"):
+                builder.validate_build(root, {}, 1_000_000)
 
     def invoke_main(self, arguments: list[str]) -> int:
         with mock.patch.object(sys, "argv", [str(BUILDER_PATH), *arguments]), mock.patch.object(

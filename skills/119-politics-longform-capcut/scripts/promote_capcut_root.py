@@ -45,8 +45,9 @@ LEGACY_FONT_RE = re.compile(
     r"(?:/|\\\\)[^/\\\\]+(?:/|\\\\)Resources(?:/|\\\\)fonts(?:/|\\\\)lower-panel-font\.ttf"
 )
 EMBEDDED_RESOURCE_RE = re.compile(
-    r"(?i)^(?:[A-Za-z]:|/).*[\\/]Resources[\\/](?P<relative>.+)$"
+    r"(?i)^(?:[A-Za-z]:[\\/]|/).*[\\/]Resources[\\/](?P<relative>.+)$"
 )
+DRIVE_RELATIVE_RE = re.compile(r"(?i)^[A-Za-z]:(?![\\/])")
 PROFILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 VERSION_RE = re.compile(r"^v([1-9][0-9]*)$")
 BUNDLE_RELATIVE = DEFAULT_ACTIVE_POINTER.parent
@@ -174,28 +175,45 @@ def rewrite_embedded_resource_paths(value: Any, final_root: Path) -> Any:
     return posix(final_root / "Resources" / Path(*parts))
 
 
-def strip_external_video_materials(document: dict[str, Any], final_root: Path) -> None:
-    """A relink probe's test media must never leak into a reusable root."""
-    root_prefix = posix(final_root).lower().rstrip("/") + "/"
-    videos = document.get("materials", {}).get("videos", [])
-    removed_ids = {
-        item.get("id")
-        for item in videos
-        if item.get("path")
-        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
-    }
-    if not removed_ids:
+def material_paths(document: dict[str, Any]) -> list[str]:
+    result: list[str] = []
+
+    def visit(value: Any, *, parse_serialized: bool) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key == "path" or key.endswith("_path"):
+                    if isinstance(item, str):
+                        if item:
+                            result.append(item)
+                    elif item is not None:
+                        raise RuntimeError(f"UNSAFE_MATERIAL_PATH_VALUE:{key}")
+                visit(item, parse_serialized=parse_serialized)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item, parse_serialized=parse_serialized)
+        elif (
+            parse_serialized
+            and isinstance(value, str)
+            and value.lstrip().startswith(("{", "["))
+        ):
+            try:
+                serialized = json.loads(value)
+            except json.JSONDecodeError:
+                raise RuntimeError(f"UNSAFE_SERIALIZED_MATERIAL_VALUE:{value}") from None
+            if isinstance(serialized, (dict, list)):
+                visit(serialized, parse_serialized=False)
+
+    visit(document.get("materials", {}), parse_serialized=True)
+    return result
+
+
+def reject_unsafe_material_paths_before_rewrite(document: Any) -> None:
+    if not isinstance(document, dict):
         return
-    document["materials"]["videos"] = [item for item in videos if item.get("id") not in removed_ids]
-    cleaned_tracks: list[dict[str, Any]] = []
-    for track in document.get("tracks", []):
-        segments = [
-            segment for segment in track.get("segments", []) if segment.get("material_id") not in removed_ids
-        ]
-        if segments or track.get("type") != "video":
-            track["segments"] = segments
-            cleaned_tracks.append(track)
-    document["tracks"] = cleaned_tracks
+    for material_path in material_paths(document):
+        parts = re.split(r"[\\/]+", material_path)
+        if DRIVE_RELATIVE_RE.match(material_path) or any(part in {".", ".."} for part in parts):
+            raise RuntimeError(f"UNSAFE_MATERIAL_PATH:{material_path}")
 
 
 def content_text(material: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -312,6 +330,26 @@ def material_ids(document: dict[str, Any]) -> set[str]:
     return result
 
 
+def validate_material_path_containment(
+    document: dict[str, Any], root: Path, *, allowed_prefixes: tuple[str, ...] = ()
+) -> None:
+    resolved_root = root.resolve()
+    for material_path in material_paths(document):
+        parts = re.split(r"[\\/]+", material_path)
+        if DRIVE_RELATIVE_RE.match(material_path) or any(part in {".", ".."} for part in parts):
+            raise RuntimeError(f"UNSAFE_MATERIAL_PATH:{material_path}")
+        normalized = material_path.replace("\\", "/")
+        if any(normalized.lower().startswith(prefix.replace("\\", "/").lower()) for prefix in allowed_prefixes):
+            continue
+        candidate = Path(normalized)
+        try:
+            relative = candidate.resolve().relative_to(resolved_root)
+        except (OSError, ValueError):
+            raise RuntimeError(f"FOREIGN_MATERIAL_PATH_PRESENT:{material_path}") from None
+        if not relative.parts:
+            raise RuntimeError(f"FOREIGN_MATERIAL_PATH_PRESENT:{material_path}")
+
+
 def validate_root(root: Path, content_start_us: int, *, path_reference: Path | None = None) -> dict[str, Any]:
     banned = [
         path.relative_to(root).as_posix()
@@ -335,15 +373,7 @@ def validate_root(root: Path, content_start_us: int, *, path_reference: Path | N
         raise RuntimeError("JSON_MIRROR_MISMATCH")
 
     document = json_load(root / "draft_content.json")
-    root_prefix = posix(path_reference or root).lower().rstrip("/") + "/"
-    foreign_video_paths = [
-        item.get("path", "")
-        for item in document.get("materials", {}).get("videos", [])
-        if item.get("path")
-        and not item["path"].replace("\\", "/").lower().startswith(root_prefix)
-    ]
-    if foreign_video_paths:
-        raise RuntimeError("FOREIGN_VIDEO_PATH_PRESENT:" + " | ".join(foreign_video_paths[:3]))
+    validate_material_path_containment(document, path_reference or root)
     duration_us = int(document["duration"])
     text_by_id = {item.get("id"): item for item in document["materials"].get("texts", [])}
     ids = material_ids(document)
@@ -683,8 +713,10 @@ def prepare_candidate(
         for path in stage.rglob("*"):
             if path.is_file() and path.suffix.lower() in {".json", ".tmp"}:
                 try:
-                    parsed[path] = json_load(path)
-                    collect_uuids(parsed[path], found)
+                    value = json_load(path)
+                    reject_unsafe_material_paths_before_rewrite(value)
+                    parsed[path] = value
+                    collect_uuids(value, found)
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     continue
         id_map = {old: str(uuid.uuid4()).upper() for old in found}
@@ -712,7 +744,6 @@ def prepare_candidate(
             if isinstance(value, dict) and "tracks" in value and len(value.get("materials", {}).get("videos", [])) >= 2:
                 value["name"] = paths["root"].name
                 normalize_content(value, duration_us=duration_us, content_start_us=content_start_us)
-                strip_external_video_materials(value, paths["root"])
             if isinstance(value, dict) and value.get("draft_name") == source.name:
                 value["draft_name"] = paths["root"].name
             json_write(destination, value)
