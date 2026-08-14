@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
+import user_provided_media_overlay
+
 from common import meaningful_text_length
 
 
@@ -289,6 +291,17 @@ def validate_locked_assembly(
     original_ranges = [_header_range_us("original", header) for header in original.headers]
     manifest_source_ranges = sorted({tuple(row.get("source_range_us", ())) for row in clips})
     errors: list[dict] = []
+    checked_overlay = user_provided_media_overlay.validate_bundle(
+        build_manifest.get("user_provided_media_overlay"),
+        episode_id=build_manifest.get("episode_id"),
+        timeline_duration_us=build_manifest.get("urakkai", {}).get("target_duration_us", 0),
+    )
+    if checked_overlay["status"] != "PASS":
+        errors.extend(checked_overlay.get("errors", []))
+    else:
+        errors.extend(user_provided_media_overlay.validate_a10_overlap_policy(
+            build_manifest.get("source_audio"), checked_overlay.get("items", []),
+        ))
     if original_ranges != manifest_source_ranges:
         errors.append(_error(
             "TABLE_VIDEO_RANGE_MISMATCH",

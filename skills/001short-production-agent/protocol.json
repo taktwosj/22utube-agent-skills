@@ -69,7 +69,7 @@
     "append_after_index": 14,
     "evidence_bound": true,
     "undeclared_extra_tracks": "FORBIDDEN",
-    "user_audio_overlap_a10": "A10_ON_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
+    "user_audio_overlap_a10": "A10_ON_VOLUME_1_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
   },
   "visual_asset_modes": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"],
   "stage07_outputs": ["audio_lock.json", "caption_lock.json", "final.srt", "caption_timing_evidence.json"],

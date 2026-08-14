@@ -434,7 +434,39 @@ def _probe_duration_us(path: Path) -> int | None:
 
 
 def _probe(path: Path) -> bool:
-    return _probe_duration_us(path) is not None
+    if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}:
+        return _probe_duration_us(path) is not None
+    try:
+        metadata = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=codec_type,width,height", "-of", "json", str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        decoded = subprocess.run(
+            [
+                "ffmpeg", "-v", "error", "-xerror", "-err_detect", "explode",
+                "-i", str(path), "-map", "0:v:0", "-frames:v", "1", "-f", "null", "-",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        streams = json.loads(metadata.stdout).get("streams", []) if metadata.returncode == 0 else []
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError):
+        return False
+    return decoded.returncode == 0 and any(
+        isinstance(stream, dict)
+        and stream.get("codec_type") == "video"
+        and isinstance(stream.get("width"), int)
+        and stream["width"] > 0
+        and isinstance(stream.get("height"), int)
+        and stream["height"] > 0
+        for stream in streams
+    )
 
 
 def _probe_stream_types(path: Path) -> set[str]:
@@ -523,7 +555,8 @@ def _referenced_media_paths(model, project: Path) -> set[str]:
 
 def validate_audio_material_registration(
     project: Path, *, declared_items: list[dict] | None = None,
-    a10_required: bool | None = None, content: dict | None = None,
+    declared_role_segment_ids: dict[str, set[str]] | None = None,
+    content: dict | None = None,
     meta: dict | None = None, project_managed_ids: set[str] | None = None,
 ) -> list[dict]:
     """Validate CapCut's persisted local-audio registration surface."""
@@ -620,32 +653,81 @@ def validate_audio_material_registration(
         row for row in managed
         if row.get("role") == "A10"
     ]
-    managed_ids = [row.get("id") for row in managed]
-    managed_paths = [str(row.get("path", "")) for row in managed]
+    a9_rows = [
+        row for row in managed
+        if row.get("role") == "A9"
+    ]
     if overlay_indices == {15, 16, 17} and (
-        len(managed) != 4
-        or len(set(managed_ids)) != 4
-        or len(set(managed_paths)) != 4
+        len(overlay_rows) != 3
+        or len(set(overlay_material_ids)) != 3
+        or len(overlay_paths) != 3
         or len(a10_rows) != 1
         or a10_rows[0].get("id") in set(overlay_material_ids)
+        or str(a10_rows[0].get("path", "")) in overlay_paths
     ):
         errors.append(_error("USER_AUDIO_OVERLAY_COLLAPSED", count=len(overlay_rows)))
     if declared_items:
+        declared_role_segment_ids = declared_role_segment_ids or {}
+        segments_by_id = {
+            segment.get("id"): segment
+            for track in content.get("tracks", []) if isinstance(track, dict)
+            for segment in track.get("segments", []) if isinstance(segment, dict)
+            if isinstance(segment.get("id"), str)
+        }
+        expected_role_material_ids: dict[str, set[str]] = {}
+        missing_declared_role_segments: set[str] = set()
+        for role in ("A9", "A10"):
+            expected_ids: set[str] = set()
+            mapped_ids: list[str] = []
+            declared_segment_ids = declared_role_segment_ids.get(role, set())
+            for segment_id in declared_segment_ids:
+                segment = segments_by_id.get(segment_id)
+                material_id = segment.get("material_id") if isinstance(segment, dict) else None
+                material = material_map.get(material_id) if isinstance(material_id, str) else None
+                if not isinstance(material, dict) or material.get("role") != role:
+                    missing_declared_role_segments.add(segment_id)
+                    continue
+                expected_ids.add(material_id)
+                mapped_ids.append(material_id)
+            expected_role_material_ids[role] = expected_ids
+            if role == "A9" and (
+                len(mapped_ids) != len(declared_segment_ids)
+                or len(set(mapped_ids)) != len(declared_segment_ids)
+            ):
+                errors.append(_error(
+                    "A9_MATERIAL_MAPPING_INVALID",
+                    declared_segments=len(declared_segment_ids),
+                    distinct_materials=len(set(mapped_ids)),
+                ))
         expected_overlay_indices = {
             row.get("track_index") for row in declared_items
             if isinstance(row, dict) and row.get("media_kind") == "audio"
         }
-        expected_managed_count = len(expected_overlay_indices) + (1 if a10_required else 0)
+        expected_managed = [
+            *overlay_rows,
+            *(row for row in a10_rows if row.get("id") in expected_role_material_ids["A10"]),
+            *(row for row in a9_rows if row.get("id") in expected_role_material_ids["A9"]),
+        ]
+        expected_managed_count = (
+            len(expected_overlay_indices)
+            + len(expected_role_material_ids["A10"])
+            + len(expected_role_material_ids["A9"])
+        )
+        expected_managed_ids = [row.get("id") for row in expected_managed]
+        expected_managed_paths = [str(row.get("path", "")) for row in expected_managed]
         if (
             overlay_indices != expected_overlay_indices
             or len(overlay_rows) != len(expected_overlay_indices)
-            or len(a10_rows) != (1 if a10_required else 0)
-            or len(set(managed_ids)) != expected_managed_count
-            or len(set(managed_paths)) != expected_managed_count
+            or {row.get("id") for row in a10_rows} != expected_role_material_ids["A10"]
+            or {row.get("id") for row in a9_rows} != expected_role_material_ids["A9"]
+            or bool(missing_declared_role_segments)
+            or len(managed) != expected_managed_count
+            or len(set(expected_managed_ids)) != expected_managed_count
+            or len(set(expected_managed_paths)) != expected_managed_count
         ):
             errors.append(_error(
                 "USER_AUDIO_OVERLAY_COLLAPSED",
-                observed=len(set(managed_ids)), expected=expected_managed_count,
+                observed=len(set(expected_managed_ids)), expected=expected_managed_count,
             ))
 
     managed_id_set = {row.get("id") for row in managed}
@@ -747,6 +829,7 @@ def validate_audio_material_registration(
             or registered.get("metetype") != "music"
             or registered.get("item_source") != 1
             or registered.get("type") != 0
+            or candidate is None
             or registered.get("extra_info") != candidate.name
             or registered.get("sub_time_range") != {"start": -1, "duration": -1}
             or registered.get("width") != 0
@@ -754,7 +837,6 @@ def validate_audio_material_registration(
             or any(key not in row or row.get(key) != value for key, value in material_exact.items())
             or any(key not in registered or registered.get(key) != value for key, value in meta_exact.items())
             or "\\" in str(registered_path)
-            or candidate is None
             or registered_candidate != candidate
             or not isinstance(row.get("duration"), int)
             or not isinstance(registered.get("duration"), int)
@@ -788,10 +870,14 @@ def validate_primary_document_audio_surfaces(project: Path, contract: dict) -> l
         )
     )
     errors = list(declaration_errors)
-    a10_required = any(
-        isinstance(row, dict) and row.get("role") == "A10"
-        for row in contract.get("timeline", [])
-    )
+    declared_role_segment_ids = {
+        role: {
+            row["segment_id"] for row in contract.get("timeline", [])
+            if isinstance(row, dict) and row.get("role") == role
+            and isinstance(row.get("segment_id"), str)
+        }
+        for role in ("A9", "A10")
+    }
     try:
         documents = list(iter_primary_draft_documents(project))
     except (OSError, ValueError, TypeError):
@@ -827,10 +913,79 @@ def validate_primary_document_audio_surfaces(project: Path, contract: dict) -> l
         )
         document_name = document_path.relative_to(project).as_posix()
         errors.extend({**row, "document": document_name} for row in track_result.get("errors", []))
+        errors.extend({**row, "document": document_name} for row in _validate_document_audio_policy(
+            payload, contract,
+        ))
         errors.extend({**row, "document": document_name} for row in validate_audio_material_registration(
-            project, declared_items=declared_items, a10_required=a10_required,
+            project, declared_items=declared_items,
+            declared_role_segment_ids=declared_role_segment_ids,
             content=payload, meta=meta, project_managed_ids=project_managed_ids,
         ))
+    return errors
+
+
+def _validate_document_audio_policy(content: dict, contract: dict) -> list[dict]:
+    errors: list[dict] = []
+    missing_authority = []
+    if not isinstance(contract.get("audio_policy"), str) or not contract["audio_policy"]:
+        missing_authority.append("audio_policy")
+    if not isinstance(contract.get("source_audio"), list):
+        missing_authority.append("source_audio")
+    if missing_authority:
+        errors.append(_error(
+            "AUDIO_POLICY_AUTHORITY_MISSING", fields=missing_authority,
+        ))
+    if not isinstance(content.get("config"), dict) or content["config"].get("video_mute") is not True:
+        errors.append(_error("VIDEO_MUTE_POLICY_INVALID"))
+    segments = [
+        segment
+        for track in content.get("tracks", []) if isinstance(track, dict)
+        for segment in track.get("segments", []) if isinstance(segment, dict)
+    ]
+    for segment in segments:
+        if segment.get("role") == "VIDEO" and segment.get("volume") != 0.0:
+            errors.append(_error(
+                "VIDEO_VOLUME_POLICY_INVALID", segment_id=segment.get("id"),
+            ))
+    source_audio = contract.get("source_audio")
+    if isinstance(source_audio, list):
+        planned_rows = [
+            row
+            for row in source_audio
+            if isinstance(row, dict)
+            and row.get("mode") in {"on", "duck"}
+            and isinstance(row.get("target_range_us"), list)
+            and len(row["target_range_us"]) == 2
+        ]
+        for segment in segments:
+            if segment.get("role") != "A10":
+                continue
+            target = _range(segment)
+            target_pair = [target[0], target[2]] if target is not None else None
+            matches = [
+                row for row in planned_rows
+                if row.get("target_range_us") == target_pair
+            ]
+            if not matches:
+                errors.append(_error(
+                    "A10_AUDIO_POLICY_MAPPING_MISSING",
+                    segment_id=segment.get("id"), target_range_us=target_pair,
+                ))
+                continue
+            if len(matches) != 1:
+                errors.append(_error(
+                    "A10_AUDIO_POLICY_MAPPING_DUPLICATE",
+                    segment_id=segment.get("id"), target_range_us=target_pair,
+                    matches=len(matches),
+                ))
+                continue
+            planned = matches[0]
+            expected_volume = 0.0 if planned.get("mode") == "duck" else 1.0
+            if segment.get("volume") != expected_volume:
+                errors.append(_error(
+                    "A10_VOLUME_POLICY_INVALID", segment_id=segment.get("id"),
+                    clip_id=planned.get("clip_id"),
+                ))
     return errors
 
 

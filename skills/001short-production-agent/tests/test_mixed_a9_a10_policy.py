@@ -187,6 +187,58 @@ class MixedA9A10PolicyTest(unittest.TestCase):
                 )
                 self.assertEqual(locked["status"], "PASS", locked)
 
+            user_manifest = json.loads(build_manifest.read_text(encoding="utf-8"))
+            user_manifest["source_audio"] = [
+                {**row, "mode": "on"} for row in user_manifest["source_audio"]
+            ]
+            user_manifest["user_provided_media_overlay"] = {
+                "schema_version": "001short-user-provided-media-overlay-v1",
+                "episode_id": "EP",
+                "status": "WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT",
+                "user_authority": {
+                    "evidence": "operator supplied the narration file",
+                    "exact_text": "Keep the supplied narration at full volume.",
+                },
+                "items": [{
+                    "overlay_id": "user-narration-1",
+                    "media_kind": "audio",
+                    "track_index": 15,
+                    "source_path": str(narration),
+                    "source_sha256": sha(narration),
+                    "measured_duration_us": 1_000_000,
+                    "dimensions": {"width": 0, "height": 0},
+                    "source_range_us": [0, 1_000_000],
+                    "target_range_us": [0, 1_000_000],
+                }],
+            }
+            write(build_manifest, user_manifest)
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
+            config["project_name"] = "user-narration-project"
+            with patch.object(
+                builder, "_build_episode_once", return_value={"status": "PUBLIC_BUILD_REACHED"}
+            ):
+                user_result = builder.build_episode(config)
+            self.assertEqual(user_result["status"], "PUBLIC_BUILD_REACHED")
+            self.assertEqual(
+                config["user_provided_media_overlay"][0]["overlay_id"],
+                "user-narration-1",
+            )
+            config["project_name"] = "project"
+            write(build_manifest, json.loads(json.dumps(user_manifest | {
+                "user_provided_media_overlay": None,
+                "source_audio": [
+                    {**user_manifest["source_audio"][0], "mode": "duck"},
+                    user_manifest["source_audio"][1],
+                ],
+            })))
+            bind_state_artifacts(
+                state, timeline=timeline, build_manifest=build_manifest,
+                design_evidence=evidence, audio_lock=audio_lock, caption_lock=caption,
+            )
+
             original_timeline = json.loads(timeline.read_text(encoding="utf-8"))
             partial_timeline = json.loads(timeline.read_text(encoding="utf-8"))
             for row in partial_timeline["segments"]:

@@ -39,6 +39,44 @@
       },
       "additionalProperties": true
     },
+    "user_provided_media_overlay": {
+      "type": "object",
+      "required": ["schema_version", "episode_id", "status", "user_authority", "items"],
+      "properties": {
+        "schema_version": {"const": "001short-user-provided-media-overlay-v1"},
+        "episode_id": {"type": "string", "minLength": 1},
+        "status": {"const": "WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT"},
+        "user_authority": {
+          "type": "object",
+          "required": ["evidence", "exact_text"],
+          "properties": {
+            "evidence": {"type": "string", "minLength": 1},
+            "exact_text": {"type": "string", "minLength": 1}
+          },
+          "additionalProperties": true
+        },
+        "items": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["overlay_id", "media_kind", "track_index", "source_path", "source_sha256", "measured_duration_us", "dimensions", "target_range_us"],
+            "properties": {
+              "overlay_id": {"type": "string", "minLength": 1},
+              "media_kind": {"enum": ["audio", "image", "video"]},
+              "track_index": {"type": "integer", "minimum": 15},
+              "source_path": {"type": "string", "minLength": 1},
+              "source_sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+              "measured_duration_us": {"type": "integer", "minimum": 0},
+              "dimensions": {"type": "object"},
+              "source_range_us": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}},
+              "target_range_us": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}}
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
     "total_duration_us": {"type": "integer", "minimum": 1},
     "original_order": {"type": "array", "minItems": 1},
     "order_signature": {"type": "array", "minItems": 1},

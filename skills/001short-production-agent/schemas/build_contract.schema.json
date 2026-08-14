@@ -3,7 +3,7 @@
   "title": "001short actual CAPCUT_PROJECT build contract",
   "type": "object",
   "required": [
-    "schema_version", "episode_id", "track_layout_version", "root_contract_path", "workspace_root", "root_profile", "root_template_profile", "visual_asset_mode", "video_asset_key", "video_input_path", "video_input_sha256", "upload_ready", "source_project_path", "working_project_path", "evidence_root_path",
+    "schema_version", "episode_id", "track_layout_version", "audio_policy", "source_audio", "root_contract_path", "workspace_root", "root_profile", "root_template_profile", "visual_asset_mode", "video_asset_key", "video_input_path", "video_input_sha256", "upload_ready", "source_project_path", "working_project_path", "evidence_root_path",
     "source_core_sha256", "source_root_sha256", "template_sha256", "design_lock_evidence_path",
     "design_lock_evidence_sha256", "structure_snapshot_sha256", "project_id", "draft_id",
     "audio_lock_path", "audio_lock_sha256", "caption_lock_path",
@@ -54,6 +54,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "audio_policy": {"type": "string", "minLength": 1},
+    "source_audio": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["clip_id", "mode", "target_range_us"],
+        "properties": {
+          "clip_id": {"type": "string", "minLength": 1},
+          "mode": {"enum": ["on", "duck", "mute"]},
+          "target_range_us": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}}
+        },
+        "additionalProperties": true
+      }
     },
     "root_contract_path": {"type": "string", "minLength": 1},
     "workspace_root": {"type": "string", "minLength": 1},

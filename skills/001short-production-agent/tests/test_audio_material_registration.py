@@ -281,6 +281,84 @@ class AudioMaterialRegistrationTest(unittest.TestCase):
                 codes = {row["code"] for row in validate_audio_material_registration(project)}
                 self.assertIn("USER_AUDIO_OVERLAY_COLLAPSED", codes)
 
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "media tools required")
+    def test_declared_user_audio_count_includes_each_valid_a9_and_a10_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            media = project / "Resources" / "media"
+            media.mkdir(parents=True)
+            audios = []
+            for index, (name, role) in enumerate((
+                ("a9_narration_1.wav", "A9"),
+                ("a9_narration_2.wav", "A9"),
+                ("a10_vocal_stem.wav", "A10"),
+                ("user_overlay_15.wav", "USER_PROVIDED_AUDIO"),
+            )):
+                subprocess.run([
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "lavfi", "-i", f"sine=frequency={440 + index}:duration=0.2",
+                    "-ac", "1", "-ar", "48000", "-c:a", "pcm_s16le", str(media / name),
+                ], check=True)
+                audios.append({
+                    "id": f"audio-{index}", "role": role, "type": "music", "name": name,
+                    "path": f"##_draftpath_placeholder_fixture_##/Resources/media/{name}",
+                    "duration": 200_000, "local_material_id": "", "music_id": "",
+                })
+            _write(project / "draft_content.json", {
+                "materials": {"audios": audios},
+                "tracks": [{"segments": [
+                    {"id": f"segment-{index}", "material_id": row["id"]}
+                    for index, row in enumerate(audios)
+                ]}],
+            })
+            _write(project / "draft_meta_info.json", {"draft_materials": []})
+            builder.register_project_local_audio_materials(project)
+
+            errors = validate_audio_material_registration(
+                project,
+                declared_items=[{"track_index": 15, "media_kind": "audio"}],
+                declared_role_segment_ids={
+                    "A9": {"segment-0", "segment-1"},
+                    "A10": {"segment-2"},
+                },
+            )
+
+            self.assertEqual(errors, [])
+
+            content_path = project / "draft_content.json"
+            content = json.loads(content_path.read_text(encoding="utf-8"))
+            content["tracks"][0]["segments"][1]["material_id"] = "audio-0"
+            _write(content_path, content)
+            collapsed_errors = validate_audio_material_registration(
+                project,
+                declared_items=[{"track_index": 15, "media_kind": "audio"}],
+                declared_role_segment_ids={
+                    "A9": {"segment-0", "segment-1"},
+                    "A10": {"segment-2"},
+                },
+            )
+
+            self.assertIn(
+                "A9_MATERIAL_MAPPING_INVALID",
+                {row["code"] for row in collapsed_errors},
+            )
+
+    def test_out_of_project_managed_audio_path_fails_closed_without_crashing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            self._registered_bundle(project)
+            content_path = project / "draft_content.json"
+            content = json.loads(content_path.read_text(encoding="utf-8"))
+            content["materials"]["audios"][0]["path"] = str(project.parent / "outside.wav")
+            _write(content_path, content)
+
+            errors = validate_audio_material_registration(project)
+
+            self.assertIn(
+                "AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID",
+                {row["code"] for row in errors},
+            )
+
     def test_registration_schema_and_combination_refs_are_hard_gates(self):
         schema_mutations = {
             "material_type": lambda content, meta: content["materials"]["audios"][1].update(type="music"),
@@ -347,7 +425,8 @@ class AudioMaterialRegistrationTest(unittest.TestCase):
                 for index in (15, 16, 17)
             ]
             codes = {row["code"] for row in validate_audio_material_registration(
-                project, declared_items=declared, a10_required=True,
+                project, declared_items=declared,
+                declared_role_segment_ids={"A9": set(), "A10": {"segment-0"}},
             )}
             self.assertIn("AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID", codes)
 
