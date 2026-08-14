@@ -17,6 +17,13 @@ SCHEMA = SKILL / "schemas" / "executable_protocol.schema.json"
 PLAN_SCHEMA = SKILL / "schemas" / "executable_production_plan.schema.json"
 COMPLETION_SCHEMA = SKILL / "schemas" / "completion_report.schema.json"
 VALIDATOR = SKILL / "scripts" / "validate_executable_protocol.py"
+SOURCE_AUTHORITY = r"C:\Users\arajun\agent-skills\skills\001short-production-agent"
+SOURCE_REPOSITORY = r"C:\Users\arajun\agent-skills"
+RUNTIME_ENTRYPOINTS = {
+    "Codex": r"C:\Users\arajun\.codex\skills\001short-production-agent",
+    "Claude": r"C:\Users\arajun\.claude\skills\001short-production-agent",
+    "Hermes": r"C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent",
+}
 
 
 def load_validator():
@@ -30,6 +37,26 @@ def load_validator():
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def run_copied_self_check(mutator):
+    with tempfile.TemporaryDirectory() as directory:
+        copied_skill = Path(directory) / "001short-production-agent"
+        shutil.copytree(SKILL, copied_skill)
+        mutator(copied_skill)
+        return subprocess.run(
+            [
+                sys.executable,
+                str(copied_skill / "scripts" / "validate_executable_protocol.py"),
+                "--protocol",
+                str(copied_skill / "protocol.json"),
+                "--self-check",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
 
 
 def add_final_evidence(report: dict, root: Path) -> None:
@@ -313,6 +340,108 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             "PROTOCOL_REQUIRED_FILE_MISSING:schemas/not-present.schema.json",
             module.validate_skill_contract(SKILL, broken),
         )
+
+    def test_source_authority_escalation_contract_is_exact_and_self_checked(self):
+        orchestrator_text = (SKILL / "references" / "production-orchestrator.md").read_text(encoding="utf-8")
+        skill_text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn(f"Source authority: `{SOURCE_AUTHORITY}`", orchestrator_text)
+        self.assertIn(f"Worktree source repository: `{SOURCE_REPOSITORY}`", orchestrator_text)
+        for label, path in RUNTIME_ENTRYPOINTS.items():
+            self.assertIn(f"{label}: {path}", orchestrator_text)
+        self.assertIn("## Source authority and divergence gate", orchestrator_text)
+        self.assertIn("references/production-orchestrator.md#source-authority-and-divergence-gate", skill_text)
+        self.assertLess(len(skill_text.split()), 500)
+
+        passed = subprocess.run(
+            [sys.executable, str(VALIDATOR), "--self-check"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        self.assertEqual(passed.returncode, 0, passed.stdout)
+
+    def test_self_check_rejects_wrong_source_authority_repo(self):
+        def mutate(copied_skill):
+            path = copied_skill / "references" / "production-orchestrator.md"
+            text = path.read_text(encoding="utf-8")
+            path.write_text(
+                text.replace(
+                    f"Worktree source repository: `{SOURCE_REPOSITORY}`",
+                    r"Worktree source repository: `D:\wrong-authority-repo`",
+                ),
+                encoding="utf-8",
+            )
+
+        rejected = run_copied_self_check(mutate)
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn("PROTOCOL_ORCHESTRATOR_SOURCE_AUTHORITY_MISMATCH", rejected.stdout)
+
+    def test_self_check_rejects_each_missing_or_misbound_runtime_entrypoint(self):
+        for label, path in RUNTIME_ENTRYPOINTS.items():
+            exact_line = f"{label}: {path}"
+            mutations = {
+                "missing": "",
+                "misbound": f"{label}: D:\\wrong-entrypoint\\{label.lower()}",
+            }
+            for mutation_name, replacement in mutations.items():
+                with self.subTest(label=label, mutation=mutation_name):
+                    def mutate(copied_skill, old=exact_line, new=replacement):
+                        orchestrator = copied_skill / "references" / "production-orchestrator.md"
+                        text = orchestrator.read_text(encoding="utf-8")
+                        orchestrator.write_text(text.replace(old, new), encoding="utf-8")
+
+                    rejected = run_copied_self_check(mutate)
+                    self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                    self.assertIn(
+                        f"PROTOCOL_ORCHESTRATOR_RUNTIME_ENTRYPOINT_MISMATCH:{label}",
+                        rejected.stdout,
+                    )
+
+    def test_self_check_rejects_extra_escalation_option_or_release_step(self):
+        mutations = {
+            "extra_option": (
+                "3. 스킬 수정하기 — 스킬 수정 폴더에서",
+                "3. 스킬 수정하기 — 스킬 수정 폴더에서\n4. 자동 진행",
+                "PROTOCOL_ORCHESTRATOR_ESCALATION_OPTIONS_MISMATCH",
+            ),
+            "extra_option_paren": (
+                "3. 스킬 수정하기 — 스킬 수정 폴더에서",
+                "3. 스킬 수정하기 — 스킬 수정 폴더에서\n4) 자동 진행",
+                "PROTOCOL_ORCHESTRATOR_ESCALATION_OPTIONS_MISMATCH",
+            ),
+            "extra_option_unnumbered": (
+                "3. 스킬 수정하기 — 스킬 수정 폴더에서",
+                "3. 스킬 수정하기 — 스킬 수정 폴더에서\n자동 진행",
+                "PROTOCOL_ORCHESTRATOR_ESCALATION_OPTIONS_MISMATCH",
+            ),
+            "extra_release_step": (
+                "7. `python -B scripts/skill_release.py verify --target all --self-check`",
+                "7. `python -B scripts/skill_release.py verify --target all --self-check`\n8. Direct runtime copy",
+                "PROTOCOL_ORCHESTRATOR_RELEASE_RECIPE_MISMATCH",
+            ),
+            "extra_release_step_paren": (
+                "7. `python -B scripts/skill_release.py verify --target all --self-check`",
+                "7. `python -B scripts/skill_release.py verify --target all --self-check`\n8) Direct runtime copy",
+                "PROTOCOL_ORCHESTRATOR_RELEASE_RECIPE_MISMATCH",
+            ),
+            "extra_release_step_unnumbered": (
+                "7. `python -B scripts/skill_release.py verify --target all --self-check`",
+                "7. `python -B scripts/skill_release.py verify --target all --self-check`\nDirect runtime copy",
+                "PROTOCOL_ORCHESTRATOR_RELEASE_RECIPE_MISMATCH",
+            ),
+        }
+        for mutation_name, (old, new, expected_error) in mutations.items():
+            with self.subTest(mutation=mutation_name):
+                def mutate(copied_skill, old_text=old, new_text=new):
+                    orchestrator = copied_skill / "references" / "production-orchestrator.md"
+                    text = orchestrator.read_text(encoding="utf-8")
+                    orchestrator.write_text(text.replace(old_text, new_text), encoding="utf-8")
+
+                rejected = run_copied_self_check(mutate)
+                self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+                self.assertIn(expected_error, rejected.stdout)
 
     def test_self_check_catches_missing_urakkai_table_approval_contract(self):
         module = load_validator()

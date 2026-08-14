@@ -14,6 +14,10 @@ description: Use for original-shorts production, source intake from Google Drive
 For pre-lock ambiguity, reproducible code/tool defects, or contract changes, read
 [matt-auxiliary-routing.md](references/matt-auxiliary-routing.md). Normal/AUTO episodes stay on the owner workflow.
 
+## Authority and divergence
+
+Before any skill, runtime, or episode-draft mutation, read and follow the single detailed contract in [Source authority and divergence gate](references/production-orchestrator.md#source-authority-and-divergence-gate). Never infer or self-select an exception.
+
 ## User-facing three phases
 
 Always execute and report `원본표 → 우라까이표 → CapCut 조립`.
@@ -43,18 +47,8 @@ Every cell: real value, `없음`, or `비움`; empty/placeholders/`미확인` fa
 
 ## Build boundary
 
-- `scripts/build_episode_capcut.py` validates both tables before work-root or draft writes.
-- It binds normalized text, cue/layer/color/effect, and path/SHA locks for timeline, manifest, design, audio, and captions.
-- Preserve the 15 canonical base tracks. Only evidence-bound `001short-user-provided-media-overlay-layout-v1` may append declared overlays after index 14; reject undeclared tracks. Route STATE only to `STATE_LASER`; keep `STATE_GLITCH`, `STATE_FLICKER`, and A12 empty.
-- A9/A9_TEXT require narration audio. STATE_LASER is silent situation text; never request TTS for STATE-only screens.
-- Select one explicit audio matrix; never fall back between modes:
-  - `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` + `SOURCE_ORDER_CLEAN_AUDIO`: full source-identity-bound raw A10; no Demucs.
-  - `SOURCE_ORDER_UNCHANGED_A10_RETAINED` + `A10_RETAINED_SYNC`: validated full Demucs stem.
-  - `URAKKAI` + `A10_REASSEMBLED_SYNC`: mapped reassembly derived from that full stem.
-- Run Demucs once per explicit stem mode; reuse its manifest.
-- Mixed generated A9: `source_audio[].mode=duck` under narration, `source_audio[].mode=on` elsewhere; partial overlap=`MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`. Validated file/SHA/duration/range-bound user audio: A10 on/1.0, no auto-duck/mute/split, status `WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT`.
-- Require timeline/caption cue bijection and source-time evidence. Zero captions require empty timeline cues, lock cues, and `final.srt`.
-- Keep VIDEO embedded audio muted and preserve the selected audio policy.
+- `scripts/build_episode_capcut.py` validates both tables before work-root or draft writes. All build, overlay, track, and audio detail lives in the orchestrator.
+- Mixed-audio contract vocabulary remains `A10_REASSEMBLED_SYNC`, `source_audio[].mode=duck`, `source_audio[].mode=on`, and `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`.
 - Do not mutate a draft while CapCut or its background processes are open.
 
 After assembly, report validator/readback, then separate code blocks for `프로젝트 파일명` and `프로젝트 전체 경로`. Missing readback=`NOT RUN`.

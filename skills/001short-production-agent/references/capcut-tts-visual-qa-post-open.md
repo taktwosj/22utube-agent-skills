@@ -7,7 +7,7 @@
 ## 조립 계약
 
 - 근본 ZIP은 불변 authority이며 매 build마다 새 staging과 새 build/project/timeline ID를 만든다.
-- source authority와 working staging은 반드시 다른 경로여야 한다. 같으면 `SOURCE_WORKING_CONFLICT`로 중단한다.
+- CapCut root authority와 working staging은 반드시 다른 경로여야 한다. 같으면 `SOURCE_WORKING_CONFLICT`로 중단한다.
 - raw track index 대신 root contract의 logical anchor를 사용한다.
 - T1/T2 노출 시간은 승인된 `production_design`이 권위다. 3초 같은 builder 상수를 두지 않는다. 전체 영상 유지가 승인안이면 VIDEO 전체 길이를 사용한다.
 - A9를 비우기만 하고 끝내지 않는다. 실제 TTS material과 segment를 생성하고 `Resources/media`의 self-contained WAV에 연결한다.
@@ -97,7 +97,7 @@ WAIT_USER_CAPCUT_CHECK
 - A9/A9_TEXT가 실제로 배치되고 같은 길이를 갖는다.
 - T1/T2가 승인 구간 전체에서 유지된다.
 - A10 start/duck이 mix plan과 일치한다.
-- source authority와 working staging 동일 경로는 FAIL한다.
+- CapCut root authority와 working staging 동일 경로는 FAIL한다.
 - paired mirror는 post-open 후 PASS한다.
 - 프로젝트 이름 suffix 변경 후에도 ID로 draft를 찾는다.
 - 모든 retained material ref와 media file이 존재한다.
