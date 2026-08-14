@@ -22,6 +22,31 @@ class CapcutMaterialPathTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def test_skill_contract_makes_installed_copies_immutable(self) -> None:
+        skill = (SCRIPTS.parent / "SKILL.md").read_text(encoding="utf-8")
+        for installed_path in (
+            r"C:\Users\arajun\.codex\skills\119-politics-longform-capcut",
+            r"C:\Users\arajun\.claude\skills\119-politics-longform-capcut",
+            r"C:\Users\arajun\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut",
+        ):
+            with self.subTest(installed_path=installed_path):
+                self.assertIn(f"`{installed_path}`", skill)
+        self.assertIn("직접 create·edit·copy·delete·relink하지 않는다", skill)
+        self.assertIn(
+            r"Git 정본 `C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다",
+            skill,
+        )
+        self.assertIn("공식 release `publish → activate → verify`", skill)
+        self.assertIn("첫 불일치에서 중단하고 문제·증거·영향·안전 rollback point를 보고", skill)
+        for choice in (
+            "별도승인 이번작업만",
+            "일단정지 어떤문제인지보고만",
+            "스킬수정하기(스킬수정폴더에서)",
+        ):
+            with self.subTest(choice=choice):
+                self.assertIn(f"`{choice}`", skill)
+        self.assertIn("Codex·Claude·Hermes installed copy를 직접 편집하지 않는다", skill)
+
     @staticmethod
     def document(material: dict) -> dict:
         return {"materials": {"videos": [material]}, "outside": {"path": "D:/ignored.mp4"}}

@@ -22,6 +22,26 @@ description: Use only when a political-longform request explicitly contains CapC
 
 앞으로 시작하는 모든 119 정치롱폼 에피소드의 경량 산출물과 작업 루트는 `<factory-root>\0000jungchi\<episode_id>`다. 시작할 때 해당 에피소드 폴더를 만들며, 기존 에피소드 파일은 이동하지 않는다. 원본 CapCut draft·cache·원본 MP4·Media 폴더 등 무거운 로컬 미디어는 소유 계약이 달리 정하지 않는 한 계속 machine-local에 둔다.
 
+## Installed copies are immutable
+
+다음 설치 경로의 파일은 직접 create·edit·copy·delete·relink하지 않는다.
+
+- `C:\Users\arajun\.codex\skills\119-politics-longform-capcut`
+- `C:\Users\arajun\.claude\skills\119-politics-longform-capcut`
+- `C:\Users\arajun\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut`
+
+119 스킬 변경은 Git 정본 `C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다. 변경을 commit한 뒤 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
+
+## 생산 중 계약 충돌
+
+생산 중 승인 계획이 스킬 계약과 충돌하면 스킬을 수정하거나 우회책을 만들지 않는다. 첫 불일치에서 중단하고 문제·증거·영향·안전 rollback point를 보고한 뒤, 사용자에게 다음 중 정확히 하나를 선택하게 한다.
+
+1. `별도승인 이번작업만` — 이 에피소드에 한정한 최소 one-off workaround만 허용하며 스킬은 수정하지 않는다.
+2. `일단정지 어떤문제인지보고만` — workaround와 스킬 변경 없이 문제만 보고한다.
+3. `스킬수정하기(스킬수정폴더에서)` — Git 정본 스킬 폴더만 수정하고 test·review·commit한 뒤 공식 release flow로 배포한다.
+
+어느 선택에서도 Codex·Claude·Hermes installed copy를 직접 편집하지 않는다.
+
 | 관찰 가능한 상태 | 읽을 문서 | 상태 |
 |---|---|---|
 | PRE-119 강한 표식 1개 또는 보조 표식 2개 이상 | `pre119-handoff-contract.md` | `PRE119_VALIDATION` |
