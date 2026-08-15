@@ -54,9 +54,9 @@ Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인
 
 After assembly, report validator/readback and separate code blocks for `프로젝트 파일명`, `프로젝트 전체 경로`, and `미디어 폴더 전체 경로`; missing readback=`NOT RUN`.
 
-## Lane and finalization
+## Lane Isolation
 
-- Keep `owner_skill=001short-production-agent`, `lane=general_shorts_production`.
+- 하나의 lane만 확정: keep `owner_skill=001short-production-agent`, `lane=general_shorts_production`; do not chain `top5isu-shorts` or another production skill.
 - `PAPERCLIP_DISABLED`: Do not request, register, create, validate, wait on, or report Paperclip.
 - VMake is agent-first and nonblocking; replace provisional VIDEO after clean-asset verification.
 - Stage 04의 승인 권위는 사용자다.
