@@ -74,6 +74,7 @@ class CapcutMaterialPathTests(unittest.TestCase):
                 "path": "Resources/media/main.mp4",
                 "nested": {"proxy_path": "Resources/media/proxy.mp4"},
                 "text_loop_on_path": False,
+                "offset_on_path": 0.0,
                 "filepath": "D:/not-a-recognized-key.mp4",
                 "name": "D:/display-only.mp4",
             }
