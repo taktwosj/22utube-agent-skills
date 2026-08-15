@@ -15,6 +15,11 @@ from common import sha256_file
 
 
 ALLOWED_KINDS = {"GOOGLE_DRIVE", "URL", "DESKTOP"}
+RECEIPT_VERSIONS = {
+    "001short-source-intake-receipt-v1",
+    "001short-source-intake-receipt-v2",
+}
+ORIGINAL_ANALYSIS_CONTRACT_VERSION = "001short-original-source-transcript-v1"
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -66,8 +71,14 @@ def validate_receipt(receipt_path: Path) -> list[str]:
     except Exception as exc:
         return [f"INTAKE_RECEIPT_READ:{exc}"]
     errors: list[str] = []
-    if receipt.get("schema_version") != "001short-source-intake-receipt-v1":
+    receipt_version = receipt.get("schema_version")
+    if receipt_version not in RECEIPT_VERSIONS:
         errors.append("INTAKE_RECEIPT_SCHEMA_VERSION_INVALID")
+    if receipt_version == "001short-source-intake-receipt-v2":
+        if receipt.get("original_analysis_contract_version") != ORIGINAL_ANALYSIS_CONTRACT_VERSION:
+            errors.append("INTAKE_RECEIPT_ORIGINAL_ANALYSIS_CONTRACT_REQUIRED")
+    elif receipt.get("original_analysis_contract_version") is not None:
+        errors.append("INTAKE_RECEIPT_ORIGINAL_ANALYSIS_CONTRACT_VERSION_INVALID")
     for field in ("episode_id", "source_id", "source_locator", "local_media_path", "local_media_sha256", "source_identity_path", "source_identity_sha256"):
         if not isinstance(receipt.get(field), str) or not receipt[field].strip():
             errors.append(f"INTAKE_RECEIPT_FIELD_REQUIRED:{field}")

@@ -19,6 +19,35 @@
     "a9_text_max_chars_per_line": 15,
     "state_laser_max_lines": 2,
     "state_laser_max_chars_per_line": 15,
+    "original_source_transcript": {
+      "contract_version": "001short-original-source-transcript-v1",
+      "reference": "references/original-source-transcript.md",
+      "position": "before_15_row_grid",
+      "stage02_validator": "python -B scripts/validate_capcut_grids.py --original <episode_root>/20_script/original-capcut-grid.md --original-only",
+      "new_episode_intake_schema_version": "001short-source-intake-receipt-v2",
+      "version_field": "original_analysis_contract_version",
+      "evidence_path": "10_analysis/original-source-evidence.json",
+      "evidence_schema": "schemas/original_source_evidence.schema.json",
+      "evidence_validator": "scripts/validate_original_source_evidence.py",
+      "state_evidence_fields": [
+        "original_source_evidence_path",
+        "original_source_evidence_sha256"
+      ],
+      "legacy_without_version": "RESUME_UNCHANGED",
+      "caller_version_override": "FORBIDDEN",
+      "segment_binding": "all_B_headers_exact_id_and_source_range",
+      "field_order": [
+        "(상황설명)",
+        "\"화자발언\"",
+        "<나레이션>",
+        "TTS화자발언",
+        "TTS나레이션"
+      ],
+      "literal_ocr_field": "(상황설명).화면 OCR:",
+      "source_audio_fields": ["\"화자발언\"", "<나레이션>"],
+      "original_tts_value": "없음",
+      "unresolved_ocr_error": "WAIT_OCR_UNRESOLVED"
+    },
     "builder_preflight_before_writes": true,
     "chat_report_required_in_auto_mode": true,
     "final_report_requires": [

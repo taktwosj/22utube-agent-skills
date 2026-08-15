@@ -30,9 +30,27 @@ def _sha(path: Path) -> str:
 def _two_column_grid(kind: str, *, declare_mixed: bool, target_mismatch: bool = False) -> str:
     if kind == "original":
         header = "| 레이어 \\ 원본 시간 | B01 0.0–1.0 | B02 1.0–2.0 |"
+        transcript = """## 원본 5분류 대본
+
+### B01 0.0–1.0
+(상황설명) 첫 장면. 화면 OCR: 없음
+\"화자발언\" \"hello\"
+<나레이션> 없음
+TTS화자발언 없음
+TTS나레이션 없음
+
+### B02 1.0–2.0
+(상황설명) 둘째 장면. 화면 OCR: 없음
+\"화자발언\" \"there\"
+<나레이션> 없음
+TTS화자발언 없음
+TTS나레이션 없음
+
+"""
     else:
         first_end = "0.9" if target_mismatch else "1.0"
         header = f"| 레이어 \\ 목표 시간 | V01 0.0–{first_end} B02 | V02 1.0–2.0 B01 |"
+        transcript = ""
     mixed_a9 = ("나레이션", "비움") if declare_mixed else ("비움", "비움")
     rows = (
         ("T1", "title", "title"),
@@ -51,7 +69,7 @@ def _two_column_grid(kind: str, *, declare_mixed: bool, target_mismatch: bool = 
         ("A11", "비움", "비움"),
         ("A12_RESERVED_EMPTY", "비움", "비움"),
     )
-    return "\n".join((header, "|---|---|---|", *("| " + " | ".join(row) + " |" for row in rows))) + "\n"
+    return transcript + "\n".join((header, "|---|---|---|", *("| " + " | ".join(row) + " |" for row in rows))) + "\n"
 
 
 def _semantic_config(root: Path, *, declare_mixed: bool, target_mismatch: bool = False) -> dict:
@@ -124,6 +142,47 @@ def _semantic_config(root: Path, *, declare_mixed: bool, target_mismatch: bool =
 
 
 class CapCutGridHarnessTest(unittest.TestCase):
+    def test_builder_uses_state_bound_original_contract_and_stops_before_writes(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = _semantic_config(root, declare_mixed=True)
+            episode = Path(config["episode_root"])
+            state_path = Path(config["state_path"])
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state.update({
+                "episode_id": "EP",
+                "original_analysis_contract_version": "001short-original-source-transcript-v1",
+            })
+            _write_json(state_path, state)
+            input_root = episode / "00_input"
+            input_root.mkdir()
+            _write_json(input_root / "source_intake_receipt.json", {
+                "schema_version": "001short-source-intake-receipt-v2",
+                "episode_id": "EP",
+                "original_analysis_contract_version": "001short-original-source-transcript-v1",
+            })
+            with self.assertRaisesRegex(ValueError, "ORIGINAL_SOURCE_EVIDENCE_REQUIRED"):
+                builder.build_episode(config)
+            self.assertFalse((root / "work").exists())
+            self.assertFalse((root / "capcut").exists())
+
+    def test_cli_original_only_keeps_unversioned_legacy_fixture_compatible(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--original",
+                str(ORIGINAL),
+                "--original-only",
+            ],
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(json.loads(completed.stdout), {"status": "PASS", "errors": []})
+
     def test_cli_emits_original_then_urakkai_complete_tables(self):
         completed = subprocess.run(
             [
@@ -175,7 +234,7 @@ class CapCutGridHarnessTest(unittest.TestCase):
                 "A12_RESERVED_EMPTY",
             ),
             "header": (
-                original_text.replace("B01 00.0–03.9", "V01 00.0–03.9", 1),
+                original_text.replace("| B01 00.0–03.9 |", "| V01 00.0–03.9 |", 1),
                 "TABLE_HEADER_INVALID",
             ),
         }
