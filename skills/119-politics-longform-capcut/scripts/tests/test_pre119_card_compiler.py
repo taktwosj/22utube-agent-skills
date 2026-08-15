@@ -443,6 +443,54 @@ class Pre119CardCompilerTests(unittest.TestCase):
         self.assertIn("PRE119_LOCKED_FIELD_EXTRA:C001:unapproved_screen_text", result.stderr)
         self.assertFalse(self.output.exists())
 
+    def test_runtime_execution_bindings_are_accepted(self) -> None:
+        card = self.source_card()
+        runtime_bindings = {
+            "audio_start_us": 100_000,
+            "motion_profile": "ZOOM_SLOW",
+            "source_audio_mode": "MUTE",
+            "video_start_us": 100_000,
+        }
+        card.update(runtime_bindings)
+        self.write_evidence([card])
+
+        result = self.run_compiler()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        compiled = json.loads(self.output.read_text(encoding="utf-8"))
+        for field, value in runtime_bindings.items():
+            with self.subTest(field=field):
+                self.assertEqual(compiled["cards"][0][field], value)
+
+    def test_valid_display_transform_evidence_is_accepted_when_not_seed_locked(self) -> None:
+        self.write_validation(lower_mode="SRT")
+        raw = self.root / "transcripts" / "S01_raw.srt"
+        display = self.root / "captions" / "S01_display.srt"
+        raw.parent.mkdir(parents=True)
+        display.parent.mkdir(parents=True)
+        raw.write_text("1\n00:00:00,000 --> 00:00:02,000\n>> locked text\n", encoding="utf-8")
+        display.write_text("1\n00:00:00,000 --> 00:00:02,000\nlocked\ntext\n", encoding="utf-8")
+        card = self.source_card(lower_mode="SRT")
+        card.update(
+            {
+                "raw_transcript_path": str(raw),
+                "raw_transcript_sha256": digest(raw),
+                "display_srt_path": str(display),
+                "display_srt_sha256": digest(display),
+                "display_transform": ["DIALOGUE_MARKER_REMOVAL", "LINE_BREAK"],
+            }
+        )
+        self.write_evidence([card])
+
+        result = self.run_compiler()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        compiled = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertEqual(
+            compiled["cards"][0]["display_transform"],
+            ["DIALOGUE_MARKER_REMOVAL", "LINE_BREAK"],
+        )
+
     def test_malformed_timeline_value_returns_controlled_blocker(self) -> None:
         card = self.source_card()
         card["target_start_us"] = None
