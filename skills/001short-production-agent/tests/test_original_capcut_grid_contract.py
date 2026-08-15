@@ -164,7 +164,7 @@ class OriginalCapCutGridContractTest(unittest.TestCase):
             "TABLE_EMPTY_CELL_FORBIDDEN",
             "TABLE_UNVERIFIED_CELL",
             "대화창",
-            "프로젝트 파일명",
+            "프로젝트명",
             "프로젝트 전체 경로",
         ):
             self.assertIn(token, joined)

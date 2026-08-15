@@ -31,16 +31,13 @@
 
 ## 최종 보고
 
-정적 validator와 실제 draft readback을 실행한 뒤 결과를 한 줄로 보고한다. 실행하지 않았다면 `NOT RUN`으로 적고 PASS를 주장하지 않는다.
-`references/urakkai-artifact-contract.md`에 따라 readback의 `project_path`와 `media_source_path`를 확인한다.
+결과 보고의 첫 항목은 정확한 CapCut 프로젝트명이며, 프로젝트 폴더 이름만 담은 별도 복사 가능 코드 블록으로 출력한다.
 
-그 다음 아래 순서를 반드시 지킨다.
+그 다음 정적 validator와 실제 draft readback 결과를 한 줄로 보고한다. 실행하지 않았다면 `NOT RUN`으로 적고 PASS를 주장하지 않는다. `references/urakkai-artifact-contract.md`에 따라 readback의 `project_path`와 `media_source_path`를 확인한다.
+
+그 뒤 아래 순서를 따른다.
 
 ```text
-프로젝트 파일명
-
-<프로젝트 폴더 이름만 담은 별도 코드 블록>
-
 프로젝트 전체 경로
 
 <절대경로만 담은 별도 코드 블록>
