@@ -56,6 +56,28 @@ CTA OFF는 build 전에 root CTA segment를 제거한다. 카드별 CTA가 섞�
 
 `PROJECT_CREATED_WAIT_MEDIA_RELINK`은 정적 검사 통과일 뿐 완성이 아니다.
 
+## 사용자 전달 경계
+
+정적 build가 PASS하면 에이전트는 CapCut을 열지 않는다. 다음 세 경로를 실제 build report에서 읽어 사용자에게 보고하고 `WAIT_USER_CAPCUT_CHECK`로 멈춘다.
+
+```text
+프로젝트 파일명
+프로젝트 전체 경로
+미디어 폴더 전체 경로
+```
+
+이 전달 시점에는 다음과 같이 보고한다.
+
+```text
+MEDIA_RELINK=NOT RUN — USER MANUAL
+MEDIA_RESOLUTION=NOT RUN — USER MANUAL
+VISUAL_GATE=NOT RUN — USER MANUAL
+MP4=NOT RUN
+UPLOAD=NOT RUN
+```
+
+사용자가 직접 CapCut을 열고 확인한다. 정적 build를 전체 CapCut 제작 완료로 승격하지 않는다.
+
 ## Build 이후 수정 금지
 
 BUILD 뒤 active draft에서 CTA·chapter·source label·lower text·card media·template·attachment·history metadata를 직접 수술하지 않는다.

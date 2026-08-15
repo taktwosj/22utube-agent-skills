@@ -43,7 +43,17 @@ def one_column_grid(kind: str, duration_us: int) -> str:
         "STATE_LASER", "STATE_GLITCH", "STATE_FLICKER", "SCREEN_WHITE",
         "SCREEN_EFFECT", "VIDEO", "A9", "A10", "A11", "A12_RESERVED_EMPTY",
     )
-    return "\n".join([header, "|---|---|", *(f"| {role} | 비움 |" for role in roles)]) + "\n"
+    transcript = "" if kind != "original" else f"""## 원본 5분류 대본
+
+### B01 0.0–{seconds:g}
+(상황설명) 테스트 장면. 화면 OCR: 없음
+\"화자발언\" 없음
+<나레이션> 없음
+TTS화자발언 없음
+TTS나레이션 없음
+
+"""
+    return transcript + "\n".join([header, "|---|---|", *(f"| {role} | 비움 |" for role in roles)]) + "\n"
 
 
 class ContractDefects20260811Test(unittest.TestCase):

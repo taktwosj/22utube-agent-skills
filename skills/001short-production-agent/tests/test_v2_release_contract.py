@@ -219,6 +219,18 @@ class V2ReleaseContractTest(unittest.TestCase):
                 self.assertEqual(validator.validate_receipt(receipt), [])
 
                 payload = json.loads(receipt.read_text(encoding="utf-8"))
+                payload["schema_version"] = "001short-source-intake-receipt-v2"
+                payload["original_analysis_contract_version"] = "001short-original-source-transcript-v1"
+                receipt.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertEqual(validator.validate_receipt(receipt), [])
+                del payload["original_analysis_contract_version"]
+                receipt.write_text(json.dumps(payload), encoding="utf-8")
+                self.assertIn(
+                    "INTAKE_RECEIPT_ORIGINAL_ANALYSIS_CONTRACT_REQUIRED",
+                    validator.validate_receipt(receipt),
+                )
+
+                payload["schema_version"] = "001short-source-intake-receipt-v1"
                 payload["source_id"] = "wrong"
                 receipt.write_text(json.dumps(payload), encoding="utf-8")
                 self.assertIn("INTAKE_RECEIPT_SOURCE_ID_MISMATCH", validator.validate_receipt(receipt))

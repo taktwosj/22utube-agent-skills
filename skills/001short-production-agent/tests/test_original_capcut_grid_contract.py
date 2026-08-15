@@ -12,7 +12,7 @@ if str(SCRIPTS) not in sys.path:
 
 import validate_design_lock
 import validate_original_blueprint
-from validate_capcut_grids import REQUIRED_ROWS
+from validate_capcut_grids import REQUIRED_ROWS, render_chat_report, validate_grid, validate_grids
 
 
 SKILL = SKILL_ROOT / "SKILL.md"
@@ -25,6 +25,7 @@ ORCHESTRATOR = SKILL_ROOT / "references" / "production-orchestrator.md"
 ORIGINAL_TEMPLATE = SKILL_ROOT / "templates" / "original-capcut-grid.md"
 URAKKAI_TEMPLATE = SKILL_ROOT / "templates" / "urakkai-capcut-grid.md"
 EXECUTION_SPEC = SKILL_ROOT.parents[1] / "docs" / "001SHORT_NORMAL_FAST_EXECUTION_SPEC.md"
+ORIGINAL_FIXTURE = SKILL_ROOT / "tests" / "fixtures" / "original_grid_8.pass.md"
 
 
 def table_roles(path: Path, header: str) -> tuple[str, ...]:
@@ -91,6 +92,63 @@ class OriginalCapCutGridContractTest(unittest.TestCase):
                     {row["code"] for row in result["errors"]},
                 )
 
+    def test_original_grid_requires_five_category_source_transcript_before_table(self):
+        source = ORIGINAL_FIXTURE.read_text(encoding="utf-8")
+        legacy_table = "# 원본표\n\n" + source[source.index("| 레이어 \\ 원본 시간 |") :]
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "original.md"
+            path.write_text(legacy_table, encoding="utf-8")
+            _grid, errors = validate_grid(path, "original", require_source_transcript=True)
+        self.assertIn("ORIGINAL_TRANSCRIPT_REQUIRED", {row["code"] for row in errors})
+
+    def test_original_transcript_matches_every_b_segment_and_renders_before_grid(self):
+        source = ORIGINAL_FIXTURE.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "original.md"
+            path.write_text(source, encoding="utf-8")
+            validation = validate_grids(path, URAKKAI_TEMPLATE)
+            self.assertNotIn(
+                "ORIGINAL_TRANSCRIPT_REQUIRED",
+                {row["code"] for row in validation["errors"]},
+            )
+            original, errors = validate_grid(path, "original")
+            self.assertEqual(errors, [])
+            self.assertEqual(tuple(block.segment_id for block in original.source_transcript), tuple(f"B{i:02d}" for i in range(1, 9)))
+            report = original.markdown()
+            self.assertLess(report.index("### B01 00.0–03.9"), report.index("| 레이어 \\ 원본 시간 |"))
+
+    def test_original_transcript_rejects_field_reorder_unresolved_ocr_and_added_tts(self):
+        valid = ORIGINAL_FIXTURE.read_text(encoding="utf-8")
+        cases = {
+            "field_order": (
+                valid.replace(
+                    '\"화자발언\" 없음\n<나레이션> \"케이크 상태가 이상해\"',
+                    '<나레이션> \"케이크 상태가 이상해\"\n\"화자발언\" 없음',
+                    1,
+                ),
+                "ORIGINAL_TRANSCRIPT_FIELD_ORDER_INVALID",
+            ),
+            "ocr": (
+                valid.replace("화면 OCR: 없음", "화면 OCR: 미확인", 1),
+                "WAIT_OCR_UNRESOLVED",
+            ),
+            "tts": (
+                valid.replace("TTS나레이션 없음", "TTS나레이션 새로 만든 해설", 1),
+                "ORIGINAL_TRANSCRIPT_TTS_FORBIDDEN",
+            ),
+            "absence": (
+                valid.replace('\"화자발언\" 없음', '\"화자발언\" 비움', 1),
+                "ORIGINAL_TRANSCRIPT_ABSENCE_VALUE_INVALID",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as td:
+            for name, (text, expected) in cases.items():
+                with self.subTest(name=name):
+                    path = Path(td) / f"{name}.md"
+                    path.write_text(text, encoding="utf-8")
+                    _grid, errors = validate_grid(path, "original")
+                    self.assertIn(expected, {row["code"] for row in errors})
+
     def test_both_templates_use_the_same_exact_15_row_order(self):
         self.assertEqual(table_roles(ORIGINAL_TEMPLATE, "레이어 \\ 원본 시간"), REQUIRED_ROWS)
         self.assertEqual(table_roles(URAKKAI_TEMPLATE, "레이어 \\ 목표 시간"), REQUIRED_ROWS)
@@ -119,7 +177,27 @@ class OriginalCapCutGridContractTest(unittest.TestCase):
         self.assertEqual(harness["validator"], "scripts/validate_capcut_grids.py")
         self.assertTrue(harness["builder_preflight_before_writes"])
         self.assertTrue(harness["chat_report_required_in_auto_mode"])
+        transcript = harness["original_source_transcript"]
+        self.assertEqual(tuple(transcript["field_order"]), (
+            "(상황설명)", '"화자발언"', "<나레이션>", "TTS화자발언", "TTS나레이션",
+        ))
+        self.assertEqual(transcript["original_tts_value"], "없음")
+        self.assertEqual(transcript["unresolved_ocr_error"], "WAIT_OCR_UNRESOLVED")
+        self.assertEqual(
+            transcript["contract_version"],
+            "001short-original-source-transcript-v1",
+        )
+        self.assertEqual(transcript["legacy_without_version"], "RESUME_UNCHANGED")
+        self.assertEqual(transcript["caller_version_override"], "FORBIDDEN")
+        self.assertEqual(
+            transcript["evidence_schema"],
+            "schemas/original_source_evidence.schema.json",
+        )
         self.assertEqual(workflow["grid_harness"], {"authority": "protocol.json#/grid_harness"})
+        self.assertEqual(
+            workflow["original_source_transcript"]["authority"],
+            "protocol.json#/grid_harness/original_source_transcript",
+        )
 
     def test_original_beats_have_five_separate_observation_fields(self):
         protocol = json.loads((SKILL_ROOT / "protocol.json").read_text(encoding="utf-8"))

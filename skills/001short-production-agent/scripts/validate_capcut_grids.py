@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import user_provided_media_overlay
+import validate_original_source_evidence
 
 from common import meaningful_text_length
 
@@ -56,6 +57,32 @@ PLACEHOLDER_TOKEN = re.compile(
     re.IGNORECASE,
 )
 BRACKET_PLACEHOLDER = re.compile(r"^(?:<[^<>]+>|\[[^\[\]]+\]|\{[^{}]+\})$")
+SOURCE_TRANSCRIPT_HEADING = re.compile(
+    r"^###\s+(?P<segment>B\d{2})\s+(?P<start>\d+(?:\.\d+)?)[–-](?P<end>\d+(?:\.\d+)?)$"
+)
+SOURCE_TRANSCRIPT_FIELDS = (
+    "(상황설명)",
+    '"화자발언"',
+    "<나레이션>",
+    "TTS화자발언",
+    "TTS나레이션",
+)
+
+
+@dataclass(frozen=True)
+class SourceTranscriptBlock:
+    segment_id: str
+    start_text: str
+    end_text: str
+    values: tuple[str, ...]
+
+    def markdown(self) -> str:
+        lines = [f"### {self.segment_id} {self.start_text}–{self.end_text}"]
+        lines.extend(
+            f"{label} {value}"
+            for label, value in zip(SOURCE_TRANSCRIPT_FIELDS, self.values)
+        )
+        return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -63,18 +90,22 @@ class Grid:
     kind: str
     headers: tuple[str, ...]
     rows: tuple[tuple[str, ...], ...]
+    source_transcript: tuple[SourceTranscriptBlock, ...] = ()
 
     @property
     def column_count(self) -> int:
         return len(self.headers)
 
     def markdown(self) -> str:
-        lines = [
+        table_lines = [
             "| " + " | ".join((HEADER_LABELS[self.kind], *self.headers)) + " |",
             "|" + "|".join("---" for _ in range(self.column_count + 1)) + "|",
         ]
-        lines.extend("| " + " | ".join(row) + " |" for row in self.rows)
-        return "\n".join(lines)
+        table_lines.extend("| " + " | ".join(row) + " |" for row in self.rows)
+        if self.kind != "original" or not self.source_transcript:
+            return "\n".join(table_lines)
+        transcript = "\n\n".join(block.markdown() for block in self.source_transcript)
+        return "## 원본 5분류 대본\n\n" + transcript + "\n\n" + "\n".join(table_lines)
 
 
 def _cells(line: str) -> list[str]:
@@ -88,7 +119,163 @@ def _error(code: str, table: str, **details: object) -> dict:
     return {"code": code, "table": table, **details}
 
 
-def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
+def _parse_source_transcript(
+    lines: list[str],
+    header_index: int,
+    headers: list[str],
+) -> tuple[tuple[SourceTranscriptBlock, ...], list[dict]]:
+    errors: list[dict] = []
+    headings: list[tuple[int, re.Match[str]]] = []
+    for index, line in enumerate(lines[:header_index]):
+        match = SOURCE_TRANSCRIPT_HEADING.fullmatch(line.strip())
+        if match is not None:
+            headings.append((index, match))
+    if not headings:
+        return (), [_error("ORIGINAL_TRANSCRIPT_REQUIRED", "original")]
+
+    expected_segments: list[tuple[str, Decimal, Decimal]] = []
+    for header in headers:
+        match = HEADER_PATTERNS["original"].fullmatch(header)
+        if match is None:
+            continue
+        expected_segments.append(
+            (
+                f"B{int(match.group('index')):02d}",
+                Decimal(match.group("start")),
+                Decimal(match.group("end")),
+            )
+        )
+
+    blocks: list[SourceTranscriptBlock] = []
+    observed_segments: list[tuple[str, Decimal, Decimal]] = []
+    for position, (line_index, match) in enumerate(headings):
+        end_index = headings[position + 1][0] if position + 1 < len(headings) else header_index
+        field_lines = [line.strip() for line in lines[line_index + 1 : end_index] if line.strip()]
+        segment_id = match.group("segment")
+        observed_segments.append(
+            (segment_id, Decimal(match.group("start")), Decimal(match.group("end")))
+        )
+        if len(field_lines) != len(SOURCE_TRANSCRIPT_FIELDS):
+            errors.append(
+                _error(
+                    "ORIGINAL_TRANSCRIPT_FIELD_ORDER_INVALID",
+                    "original",
+                    segment=segment_id,
+                    expected=list(SOURCE_TRANSCRIPT_FIELDS),
+                    observed=field_lines,
+                )
+            )
+            continue
+
+        values: list[str] = []
+        field_order_invalid = False
+        for field_index, (label, line) in enumerate(zip(SOURCE_TRANSCRIPT_FIELDS, field_lines), start=1):
+            prefix = label + " "
+            if not line.startswith(prefix):
+                field_order_invalid = True
+                errors.append(
+                    _error(
+                        "ORIGINAL_TRANSCRIPT_FIELD_ORDER_INVALID",
+                        "original",
+                        segment=segment_id,
+                        field=field_index,
+                        expected=label,
+                        observed=line,
+                    )
+                )
+                values.append("")
+                continue
+            value = line[len(prefix) :].strip()
+            values.append(value)
+            if not value:
+                errors.append(
+                    _error(
+                        "ORIGINAL_TRANSCRIPT_EMPTY_FIELD",
+                        "original",
+                        segment=segment_id,
+                        field=label,
+                    )
+                )
+            if value == "비움" or value in EMPTY_MARKERS:
+                errors.append(
+                    _error(
+                        "ORIGINAL_TRANSCRIPT_ABSENCE_VALUE_INVALID",
+                        "original",
+                        segment=segment_id,
+                        field=label,
+                        value=value,
+                    )
+                )
+            if label == "(상황설명)":
+                situation_value, marker, ocr_value = value.partition("화면 OCR:")
+                if any(token in situation_value for token in ("미확인", "확인 필요")):
+                    errors.append(
+                        _error(
+                            "ORIGINAL_TRANSCRIPT_UNVERIFIED",
+                            "original",
+                            segment=segment_id,
+                            field=label,
+                            value=value,
+                        )
+                    )
+                ocr_value = ocr_value.strip() if marker else ""
+                if not ocr_value or any(token in ocr_value for token in ("미확인", "확인 필요")):
+                    errors.append(
+                        _error(
+                            "WAIT_OCR_UNRESOLVED",
+                            "original",
+                            segment=segment_id,
+                            value=value,
+                        )
+                    )
+            elif any(token in value for token in ("미확인", "확인 필요")):
+                errors.append(
+                    _error(
+                        "ORIGINAL_TRANSCRIPT_UNVERIFIED",
+                        "original",
+                        segment=segment_id,
+                        field=label,
+                        value=value,
+                    )
+                )
+            if label in {"TTS화자발언", "TTS나레이션"} and value != "없음":
+                errors.append(
+                    _error(
+                        "ORIGINAL_TRANSCRIPT_TTS_FORBIDDEN",
+                        "original",
+                        segment=segment_id,
+                        field=label,
+                        value=value,
+                    )
+                )
+        if not field_order_invalid:
+            blocks.append(
+                SourceTranscriptBlock(
+                    segment_id=segment_id,
+                    start_text=match.group("start"),
+                    end_text=match.group("end"),
+                    values=tuple(values),
+                )
+            )
+
+    if observed_segments != expected_segments:
+        errors.append(
+            _error(
+                "ORIGINAL_TRANSCRIPT_SEGMENT_MISMATCH",
+                "original",
+                expected=[f"{segment} {start}–{end}" for segment, start, end in expected_segments],
+                observed=[f"{segment} {start}–{end}" for segment, start, end in observed_segments],
+            )
+        )
+    return tuple(blocks), errors
+
+
+def validate_grid(
+    path: Path,
+    kind: str,
+    *,
+    require_source_transcript: bool = False,
+) -> tuple[Grid | None, list[dict]]:
     errors: list[dict] = []
     if kind not in HEADER_LABELS:
         raise ValueError(f"GRID_KIND_INVALID:{kind}")
@@ -122,6 +309,16 @@ def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
                     value=header,
                 )
             )
+
+    source_transcript: tuple[SourceTranscriptBlock, ...] = ()
+    if kind == "original":
+        has_transcript = any(
+            SOURCE_TRANSCRIPT_HEADING.fullmatch(line.strip())
+            for line in lines[:header_index]
+        )
+        if require_source_transcript or has_transcript:
+            source_transcript, transcript_errors = _parse_source_transcript(lines, header_index, headers)
+            errors.extend(transcript_errors)
 
     body: list[tuple[str, ...]] = []
     for line in lines[header_index + 2 :]:
@@ -281,12 +478,100 @@ def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
                             )
                         )
 
-    grid = Grid(kind=kind, headers=tuple(headers), rows=tuple(body))
+    grid = Grid(
+        kind=kind,
+        headers=tuple(headers),
+        rows=tuple(body),
+        source_transcript=source_transcript,
+    )
     return grid, errors
 
 
-def validate_grids(original_path: Path, urakkai_path: Path) -> dict:
-    original, original_errors = validate_grid(original_path, "original")
+def _validate_source_evidence(grid: Grid | None, context: dict) -> list[dict]:
+    errors = list(context.get("errors", []))
+    if not context.get("required") or grid is None or errors:
+        return errors
+    evidence_segments = context.get("segments", {})
+    blocks = {block.segment_id: block for block in grid.source_transcript}
+    for column, header in enumerate(grid.headers, start=1):
+        match = HEADER_PATTERNS["original"].fullmatch(header)
+        if match is None:
+            continue
+        segment_id = f"B{column:02d}"
+        evidence = evidence_segments.get(segment_id)
+        block = blocks.get(segment_id)
+        if evidence is None or block is None:
+            errors.append(_error(
+                "ORIGINAL_TRANSCRIPT_EVIDENCE_MISMATCH",
+                "original",
+                segment=segment_id,
+                detail="SEGMENT_MISSING",
+            ))
+            continue
+        expected_range = [
+            int(Decimal(match.group("start")) * Decimal(1_000_000)),
+            int(Decimal(match.group("end")) * Decimal(1_000_000)),
+        ]
+        if evidence.get("source_range_us") != expected_range:
+            errors.append(_error(
+                "ORIGINAL_TRANSCRIPT_EVIDENCE_MISMATCH",
+                "original",
+                segment=segment_id,
+                detail="SOURCE_RANGE",
+            ))
+        fields = evidence.get("classified_fields", {})
+        expected_values = (
+            fields.get("situation_description"),
+            fields.get("speaker_statement"),
+            fields.get("narration"),
+            fields.get("tts_speaker_statement"),
+            fields.get("tts_narration"),
+        )
+        if block.values != expected_values:
+            errors.append(_error(
+                "ORIGINAL_TRANSCRIPT_EVIDENCE_MISMATCH",
+                "original",
+                segment=segment_id,
+                expected=list(expected_values),
+                observed=list(block.values),
+            ))
+    if set(evidence_segments) != set(blocks):
+        errors.append(_error(
+            "ORIGINAL_TRANSCRIPT_EVIDENCE_MISMATCH",
+            "original",
+            detail="SEGMENT_SET",
+        ))
+    return errors
+
+
+def validate_original(
+    original_path: Path,
+    *,
+    state_path: Path | None = None,
+) -> tuple[Grid | None, list[dict], dict]:
+    context = validate_original_source_evidence.resolve_contract_context(
+        original_path,
+        state_path=state_path,
+    )
+    original, errors = validate_grid(
+        original_path,
+        "original",
+        require_source_transcript=bool(context.get("required")),
+    )
+    errors.extend(_validate_source_evidence(original, context))
+    return original, errors, context
+
+
+def validate_grids(
+    original_path: Path,
+    urakkai_path: Path,
+    *,
+    state_path: Path | None = None,
+) -> dict:
+    original, original_errors, _context = validate_original(
+        original_path,
+        state_path=state_path,
+    )
     urakkai, urakkai_errors = validate_grid(urakkai_path, "urakkai")
     errors = original_errors + urakkai_errors
     return {
@@ -597,10 +882,18 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("--original", type=Path, required=True)
-    parser.add_argument("--urakkai", type=Path, required=True)
+    parser.add_argument("--urakkai", type=Path)
+    parser.add_argument("--original-only", action="store_true")
     parser.add_argument("--emit-report", action="store_true")
     args = parser.parse_args()
 
+    if args.original_only:
+        _grid, errors, _context = validate_original(args.original.resolve())
+        payload = {"status": "FAIL" if errors else "PASS", "errors": errors}
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 1 if errors else 0
+    if args.urakkai is None:
+        parser.error("--urakkai is required unless --original-only is set")
     validation = validate_grids(args.original.resolve(), args.urakkai.resolve())
     if validation["status"] != "PASS":
         print(

@@ -55,7 +55,24 @@ def install_valid_grids(episode: Path, *, mixed: bool = False) -> None:
         ("A12_RESERVED_EMPTY", "비움", "비움"),
     )
     body = "\n".join("| " + " | ".join(row) + " |" for row in rows)
-    original = "| 레이어 \\ 원본 시간 | B01 0.0–1.0 | B02 1.0–2.0 |\n|---|---|---|\n" + body + "\n"
+    transcript = """## 원본 5분류 대본
+
+### B01 0.0–1.0
+(상황설명) 첫 장면. 화면 OCR: 없음
+\"화자발언\" \"hello\"
+<나레이션> 없음
+TTS화자발언 없음
+TTS나레이션 없음
+
+### B02 1.0–2.0
+(상황설명) 둘째 장면. 화면 OCR: 없음
+\"화자발언\" \"there\"
+<나레이션> 없음
+TTS화자발언 없음
+TTS나레이션 없음
+
+"""
+    original = transcript + "| 레이어 \\ 원본 시간 | B01 0.0–1.0 | B02 1.0–2.0 |\n|---|---|---|\n" + body + "\n"
     urakkai = "| 레이어 \\ 목표 시간 | V01 0.0–1.0 B02 | V02 1.0–2.0 B01 |\n|---|---|---|\n" + body + "\n"
     (script_root / "original-capcut-grid.md").write_text(original, encoding="utf-8")
     (script_root / "urakkai-capcut-grid.md").write_text(urakkai, encoding="utf-8")

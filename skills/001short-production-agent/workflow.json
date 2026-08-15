@@ -5,6 +5,14 @@
   "grid_harness": {
     "authority": "protocol.json#/grid_harness"
   },
+  "original_source_transcript": {
+    "authority": "protocol.json#/grid_harness/original_source_transcript",
+    "contract_version_source": "state_and_intake_v2",
+    "evidence": "{episode_root}/10_analysis/original-source-evidence.json",
+    "legacy_state_without_version": "resume_unchanged",
+    "evidence_stage": "01",
+    "write_and_validate_stage": "02"
+  },
   "blueprint_reference": "references/blueprint_matrix.md",
   "analysis_authority": "original_source_only",
   "assembly_visual": "vmake_submit_after_source_identity_nonblocking_source_provisional_then_clean_swap",

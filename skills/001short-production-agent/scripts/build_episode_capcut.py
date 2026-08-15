@@ -74,6 +74,8 @@ def validate_grid_harness(config: dict, *, state_payload: dict | None = None) ->
     episode = Path(episode_value).resolve()
     original = episode / "20_script" / "original-capcut-grid.md"
     urakkai = episode / "20_script" / "urakkai-capcut-grid.md"
+    # Revisions use derived state paths, but original analysis is always bound
+    # to the canonical episode state resolved by the grid validator.
     validation = validate_capcut_grids.validate_grids(original, urakkai)
     if validation["status"] != "PASS":
         first = validation["errors"][0]

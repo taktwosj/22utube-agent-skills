@@ -56,7 +56,7 @@ DOM overflow 없음
 문구 길이 제한
 ```
 
-HTML 자체를 CapCut에 넣지 않는다. PNG만 `NARRATION_IMAGE`의 실제 조립 자산으로 사용한다. 외부 이미지 검색·AI 이미지 생성·다중 시안을 기본 실행하지 않는다.
+HTML 자체를 CapCut에 넣지 않는다. PNG는 무음 챕터 전환이면 `CHAPTER_CARD`, 승인 나레이션과 함께 쓰면 `NARRATION_IMAGE`의 실제 조립 자산으로 사용한다. 외부 이미지 검색·AI 이미지 생성·다중 시안을 기본 실행하지 않는다.
 
 ## 화면 안전영역
 

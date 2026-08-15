@@ -2,6 +2,8 @@
 
 강한 PRE-119 표식 하나 또는 보조 표식 두 개 이상이 있으면 `direct-script.md`보다 먼저 이 문서를 읽는다. PRE-119 route 잠금과 validation PASS는 별개다.
 
+최초 승인 대본은 `templates/pre119-approved-script.md`를 사용한다. `between_image`·`between_narration`과 카드 종류로 영상만, 영상+나레이션, 영상+나레이션+HTML 챕터 이미지를 구분한다. 모든 본문 카드의 `chapter_label`은 실제 상단 챕터 제목이며, 하단은 `SOURCE_VIDEO+SRT`, `NARRATION_*+SRT`, `COMMENTARY_2LINE`, `NONE` 중 하나다.
+
 강한 표식:
 
 ```text
@@ -52,6 +54,6 @@ python scripts/validate_pre119_handoff.py `
   --approval-evidence <user_message:id-or-runtime_approval:id>
 ```
 
-validator는 `119_final_script.md` raw SHA, packet `script_lock.current_final_script_sha256`, 외부 승인 SHA를 비교한다. 패킷 내부 승인 필드는 외부 사용자 승인을 대신하지 못한다. 절대경로·상위경로 traversal은 거부한다.
+validator는 `119_final_script.md` raw SHA, packet `script_lock.current_final_script_sha256`, 외부 승인 SHA를 비교한다. 세 SHA가 일치한 뒤 기존 `ASSEMBLY_ONLY_SEED`를 한 번 파싱해 고유한 카드 순서와 잠금 필드를 `assembly_only_seed` 및 결정적 `assembly_only_seed_sha256`으로 같은 PASS 보고서에 결합한다. 패킷 내부 승인 필드는 외부 사용자 승인을 대신하지 못한다. 절대경로·상위경로 traversal은 거부한다.
 
-PASS 뒤 A/D와 요청된 B/C를 실행한다. join owner는 실제 path·SHA·duration·transcript provenance evidence만 사용해 cards를 compile한다. compile 결과는 `execution_mode=ASSEMBLY_ONLY`이며 build 전 `run_politics_assembly_preflight.py` PASS를 요구한다.
+PASS 뒤 A/D와 요청된 B/C를 실행한다. join owner는 같은 PASS seed evidence를 재사용해 seed `card_id`와 순서대로 1:1 compile하며 실제 path·SHA·duration·검증된 source range/channel/date/speaker·narration/SRT/rendered asset·target timing만 결합한다. 카드 누락·추가·재정렬 또는 잠금 필드 override는 차단한다. compile 결과는 `execution_mode=ASSEMBLY_ONLY`이며 build 전 `run_politics_assembly_preflight.py` PASS를 요구한다.

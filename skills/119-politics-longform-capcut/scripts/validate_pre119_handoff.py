@@ -28,10 +28,93 @@ AUXILIARY_PATHS = (
     Path("00_README.md"),
 )
 SHA256_RE = re.compile(r"^[0-9A-Fa-f]{64}$")
+SEED_MARKER = "[ASSEMBLY_ONLY_SEED]"
+CARD_MARKER = "[CARD]"
+SEED_ASSIGNMENT_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*(?:=|:)\s*(.*)$")
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+def assembly_seed_sha256(seed: dict[str, Any]) -> str:
+    canonical = json.dumps(seed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest().upper()
+
+
+def _seed_value(text: str) -> Any:
+    if not text:
+        return ""
+    if text[0] in '[{"' or text in {"true", "false", "null"}:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+    return text
+
+
+def _store_seed_assignment(target: dict[str, Any], line: str, line_number: int) -> None:
+    match = SEED_ASSIGNMENT_RE.fullmatch(line)
+    if match is None:
+        raise ValueError(f"LINE_{line_number}_ASSIGNMENT_REQUIRED")
+    key = match.group(1).lower()
+    if key in target:
+        raise ValueError(f"LINE_{line_number}_DUPLICATE_FIELD:{key}")
+    target[key] = _seed_value(match.group(2).strip())
+
+
+def parse_assembly_only_seed(script_path: Path) -> dict[str, Any]:
+    lines = script_path.read_text(encoding="utf-8").splitlines()
+    marker_lines = [index for index, line in enumerate(lines) if line.strip() == SEED_MARKER]
+    if not marker_lines:
+        raise ValueError("ASSEMBLY_ONLY_SEED_REQUIRED")
+    if len(marker_lines) != 1:
+        raise ValueError("ASSEMBLY_ONLY_SEED_DUPLICATE")
+
+    policy: dict[str, Any] = {}
+    cards: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    closed = False
+    for index in range(marker_lines[0] + 1, len(lines)):
+        line_number = index + 1
+        line = lines[index].strip()
+        if not line or line in {"```", "```text"}:
+            continue
+        if line == "[/ASSEMBLY_ONLY_SEED]":
+            closed = True
+            break
+        if line == CARD_MARKER:
+            current = {}
+            cards.append(current)
+            continue
+        if line == "[/CARD]":
+            if current is None:
+                raise ValueError(f"LINE_{line_number}_CARD_CLOSE_WITHOUT_CARD")
+            current = None
+            continue
+        _store_seed_assignment(policy if current is None else current, line, line_number)
+
+    if not cards:
+        raise ValueError("ASSEMBLY_ONLY_SEED_CARDS_REQUIRED")
+    if closed and any(line.strip() == SEED_MARKER for line in lines[index + 1 :]):
+        raise ValueError("ASSEMBLY_ONLY_SEED_DUPLICATE")
+    if str(policy.get("execution_mode", "")).strip().upper() != "ASSEMBLY_ONLY":
+        raise ValueError("ASSEMBLY_ONLY_SEED_EXECUTION_MODE_INVALID")
+
+    card_order: list[str] = []
+    for position, card in enumerate(cards, start=1):
+        card_id = str(card.get("card_id", "")).strip()
+        card_type = str(card.get("card_type", "")).strip()
+        if not card_id:
+            raise ValueError(f"CARD_{position}_ID_REQUIRED")
+        if not card_type:
+            raise ValueError(f"CARD_{position}_TYPE_REQUIRED:{card_id}")
+        if card_id in card_order:
+            raise ValueError(f"CARD_ID_DUPLICATE:{card_id}")
+        card["card_id"] = card_id
+        card["card_type"] = card_type
+        card_order.append(card_id)
+    return {"policy": policy, "card_order": card_order, "cards": cards}
 
 
 def write_report(package_root: Path, payload: dict[str, Any]) -> None:
@@ -181,6 +264,21 @@ def main() -> int:
         write_report(package_root, blocked_report("WAIT_APPROVAL_HASH_MISMATCH", markers, script_lock=lock_report))
         return 2
 
+    try:
+        assembly_seed = parse_assembly_only_seed(script_path)
+    except (OSError, UnicodeDecodeError, ValueError) as error:
+        detail = str(error)
+        status = (
+            "FAIL_PRE119_ASSEMBLY_SEED_REQUIRED"
+            if detail == "ASSEMBLY_ONLY_SEED_REQUIRED"
+            else "FAIL_PRE119_ASSEMBLY_SEED_INVALID"
+        )
+        write_report(
+            package_root,
+            blocked_report(status, markers, script_lock=lock_report, seed_error=detail),
+        )
+        return 2
+
     minimal_edit_plan = handoff.get("minimal_edit_plan")
     if not isinstance(minimal_edit_plan, dict):
         minimal_edit_plan = {}
@@ -212,6 +310,35 @@ def main() -> int:
         return 2
     required["cta_like_subscribe"] = str(required["cta_like_subscribe"]).strip().upper()
 
+    seed_policy = assembly_seed["policy"]
+    policy_mismatches = [
+        key
+        for key in (
+            "episode_id",
+            "project_name",
+            "central_question",
+            "selected_thesis",
+            "chapter_order",
+            "between_image",
+            "between_narration",
+            "lower_mode",
+            "execution_mode",
+            "cta_like_subscribe",
+        )
+        if key in seed_policy and seed_policy[key] != required[key]
+    ]
+    if policy_mismatches:
+        write_report(
+            package_root,
+            blocked_report(
+                "FAIL_PRE119_SEED_POLICY_MISMATCH",
+                markers,
+                script_lock=lock_report,
+                seed_policy_mismatches=policy_mismatches,
+            ),
+        )
+        return 2
+
     report = {
         "schema": "politics-pre119-handoff-validation.v1",
         "status": "PASS",
@@ -222,6 +349,8 @@ def main() -> int:
         "approval_evidence": approval_evidence,
         "script_lock": lock_report,
         "validated_plan": required,
+        "assembly_only_seed": assembly_seed,
+        "assembly_only_seed_sha256": assembly_seed_sha256(assembly_seed),
         "next": "Run A and D plus requested B/C, then compile cards from actual asset evidence.",
     }
     write_report(package_root, report)
