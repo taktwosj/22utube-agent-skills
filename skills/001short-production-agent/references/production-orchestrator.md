@@ -63,9 +63,7 @@ implicit empty cells, and are emitted to the 대화창 by
 the complete-table report. The CapCut builder validates both files before any
 work-root or local-draft write.
 
-After assembly, report current validator/readback evidence, then separate code
-blocks for the 프로젝트 파일명 and 프로젝트 전체 경로. Missing readback is
-`NOT RUN`, never `PASS`.
+After assembly, the first item in the result report is the exact CapCut 프로젝트명 in its own copyable code block. Then report current validator/readback evidence and use separate code blocks for the 프로젝트 전체 경로. Missing readback is `NOT RUN`, never `PASS`.
 
 ## Build and audio contract
 
