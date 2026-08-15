@@ -29,6 +29,109 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def assembly_seed_sha256(seed: dict[str, Any]) -> str:
+    canonical = json.dumps(seed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest().upper()
+
+
+def validated_assembly_seed(validation: dict[str, Any], plan: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    seed = validation.get("assembly_only_seed")
+    expected_sha = str(validation.get("assembly_only_seed_sha256", "")).strip().upper()
+    if not isinstance(seed, dict):
+        raise RuntimeError("PRE119_VALIDATED_SEED_REQUIRED")
+    if not SHA256_RE.fullmatch(expected_sha) or assembly_seed_sha256(seed) != expected_sha:
+        raise RuntimeError("PRE119_VALIDATED_SEED_SHA_MISMATCH")
+    policy = seed.get("policy")
+    card_order = seed.get("card_order")
+    cards = seed.get("cards")
+    if (
+        not isinstance(policy, dict)
+        or not isinstance(card_order, list)
+        or not card_order
+        or any(not isinstance(card_id, str) or not card_id for card_id in card_order)
+        or len(set(card_order)) != len(card_order)
+        or not isinstance(cards, list)
+        or len(cards) != len(card_order)
+        or any(not isinstance(card, dict) for card in cards)
+    ):
+        raise RuntimeError("PRE119_VALIDATED_SEED_INVALID")
+    actual_order = [str(card.get("card_id", "")) for card in cards]
+    if actual_order != card_order:
+        raise RuntimeError("PRE119_VALIDATED_SEED_ORDER_INVALID")
+    for key, value in policy.items():
+        if key in plan and plan[key] != value:
+            raise RuntimeError(f"PRE119_VALIDATED_SEED_POLICY_MISMATCH:{key}")
+    if str(policy.get("execution_mode", "")).strip().upper() != "ASSEMBLY_ONLY":
+        raise RuntimeError("PRE119_VALIDATED_SEED_EXECUTION_MODE_INVALID")
+    return seed, expected_sha
+
+
+def runtime_binding_field(field: str) -> bool:
+    lowered = field.lower()
+    if lowered.endswith(("_path", "_file", "_sha256", "_duration_us")):
+        return True
+    return lowered in {
+        "target_start_us",
+        "target_duration_us",
+        "source_start",
+        "source_end",
+        "source_start_us",
+        "source_end_us",
+        "source_range",
+        "source_time_range",
+        "verified_source_range",
+        "source_channel",
+        "source_date",
+        "source_speaker",
+        "channel",
+        "date",
+        "speaker",
+    }
+
+
+def bind_seed_cards(seed: dict[str, Any], evidence_cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    expected_order = list(seed["card_order"])
+    actual_order = [str(card.get("card_id", "")) for card in evidence_cards]
+    seen: set[str] = set()
+    for card_id in actual_order:
+        if not card_id:
+            raise RuntimeError("PRE119_EVIDENCE_CARD_ID_REQUIRED")
+        if card_id in seen:
+            raise RuntimeError(f"PRE119_EVIDENCE_CARD_ID_DUPLICATE:{card_id}")
+        seen.add(card_id)
+    missing = [card_id for card_id in expected_order if card_id not in seen]
+    extra = [card_id for card_id in actual_order if card_id not in set(expected_order)]
+    if missing or extra:
+        raise RuntimeError(
+            "PRE119_CARD_SET_MISMATCH:"
+            f"missing={','.join(missing) if missing else '-'}:"
+            f"extra={','.join(extra) if extra else '-'}"
+        )
+    if actual_order != expected_order:
+        raise RuntimeError(
+            "PRE119_CARD_ORDER_MISMATCH:"
+            f"expected={','.join(expected_order)}:actual={','.join(actual_order)}"
+        )
+
+    evidence_by_id = {str(card["card_id"]): card for card in evidence_cards}
+    compiled: list[dict[str, Any]] = []
+    for seed_card in seed["cards"]:
+        card_id = str(seed_card["card_id"])
+        card = copy.deepcopy(seed_card)
+        for field, value in evidence_by_id[card_id].items():
+            if field == "card_id":
+                continue
+            if runtime_binding_field(field):
+                card[field] = copy.deepcopy(value)
+                continue
+            if field not in seed_card:
+                raise RuntimeError(f"PRE119_LOCKED_FIELD_EXTRA:{card_id}:{field}")
+            if value != seed_card[field]:
+                raise RuntimeError(f"PRE119_LOCKED_FIELD_OVERRIDE:{card_id}:{field}")
+        compiled.append(card)
+    return compiled
+
+
 def require_file_sha(card: dict[str, Any], path_field: str, sha_field: str, code: str) -> Path:
     value = card.get(path_field)
     expected = str(card.get(sha_field, "")).strip().upper()
@@ -173,20 +276,20 @@ def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[
     plan = validation.get("validated_plan")
     if not isinstance(plan, dict):
         raise RuntimeError("WAIT_PRE119_VALIDATED_PLAN_REQUIRED")
+    seed, seed_sha = validated_assembly_seed(validation, plan)
     if evidence.get("status") != "PASS":
         raise RuntimeError("WAIT_PRE119_ASSET_EVIDENCE_PASS_REQUIRED")
     validate_lanes(plan, evidence)
     cards = evidence.get("cards")
     if not isinstance(cards, list) or not cards or any(not isinstance(card, dict) for card in cards):
         raise RuntimeError("PRE119_CARDS_EVIDENCE_REQUIRED")
-    compiled = copy.deepcopy(cards)
+    compiled = bind_seed_cards(seed, cards)
     for card in compiled:
         validate_card(card)
     validate_plan_bindings(plan, compiled)
     cta_policy = normalize_cta_policy(compiled, plan)
     cursor = 0
-    ordered = sorted(compiled, key=lambda item: int(item["target_start_us"]))
-    for card in ordered:
+    for card in compiled:
         if int(card["target_start_us"]) != cursor:
             raise RuntimeError(f"CARD_TIMELINE_EVIDENCE_INVALID:{card.get('card_id', '?')}")
         cursor += int(card["target_duration_us"])
@@ -198,7 +301,8 @@ def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[
         "cta_like_subscribe": cta_policy,
         "canvas": {"width": 1920, "height": 1080, "fps": 30},
         "pre119_validation_sha256": validation.get("handoff_sha256", "TEST_FIXTURE"),
-        "cards": ordered,
+        "assembly_only_seed_sha256": seed_sha,
+        "cards": compiled,
     }
 
 

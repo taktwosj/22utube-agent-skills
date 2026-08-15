@@ -18,7 +18,22 @@ class Pre119HandoffV28Tests(unittest.TestCase):
             package = Path(temporary)
             script = package / "20_script" / "119_final_script.md"
             script.parent.mkdir(parents=True)
-            script.write_text("# approved\n\n[ASSEMBLY_ONLY_SEED]\n", encoding="utf-8")
+            script.write_text(
+                "# approved\n\n"
+                "[ASSEMBLY_ONLY_SEED]\n"
+                "execution_mode=ASSEMBLY_ONLY\n"
+                "between_image=YES\n"
+                "between_narration=YES\n"
+                "lower_mode=MIXED\n"
+                "cta_like_subscribe=OFF\n\n"
+                "[CARD]\n"
+                "card_id=C001\n"
+                "card_type=NARRATION_IMAGE\n"
+                "lower_mode=COMMENTARY_2LINE\n"
+                "cta_like_subscribe=OFF\n"
+                "next_card=END\n",
+                encoding="utf-8",
+            )
             digest = hashlib.sha256(script.read_bytes()).hexdigest().upper()
             handoff = {
                 "schema": "togun-pre119-handoff-v3",
