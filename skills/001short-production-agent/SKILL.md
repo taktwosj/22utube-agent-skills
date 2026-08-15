@@ -50,6 +50,8 @@ Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인
 
 ## Build boundary
 
+For newly requested A9 narration TTS, read `<factory-root>/00_asset_tools/TYPECAST_TTS_RUNBOOK.md` before synthesis. Keep user-supplied or approved narration audio unchanged.
+
 `scripts/build_episode_capcut.py` validates both tables before writes, validates the root ZIP, extracts immutable `source_authority`, clones `working_project`, assigns new IDs, injects assets only into the clone, and validates it. Audio terms remain `A10_REASSEMBLED_SYNC`, `source_audio[].mode=duck`, `source_audio[].mode=on`, and `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`. Never mutate a draft while CapCut or its background processes are open.
 
 After assembly, report validator/readback and separate code blocks for `프로젝트 파일명`, `프로젝트 전체 경로`, and `미디어 폴더 전체 경로`; missing readback=`NOT RUN`.
