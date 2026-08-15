@@ -11,6 +11,11 @@ from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR = SKILL_ROOT / "scripts" / "validate_pre119_handoff.py"
+APPROVED_SCRIPT_TEMPLATE = SKILL_ROOT / "templates" / "pre119-approved-script.md"
+if str(SKILL_ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+
+import validate_pre119_handoff as pre119_validator
 
 
 class Pre119HandoffTests(unittest.TestCase):
@@ -100,6 +105,19 @@ next_card=END
     def read_report(self) -> dict[str, object]:
         self.assertTrue(self.report_path.is_file())
         return json.loads(self.report_path.read_text(encoding="utf-8"))
+
+    def test_approved_script_template_covers_all_supported_composition_and_lower_modes(self) -> None:
+        seed = pre119_validator.parse_assembly_only_seed(APPROVED_SCRIPT_TEMPLATE)
+
+        self.assertEqual(
+            [card["card_type"] for card in seed["cards"]],
+            ["SOURCE_VIDEO", "NARRATION_VIDEO", "SOURCE_VIDEO", "CHAPTER_CARD"],
+        )
+        self.assertEqual(
+            [card["lower_mode"] for card in seed["cards"]],
+            ["SRT", "SRT", "COMMENTARY_2LINE", "NONE"],
+        )
+        self.assertTrue(all(str(card.get("chapter_label", "")).strip() for card in seed["cards"]))
 
     def test_strong_marker_locks_pre119_before_direct_script_fallback(self) -> None:
         self.write_valid_packet()

@@ -97,6 +97,47 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
         self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
 
+    def test_narration_video_and_image_emit_the_same_upper_chapter_title(self):
+        for card_type in ("NARRATION_VIDEO", "NARRATION_IMAGE"):
+            with self.subTest(card_type=card_type):
+                duration = 4_000_000
+                record = self.source_record()
+                record.update({"duration_us": duration, "source_duration": duration, "has_audio": False})
+                record["narration_audio"] = {
+                    "filename": "narration.wav",
+                    "duration_us": duration,
+                    "offline_path": "C:/relink/narration.wav",
+                    "source_start": 0,
+                    "source_duration": duration,
+                }
+                built = builder.build_document(
+                    self.minimal_document_for_chapter_titles(),
+                    [{
+                        "card_id": "C001",
+                        "card_type": card_type,
+                        "chapter_label": "같은 상단 챕터",
+                        "target_start_us": 0,
+                        "target_duration_us": duration,
+                        "lower_mode": "NONE",
+                    }],
+                    duration,
+                    {"C001": record},
+                    "narration-chapter-title",
+                )
+                text_by_id = {
+                    material["id"]: builder.text_of(material)
+                    for material in built["materials"]["texts"]
+                }
+                chapter_track = next(track for track in built["tracks"] if track["id"] == "CHAPTER")
+
+                self.assertEqual(len(chapter_track["segments"]), 1)
+                chapter_segment = chapter_track["segments"][0]
+                self.assertEqual(text_by_id[chapter_segment["material_id"]], "같은 상단 챕터")
+                self.assertEqual(
+                    chapter_segment["target_timerange"],
+                    {"start": 0, "duration": duration},
+                )
+
     def chapter_states(self, cards: list[dict], media: dict[str, dict]) -> list[tuple[str, dict]]:
         total = max(card["target_start_us"] + card["target_duration_us"] for card in cards)
         built = builder.build_document(

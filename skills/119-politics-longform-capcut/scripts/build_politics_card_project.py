@@ -831,6 +831,13 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
         kind = card["card_type"]
         lower_mode = card.get("lower_mode", "NONE")
         record = media.get(card["card_id"])
+        chapter_label = "" if card.get("chapter_label") is None else str(card.get("chapter_label", "")).strip()
+        covered_by_chapter_state = any(
+            label == chapter_label
+            and int(cards[index]["target_start_us"]) <= start
+            and state_end >= start + duration
+            for index, (label, state_end) in chapter_states.items()
+        )
         if kind == "CHAPTER_CARD":
             if record is None:
                 raise RuntimeError(f"CHAPTER_IMAGE_REQUIRED:{card['card_id']}")
@@ -851,24 +858,19 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             if record is None:
                 raise RuntimeError(f"VIDEO_REQUIRED:{card['card_id']}")
             clone_media(document, intro_video, intro_video_segment, None, target_track=intro_video_track, kind="video", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=int(record["source_start"]), source_duration=int(record["source_duration"]), media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=bool(record["has_audio"]) if kind == "SOURCE_VIDEO" else False)
+            if chapter_label and not covered_by_chapter_state:
+                clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
             if kind == "SOURCE_VIDEO":
                 channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
                 if not channel or not date:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
-                chapter_label = "" if card.get("chapter_label") is None else str(card.get("chapter_label", "")).strip()
-                covered_by_chapter_state = any(
-                    label == chapter_label
-                    and int(cards[index]["target_start_us"]) <= start
-                    and state_end >= start + duration
-                    for index, (label, state_end) in chapter_states.items()
-                )
-                if chapter_label and not covered_by_chapter_state:
-                    clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
                 clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
         elif kind == "NARRATION_IMAGE":
             if record is None:
                 raise RuntimeError(f"IMAGE_REQUIRED:{card['card_id']}")
             clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+            if chapter_label and not covered_by_chapter_state:
+                clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
         elif kind in {"TEXT_EXPLAINER", "ENDING"}:
             pass
         else:

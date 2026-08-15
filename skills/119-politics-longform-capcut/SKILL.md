@@ -12,11 +12,12 @@ description: Use only when a political-longform request explicitly contains CapC
 ## 시작
 
 1. `episode_id`, active writer, 사용자 요청 결과를 확인한다.
-2. `20_script/pre119_handoff.json`, `togun-pre119-handoff-v3`, `TOGUN_PRE119_TO_119_DIRECT`, `EDITORIAL_OWNER=TOGUN_PRE119`, `PRE119_SOURCE_CANDIDATE` 중 강한 표식 하나가 있거나 보조 표식 두 개 이상이면 승인 여부보다 먼저 [pre119-handoff-contract.md](references/pre119-handoff-contract.md)를 읽는다.
-3. PRE-119 경로가 선택되면 `validate_pre119_handoff.py`가 PASS하기 전 direct-script로 fallback하지 않는다.
-4. 승인 대본에 `[ASSEMBLY_ONLY_SEED]` 또는 `execution_mode=ASSEMBLY_ONLY`가 있으면 `ASSEMBLY_ONLY` 조립 경로를 최우선으로 적용한다.
-5. PRE-119가 아니고 승인 대본도 없을 때만 [direct-script.md](references/direct-script.md)를 읽는다.
-6. 현재 단계의 reference만 읽으며 관련 없는 문서를 미리 읽지 않는다.
+2. PRE-119가 최초 승인 대본을 만들 때는 [pre119-approved-script.md](templates/pre119-approved-script.md)를 사용한다. 영상만, 영상+나레이션, 영상+나레이션+HTML 챕터 이미지와 하단 3종을 한 형식에서 선택한다.
+3. `20_script/pre119_handoff.json`, `togun-pre119-handoff-v3`, `TOGUN_PRE119_TO_119_DIRECT`, `EDITORIAL_OWNER=TOGUN_PRE119`, `PRE119_SOURCE_CANDIDATE` 중 강한 표식 하나가 있거나 보조 표식 두 개 이상이면 승인 여부보다 먼저 [pre119-handoff-contract.md](references/pre119-handoff-contract.md)를 읽는다.
+4. PRE-119 경로가 선택되면 `validate_pre119_handoff.py`가 PASS하기 전 direct-script로 fallback하지 않는다.
+5. 승인 대본에 `[ASSEMBLY_ONLY_SEED]` 또는 `execution_mode=ASSEMBLY_ONLY`가 있으면 `ASSEMBLY_ONLY` 조립 경로를 최우선으로 적용한다.
+6. PRE-119가 아니고 승인 대본도 없을 때만 [direct-script.md](references/direct-script.md)를 읽는다.
+7. 현재 단계의 reference만 읽으며 관련 없는 문서를 미리 읽지 않는다.
 
 ## 에피소드 저장 루트
 
@@ -73,6 +74,7 @@ PASS 전에는 `episode_cards.json`을 만들지 않는다. 패킷 내부의 `PA
 ```text
 카드 순서
 CARD_TYPE
+상단 `chapter_label` 챕터 제목
 챕터 제목·훅
 나레이션 대사
 HTML/CSS 설명카드 문구
@@ -240,3 +242,5 @@ VISUAL_GATE
 ```
 
 `MEDIA_RELINK=PASS`, `MEDIA_RESOLUTION=PASS`, `VISUAL_GATE=PASS`가 모두 있어야 CapCut 제작 완료다. 정적 JSON 검사나 GRID는 실제 화면 승인 증거가 아니다. `MP4`와 `UPLOAD`는 실행하지 않았으면 `NOT RUN`이다.
+
+자동화의 사용자 전달 경계는 `PROJECT_BUILD=PASS` 뒤다. 프로젝트를 자동으로 열지 않고 `프로젝트 파일명`, `프로젝트 전체 경로`, `미디어 폴더 전체 경로`를 보고한 뒤 `WAIT_USER_CAPCUT_CHECK`로 멈춘다. 이 시점의 `MEDIA_RELINK`, `MEDIA_RESOLUTION`, `VISUAL_GATE`는 `NOT RUN — USER MANUAL`이며 CapCut 제작 완료라고 부르지 않는다.
