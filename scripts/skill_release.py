@@ -638,11 +638,10 @@ def activate(args: argparse.Namespace) -> None:
         ):
             raise ReleaseError("previous local active release identity mismatch")
     staging.parent.mkdir(parents=True, exist_ok=True)
+    promoted_local_release = False
     try:
         shutil.copytree(source_release, staging)
         verify_release_directory(staging, manifest_sha)
-        make_local_release_immutable(staging, manifest_sha)
-        verify_release_directory(staging, manifest_sha, require_immutable=True)
         local_release.parent.mkdir(parents=True, exist_ok=True)
         if local_release.exists():
             verify_release_directory(local_release, manifest_sha, require_immutable=True)
@@ -650,7 +649,14 @@ def activate(args: argparse.Namespace) -> None:
                 raise ReleaseError(f"immutable local release differs: {release_id}")
         else:
             os.replace(staging, local_release)
+            promoted_local_release = True
+            make_local_release_immutable(local_release, manifest_sha)
         verify_release_directory(local_release, manifest_sha, require_immutable=True)
+    except Exception:
+        if promoted_local_release and local_release.exists():
+            make_tree_writable_for_cleanup(local_release)
+            shutil.rmtree(local_release)
+        raise
     finally:
         if staging.exists():
             make_tree_writable_for_cleanup(staging)
