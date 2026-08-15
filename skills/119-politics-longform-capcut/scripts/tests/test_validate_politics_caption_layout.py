@@ -12,16 +12,16 @@ import validate_politics_caption_layout as validator
 
 
 class CaptionLayoutTests(unittest.TestCase):
-    def test_two_lines_average_fifteen_passes(self):
-        text = "123456789012\n123456789012345678"
+    def test_two_lines_at_actual_assembly_boundary_pass(self):
+        text = "1234567890123456789\n123456789012345678901"
         self.assertEqual(validator.validate_caption(text, label="x"), [])
 
     def test_three_lines_fail(self):
         findings = validator.validate_caption("첫째 줄\n둘째 줄\n셋째 줄", label="x")
         self.assertIn("CAPTION_MAX_LINES_EXCEEDED", {row["code"] for row in findings})
 
-    def test_one_line_average_over_fifteen_fails(self):
-        findings = validator.validate_caption("1234567890123456", label="x")
+    def test_one_line_average_over_twenty_fails(self):
+        findings = validator.validate_caption("123456789012345678901", label="x")
         self.assertIn(
             "CAPTION_AVERAGE_LINE_LENGTH_EXCEEDED",
             {row["code"] for row in findings},
@@ -29,7 +29,7 @@ class CaptionLayoutTests(unittest.TestCase):
 
     def test_line_over_hard_limit_fails(self):
         findings = validator.validate_caption(
-            "12345678901\n1234567890123456789", label="x"
+            "12345678901\n1234567890123456789012", label="x"
         )
         self.assertIn(
             "CAPTION_LINE_HARD_LIMIT_EXCEEDED",
