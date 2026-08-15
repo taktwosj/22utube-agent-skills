@@ -1231,6 +1231,11 @@ def validate_capcut_project(
         snapshot_schema = read_json(SNAPSHOT_SCHEMA)
     except (OSError, ValueError, TypeError) as exc:
         return {**result([_error("BUILD_CONTRACT_SCHEMA", detail=str(exc))]), "next_action": "NONE"}
+    if snapshot.get("schema_version") == "001short-structure-snapshot-v1":
+        return {
+            **result([_error("STRUCTURE_SNAPSHOT_MIGRATION_REQUIRED")]),
+            "next_action": "NONE",
+        }
     contract_schema_errors = validate_schema(contract, build_schema)
     if isinstance(contract.get("root_contract_path"), str) and Path(contract["root_contract_path"]).is_absolute():
         contract_schema_errors.append("$.root_contract_path: workspace-relative path required")
@@ -1342,23 +1347,21 @@ def validate_capcut_project(
     design_lock_errors, _ = validate_design_lock_authority(contract)
     errors.extend(design_lock_errors)
     authority = snapshot.get("authority", {})
+    try:
+        source_structure_sha256 = manifest_sha256(
+            capture_structure(load_project(source_path))
+        )
+    except ProjectError:
+        source_structure_sha256 = None
     expected_authority = {
-        "captured_from": "source",
+        "captured_from": "working_project",
         "source_project_path": str(source_path),
         "source_root_sha256": contract.get("source_root_sha256"),
         "template_sha256": contract.get("template_sha256"),
+        "source_structure_sha256": source_structure_sha256,
         "design_lock_evidence_sha256": contract.get("design_lock_evidence_sha256"),
     }
     if authority != expected_authority:
-        errors.append(_error("STRUCTURE_SNAPSHOT_AUTHORITY_MISMATCH"))
-    try:
-        source_structure = capture_structure(load_project(source_path))
-        snapshot_structure = {
-            key: snapshot.get(key) for key in ("schema_version", "track_order", "tracks")
-        }
-        if source_structure != snapshot_structure:
-            errors.append(_error("STRUCTURE_SNAPSHOT_AUTHORITY_MISMATCH"))
-    except ProjectError:
         errors.append(_error("STRUCTURE_SNAPSHOT_AUTHORITY_MISMATCH"))
     try:
         model = load_project(project_path)

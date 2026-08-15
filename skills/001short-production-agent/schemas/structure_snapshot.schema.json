@@ -4,15 +4,16 @@
   "type": "object",
   "required": ["schema_version", "authority", "track_order", "tracks"],
   "properties": {
-    "schema_version": {"type": "string", "const": "001short-structure-snapshot-v1"},
+    "schema_version": {"type": "string", "const": "001short-structure-snapshot-v2"},
     "authority": {
       "type": "object",
-      "required": ["captured_from", "source_project_path", "source_root_sha256", "template_sha256", "design_lock_evidence_sha256"],
+      "required": ["captured_from", "source_project_path", "source_root_sha256", "template_sha256", "source_structure_sha256", "design_lock_evidence_sha256"],
       "properties": {
-        "captured_from": {"type": "string", "const": "source"},
+        "captured_from": {"type": "string", "const": "working_project"},
         "source_project_path": {"type": "string", "minLength": 1},
         "source_root_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
         "template_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
+        "source_structure_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"},
         "design_lock_evidence_sha256": {"type": "string", "pattern": "[0-9a-fA-F]{64}"}
       },
       "additionalProperties": false

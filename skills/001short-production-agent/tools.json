@@ -164,7 +164,6 @@
       "undeclared_extra_tracks": "FORBIDDEN",
       "user_audio_overlap_a10": "A10_ON_VOLUME_1_MANUAL_CAPCUT_ADJUSTMENT_NO_AUTO_DUCK"
     },
-    "new_tools": false,
-    "external_review_auto": false
+    "new_tools": false
   }
 }

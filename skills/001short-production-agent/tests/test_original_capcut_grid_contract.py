@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import validate_design_lock
+import validate_original_blueprint
 from validate_capcut_grids import REQUIRED_ROWS
 
 
@@ -22,6 +24,7 @@ STAGE08 = SKILL_ROOT / "steps" / "08-capcut-assembly.md"
 ORCHESTRATOR = SKILL_ROOT / "references" / "production-orchestrator.md"
 ORIGINAL_TEMPLATE = SKILL_ROOT / "templates" / "original-capcut-grid.md"
 URAKKAI_TEMPLATE = SKILL_ROOT / "templates" / "urakkai-capcut-grid.md"
+EXECUTION_SPEC = SKILL_ROOT.parents[1] / "docs" / "001SHORT_NORMAL_FAST_EXECUTION_SPEC.md"
 
 
 def table_roles(path: Path, header: str) -> tuple[str, ...]:
@@ -45,6 +48,49 @@ def base_timeline(extra: list[dict]) -> dict:
 
 
 class OriginalCapCutGridContractTest(unittest.TestCase):
+    def test_stage02_documents_exact_field_id_to_header_mapping(self):
+        stage02 = STAGE02.read_text(encoding="utf-8")
+        for field_id, header in (
+            ("situation_action", "상황·행동"),
+            ("lead_speaker", "주도 화자"),
+            ("delivery_mode", "전달 방식"),
+            ("narrative_function", "서사 기능"),
+            ("split_basis", "구조 분리 근거"),
+        ):
+            self.assertIn(f"`{field_id}` ↔ `{header}`", stage02)
+
+    def test_execution_spec_lists_every_required_release_blocker_file(self):
+        spec = EXECUTION_SPEC.read_text(encoding="utf-8")
+        for relative in (
+            "scripts/validate_original_blueprint.py",
+            "scripts/validate_stage.py",
+            "scripts/build_episode_capcut.py",
+            "scripts/capcut_model.py",
+            "scripts/validate_capcut_project.py",
+            "schemas/structure_snapshot.schema.json",
+            "references/matt-auxiliary-routing.md",
+            "templates/human-design-blueprint.md",
+            "tests/test_validate_stage_router.py",
+        ):
+            self.assertIn(relative, spec)
+
+    def test_original_blueprint_rejects_unverified_and_placeholder_field_values(self):
+        for value in ("미확인", "아직 미확인입니다", "TBD", "placeholder", "<later>", "-"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as td:
+                artifact = Path(td) / "original-blueprint.md"
+                artifact.write_text(
+                    "| 원본 구조 | source range | 상황·행동 | 주도 화자 | 전달 방식 | 서사 기능 | 구조 분리 근거 |\n"
+                    "|---|---|---|---|---|---|---|\n"
+                    f"| B01 | 0~1 | 행동 | 화자 | 외국인 발화 | 도입 | {value} |\n",
+                    encoding="utf-8",
+                )
+                result = validate_original_blueprint.validate_original_blueprint(artifact)
+                self.assertEqual(result["status"], "FAIL")
+                self.assertIn(
+                    "ORIGINAL_BLUEPRINT_BEAT_FIELD_PLACEHOLDER",
+                    {row["code"] for row in result["errors"]},
+                )
+
     def test_both_templates_use_the_same_exact_15_row_order(self):
         self.assertEqual(table_roles(ORIGINAL_TEMPLATE, "레이어 \\ 원본 시간"), REQUIRED_ROWS)
         self.assertEqual(table_roles(URAKKAI_TEMPLATE, "레이어 \\ 목표 시간"), REQUIRED_ROWS)
@@ -74,6 +120,31 @@ class OriginalCapCutGridContractTest(unittest.TestCase):
         self.assertTrue(harness["builder_preflight_before_writes"])
         self.assertTrue(harness["chat_report_required_in_auto_mode"])
         self.assertEqual(workflow["grid_harness"], {"authority": "protocol.json#/grid_harness"})
+
+    def test_original_beats_have_five_separate_observation_fields(self):
+        protocol = json.loads((SKILL_ROOT / "protocol.json").read_text(encoding="utf-8"))
+        contract = protocol["original_beat_contract"]
+        self.assertEqual(
+            contract["required_fields"],
+            [
+                "situation_action",
+                "lead_speaker",
+                "delivery_mode",
+                "narrative_function",
+                "split_basis",
+            ],
+        )
+        self.assertEqual(contract["authority"], "source_observation_only")
+        self.assertEqual(contract["urakkai_substitution"], "FORBIDDEN")
+
+    def test_stage03_has_one_independent_author_and_preserves_original_grid(self):
+        protocol = json.loads((SKILL_ROOT / "protocol.json").read_text(encoding="utf-8"))
+        authoring = protocol["stage03_authoring"]
+        self.assertEqual(authoring["author_count"], 1)
+        self.assertEqual(authoring["author_role"], "task-owner")
+        self.assertEqual(authoring["method"], "independent_urakkai")
+        self.assertEqual(authoring["subworkers"], 0)
+        self.assertEqual(authoring["original_grid_mutation"], "FORBIDDEN")
 
     def test_stage_docs_preserve_required_artifacts_and_exact_handoff_command(self):
         self.assertIn("20_script/original-blueprint.md", STAGE02.read_text(encoding="utf-8"))

@@ -2,6 +2,12 @@
 
 `protocol.json` is the machine contract and `workflow.json` owns stage transitions. Resolve one internal stage and load exactly its direct stage document. Conflicting instructions stop at `STOP_PROTOCOL_CONFLICT`.
 
+## NORMAL_FAST execution
+
+`NORMAL_FAST` is the default profile. One task-owner performs Stage 01 through Stage 04 sequentially and owns their canonical writes. Stage 01, Stage 03, post-design, and postbuild worker fanout are inactive. Candidate promotion, coordinator revalidation, and duplicate evidence barriers are inactive. Run the validator owned by each stage once per current artifact revision and rerun it only after a proven relevant artifact change.
+
+The same task-owner may submit the VMake job after source identity verification and continue Stage 02 through Stage 04 while the remote job runs. This is one-owner background work, not worker fanout.
+
 ## Source authority and divergence gate
 
 Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`
@@ -63,7 +69,9 @@ blocks for the 프로젝트 파일명 and 프로젝트 전체 경로. Missing re
 
 ## Build and audio contract
 
-`scripts/build_episode_capcut.py` validates both tables before work-root or draft writes. It binds normalized text, cue/layer/color/effect, and path/SHA locks for the timeline, manifest, design, audio, and captions. Require timeline/caption cue bijection and source-time evidence. Zero captions require empty timeline cues, lock cues, and `final.srt`. Keep VIDEO embedded audio muted.
+`scripts/build_episode_capcut.py` validates both tables before work-root or draft writes. It validates the canonical root ZIP against the root contract, extracts it into immutable `source_authority`, clones that tree to `working_project`, assigns new project, draft, and timeline IDs, and injects episode assets only into that clone. Validate the assembled clone; never mutate the root ZIP or extracted source.
+
+The builder binds normalized text, cue/layer/color/effect, and path/SHA locks for the timeline, manifest, design, audio, and captions. Require timeline/caption cue bijection, source-time evidence, audio-material registration, project-ID mirrors, and Timeline mirrors. Zero captions require empty timeline cues, lock cues, and `final.srt`. Keep VIDEO embedded audio muted.
 
 A9/A9_TEXT require narration audio. STATE_LASER is silent situation text; never request TTS for STATE-only screens. Select one explicit audio matrix without fallback:
 
@@ -96,7 +104,7 @@ Retained-speaker captions use the two
 ## Urakkai Editorial Authority
 
 Urakkai always requires the source-time original table and target-time urakkai
-table. Do not call an external AI reviewer. Manual mode waits for user approval;
+table. One task-owner writes one independent Stage 03 recommendation from the locked Stage 02 artifacts and does not mutate the original grid. Manual mode waits for user approval;
 when the user requests automatic mode, preserve both tables and continue without
 asking for approval. Its final duration is allowed to differ from source
 duration; clean-only remains full-length passthrough.

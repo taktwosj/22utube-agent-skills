@@ -16,7 +16,7 @@ This file defines only 001-specific exceptions. `NONE` means no specialist beyon
 | Download, media, state, audio, caption, builder, or readback failure | Resume the owning stage first. |
 | The same code/tool failure is reproducible after owner-stage recovery | `$diagnosing-bugs`; establish the cause before editing. |
 
-Stage 04 never uses Matt as external editorial review. Matt failure never blocks a normal or automatic episode.
+Stage 04 approval authority is the user. Automatic mode keeps the same approved artifacts and skips only the approval question. Matt failure never blocks a normal or automatic episode.
 
 ## Research boundary
 

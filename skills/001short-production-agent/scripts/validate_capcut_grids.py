@@ -44,7 +44,13 @@ HEADER_PATTERNS = {
     ),
 }
 EMPTY_MARKERS = {"", "-", "–", "—"}
-LINE_LIMIT_ROLES = {"A9_TEXT", "STATE_LASER"}
+DECLARED_EMPTY_VALUES = {"없음", "비움"}
+LINE_LIMITS = {
+    ("original", "A9_TEXT"): (2, 15),
+    ("urakkai", "A9_TEXT"): (2, 15),
+    ("original", "STATE_LASER"): (2, 15),
+    ("urakkai", "STATE_LASER"): (2, 15),
+}
 PLACEHOLDER_TOKEN = re.compile(
     r"(?:^|[\s_:/-])(?:placeholder|todo|tbd|tbc|n/a)(?:$|[\s_:/-])",
     re.IGNORECASE,
@@ -156,6 +162,11 @@ def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
         )
 
     expected_width = len(headers) + 1
+    values_by_role = {
+        row[0]: row[1:]
+        for row in body
+        if len(row) == expected_width and row
+    }
     for row_index, row in enumerate(body, start=1):
         role = row[0] if row else ""
         if len(row) != expected_width:
@@ -211,9 +222,42 @@ def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
                         value=stripped,
                     )
                 )
-            if role in LINE_LIMIT_ROLES:
+            line_limit = LINE_LIMITS.get((kind, role))
+            if kind == "urakkai" and role == "A9_TEXT":
+                a9_values = values_by_role.get("A9", ())
+                a9_present = (
+                    column <= len(a9_values)
+                    and a9_values[column - 1].strip() not in DECLARED_EMPTY_VALUES
+                    and a9_values[column - 1].strip() not in EMPTY_MARKERS
+                )
+                text_present = (
+                    stripped not in DECLARED_EMPTY_VALUES
+                    and stripped not in EMPTY_MARKERS
+                )
+                if text_present and not a9_present:
+                    errors.append(
+                        _error(
+                            "A9_TEXT_TTS_PAIR_REQUIRED",
+                            kind,
+                            row=role,
+                            column=column,
+                        )
+                    )
+                if a9_present and not text_present:
+                    errors.append(
+                        _error(
+                            "A9_TTS_TEXT_PAIR_REQUIRED",
+                            kind,
+                            row=role,
+                            column=column,
+                        )
+                    )
+                if a9_present:
+                    line_limit = (2, 10)
+            if line_limit is not None:
+                max_lines, max_chars = line_limit
                 display_lines = re.split(r"\s*<br\s*/?>\s*|\r?\n", stripped, flags=re.IGNORECASE)
-                if len(display_lines) > 2:
+                if len(display_lines) > max_lines:
                     errors.append(
                         _error(
                             "TABLE_TEXT_TOO_MANY_LINES",
@@ -221,11 +265,11 @@ def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
                             row=role,
                             column=column,
                             observed=len(display_lines),
-                            limit=2,
+                            limit=max_lines,
                         )
                     )
                 for display_line in display_lines:
-                    if meaningful_text_length(display_line) > 15:
+                    if meaningful_text_length(display_line) > max_chars:
                         errors.append(
                             _error(
                                 "TABLE_TEXT_LINE_TOO_LONG",
@@ -233,7 +277,7 @@ def validate_grid(path: Path, kind: str) -> tuple[Grid | None, list[dict]]:
                                 row=role,
                                 column=column,
                                 value=display_line,
-                                limit=15,
+                                limit=max_chars,
                             )
                         )
 
@@ -347,7 +391,7 @@ def validate_locked_assembly(
     rows = {row[0]: row[1:] for row in urakkai.rows}
     segments = approved_timeline.get("segments", [])
     caption_cues = caption_lock.get("cues", [])
-    empty_values = {"없음", "비움"}
+    empty_values = DECLARED_EMPTY_VALUES
 
     caption_rows = [row for row in segments if row.get("role") in {"A9_TEXT", "A10_TEXT", "STATE"}]
     timeline_cue_ids = [row.get("cue_id") for row in caption_rows]

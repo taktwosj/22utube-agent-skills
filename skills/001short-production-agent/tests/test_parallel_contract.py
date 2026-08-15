@@ -19,30 +19,32 @@ class ParallelContractTests(unittest.TestCase):
         cls.workflow = json.loads(WORKFLOW.read_text(encoding="utf-8"))
         cls.contract = cls.workflow["parallel_execution"]
 
-    def test_workers_are_evidence_only_and_coordinator_owns_canonical_writes(self):
-        self.assertEqual(self.contract["mode"], "evidence_only")
-        self.assertEqual(self.contract["max_workers"], 4)
-        self.assertTrue(self.contract["workers"]["unique_root_required"])
-        self.assertIn("{worker_id}", self.contract["workers"]["root_template"])
-        self.assertIn("{task_id}", self.contract["workers"]["root_template"])
-        self.assertEqual(
-            self.contract["canonical_writes"]["owner"],
-            "coordinator_only",
-        )
-        self.assertEqual(
-            self.contract["canonical_writes"]["state_advance"],
-            "barrier_pass_then_sequential_only",
-        )
+    def test_normal_fast_is_default_and_one_owner_runs_stage01_through_stage04(self):
+        profile = self.workflow["execution_profiles"]
+        normal = profile["profiles"]["NORMAL_FAST"]
+        self.assertEqual(profile["default"], "NORMAL_FAST")
+        self.assertEqual(normal["task_owner_count"], 1)
+        self.assertEqual(normal["stage_sequence"], ["01", "02", "03", "04"])
+        self.assertEqual(normal["stage_execution"], "single_task_owner_sequential")
+        self.assertEqual(normal["state_writer"], "task_owner")
 
-    def test_worker_live_transcripts_are_recorded_but_never_promoted_as_authority(self):
-        transcripts = self.contract["workers"]["live_transcripts"]
-        self.assertTrue(transcripts["record_paths_when_available"])
-        self.assertEqual(transcripts["authority"], "observation_only")
-        self.assertTrue(transcripts["artifact_reverification_required"])
-        self.assertEqual(
-            transcripts["parent_session_end_behavior"],
-            "do_not_treat_delegation_as_durable",
-        )
+    def test_normal_fast_disables_worker_promotion_revalidation_and_barrier_duplication(self):
+        normal = self.workflow["execution_profiles"]["profiles"]["NORMAL_FAST"]
+        self.assertFalse(normal["evidence_only_worker_candidates"])
+        self.assertFalse(normal["coordinator_revalidation"])
+        self.assertFalse(normal["barrier_duplication"])
+        self.assertEqual(normal["validator_run"], "once_per_current_artifact_revision")
+        self.assertEqual(normal["validator_rerun"], "after_proven_relevant_change_only")
+
+        self.assertFalse(self.contract["enabled"])
+        self.assertEqual(self.contract["mode"], "disabled_in_normal_fast")
+        self.assertEqual(self.contract["max_workers"], 0)
+        for lane in ("stage01", "stage03", "after_final_design_locked", "stage08_postbuild"):
+            with self.subTest(lane=lane):
+                fanout = self.contract["fanout"][lane]
+                self.assertFalse(fanout["enabled"])
+                self.assertEqual(fanout["workers"], 0)
+                self.assertEqual(fanout["lanes"], [])
 
     def test_only_one_gui_owner_exists(self):
         gui = self.contract["gui"]
@@ -56,37 +58,15 @@ class ParallelContractTests(unittest.TestCase):
         self.assertTrue(gui["recapture_after_state_change"])
         self.assertTrue(gui["foreground_requires_driver_recommendation"])
 
-    def test_stage01_and_stage03_have_bounded_fanout(self):
-        early_vmake = self.contract["fanout"]["after_source_identity_verified"]
-        stage01 = self.contract["fanout"]["stage01"]
-        stage03 = self.contract["fanout"]["stage03"]
+    def test_nonblocking_vmake_is_an_owner_job_not_worker_fanout(self):
+        early_vmake = self.workflow["owner_background_jobs"]["after_source_identity_verified"]
         self.assertEqual(early_vmake["trigger_status"], "SOURCE_OCR_VERIFIED")
-        self.assertEqual(early_vmake["lanes"][0]["id"], "vmake_submit")
-        self.assertEqual(early_vmake["lanes"][0]["gui"], "vmake")
+        self.assertEqual(early_vmake["owner"], "task_owner")
+        self.assertEqual(early_vmake["job"], "vmake_submit")
+        self.assertEqual(early_vmake["gui"], "vmake")
+        self.assertTrue(early_vmake["nonblocking"])
         self.assertEqual(early_vmake["candidate_receipt"]["status_meaning"], "TECHNICAL_IDENTITY_ONLY")
         self.assertEqual(early_vmake["candidate_receipt"]["quality_authority"], "user")
-        self.assertEqual(stage01["workers"], 3)
-        self.assertEqual(len(stage01["lanes"]), 3)
-        self.assertEqual(stage03["workers"], 4)
-        self.assertEqual(len(stage03["lanes"]), 4)
-        self.assertEqual(stage01["commit_status"], "SOURCE_OCR_VERIFIED")
-        self.assertEqual(stage03["commit_status"], "FIRST_RECOMMENDATION_READY")
-
-    def test_post_design_fanout_has_three_lanes_and_nonblocking_clean_visual(self):
-        post = self.contract["fanout"]["after_final_design_locked"]
-        self.assertEqual(post["trigger_status"], "FINAL_DESIGN_LOCKED")
-        self.assertEqual(post["workers"], 3)
-        self.assertEqual(
-            [lane["id"] for lane in post["lanes"]],
-            ["vmake_candidate_finalize", "audio_prep", "stage08_readonly_preflight"],
-        )
-        self.assertIsNone(post["lanes"][0]["gui"])
-        self.assertNotIn("clean_visual_evidence", post["barrier"]["required_evidence"])
-        self.assertIn("clean_visual_evidence", post["barrier"]["nonblocking_evidence"])
-        self.assertEqual(
-            post["barrier"]["sequential_state_advance"],
-            ["AUDIO_CAPTION_VALIDATED"],
-        )
 
     def test_stage06_validator_and_stage08_source_provisional_path_are_registered(self):
         checks = self.workflow["validation"]["checks"]
@@ -118,12 +98,7 @@ class ParallelContractTests(unittest.TestCase):
         self.assertIn("SOURCE_PROVISIONAL_RENDER", interim["allows"])
         self.assertEqual(interim["quality_authority"], "user")
 
-    def test_stage08_postbuild_checks_are_read_only_and_stage09_is_user_manual_only(self):
-        postbuild = self.contract["fanout"]["stage08_postbuild"]
-        self.assertEqual(postbuild["mode"], "read_only_validation")
-        self.assertLessEqual(postbuild["workers"], self.contract["max_workers"])
-        self.assertTrue(postbuild["immutable_snapshot_required"])
-
+    def test_stage09_is_user_manual_only(self):
         stage09 = self.contract["stage09"]
         self.assertEqual(stage09["mode"], "user_manual_only")
         self.assertEqual(stage09["max_workers"], 0)
@@ -132,13 +107,13 @@ class ParallelContractTests(unittest.TestCase):
         self.assertEqual(stage09["sequence"], ["WAIT_USER_CAPCUT_CHECK"])
         self.assertEqual(stage09["router_args"], [])
 
-    def test_runtime_guides_require_transcript_evidence_and_verified_gui_escalation(self):
+    def test_runtime_guides_describe_normal_fast_and_verified_gui_escalation(self):
         parallel = GUIDE.read_text(encoding="utf-8")
         ui = UI_GUIDE.read_text(encoding="utf-8")
         testing = PROTOCOL_TESTING_GUIDE.read_text(encoding="utf-8")
-        self.assertIn("live_transcripts", parallel)
-        self.assertIn("observation_only", parallel)
-        self.assertIn("artifact_reverification_required", parallel)
+        self.assertIn("NORMAL_FAST", parallel)
+        self.assertIn("single task-owner", parallel)
+        self.assertIn("once per current artifact revision", parallel)
         self.assertIn("suspected_noop", ui)
         self.assertIn("background_unavailable", ui)
         self.assertIn("foreground", ui)

@@ -1,5 +1,5 @@
 # 05 최종 설계
-외부 검토 중 원본으로 확인된 개선만 반영한다. `references/shorts-structure-taxonomy.md`의 분류·우라까이·가단야 판단을 고정한다.
+Stage 04에서 승인된 원본표와 우라까이표만 반영한다. `references/shorts-structure-taxonomy.md`의 분류·우라까이·가단야 판단을 고정한다.
 
 - `source_identity.json`, `approved_timeline.json`, `design_handoff.json`에는 4축 분류, source/target order signature, source/target beat 매핑, `remake_structure_pattern`, `resolution_type`, 와우포인트, 가단야 결과를 함께 기록한다.
 - `TRANSFORM_APPROVED`는 실제 target VIDEO 순서가 source와 다르고 대화·인과·baked-in 순번 검수가 통과했을 때만 쓴다.

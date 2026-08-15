@@ -1947,20 +1947,14 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
     work_root.mkdir(parents=True, exist_ok=True)
     source = _extract_template(Path(config["template_zip"]).resolve(), work_root / "source_authority")
     pre = prerequisites if prerequisites is not None else _stage_prerequisites(config, episode, [])
-    source_rows = _normalize_source(source, config, pre["audio_source"], pre["build_manifest"])
-    # The protected structure snapshot includes the approved polish bindings.
-    # Apply them to the extracted authority before cloning; the later target
-    # application is idempotent and produces the user-facing receipt.
-    apply_capcut_polish_profile.apply_project(source)
-    source_polish = validate_capcut_polish_profile.validate_project(source)
-    if source_polish["status"] != "PASS":
-        raise RuntimeError(f"STAGE08_POLISH_SOURCE:{source_polish}")
-
+    source_manifest = clone_and_sync.hash_project_core(source)
+    source_root_sha = manifest_sha256(source_manifest)
+    template_sha = clone_and_sync.template_fingerprint_sha256(source)
+    source_structure = capcut_model.capture_structure(capcut_model.load_project(source))
     working = work_root / "working_project"
     cloned = clone_and_sync.clone_project(source, working)
     if cloned["status"] != "PASS":
         raise RuntimeError(f"STAGE08_CLONE:{cloned}")
-    source_manifest = clone_and_sync.hash_project_core(source)
     project_id = "project-" + uuid.uuid4().hex
     draft_id = "draft-" + uuid.uuid4().hex
     timeline_id = "timeline-" + uuid.uuid4().hex
@@ -1971,12 +1965,21 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
     if synced["status"] != "PASS":
         raise RuntimeError(f"STAGE08_ID_SYNC:{synced}")
 
-    source_root_sha = manifest_sha256(source_manifest)
-    template_sha = clone_and_sync.template_fingerprint_sha256(source)
-    snapshot = capcut_model.capture_structure(capcut_model.load_project(source))
+    _normalize_source(working, config, pre["audio_source"], pre["build_manifest"])
+    # Episode assets and the approved polish profile belong only to the clone.
+    apply_capcut_polish_profile.apply_project(working)
+    working_polish = validate_capcut_polish_profile.validate_project(working)
+    if working_polish["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_POLISH_WORKING:{working_polish}")
+    source_unchanged = clone_and_sync.verify_source_unchanged(source, source_manifest)
+    if source_unchanged["status"] != "PASS":
+        raise RuntimeError(f"STAGE08_SOURCE_AUTHORITY_CHANGED:{source_unchanged}")
+
+    snapshot = capcut_model.capture_structure(capcut_model.load_project(working))
     snapshot["authority"] = {
-        "captured_from": "source", "source_project_path": str(source.resolve()),
+        "captured_from": "working_project", "source_project_path": str(source.resolve()),
         "source_root_sha256": source_root_sha, "template_sha256": template_sha,
+        "source_structure_sha256": manifest_sha256(source_structure),
         "design_lock_evidence_sha256": _sha(pre["design_evidence"]),
     }
     snapshot_path = build_root / "structure_snapshot.json"

@@ -140,7 +140,7 @@ def capture_structure(model: ProjectModel) -> dict:
             }
         )
     return {
-        "schema_version": "001short-structure-snapshot-v1",
+        "schema_version": "001short-structure-snapshot-v2",
         "track_order": [track["id"] for track in tracks],
         "tracks": tracks,
     }
@@ -174,7 +174,7 @@ def capture_structure_from_content(content: dict) -> dict:
             }
         )
     return {
-        "schema_version": "001short-structure-snapshot-v1",
+        "schema_version": "001short-structure-snapshot-v2",
         "track_order": [track["id"] for track in tracks],
         "tracks": tracks,
     }

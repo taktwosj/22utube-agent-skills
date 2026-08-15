@@ -11,6 +11,8 @@
 
 두 완전표가 PASS하지 않으면 work root와 local draft를 생성·변경하지 않는다. `TABLE_EMPTY_CELL_FORBIDDEN`, `TABLE_UNVERIFIED_CELL`, 행·머리글 오류를 우회하지 않는다.
 
+근본 CapCut ZIP을 root contract로 검증한 뒤 `source_authority`에 해제한다. root ZIP과 해제된 source-authority tree는 읽기 전용이다. `working_project` 복제본을 만들고 새 project ID, draft ID, timeline ID를 부여한 뒤 episode asset은 복제본에만 주입한다. 조립 완료 뒤 실제 clone의 material, audio, caption, path/SHA, project-ID mirror, Timeline mirror를 기존 validator로 검사한다.
+
 형식 PASS 뒤에는 B/V 범위와 source Bxx 매핑을 `build_manifest.urakkai.video_clips`에, A9/A10/자막/STATE의 비움·채움 상태를 approved timeline과 caption lock에, T1/T2 문구를 잠긴 title segment에 대조한다. 완전표는 단순 보고서가 아니라 실제 조립 선언이다.
 
 ## 15트랙 조립

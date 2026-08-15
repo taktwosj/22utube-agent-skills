@@ -124,6 +124,83 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         errors.append("PROTOCOL_OWNER_SKILL")
     if protocol.get("lane") != "general_shorts_production":
         errors.append("PROTOCOL_LANE")
+    execution_profiles = protocol.get("execution_profiles", {})
+    normal_fast = execution_profiles.get("profiles", {}).get("NORMAL_FAST", {})
+    if execution_profiles.get("default") != "NORMAL_FAST":
+        errors.append("PROTOCOL_NORMAL_FAST_DEFAULT")
+    owner_mismatch = normal_fast.get("task_owner_count") != 1
+    if owner_mismatch:
+        errors.append("PROTOCOL_NORMAL_FAST_OWNER")
+    expected_normal_fast = {
+        "task_owner_count": 1,
+        "stage_sequence": ["01", "02", "03", "04"],
+        "stage_execution": "single_task_owner_sequential",
+        "state_writer": "task_owner",
+        "worker_fanout": False,
+        "evidence_only_worker_candidates": False,
+        "coordinator_revalidation": False,
+        "barrier_duplication": False,
+        "validator_run": "once_per_current_artifact_revision",
+        "validator_rerun": "after_proven_relevant_change_only",
+    }
+    if normal_fast != expected_normal_fast and not owner_mismatch:
+        errors.append("PROTOCOL_NORMAL_FAST_CONTRACT")
+
+    expected_beat_contract = {
+        "id_pattern": "Bxx",
+        "required_fields": [
+            "situation_action",
+            "lead_speaker",
+            "delivery_mode",
+            "narrative_function",
+            "split_basis",
+        ],
+        "authority": "source_observation_only",
+        "urakkai_substitution": "FORBIDDEN",
+    }
+    if protocol.get("original_beat_contract") != expected_beat_contract:
+        errors.append("PROTOCOL_ORIGINAL_BEAT_FIELDS")
+
+    expected_stage03_authoring = {
+        "author_count": 1,
+        "author_role": "task-owner",
+        "method": "independent_urakkai",
+        "subworkers": 0,
+        "requires_state": "ORIGINAL_BLUEPRINT_READY",
+        "locked_inputs": [
+            "20_script/original-blueprint.md",
+            "20_script/original-capcut-grid.md",
+        ],
+        "original_grid_mutation": "FORBIDDEN",
+    }
+    if protocol.get("stage03_authoring") != expected_stage03_authoring:
+        errors.append("PROTOCOL_STAGE03_SINGLE_AUTHOR")
+
+    expected_root_clone_contract = {
+        "root_contract_validation_required": True,
+        "root_zip_immutable": True,
+        "extract_target": "source_authority",
+        "source_authority_immutable": True,
+        "assembly_target": "working_project_clone_only",
+        "new_ids": ["project_id", "draft_id", "timeline_id"],
+        "asset_injection_target": "working_project_clone_only",
+        "assembled_clone_validation_required": True,
+    }
+    if protocol.get("capcut_root_clone_contract") != expected_root_clone_contract:
+        errors.append("PROTOCOL_ROOT_CLONE_SAFETY")
+
+    grid_harness = protocol.get("grid_harness", {})
+    expected_grid_text_contract = {
+        "target_a9_text_scope": "new_urakkai_a9_tts_only",
+        "target_a9_text_max_lines": 2,
+        "target_a9_text_max_chars_per_line": 10,
+        "original_a9_text_max_lines": 2,
+        "original_a9_text_max_chars_per_line": 15,
+        "state_laser_max_lines": 2,
+        "state_laser_max_chars_per_line": 15,
+    }
+    if any(grid_harness.get(key) != value for key, value in expected_grid_text_contract.items()):
+        errors.append("PROTOCOL_GRID_TEXT_SCOPE")
     expected_tracks = list(CANONICAL_TRACKS)
     if protocol.get("track_layout") != TRACK_LAYOUT:
         errors.append("PROTOCOL_TRACK_LAYOUT")
@@ -241,19 +318,18 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     else:
         expected_approval = {
             "enabled_for": ["URAKKAI"],
-            "external_review_required": False,
             "approval_authority": "user",
             "auto_mode_skips_user_approval": True,
             "required_report_artifacts": expected_artifacts,
             "manual_pass_state": "WAIT_USER_URAKKAI_APPROVAL",
             "auto_pass_state": "URAKKAI_AUTO_APPROVED",
         }
+        if "external_review_required" in approval:
+            errors.append("PROTOCOL_URAKKAI_APPROVAL_LEGACY_FIELD")
         for key, value in expected_approval.items():
             if approval.get(key) != value:
                 errors.append(
-                    "PROTOCOL_URAKKAI_EXTERNAL_REVIEW_FORBIDDEN"
-                    if key == "external_review_required"
-                    else "PROTOCOL_URAKKAI_APPROVAL_ARTIFACTS"
+                    "PROTOCOL_URAKKAI_APPROVAL_ARTIFACTS"
                     if key == "required_report_artifacts"
                     else f"PROTOCOL_URAKKAI_APPROVAL_GATE:{key}"
                 )
@@ -263,6 +339,16 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     observed_stages = [stage.get("id") for stage in stages] if isinstance(stages, list) else []
     if observed_stages != expected_stages:
         errors.append("PROTOCOL_STAGE_ORDER")
+    elif stages[1].get("validators") != [
+        "scripts/validate_original_blueprint.py",
+        "scripts/validate_capcut_grids.py",
+    ]:
+        errors.append("PROTOCOL_STAGE02_ORIGINAL_BLUEPRINT_VALIDATOR")
+    elif stages[3].get("requires") != ["20_script/original-capcut-grid.md"] or stages[3].get("produces") != [
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md",
+    ]:
+        errors.append("PROTOCOL_STAGE04_ORIGINAL_GRID_IMMUTABLE")
     elif stages[6].get("requires_state") != "FINAL_DESIGN_LOCKED_OR_CLEAN_VISUAL_READY":
         errors.append("PROTOCOL_SOURCE_PROVISIONAL_AUDIO_GATE")
     elif stages[6].get("produces") != [
@@ -429,8 +515,15 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         ]:
             if token not in skill_text:
                 errors.append(f"PROTOCOL_SKILL_TOKEN_MISSING:{token}")
-        if "외부 AI 검토를 호출하지 않는다" not in skill_text:
-            errors.append("PROTOCOL_SKILL_EXTERNAL_REVIEW_DISABLED_MISSING")
+        if "Stage 04의 승인 권위는 사용자다" not in skill_text:
+            errors.append("PROTOCOL_SKILL_USER_APPROVAL_AUTHORITY_MISSING")
+
+    for legacy_path in (
+        "steps/04-external-review.md",
+        "references/stage04-external-review-contract.md",
+    ):
+        if (root / legacy_path).exists():
+            errors.append(f"PROTOCOL_EXTERNAL_REVIEW_LEGACY_PRESENT:{legacy_path}")
 
     orchestrator_path = root / "references/production-orchestrator.md"
     if orchestrator_path.is_file():
@@ -444,6 +537,9 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             "DESKTOP",
             "A11=SFX",
             "A12=EMPTY",
+            "root ZIP",
+            "source_authority",
+            "working_project",
         ]:
             if token not in orchestrator_text:
                 errors.append(f"PROTOCOL_ORCHESTRATOR_TOKEN_MISSING:{token}")
@@ -482,6 +578,10 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
         if "claude.cmd" in stage04_text or "codex.cmd" in stage04_text:
             errors.append("PROTOCOL_STAGE04_EXTERNAL_REVIEW_COMMAND_FORBIDDEN")
 
+    stage05_path = root / "steps" / "05-final-blueprint.md"
+    if stage05_path.is_file() and "외부 검토" in stage05_path.read_text(encoding="utf-8"):
+        errors.append("PROTOCOL_STAGE05_EXTERNAL_REVIEW_STALE")
+
     workflow_path = root / str(authority.get("state_machine", "workflow.json"))
     if workflow_path.is_file():
         try:
@@ -503,10 +603,37 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_WORKFLOW_COMPLETION_GATE_DISABLED")
             if workflow.get("manual_finalization") != protocol.get("manual_finalization"):
                 errors.append("PROTOCOL_WORKFLOW_MANUAL_FINALIZATION_MISMATCH")
+            if workflow.get("execution_profiles") != protocol.get("execution_profiles"):
+                errors.append("PROTOCOL_WORKFLOW_NORMAL_FAST_MISMATCH")
+            if workflow.get("external_actions", {}).get("llm_calls") != "NONE":
+                errors.append("PROTOCOL_WORKFLOW_LLM_CALLS_MISMATCH")
+            parallel = workflow.get("parallel_execution", {})
+            if (
+                parallel.get("enabled") is not False
+                or parallel.get("mode") != "disabled_in_normal_fast"
+                or parallel.get("max_workers") != 0
+            ):
+                errors.append("PROTOCOL_WORKFLOW_PARALLEL_DEFAULT_ENABLED")
+            for lane in ("stage01", "stage03", "after_final_design_locked", "stage08_postbuild"):
+                fanout = parallel.get("fanout", {}).get(lane, {})
+                if fanout != {"enabled": False, "workers": 0, "lanes": []}:
+                    errors.append(f"PROTOCOL_WORKFLOW_FANOUT_ENABLED:{lane}")
+            owner_job = workflow.get("owner_background_jobs", {}).get("after_source_identity_verified", {})
+            if owner_job.get("owner") != "task_owner" or owner_job.get("job") != "vmake_submit":
+                errors.append("PROTOCOL_WORKFLOW_VMAKE_OWNER_JOB")
             stage09 = workflow.get("parallel_execution", {}).get("stage09", {})
             if stage09.get("sequence") != ["WAIT_USER_CAPCUT_CHECK"]:
                 errors.append("PROTOCOL_WORKFLOW_STAGE09_AUTOMATION_NOT_STOPPED")
             stages = {row.get("id"): row for row in workflow.get("production_stages", []) if isinstance(row, dict)}
+            workflow_stage04 = stages.get("04", {})
+            if (
+                workflow_stage04.get("requires") != ["20_script/original-capcut-grid.md"]
+                or workflow_stage04.get("produces") != [
+                    "20_script/urakkai-capcut-grid.md",
+                    "20_script/URAKKAI_BLUEPRINT.md",
+                ]
+            ):
+                errors.append("PROTOCOL_WORKFLOW_STAGE04_ORIGINAL_GRID_IMMUTABLE")
             if stages.get("09", {}).get("pass") != "WAIT_USER_CAPCUT_CHECK":
                 errors.append("PROTOCOL_WORKFLOW_STAGE09_MANUAL_WAIT_MISSING")
             if workflow.get("validation", {}).get("checks", {}).get("09") != {
@@ -526,8 +653,10 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
             if interim.get("a10_anchor") != "A10_VALIDATED_DEMUCS_VOCAL_STEM":
                 errors.append("PROTOCOL_WORKFLOW_A10_ANCHOR_MISMATCH")
             user_approval = workflow.get("blueprint_frontend", {}).get("user_approval", {})
-            if user_approval.get("external_review_required") is not False:
-                errors.append("PROTOCOL_WORKFLOW_EXTERNAL_REVIEW_NOT_DISABLED")
+            if "external_review_required" in user_approval:
+                errors.append("PROTOCOL_WORKFLOW_APPROVAL_LEGACY_FIELD")
+            if user_approval.get("approval_authority") != "user":
+                errors.append("PROTOCOL_WORKFLOW_USER_APPROVAL_AUTHORITY")
             if user_approval.get("auto_mode_skips_user_approval") is not True:
                 errors.append("PROTOCOL_WORKFLOW_AUTO_APPROVAL_BYPASS_MISSING")
             if user_approval.get("required_report_artifacts") != approval.get("required_report_artifacts"):

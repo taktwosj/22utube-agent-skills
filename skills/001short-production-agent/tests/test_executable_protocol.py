@@ -265,6 +265,57 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             ],
         )
 
+    def test_normal_fast_machine_contract_is_required_and_self_checked(self):
+        module = load_validator()
+        protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
+        schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+        for field in (
+            "grid_harness",
+            "execution_profiles",
+            "original_beat_contract",
+            "stage03_authoring",
+            "capcut_root_clone_contract",
+        ):
+            self.assertIn(field, schema["required"])
+        grid_schema = schema["properties"]["grid_harness"]
+        self.assertEqual(
+            grid_schema["properties"]["target_a9_text_max_chars_per_line"]["const"],
+            10,
+        )
+        self.assertEqual(
+            grid_schema["properties"]["original_a9_text_max_chars_per_line"]["const"],
+            15,
+        )
+
+        normal = protocol["execution_profiles"]["profiles"]["NORMAL_FAST"]
+        self.assertEqual(protocol["execution_profiles"]["default"], "NORMAL_FAST")
+        self.assertEqual(normal["task_owner_count"], 1)
+        self.assertEqual(normal["stage_sequence"], ["01", "02", "03", "04"])
+        self.assertFalse(normal["worker_fanout"])
+        self.assertFalse(normal["evidence_only_worker_candidates"])
+        self.assertFalse(normal["coordinator_revalidation"])
+        self.assertFalse(normal["barrier_duplication"])
+
+        mutations = {
+            "default": ("execution_profiles", "default", "LEGACY_PARALLEL", "PROTOCOL_NORMAL_FAST_DEFAULT"),
+            "owner": ("execution_profiles", "profiles.NORMAL_FAST.task_owner_count", 2, "PROTOCOL_NORMAL_FAST_OWNER"),
+            "beat": ("original_beat_contract", "required_fields", [], "PROTOCOL_ORIGINAL_BEAT_FIELDS"),
+            "stage03": ("stage03_authoring", "subworkers", 4, "PROTOCOL_STAGE03_SINGLE_AUTHOR"),
+            "root": ("capcut_root_clone_contract", "root_zip_immutable", False, "PROTOCOL_ROOT_CLONE_SAFETY"),
+        }
+        for name, (section, key, value, expected) in mutations.items():
+            with self.subTest(name=name):
+                broken = copy.deepcopy(protocol)
+                target = broken[section]
+                path = key.split(".")
+                for part in path[:-1]:
+                    target = target[part]
+                target[path[-1]] = value
+                errors = module.validate_protocol_document(broken)
+                self.assertIn(expected, errors)
+                if name == "owner":
+                    self.assertNotIn("PROTOCOL_NORMAL_FAST_CONTRACT", errors)
+
     def test_manual_finalization_stops_automation_after_static_capcut(self):
         protocol = json.loads(PROTOCOL.read_text(encoding="utf-8"))
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
@@ -308,8 +359,9 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertEqual(stage09["produces"], [])
         self.assertNotIn("validators", stage09)
 
-        vmake_lane = workflow["parallel_execution"]["fanout"]["after_source_identity_verified"]
-        self.assertEqual(vmake_lane["lanes"][0]["id"], "vmake_submit")
+        vmake_lane = workflow["owner_background_jobs"]["after_source_identity_verified"]
+        self.assertEqual(vmake_lane["job"], "vmake_submit")
+        self.assertEqual(vmake_lane["owner"], "task_owner")
         self.assertIn("02", vmake_lane["nonblocking_next_stages"])
         self.assertEqual(
             workflow["assembly_visual"],
@@ -458,9 +510,19 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             module.validate_skill_contract(SKILL, mismatched_protocol),
         )
 
-    def test_stage04_uses_user_approval_without_external_llm_review(self):
+    def test_stage04_uses_positive_user_approval_authority(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
+        workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
+        protocol_stage04 = next(stage for stage in protocol["stages"] if stage["id"] == "04")
+        workflow_stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
+        for stage04 in (protocol_stage04, workflow_stage04):
+            self.assertEqual(stage04["requires"], ["20_script/original-capcut-grid.md"])
+            self.assertNotIn("20_script/original-capcut-grid.md", stage04["produces"])
+            self.assertEqual(stage04["produces"], [
+                "20_script/urakkai-capcut-grid.md",
+                "20_script/URAKKAI_BLUEPRINT.md",
+            ])
         stage_path = SKILL / "steps" / "04-user-approval.md"
         stage_text = stage_path.read_text(encoding="utf-8")
         self.assertIn("original-capcut-grid.md", stage_text)
@@ -469,8 +531,41 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIn("URAKKAI_AUTO_APPROVED", stage_text)
         self.assertNotIn("claude.cmd", stage_text)
         self.assertNotIn("codex.cmd", stage_text)
-        self.assertFalse(protocol["urakkai_approval"]["external_review_required"])
+        self.assertFalse((SKILL / "steps" / "04-external-review.md").exists())
+        self.assertFalse((SKILL / "references" / "stage04-external-review-contract.md").exists())
+        self.assertNotIn(
+            "외부 검토",
+            (SKILL / "steps" / "05-final-blueprint.md").read_text(encoding="utf-8"),
+        )
+        self.assertEqual(protocol["urakkai_approval"]["approval_authority"], "user")
+        matt_routing = (
+            SKILL / "references" / "matt-auxiliary-routing.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("external editorial review", matt_routing)
+        self.assertNotIn("external_review_required", protocol["urakkai_approval"])
         self.assertEqual(module.validate_skill_contract(SKILL, protocol), [])
+
+    def test_self_check_rejects_reintroduced_external_review_route(self):
+        def mutate(copied_skill):
+            (copied_skill / "steps" / "04-external-review.md").write_text(
+                "Run an external AI reviewer.", encoding="utf-8"
+            )
+
+        rejected = run_copied_self_check(mutate)
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn("PROTOCOL_EXTERNAL_REVIEW_LEGACY_PRESENT", rejected.stdout)
+
+    def test_self_check_rejects_stage04_original_grid_as_output(self):
+        def mutate(copied_skill):
+            workflow_path = copied_skill / "workflow.json"
+            workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
+            stage04 = next(row for row in workflow["production_stages"] if row["id"] == "04")
+            stage04["produces"].append("20_script/original-capcut-grid.md")
+            workflow_path.write_text(json.dumps(workflow, ensure_ascii=False), encoding="utf-8")
+
+        rejected = run_copied_self_check(mutate)
+        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
+        self.assertIn("PROTOCOL_WORKFLOW_STAGE04_ORIGINAL_GRID_IMMUTABLE", rejected.stdout)
 
     def test_clean_only_plan_requires_single_video_audio_and_empty_tracks(self):
         module = load_validator()
@@ -705,8 +800,8 @@ class ExecutableProtocolContractTest(unittest.TestCase):
 
         approval = protocol["urakkai_approval"]
         self.assertEqual(approval["enabled_for"], ["URAKKAI"])
-        self.assertIs(approval["external_review_required"], False)
         self.assertEqual(approval["approval_authority"], "user")
+        self.assertNotIn("external_review_required", approval)
         self.assertEqual(approval["required_report_artifacts"], [
             "20_script/original-capcut-grid.md",
             "20_script/urakkai-capcut-grid.md",
@@ -716,8 +811,11 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         stage04 = next(stage for stage in workflow["production_stages"] if stage["id"] == "04")
         self.assertEqual(stage04["pass"], "WAIT_USER_URAKKAI_APPROVAL_OR_URAKKAI_AUTO_APPROVED")
         self.assertEqual(stage04["file"], "steps/04-user-approval.md")
-        self.assertEqual(workflow["blueprint_frontend"]["user_approval"]["external_review_required"], False)
+        self.assertEqual(workflow["blueprint_frontend"]["user_approval"]["approval_authority"], "user")
+        self.assertNotIn("external_review_required", workflow["blueprint_frontend"]["user_approval"])
         self.assertEqual(workflow["external_actions"]["llm_calls"], "NONE")
+        tools = json.loads((SKILL / "tools.json").read_text(encoding="utf-8"))
+        self.assertNotIn("external_review_auto", tools["policies"])
         self.assertIn("VMake Direct-Insert Contract", skill_text)
         self.assertIn("Urakkai Editorial Authority", skill_text)
 
@@ -730,7 +828,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         broken = json.loads(json.dumps(protocol, ensure_ascii=False))
         broken["urakkai_approval"]["external_review_required"] = True
         self.assertIn(
-            "PROTOCOL_URAKKAI_EXTERNAL_REVIEW_FORBIDDEN",
+            "PROTOCOL_URAKKAI_APPROVAL_LEGACY_FIELD",
             module.validate_protocol_document(broken),
         )
 

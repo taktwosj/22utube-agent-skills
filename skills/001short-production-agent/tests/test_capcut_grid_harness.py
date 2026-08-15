@@ -244,6 +244,73 @@ class CapCutGridHarnessTest(unittest.TestCase):
                     result = grid_harness.validate_grids(path, URAKKAI)
                     self.assertIn(expected[name], {row["code"] for row in result["errors"]})
 
+    def test_target_a9_text_uses_ten_characters_only_when_a9_tts_exists(self):
+        urakkai_text = URAKKAI.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            self.assertEqual(grid_harness.validate_grids(ORIGINAL, URAKKAI)["status"], "PASS")
+
+            empty_a9 = root / "empty-a9.md"
+            empty_a9.write_text(
+                urakkai_text.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 12345678901 |", 1),
+                encoding="utf-8",
+            )
+            empty_result = grid_harness.validate_grids(ORIGINAL, empty_a9)
+            self.assertEqual(empty_result["status"], "FAIL")
+            self.assertIn(
+                "A9_TEXT_TTS_PAIR_REQUIRED",
+                {row["code"] for row in empty_result["errors"]},
+            )
+
+            with_a9 = urakkai_text.replace("| A9 | 비움 |", "| A9 | a9-new-tts.wav |", 1)
+            missing_text = root / "missing-text.md"
+            missing_text.write_text(with_a9, encoding="utf-8")
+            missing_text_result = grid_harness.validate_grids(ORIGINAL, missing_text)
+            self.assertEqual(missing_text_result["status"], "FAIL")
+            self.assertIn(
+                "A9_TTS_TEXT_PAIR_REQUIRED",
+                {row["code"] for row in missing_text_result["errors"]},
+            )
+
+            ten = root / "ten.md"
+            ten.write_text(
+                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 1234567890 |", 1),
+                encoding="utf-8",
+            )
+            self.assertEqual(grid_harness.validate_grids(ORIGINAL, ten)["status"], "PASS")
+
+            eleven = root / "eleven.md"
+            eleven.write_text(
+                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 12345678901 |", 1),
+                encoding="utf-8",
+            )
+            result = grid_harness.validate_grids(ORIGINAL, eleven)
+            self.assertEqual(result["status"], "FAIL")
+            errors = [row for row in result["errors"] if row["code"] == "TABLE_TEXT_LINE_TOO_LONG"]
+            self.assertEqual(errors[0]["table"], "urakkai")
+            self.assertEqual(errors[0]["row"], "A9_TEXT")
+            self.assertEqual(errors[0]["limit"], 10)
+
+    def test_original_a9_text_keeps_the_existing_fifteen_character_contract(self):
+        original_text = ORIGINAL.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as td:
+            original = Path(td) / "original.md"
+            original.write_text(
+                original_text.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 123456789012345 |", 1),
+                encoding="utf-8",
+            )
+            result = grid_harness.validate_grids(original, URAKKAI)
+        self.assertEqual(result["status"], "PASS", result["errors"])
+
+        with tempfile.TemporaryDirectory() as td:
+            original = Path(td) / "original-a9-without-text.md"
+            original.write_text(
+                original_text.replace("| A9 | 비움 |", "| A9 | source-voice.wav |", 1),
+                encoding="utf-8",
+            )
+            result = grid_harness.validate_grids(original, URAKKAI)
+        self.assertEqual(result["status"], "PASS", result["errors"])
+
     def test_builder_grid_gate_fails_before_work_or_target_creation(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

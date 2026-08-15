@@ -43,6 +43,12 @@ def _contracts():
 
 STAGE_CHECKS, STAGE_ENTRY_STATUS, STAGE_TRANSITIONS = _contracts()
 ALL_CHECKS = tuple(dict.fromkeys(c for values in STAGE_CHECKS.values() for c in values))
+ALL_STAGES = tuple(row["id"] for row in read_json(PROTOCOL)["stages"])
+AUTHORING_STAGE_ENTRY_STATUS = {
+    row["id"]: row["requires_state"]
+    for row in read_json(PROTOCOL)["stages"]
+    if row["id"] in {"03", "04"}
+}
 RECEIPTS = {
     "design_lock": ("design_lock_evidence_path", "design_lock_evidence_sha256", "design_lock_evidence.schema.json"),
     "clean_visual": ("clean_visual_receipt_path", "clean_visual_receipt_sha256", "clean_visual_receipt.schema.json"),
@@ -52,6 +58,7 @@ RECEIPTS = {
     "capcut_project": ("capcut_project_evidence_path", "capcut_project_evidence_sha256", "capcut_project_evidence.schema.json"),
 }
 PREREQUISITES = {
+    "02": (),
     "05": (),
     "06": ("design_lock",),
     "07": ("design_lock",),
@@ -90,6 +97,29 @@ def _state_declared_path(state_path: Path, raw: str) -> Path:
     return resolve_state_artifact(state_path, raw)
 
 
+def _stage02_lock_errors(state: dict, state_path: Path) -> list[dict]:
+    errors = []
+    for name, relative in (
+        ("original_blueprint", "20_script/original-blueprint.md"),
+        ("original_capcut_grid", "20_script/original-capcut-grid.md"),
+    ):
+        raw = state.get(f"{name}_path")
+        expected_sha = state.get(f"{name}_sha256")
+        if not isinstance(raw, str) or not raw or not isinstance(expected_sha, str):
+            errors.append({"code": "STAGE02_LOCK_MISSING", "artifact": name})
+            continue
+        expected_path = _state_declared_path(state_path, relative)
+        try:
+            actual_path = _state_declared_path(state_path, raw)
+        except ValueError:
+            actual_path = None
+        if actual_path != expected_path:
+            errors.append({"code": "STAGE02_LOCK_PATH_MISMATCH", "artifact": name})
+        elif not actual_path.is_file() or sha256_file(actual_path).lower() != expected_sha.lower():
+            errors.append({"code": "STAGE02_LOCK_SHA_MISMATCH", "artifact": name})
+    return errors
+
+
 def _receipt_error(state, state_path, name):
     path_key, sha_key, schema = RECEIPTS[name]
     raw, expected = state.get(path_key), state.get(sha_key)
@@ -111,6 +141,23 @@ def _receipt_error(state, state_path, name):
 
 
 def _run(check, a):
+    if check == "original_blueprint":
+        from validate_original_blueprint import validate_original_blueprint
+        path = _state_declared_path(a.state.resolve(), "20_script/original-blueprint.md")
+        return validate_original_blueprint(path)
+    if check == "capcut_grids":
+        from validate_capcut_grids import validate_grid
+        path = _state_declared_path(a.state.resolve(), "20_script/original-capcut-grid.md")
+        grid, errors = validate_grid(path, "original")
+        return {
+            "status": "FAIL" if errors else "PASS",
+            "errors": errors,
+            "evidence": {
+                "path": str(path),
+                "sha256": sha256_file(path) if path.is_file() else "",
+                "beat_ids": [header.split()[0] for header in grid.headers] if grid else [],
+            },
+        }
     if check == "production_plan":
         from validate_executable_protocol import load_protocol, validate_production_plan
         if a.production_plan is None:
@@ -178,7 +225,27 @@ def _advance_state(state_path: Path, state: dict, stage: str, args, results: dic
     advanced = dict(state)
     advanced["current_stage"] = transition["next_stage"]
     advanced["status"] = transition["pass_state"]
-    if stage == "05":
+    if stage == "02":
+        validation = results.get("original_blueprint", {})
+        evidence = validation.get("evidence", {})
+        grid_validation = results.get("capcut_grids", {})
+        grid_evidence = grid_validation.get("evidence", {})
+        blueprint = _state_declared_path(state_path, "20_script/original-blueprint.md")
+        original_grid = _state_declared_path(state_path, "20_script/original-capcut-grid.md")
+        if (
+            validation.get("status") != "PASS"
+            or evidence.get("path") != str(blueprint)
+            or evidence.get("sha256") != sha256_file(blueprint)
+            or grid_validation.get("status") != "PASS"
+            or grid_evidence.get("path") != str(original_grid)
+            or grid_evidence.get("sha256") != sha256_file(original_grid)
+        ):
+            raise ValueError("STAGE02_ORIGINAL_ARTIFACT_BINDING_INVALID")
+        advanced["original_blueprint_path"] = str(blueprint)
+        advanced["original_blueprint_sha256"] = evidence["sha256"]
+        advanced["original_capcut_grid_path"] = str(original_grid)
+        advanced["original_capcut_grid_sha256"] = grid_evidence["sha256"]
+    elif stage == "05":
         if args.design_lock_evidence is None or args.production_plan is None or args.production_plan_receipt is None:
             raise ValueError("STAGE05_BINDING_ARGUMENT_REQUIRED")
         design = resolve_state_artifact(state_path, str(args.design_lock_evidence))
@@ -205,7 +272,7 @@ def _advance_state(state_path: Path, state: dict, stage: str, args, results: dic
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--state", type=Path, required=True); p.add_argument("--stage", choices=tuple(STAGE_CHECKS)); p.add_argument("--check", choices=ALL_CHECKS)
+    p.add_argument("--state", type=Path, required=True); p.add_argument("--stage", choices=ALL_STAGES); p.add_argument("--check", choices=ALL_CHECKS)
     p.add_argument("--handoff", type=Path); p.add_argument("--source-identity", type=Path); p.add_argument("--timeline", type=Path)
     p.add_argument("--production-plan", type=Path); p.add_argument("--production-plan-receipt", type=Path)
     p.add_argument("--clean-visual-manifest", type=Path); p.add_argument("--design-lock-evidence", type=Path)
@@ -226,6 +293,31 @@ def main() -> int:
                 raise ValueError(f"STATE_REQUIRED_FIELD_MISSING:{field}")
         raw_stage = str(state.get("current_stage", state.get("stage", ""))).strip()
         declared_stage = raw_stage.zfill(2) if raw_stage.isdigit() else raw_stage[:2]
+        if declared_stage in {"08", "09"}:
+            snapshot_argument = a.snapshot or state.get("structure_snapshot_path")
+            if snapshot_argument is None and declared_stage == "09":
+                snapshot_argument = "50_capcut_project/structure_snapshot.json"
+            if snapshot_argument is not None:
+                try:
+                    snapshot_payload = read_json(
+                        _state_declared_path(state_path, str(snapshot_argument))
+                    )
+                except (OSError, TypeError, ValueError):
+                    snapshot_payload = {}
+                if snapshot_payload.get("schema_version") == "001short-structure-snapshot-v1":
+                    return _emit({"status": "FAIL", "errors": [{"code": "STRUCTURE_SNAPSHOT_MIGRATION_REQUIRED"}], "evidence": {}, "stage": declared_stage, "stage_complete": False})
+        if declared_stage in AUTHORING_STAGE_ENTRY_STATUS:
+            if a.stage is not None and a.stage != declared_stage:
+                return _emit({"status": "FAIL", "errors": [{"code": "CALLER_STAGE_MISMATCH", "canonical_stage": declared_stage, "caller_stage": a.stage}], "evidence": {}, "stage_complete": False})
+            expected = AUTHORING_STAGE_ENTRY_STATUS[declared_stage]
+            if not _entry_state_matches(state, expected):
+                return _emit({"status": "FAIL", "errors": [{"code": "STATE_STATUS_MISMATCH", "stage": declared_stage, "expected": expected, "actual": state.get("status")}], "evidence": {}, "stage": declared_stage, "stage_complete": False})
+            lock_errors = _stage02_lock_errors(state, state_path)
+            if lock_errors:
+                return _emit({"status": "FAIL", "errors": lock_errors, "evidence": {}, "stage": declared_stage, "check": "stage02_input_locks", "stage_complete": False})
+            if a.advance:
+                return _emit({"status": "FAIL", "errors": [{"code": "AUTHORING_STAGE_ADVANCE_UNSUPPORTED"}], "evidence": {}, "stage": declared_stage, "check": "stage02_input_locks", "stage_complete": False})
+            return _emit({"status": "PASS", "errors": [], "evidence": {"stage02_input_locks": "PASS"}, "stage": declared_stage, "check": "stage02_input_locks", "stage_complete": False})
         if declared_stage == "09":
             if a.stage is not None and a.stage != declared_stage:
                 return _emit({"status": "FAIL", "errors": [{"code": "CALLER_STAGE_MISMATCH", "canonical_stage": declared_stage, "caller_stage": a.stage}], "evidence": {}, "stage_complete": False})
@@ -289,6 +381,22 @@ def main() -> int:
             results = {check: futures[check].result() for check in selected}
     else:
         results = {check: _run(check, a) for check in selected}
+    if stage == "02" and all(
+        results.get(check, {}).get("status") == "PASS"
+        for check in ("original_blueprint", "capcut_grids")
+    ):
+        blueprint_ids = sorted(set(results["original_blueprint"]["evidence"].get("beat_ids", [])))
+        grid_ids = sorted(set(results["capcut_grids"]["evidence"].get("beat_ids", [])))
+        if blueprint_ids != grid_ids:
+            results["capcut_grids"] = {
+                **results["capcut_grids"],
+                "status": "FAIL",
+                "errors": [{
+                    "code": "ORIGINAL_BEAT_GRID_BXX_MISMATCH",
+                    "blueprint_beat_ids": blueprint_ids,
+                    "grid_beat_ids": grid_ids,
+                }],
+            }
     failed = [c for c, result in results.items() if result.get("status") != "PASS"]
     completed = [c for c, result in results.items() if result.get("status") == "PASS"]
     missing = [c for c in required if c not in completed]

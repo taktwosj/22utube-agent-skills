@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -23,6 +24,127 @@ def load_script(name):
 
 
 class V2ReleaseContractTest(unittest.TestCase):
+    def test_structure_snapshot_contract_is_v2(self):
+        model = load_script("capcut_model")
+        schema = json.loads(
+            (SKILL / "schemas" / "structure_snapshot.schema.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            model.capture_structure_from_content({"tracks": []})["schema_version"],
+            "001short-structure-snapshot-v2",
+        )
+        self.assertEqual(
+            schema["properties"]["schema_version"]["const"],
+            "001short-structure-snapshot-v2",
+        )
+
+    def test_project_validator_reports_v1_snapshot_migration_explicitly(self):
+        validator = load_script("validate_capcut_project")
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            project = root / "project"
+            project.mkdir()
+            snapshot = root / "snapshot.json"
+            snapshot.write_text(json.dumps({
+                "schema_version": "001short-structure-snapshot-v1",
+            }), encoding="utf-8")
+            contract = root / "build-contract.json"
+            contract.write_text("{}", encoding="utf-8")
+            result = validator.validate_capcut_project(project, snapshot, contract)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["errors"][0]["code"], "STRUCTURE_SNAPSHOT_MIGRATION_REQUIRED")
+
+    def test_builder_keeps_source_authority_immutable_and_mutates_only_working_clone(self):
+        builder = load_script("build_episode_capcut")
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "source-template"
+            (source / "Timelines").mkdir(parents=True)
+            (source / "draft_content.json").write_text('{"tracks": [], "materials": {}}', encoding="utf-8")
+            (source / "draft_meta_info.json").write_text("{}", encoding="utf-8")
+            (source / "Timelines" / "project.json").write_text("{}", encoding="utf-8")
+            source_before = builder.clone_and_sync.hash_project_core(source)
+            video = root / "source.mp4"
+            video.write_bytes(b"video")
+            design_evidence = root / "design.json"
+            design_evidence.write_text("{}", encoding="utf-8")
+            working = root / "work" / "working_project"
+            normalized_paths = []
+
+            def normalize(project, _config, _audio_source, _manifest):
+                project = Path(project).resolve()
+                normalized_paths.append(project)
+                media = project / "Resources" / "media"
+                media.mkdir(parents=True, exist_ok=True)
+                (media / "episode-asset.bin").write_bytes(b"episode")
+                (project / "draft_content.json").write_text(
+                    '{"tracks": [], "materials": {}, "episode": true}', encoding="utf-8"
+                )
+                return []
+
+            config = {
+                "episode_root": str(root / "episode"),
+                "local_capcut_root": str(root / "capcut"),
+                "project_name": "episode-project",
+                "work_root": str(root / "work"),
+                "template_zip": str(root / "root.zip"),
+                "_visual_input": {"video_input_path": str(video)},
+            }
+            prerequisites = {
+                "audio_source": None,
+                "build_manifest": {},
+                "design_evidence": design_evidence,
+            }
+            with (
+                patch.object(builder, "_ensure_media_tools"),
+                patch.object(builder, "_validate_config"),
+                patch.object(builder, "_extract_template", return_value=source),
+                patch.object(builder, "_normalize_source", side_effect=normalize),
+                patch.object(builder.apply_capcut_polish_profile, "apply_project", return_value={}),
+                patch.object(builder.validate_capcut_polish_profile, "validate_project", return_value={"status": "PASS"}),
+                patch.object(builder.clone_and_sync, "sync_project_ids", return_value={"status": "PASS"}),
+                patch.object(builder.capcut_model, "load_project", return_value=object()),
+                patch.object(builder.capcut_model, "capture_structure", return_value={"schema_version": "001short-structure-snapshot-v2", "track_order": [], "tracks": []}),
+                patch.object(builder, "_assert_capcut_closed_for_target", side_effect=RuntimeError("STOP_AFTER_PREPARE")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "STOP_AFTER_PREPARE"):
+                    builder._build_episode_once(config, prerequisites=prerequisites)
+
+            self.assertEqual(builder.clone_and_sync.hash_project_core(source), source_before)
+            self.assertFalse((source / "Resources" / "media" / "episode-asset.bin").exists())
+            self.assertEqual(normalized_paths, [working.resolve()])
+            self.assertTrue((working / "Resources" / "media" / "episode-asset.bin").is_file())
+            snapshot = json.loads(
+                (root / "episode" / "50_capcut_project" / "structure_snapshot.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(snapshot["authority"]["captured_from"], "working_project")
+            self.assertEqual(
+                snapshot["authority"]["source_structure_sha256"],
+                builder.manifest_sha256(
+                    {"schema_version": "001short-structure-snapshot-v2", "track_order": [], "tracks": []}
+                ),
+            )
+
+    def test_protocol_requires_immutable_root_zip_and_clone_only_assembly(self):
+        protocol = json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))
+        contract = protocol["capcut_root_clone_contract"]
+        self.assertTrue(contract["root_contract_validation_required"])
+        self.assertTrue(contract["root_zip_immutable"])
+        self.assertEqual(contract["extract_target"], "source_authority")
+        self.assertTrue(contract["source_authority_immutable"])
+        self.assertEqual(contract["assembly_target"], "working_project_clone_only")
+        self.assertEqual(contract["new_ids"], ["project_id", "draft_id", "timeline_id"])
+        self.assertTrue(contract["assembled_clone_validation_required"])
+
+    def test_automation_terminal_state_remains_user_capcut_check(self):
+        protocol = json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))
+        workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))
+        self.assertEqual(protocol["manual_finalization"]["automation_terminal_state"], "WAIT_USER_CAPCUT_CHECK")
+        self.assertEqual(workflow["manual_finalization"]["automation_terminal_state"], "WAIT_USER_CAPCUT_CHECK")
+        self.assertEqual(workflow["production_stages"][-1]["pass"], "WAIT_USER_CAPCUT_CHECK")
+
     def test_a11_is_sfx_and_a12_is_reserved_empty(self):
         protocol = json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))
         workflow = json.loads((SKILL / "workflow.json").read_text(encoding="utf-8"))

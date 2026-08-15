@@ -78,7 +78,6 @@
       ],
       "04": [
         "{episode_root}/20_script/URAKKAI_BLUEPRINT.md",
-        "{episode_root}/20_script/original-capcut-grid.md",
         "{episode_root}/20_script/urakkai-capcut-grid.md"
       ],
       "05": "{episode_root}/20_script/final-blueprint.md",
@@ -130,51 +129,44 @@
       "PUBLIC_UPLOAD_COMPLETE"
     ]
   },
+  "execution_profiles": {
+    "default": "NORMAL_FAST",
+    "profiles": {
+      "NORMAL_FAST": {
+        "task_owner_count": 1,
+        "stage_sequence": ["01", "02", "03", "04"],
+        "stage_execution": "single_task_owner_sequential",
+        "state_writer": "task_owner",
+        "worker_fanout": false,
+        "evidence_only_worker_candidates": false,
+        "coordinator_revalidation": false,
+        "barrier_duplication": false,
+        "validator_run": "once_per_current_artifact_revision",
+        "validator_rerun": "after_proven_relevant_change_only"
+      }
+    }
+  },
+  "owner_background_jobs": {
+    "after_source_identity_verified": {
+      "trigger_status": "SOURCE_OCR_VERIFIED",
+      "owner": "task_owner",
+      "job": "vmake_submit",
+      "gui": "vmake",
+      "nonblocking": true,
+      "nonblocking_next_stages": ["02", "03", "04"],
+      "candidate_receipt": {
+        "validator": "scripts/validate_clean_candidate.py",
+        "status_meaning": "TECHNICAL_IDENTITY_ONLY",
+        "quality_authority": "user"
+      }
+    }
+  },
   "parallel_execution": {
-    "enabled": true,
-    "mode": "evidence_only",
-    "max_workers": 4,
+    "enabled": false,
+    "mode": "disabled_in_normal_fast",
+    "max_workers": 0,
     "reference": "references/parallel-execution.md",
-    "coordinator": {
-      "count": 1,
-      "responsibilities": [
-        "dispatch_workers",
-        "verify_worker_evidence",
-        "promote_approved_candidates",
-        "run_canonical_validators",
-        "advance_state_sequentially"
-      ]
-    },
-    "canonical_writes": {
-      "owner": "coordinator_only",
-      "targets": [
-        "runtime.state_path",
-        "runtime.work_outputs",
-        "canonical_manifests",
-        "canonical_evidence",
-        "active_capcut_draft"
-      ],
-      "state_advance": "barrier_pass_then_sequential_only"
-    },
-    "workers": {
-      "result_mode": "evidence_only",
-      "unique_root_required": true,
-      "root_template": "{episode_root}/90_workflow/parallel/{run_id}/{worker_id}/{task_id}",
-      "candidate_artifacts": "worker_root_only_until_coordinator_promotion",
-      "live_transcripts": {
-        "record_paths_when_available": true,
-        "authority": "observation_only",
-        "artifact_reverification_required": true,
-        "parent_session_end_behavior": "do_not_treat_delegation_as_durable"
-      },
-      "forbidden_writes": [
-        "runtime.state_path",
-        "runtime.work_outputs",
-        "canonical_manifests",
-        "canonical_evidence",
-        "active_capcut_draft"
-      ]
-    },
+    "activation": "separately_approved_future_profile_required",
     "gui": {
       "owner_required": true,
       "max_owners": 1,
@@ -193,163 +185,26 @@
       "recapture_after_state_change": true,
       "foreground_requires_driver_recommendation": true
     },
-    "barrier_policy": {
-      "all_required_evidence_must_pass": true,
-      "sha256_reverify": true,
-      "episode_id_match": true,
-      "failed_or_missing_evidence": "no_state_advance",
-      "state_writer": "coordinator_only",
-      "state_write_order": "sequential"
-    },
     "fanout": {
-      "after_source_identity_verified": {
-        "trigger_status": "SOURCE_OCR_VERIFIED",
-        "workers": 1,
-        "lanes": [
-          {
-            "id": "vmake_submit",
-            "gui": "vmake",
-            "output": "vmake_submission_evidence"
-          }
-        ],
-        "nonblocking_next_stages": [
-          "02",
-          "03",
-          "04"
-        ],
-        "candidate_receipt": {
-          "validator": "scripts/validate_clean_candidate.py",
-          "status_meaning": "TECHNICAL_IDENTITY_ONLY",
-          "quality_authority": "user"
-        }
-      },
       "stage01": {
-        "workers": 3,
-        "source_mode": "read_only",
-        "lanes": [
-          {
-            "id": "source_probe",
-            "output": "source_probe_evidence"
-          },
-          {
-            "id": "full_ocr",
-            "output": "ocr_evidence"
-          },
-          {
-            "id": "scene_audio_inventory",
-            "output": "scene_audio_inventory_evidence"
-          }
-        ],
-        "barrier": {
-          "required_evidence": [
-            "source_probe_evidence",
-            "ocr_evidence",
-            "scene_audio_inventory_evidence"
-          ],
-          "coordinator_action": "write_source_analysis_then_validate"
-        },
-        "commit_status": "SOURCE_OCR_VERIFIED"
+        "enabled": false,
+        "workers": 0,
+        "lanes": []
       },
       "stage03": {
-        "workers": 4,
-        "source_mode": "read_only_locked_inputs",
-        "lanes": [
-          {
-            "id": "hook_options",
-            "output": "hook_options_evidence"
-          },
-          {
-            "id": "caption_structure",
-            "output": "caption_structure_evidence"
-          },
-          {
-            "id": "audio_sfx_plan",
-            "output": "audio_sfx_plan_evidence"
-          },
-          {
-            "id": "screen_composition",
-            "output": "screen_composition_evidence"
-          }
-        ],
-        "barrier": {
-          "required_evidence": [
-            "hook_options_evidence",
-            "caption_structure_evidence",
-            "audio_sfx_plan_evidence",
-            "screen_composition_evidence"
-          ],
-          "coordinator_action": "write_first_recommendation_then_validate"
-        },
-        "commit_status": "FIRST_RECOMMENDATION_READY"
+        "enabled": false,
+        "workers": 0,
+        "lanes": []
       },
       "after_final_design_locked": {
-        "trigger_status": "FINAL_DESIGN_LOCKED",
-        "workers": 3,
-        "lanes": [
-          {
-            "id": "vmake_candidate_finalize",
-            "gui": null,
-            "output": "clean_visual_evidence"
-          },
-          {
-            "id": "audio_prep",
-            "gui": null,
-            "output": "audio_prep_evidence"
-          },
-          {
-            "id": "stage08_readonly_preflight",
-            "gui": null,
-            "output": "stage08_readonly_preflight_evidence"
-          }
-        ],
-        "barrier": {
-          "required_evidence": [
-            "audio_prep_evidence",
-            "stage08_readonly_preflight_evidence"
-          ],
-          "nonblocking_evidence": [
-            "clean_visual_evidence"
-          ],
-          "coordinator_action": "advance_audio_and_source_provisional_build_without_clean_wait",
-          "sequential_state_advance": [
-            "AUDIO_CAPTION_VALIDATED"
-          ]
-        },
-        "next_stage": "07_AND_08"
+        "enabled": false,
+        "workers": 0,
+        "lanes": []
       },
       "stage08_postbuild": {
-        "trigger": "CAPCUT_BUILD_CREATED_AND_CLOSED",
-        "mode": "read_only_validation",
-        "workers": 4,
-        "immutable_snapshot_required": true,
-        "lanes": [
-          {
-            "id": "identity_paths",
-            "output": "identity_paths_evidence"
-          },
-          {
-            "id": "structure_materials",
-            "output": "structure_materials_evidence"
-          },
-          {
-            "id": "timeline_text",
-            "output": "timeline_text_evidence"
-          },
-          {
-            "id": "media_duration",
-            "output": "media_duration_evidence"
-          }
-        ],
-        "barrier": {
-          "required_evidence": [
-            "identity_paths_evidence",
-            "structure_materials_evidence",
-            "timeline_text_evidence",
-            "media_duration_evidence"
-          ],
-          "coordinator_validator": "scripts/validate_capcut_project.py"
-        },
-        "commit_status": "CAPCUT_STATIC_VALIDATED"
+        "enabled": false,
+        "workers": 0,
+        "lanes": []
       }
     },
     "stage09": {
@@ -383,6 +238,13 @@
       "id": "04",
       "file": "steps/04-user-approval.md",
       "pass": "WAIT_USER_URAKKAI_APPROVAL_OR_URAKKAI_AUTO_APPROVED",
+      "requires": [
+        "20_script/original-capcut-grid.md"
+      ],
+      "produces": [
+        "20_script/urakkai-capcut-grid.md",
+        "20_script/URAKKAI_BLUEPRINT.md"
+      ],
       "required_evidence": [
         "20_script/original-capcut-grid.md",
         "20_script/urakkai-capcut-grid.md",
@@ -481,7 +343,6 @@
       "enabled_for": [
         "URAKKAI"
       ],
-      "external_review_required": false,
       "approval_authority": "user",
       "auto_mode_skips_user_approval": true,
       "required_report_artifacts": [
@@ -580,6 +441,13 @@
     "stage_source": "state.current_stage",
     "caller_stage_override": false,
     "checks": {
+      "02": {
+        "reference": "steps/02-original-blueprint.md",
+        "validators": [
+          "scripts/validate_original_blueprint.py",
+          "scripts/validate_capcut_grids.py"
+        ]
+      },
       "05": {
         "reference": "references/checks/design-lock.md",
         "validator": "scripts/validate_design_lock.py",

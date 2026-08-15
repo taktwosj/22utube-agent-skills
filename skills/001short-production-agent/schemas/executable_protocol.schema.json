@@ -7,6 +7,11 @@
     "schema_version",
     "owner_skill",
     "lane",
+    "grid_harness",
+    "execution_profiles",
+    "original_beat_contract",
+    "stage03_authoring",
+    "capcut_root_clone_contract",
     "authority",
     "schemas",
     "session_handoff",
@@ -28,6 +33,141 @@
     },
     "lane": {
       "const": "general_shorts_production"
+    },
+    "grid_harness": {
+      "type": "object",
+      "required": [
+        "target_a9_text_scope",
+        "target_a9_text_max_lines",
+        "target_a9_text_max_chars_per_line",
+        "original_a9_text_max_lines",
+        "original_a9_text_max_chars_per_line",
+        "state_laser_max_lines",
+        "state_laser_max_chars_per_line"
+      ],
+      "properties": {
+        "target_a9_text_scope": {"const": "new_urakkai_a9_tts_only"},
+        "target_a9_text_max_lines": {"const": 2},
+        "target_a9_text_max_chars_per_line": {"const": 10},
+        "original_a9_text_max_lines": {"const": 2},
+        "original_a9_text_max_chars_per_line": {"const": 15},
+        "state_laser_max_lines": {"const": 2},
+        "state_laser_max_chars_per_line": {"const": 15}
+      },
+      "additionalProperties": true
+    },
+    "execution_profiles": {
+      "type": "object",
+      "required": ["default", "profiles"],
+      "properties": {
+        "default": {"const": "NORMAL_FAST"},
+        "profiles": {
+          "type": "object",
+          "required": ["NORMAL_FAST"],
+          "additionalProperties": false,
+          "properties": {
+            "NORMAL_FAST": {
+              "type": "object",
+              "required": [
+                "task_owner_count",
+                "stage_sequence",
+                "stage_execution",
+                "state_writer",
+                "worker_fanout",
+                "evidence_only_worker_candidates",
+                "coordinator_revalidation",
+                "barrier_duplication",
+                "validator_run",
+                "validator_rerun"
+              ],
+              "properties": {
+                "task_owner_count": {"const": 1},
+                "stage_sequence": {"const": ["01", "02", "03", "04"]},
+                "stage_execution": {"const": "single_task_owner_sequential"},
+                "state_writer": {"const": "task_owner"},
+                "worker_fanout": {"const": false},
+                "evidence_only_worker_candidates": {"const": false},
+                "coordinator_revalidation": {"const": false},
+                "barrier_duplication": {"const": false},
+                "validator_run": {"const": "once_per_current_artifact_revision"},
+                "validator_rerun": {"const": "after_proven_relevant_change_only"}
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "original_beat_contract": {
+      "type": "object",
+      "required": ["id_pattern", "required_fields", "authority", "urakkai_substitution"],
+      "properties": {
+        "id_pattern": {"const": "Bxx"},
+        "required_fields": {
+          "const": [
+            "situation_action",
+            "lead_speaker",
+            "delivery_mode",
+            "narrative_function",
+            "split_basis"
+          ]
+        },
+        "authority": {"const": "source_observation_only"},
+        "urakkai_substitution": {"const": "FORBIDDEN"}
+      },
+      "additionalProperties": false
+    },
+    "stage03_authoring": {
+      "type": "object",
+      "required": [
+        "author_count",
+        "author_role",
+        "method",
+        "subworkers",
+        "requires_state",
+        "locked_inputs",
+        "original_grid_mutation"
+      ],
+      "properties": {
+        "author_count": {"const": 1},
+        "author_role": {"const": "task-owner"},
+        "method": {"const": "independent_urakkai"},
+        "subworkers": {"const": 0},
+        "requires_state": {"const": "ORIGINAL_BLUEPRINT_READY"},
+        "locked_inputs": {
+          "const": [
+            "20_script/original-blueprint.md",
+            "20_script/original-capcut-grid.md"
+          ]
+        },
+        "original_grid_mutation": {"const": "FORBIDDEN"}
+      },
+      "additionalProperties": false
+    },
+    "capcut_root_clone_contract": {
+      "type": "object",
+      "required": [
+        "root_contract_validation_required",
+        "root_zip_immutable",
+        "extract_target",
+        "source_authority_immutable",
+        "assembly_target",
+        "new_ids",
+        "asset_injection_target",
+        "assembled_clone_validation_required"
+      ],
+      "properties": {
+        "root_contract_validation_required": {"const": true},
+        "root_zip_immutable": {"const": true},
+        "extract_target": {"const": "source_authority"},
+        "source_authority_immutable": {"const": true},
+        "assembly_target": {"const": "working_project_clone_only"},
+        "new_ids": {"const": ["project_id", "draft_id", "timeline_id"]},
+        "asset_injection_target": {"const": "working_project_clone_only"},
+        "assembled_clone_validation_required": {"const": true}
+      },
+      "additionalProperties": false
     },
     "schemas": {
       "type": "object",
@@ -169,7 +309,6 @@
       "type": "object",
       "required": [
         "enabled_for",
-        "external_review_required",
         "approval_authority",
         "auto_mode_skips_user_approval",
         "required_report_artifacts",
@@ -179,9 +318,6 @@
       "properties": {
         "enabled_for": {
           "const": ["URAKKAI"]
-        },
-        "external_review_required": {
-          "const": false
         },
         "approval_authority": {
           "const": "user"
@@ -394,11 +530,22 @@
           "properties": {
             "id": {
               "const": "04"
+            },
+            "requires": {
+              "const": ["20_script/original-capcut-grid.md"]
+            },
+            "produces": {
+              "const": [
+                "20_script/urakkai-capcut-grid.md",
+                "20_script/URAKKAI_BLUEPRINT.md"
+              ]
             }
           },
           "required": [
             "id",
             "name",
+            "requires",
+            "produces",
             "pass_state"
           ]
         },
