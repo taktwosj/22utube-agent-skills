@@ -37,6 +37,17 @@ def wav(path: Path, seconds: float = 0.4) -> int:
     ], check=True, capture_output=True, text=True).stdout.strip()) * 1_000_000)
 
 
+def silence_wav(path: Path, seconds: float = 0.4) -> int:
+    subprocess.run([
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+        "-i", f"anullsrc=r=48000:cl=mono:d={seconds}", "-c:a", "pcm_s16le", str(path),
+    ], check=True)
+    return round(float(subprocess.run([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=nw=1:nk=1", str(path),
+    ], check=True, capture_output=True, text=True).stdout.strip()) * 1_000_000)
+
+
 def one_column_grid(kind: str, duration_us: int) -> str:
     seconds = duration_us / 1_000_000
     header = (
@@ -82,6 +93,26 @@ def zero_caption(root: Path, audio_lock: Path, episode_id: str) -> Path:
 
 
 class AudioCaptionContractV4Test(unittest.TestCase):
+    def test_caption_only_silence_lock_has_no_audio_role_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            marker = root / "caption_only_silence.wav"
+            duration = silence_wav(marker)
+            identity = root / "source_identity.json"
+            write(identity, {"schema_version": "source-identity-v1", "episode_id": "EP", "source_id": "S",
+                             "source_fingerprint": sha(marker), "media_path": marker.name,
+                             "media_sha256": sha(marker), "duration_us": duration})
+            lock = root / "audio_lock.json"
+            write(lock, {"schema_version": "001short-audio-lock-v4", "episode_id": "EP", "status": "PASS",
+                         "production_mode": "URAKKAI", "audio_policy": "CAPTION_ONLY_MUTE_SOURCE",
+                         "audio_source": "SILENCE", "audio_path": marker.name, "audio_sha256": sha(marker),
+                         "measured_duration_us": duration, "audio_codec": "pcm_s16le", "ffprobe_verified": True,
+                         "role_files": []})
+            caption = zero_caption(root, lock, "EP")
+
+            result = validate_audio_caption(lock, caption)
+            self.assertEqual(result["status"], "PASS", result)
+
     def test_urakkai_reassembled_stem_is_bound_to_valid_full_stem_and_mapping(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

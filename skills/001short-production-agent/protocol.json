@@ -242,7 +242,8 @@
       "allowed_audio_policies": [
         "A10_REASSEMBLED_SYNC",
         "TTS_ONLY_MUTE_SOURCE",
-        "A9_TTS_PLUS_A10_REASSEMBLED"
+        "A9_TTS_PLUS_A10_REASSEMBLED",
+        "CAPTION_ONLY_MUTE_SOURCE"
       ]
     },
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": {
@@ -606,6 +607,12 @@
     "URAKKAI_TTS_ONLY_A9_REQUIRED": "TTS-only urakkai must contain at least one A9 segment",
     "URAKKAI_TTS_ONLY_FORBIDDEN_AUDIO_PRESENT": "TTS-only urakkai must leave A11 and A12 empty",
     "URAKKAI_TTS_ONLY_CLEAR_ANCHOR_MISSING": "TTS-only urakkai must declare cleared audio anchors",
+    "URAKKAI_CAPTION_ONLY_A9_FORBIDDEN": "caption-only urakkai must leave A9 and A9_TEXT empty",
+    "URAKKAI_CAPTION_ONLY_A10_FORBIDDEN": "caption-only urakkai must leave A10 and A10_TEXT empty",
+    "URAKKAI_CAPTION_ONLY_VIDEO_NOT_MUTED": "caption-only urakkai must mute every VIDEO segment",
+    "URAKKAI_CAPTION_ONLY_FORBIDDEN_AUDIO_PRESENT": "caption-only urakkai must leave A11 and A12 empty",
+    "URAKKAI_CAPTION_ONLY_STATE_REQUIRED": "caption-only urakkai must contain at least one STATE segment",
+    "URAKKAI_CAPTION_ONLY_CLEAR_ANCHOR_MISSING": "caption-only urakkai must declare all cleared audio and audio-caption anchors",
     "VMAKE_DIRECT_INSERT_ASSET_INVALID": "VIDEO must use the canonical VMake clean_video asset",
     "PROTOCOL_URAKKAI_REVIEW_LOOP_COUNT": "urakkai review must complete exactly one current-local-runtime review before user approval",
     "SOURCE_FILE_EVIDENCE_MISSING": "completion report lacks verified source file evidence",

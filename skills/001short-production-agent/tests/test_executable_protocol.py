@@ -641,6 +641,30 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             row["placements"] = [placement for placement in row["placements"] if placement["anchor"] != "A9"]
         self.assertIn("URAKKAI_TTS_ONLY_A9_REQUIRED", module.validate_production_plan(no_tts, protocol))
 
+    def test_urakkai_caption_only_allows_state_text_without_audio_tracks(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        fixture = SKILL / "tests" / "fixtures" / "urakkai_tts_only.pass.json"
+        caption_only = json.loads(fixture.read_text(encoding="utf-8"))
+        caption_only["schema_version"] = "001short-production-plan-v2"
+        caption_only["final_order"] = list(caption_only["order_signature"])
+        caption_only["audio_policy"] = "CAPTION_ONLY_MUTE_SOURCE"
+        caption_only["audio_source"] = "SILENCE"
+        caption_only["cleared_anchors"] = ["A9", "A9_TEXT", "A10", "A10_TEXT", "A11", "A12"]
+        for row in caption_only["timeline"]:
+            row["placements"] = [
+                placement for placement in row["placements"]
+                if placement["anchor"] != "A9"
+            ]
+            row["placements"].append({
+                "anchor": "STATE",
+                "operation": "replace_text_preserve_style",
+                "text": "무성 설명문",
+                "target_range_us": row["target_range_us"],
+            })
+
+        self.assertEqual(module.validate_production_plan(caption_only, protocol), [])
+
     def test_urakkai_mixed_policy_accepts_retained_a10_and_generated_a9(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -772,7 +796,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIs(urakkai.get("approved_final_order_required"), True)
         self.assertEqual(
             urakkai.get("allowed_audio_policies"),
-            ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED"],
+            ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE"],
         )
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
         self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")

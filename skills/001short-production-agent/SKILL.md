@@ -46,7 +46,7 @@ STATE_LASER, STATE_GLITCH, STATE_FLICKER, SCREEN_WHITE,
 SCREEN_EFFECT, VIDEO, A9, A10, A11, A12_RESERVED_EMPTY
 ```
 
-Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인` fail. A12=`비움`. Original `A9_TEXT` and all `STATE_LASER`: 2×15. Target `A9_TEXT` paired with A9 TTS: 2×10.
+Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인` fail. A12=`비움`. Original `A9_TEXT` and all `STATE_LASER`: 2×15. Target `A9_TEXT` paired with A9 TTS: 2×10. For approved `CAPTION_ONLY_MUTE_SOURCE`, use STATE_LASER only and leave A9/A9_TEXT/A10/A10_TEXT/A11 empty.
 
 ## Build boundary
 

@@ -27,6 +27,7 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
     "A10_REASSEMBLED_SYNC",
     "TTS_ONLY_MUTE_SOURCE",
     "A9_TTS_PLUS_A10_REASSEMBLED",
+    "CAPTION_ONLY_MUTE_SOURCE",
 ]
 A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED"}
 EXPECTED_SOURCE_AUTHORITY_LINE = (
@@ -1028,6 +1029,20 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                     if not overlapping_tts and retained.get("volume") != 1:
                         errors.append("URAKKAI_MIXED_A10_NOT_RESTORED_OUTSIDE_A9")
                         break
+        elif audio_policy == "CAPTION_ONLY_MUTE_SOURCE":
+            if tts or _segments(tracks, "A9_TEXT"):
+                errors.append("URAKKAI_CAPTION_ONLY_A9_FORBIDDEN")
+            if audio or _segments(tracks, "A10_TEXT"):
+                errors.append("URAKKAI_CAPTION_ONLY_A10_FORBIDDEN")
+            if any(segment.get("volume") != 0 for segment in video):
+                errors.append("URAKKAI_CAPTION_ONLY_VIDEO_NOT_MUTED")
+            if _segments(tracks, "A11") or _segments(tracks, "A12"):
+                errors.append("URAKKAI_CAPTION_ONLY_FORBIDDEN_AUDIO_PRESENT")
+            if not _segments(tracks, "STATE"):
+                errors.append("URAKKAI_CAPTION_ONLY_STATE_REQUIRED")
+            cleared = set(plan.get("cleared_anchors", []))
+            if not {"A9", "A9_TEXT", "A10", "A10_TEXT", "A11", "A12"}.issubset(cleared):
+                errors.append("URAKKAI_CAPTION_ONLY_CLEAR_ANCHOR_MISSING")
         else:
             if audio:
                 errors.append("URAKKAI_TTS_ONLY_A10_FORBIDDEN")
