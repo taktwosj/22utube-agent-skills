@@ -22,9 +22,10 @@ Before any skill, runtime, or episode-draft mutation, read and follow the single
 
 Always execute and report `원본표 → 우라까이표 → CapCut 조립`.
 
-1. Build `20_script/original-capcut-grid.md` on source `Bxx` time columns.
-2. Build `20_script/urakkai-capcut-grid.md` on target `Vxx` time columns, including the source `Bxx` in every header.
-3. Validate and emit both complete tables with:
+1. Build `20_script/original-capcut-grid.md` on source `Bxx` time columns. Keep the 15-row layer table and add the copyable five-field script in `B01 → BN` vertical time order.
+2. The five fields are situation/literal OCR, source speaker utterance, source narration, generated speaker TTS, and generated narration TTS. Multiple source speakers stay on one line as `[A] ... / [B] ...`; A maps to `A10_TEXT_WHITE` and B to `A10_TEXT_YELLOW`.
+3. Give the copyable original script to the user. When the user returns an urakkai script, build `20_script/urakkai-capcut-grid.md` on target `Vxx` time columns, including the source `Bxx` in every header.
+4. Validate and emit both complete tables with:
 
 ```text
 python -B scripts/validate_capcut_grids.py \
@@ -51,7 +52,7 @@ Every cell: real value, `없음`, or `비움`; empty/placeholders/`미확인` fa
 - Mixed-audio contract vocabulary remains `A10_REASSEMBLED_SYNC`, `source_audio[].mode=duck`, `source_audio[].mode=on`, and `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`.
 - Do not mutate a draft while CapCut or its background processes are open.
 
-After assembly, report validator/readback, then separate code blocks for `프로젝트 파일명` and `프로젝트 전체 경로`. Missing readback=`NOT RUN`.
+After assembly, report validator/readback, then separate code blocks for `프로젝트 파일명`, `프로젝트 전체 경로`, and `미디어 폴더 전체 경로`. Missing readback=`NOT RUN`.
 
 ## Lane and finalization
 

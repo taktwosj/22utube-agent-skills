@@ -183,6 +183,28 @@ class CapCutGridHarnessTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         self.assertEqual(json.loads(completed.stdout), {"status": "PASS", "errors": []})
 
+    def test_original_script_accepts_two_source_speakers_in_one_time_block(self):
+        with tempfile.TemporaryDirectory() as td:
+            original = Path(td) / "original-two-speakers.md"
+            original.write_text(
+                ORIGINAL.read_text(encoding="utf-8").replace(
+                    '"화자발언" 없음',
+                    '"화자발언" [A] 첫 화자 원문 / [B] 둘째 화자 원문',
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPT), "--original", str(original), "--original-only"],
+                text=True,
+                encoding="utf-8",
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(json.loads(completed.stdout), {"status": "PASS", "errors": []})
+
     def test_cli_emits_original_then_urakkai_complete_tables(self):
         completed = subprocess.run(
             [
