@@ -621,8 +621,8 @@ def normalize_cards(
             or int(first["target_duration_us"]) != int(content_start_us)
         ):
             raise RuntimeError("INTRO_DURATION_CONTRADICTS_ROOT")
-    elif first.get("card_type") != "SOURCE_VIDEO":
-        raise RuntimeError("FIRST_CARD_MUST_BE_SOURCE_VIDEO_OR_INTRO")
+    elif first.get("card_type") not in {"SOURCE_VIDEO", "NARRATION_IMAGE", "NARRATION_VIDEO"}:
+        raise RuntimeError("FIRST_CARD_MUST_BE_TIMELINE_MEDIA_OR_INTRO")
     for card in ordered:
         if card["card_type"] == "CHAPTER_CARD" and not card.get("narration_audio") and int(card["target_duration_us"]) != 3 * MICROS:
             raise RuntimeError("SILENT_CHAPTER_MUST_BE_3_SECONDS")
