@@ -22,7 +22,7 @@ def _error(code: str, location: str, original: Any) -> RuntimeError:
 
 
 def _is_path_key(key: Any) -> bool:
-    return isinstance(key, str) and (key == "path" or key.endswith("_path"))
+    return isinstance(key, str) and key != "text_loop_on_path" and (key == "path" or key.endswith("_path"))
 
 
 def _parts(value: str) -> list[str]:
