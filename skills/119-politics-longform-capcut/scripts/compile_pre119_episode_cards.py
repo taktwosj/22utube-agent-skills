@@ -86,6 +86,10 @@ def runtime_binding_field(field: str) -> bool:
         "channel",
         "date",
         "speaker",
+        "audio_start_us",
+        "motion_profile",
+        "source_audio_mode",
+        "video_start_us",
     }
 
 
@@ -122,6 +126,16 @@ def bind_seed_cards(seed: dict[str, Any], evidence_cards: list[dict[str, Any]]) 
             if field == "card_id":
                 continue
             if runtime_binding_field(field):
+                card[field] = copy.deepcopy(value)
+                continue
+            if field == "display_transform" and field not in seed_card:
+                if (
+                    seed_card.get("card_type") != "SOURCE_VIDEO"
+                    or not isinstance(value, list)
+                    or any(not isinstance(transform, str) or transform not in ALLOWED_DISPLAY_TRANSFORMS for transform in value)
+                    or len(set(value)) != len(value)
+                ):
+                    raise RuntimeError(f"SOURCE_TRANSCRIPT_PROVENANCE_INVALID:{card_id}")
                 card[field] = copy.deepcopy(value)
                 continue
             if field not in seed_card:
