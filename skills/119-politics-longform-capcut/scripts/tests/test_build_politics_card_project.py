@@ -19,6 +19,22 @@ import build_politics_card_project as builder
 
 
 class BuilderRootBundleSeamTests(unittest.TestCase):
+    def test_normalize_cards_allows_a_narration_image_cold_open(self):
+        cards, total = builder.normalize_cards({
+            "cta_like_subscribe": "ON",
+            "cards": [{
+                "card_id": "N001_HOOK",
+                "card_type": "NARRATION_IMAGE",
+                "target_start_us": 0,
+                "target_duration_us": 1_000_000,
+                "lower_mode": "NONE",
+                "cta_like_subscribe": "ON",
+            }],
+        })
+
+        self.assertEqual(total, 1_000_000)
+        self.assertEqual(cards[0]["card_type"], "NARRATION_IMAGE")
+
     def minimal_document_for_chapter_titles(self) -> dict:
         def text(material_id: str, value: str) -> dict:
             return {
