@@ -245,6 +245,7 @@ def _validate_mode_matrix(lock_path: Path, audio_lock: dict, errors: list[dict])
         ("URAKKAI", "A10_REASSEMBLED_SYNC", "REASSEMBLED_VOCAL_STEM"),
         ("URAKKAI", "A9_TTS_PLUS_A10_REASSEMBLED", "REASSEMBLED_VOCAL_STEM"),
         ("URAKKAI", "TTS_ONLY_MUTE_SOURCE", "GENERATED_TTS"),
+        ("URAKKAI", "CAPTION_ONLY_MUTE_SOURCE", "SILENCE"),
     }
     if (mode, policy, source) not in accepted:
         errors.append({"code": "AUDIO_CAPTION_MODE_MATRIX_MISMATCH", "production_mode": mode, "audio_policy": policy, "audio_source": source})
@@ -520,6 +521,7 @@ def validate_audio_caption(
             "A10_REASSEMBLED_SYNC": {"A10"},
             "A9_TTS_PLUS_A10_REASSEMBLED": {"A9", "A10"},
             "TTS_ONLY_MUTE_SOURCE": {"A9"},
+            "CAPTION_ONLY_MUTE_SOURCE": set(),
         }.get(audio_lock.get("audio_policy"))
         if expected_roles is None or set(role_files) != expected_roles:
             errors.append({"code": "AUDIO_CAPTION_ROLE_MATRIX_MISMATCH", "expected": sorted(expected_roles or ()), "actual": sorted(role_files)})

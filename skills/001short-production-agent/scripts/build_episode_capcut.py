@@ -45,7 +45,7 @@ ROLE_BY_TRACK = list(CANONICAL_TRACKS)
 # MIXED keeps both, so the source stem must still be present while A9 is built.
 AUDIO_POLICIES = frozenset({
     "SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC",
-    "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED",
+    "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE",
 })
 TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
 A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
@@ -1916,6 +1916,7 @@ def _stage_prerequisites(
             "A10_REASSEMBLED_SYNC": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
             "A9_TTS_PLUS_A10_REASSEMBLED": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
             "TTS_ONLY_MUTE_SOURCE": ("URAKKAI", "GENERATED_TTS"),
+            "CAPTION_ONLY_MUTE_SOURCE": ("URAKKAI", "SILENCE"),
         }
         observed = (config.get("production_mode"), audio_payload.get("audio_source"))
         if expected_matrix.get(config.get("audio_policy")) != observed or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):

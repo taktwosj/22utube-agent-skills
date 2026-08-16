@@ -76,6 +76,7 @@ A9/A9_TEXT require narration audio. STATE_LASER is silent situation text; never 
 - `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` + `SOURCE_ORDER_CLEAN_AUDIO`: full source-identity-bound raw A10; no Demucs.
 - `SOURCE_ORDER_UNCHANGED_A10_RETAINED` + `A10_RETAINED_SYNC`: validated full Demucs stem.
 - `URAKKAI` + `A10_REASSEMBLED_SYNC`: mapped reassembly derived from that full stem.
+- `URAKKAI` + `CAPTION_ONLY_MUTE_SOURCE`: VIDEO, A9/A9_TEXT, A10/A10_TEXT, and A11 are empty or muted; STATE_LASER carries every visible caption. A SHA/duration-locked `SILENCE` WAV proves timing but is never inserted into CapCut.
 
 Run Demucs once per explicit stem mode and reuse its manifest. For mixed generated A9, use `source_audio[].mode=duck` under narration and `source_audio[].mode=on` elsewhere; partial overlap is `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`. Validated file/SHA/duration/range-bound user audio keeps A10 on at 1.0 with no auto-duck, mute, or split and stops at `WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT`.
 

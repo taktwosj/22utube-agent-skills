@@ -46,7 +46,7 @@ STATE_LASER, STATE_GLITCH, STATE_FLICKER, SCREEN_WHITE,
 SCREEN_EFFECT, VIDEO, A9, A10, A11, A12_RESERVED_EMPTY
 ```
 
-Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인` fail. A12=`비움`. Original `A9_TEXT` and all `STATE_LASER`: 2×15. Target `A9_TEXT` paired with A9 TTS: 2×10.
+Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인` fail. A12=`비움`. Original `A9_TEXT` and all `STATE_LASER`: 2×15. Target `A9_TEXT` paired with A9 TTS: 2×10. For approved `CAPTION_ONLY_MUTE_SOURCE`, use STATE_LASER only and leave A9/A9_TEXT/A10/A10_TEXT/A11 empty.
 
 ## TTT caption policy
 
@@ -57,6 +57,8 @@ Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인
 - TTT must be real, readback-verifiable CapCut text segments. `STATE_LASER` TTT cues require matching approved-timeline `STATE`, caption-lock, and caption-timing evidence.
 
 ## Build boundary
+
+For newly requested A9 narration TTS, read `<factory-root>/00_asset_tools/TYPECAST_TTS_RUNBOOK.md` before synthesis. Keep user-supplied or approved narration audio unchanged.
 
 `scripts/build_episode_capcut.py` validates both tables before writes, validates the root ZIP, extracts immutable `source_authority`, clones `working_project`, assigns new IDs, injects assets only into the clone, and validates it. Audio terms remain `A10_REASSEMBLED_SYNC`, `source_audio[].mode=duck`, `source_audio[].mode=on`, and `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`. Never mutate a draft while CapCut or its background processes are open.
 

@@ -260,7 +260,7 @@
               "uniqueItems": true,
               "minItems": 3,
               "items": {
-                "enum": ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED"]
+                "enum": ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE"]
               }
             }
           },

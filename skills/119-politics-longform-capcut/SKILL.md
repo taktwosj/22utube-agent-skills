@@ -159,15 +159,15 @@ VIDEO100_EXPLAINER
 잠금값:
 
 ```text
-TARGET_CHARS_PER_LINE = 15
+TARGET_CHARS_PER_LINE = 20
 MAX_LINES             = 2
-TARGET_CHARS_PER_CUE  = 30
-HARD_MAX_LINE_CHARS   = 18
+TARGET_CHARS_PER_CUE  = 40
+HARD_MAX_LINE_CHARS   = 21
 ```
 
-- 평균 한 줄 15자를 목표로 하고 화면에는 최대 2줄만 표시한다.
+- 평균 한 줄 20자를 목표로 하고 화면에는 최대 2줄만 표시한다.
 - 줄 앞뒤 공백을 제외하고 내부 공백·문장부호를 포함해 센다.
-- 두 줄 전체 30자, 한 줄 hard max 18자를 넘으면 FAIL이다.
+- 두 줄 전체 40자, 한 줄 hard max 21자를 넘으면 FAIL이다.
 - 긴 문장은 글자 크기로 축소하지 않고 시간상 연속 cue로 분할한다.
 - 원본 SRT·직접인용·승인 나레이션 문장은 축약·의역하지 않는다.
 - `VIDEO100_EXPLAINER`는 정확히 2줄이어야 한다.
