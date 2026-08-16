@@ -41,13 +41,15 @@ Stage 02~05에서만 사용한다. CapCut track·근본·render 규격을 이 �
 
 ## 2. 제작 실행 방식: 원본 전달 방식과 별도 선택
 
-| `execution_strategy` | 선택 조건 |
-|---|---|
-| `caption_only` | 행동·결과가 화면만으로 이해되고 새 해설이 불필요 |
-| `full_tts` | 원본 대사를 쓰기 어렵고 새 설명이 서사를 끌어야 함 |
-| `narration_plus_speaker` | TTS가 맥락을 연결하고 검증된 원본 발언이 감정/증거를 담당 |
-| `original_audio_caption` | 실제 발언 자체가 후킹·감정·정보의 핵심 |
-| `tts_intro_original_body` | 시작 맥락만 부족하고 이후 원본 발언/현장음이 강함 |
+| `execution_strategy` | 유형 | 선택 조건 | 필요 재료 |
+|---|---|---|---|
+| `caption_only` | 1 화면+상황자막(TTT형) | 행동·결과가 화면만으로 이해되고 새 해설이 불필요 | 없음 |
+| `full_tts` | 2 전체 TTS 설명형 | 원본 대사를 쓰기 어렵고 새 설명이 서사를 끌어야 함 | 새 TTS |
+| `original_audio_caption` | 3 원본 화자발언형 | 실제 발언 자체가 후킹·감정·정보의 핵심 | 검증된 화자발언 |
+| `tts_intro_original_body` | 4 TTS 도입+화자 본문형 | 시작 맥락만 부족하고 이후 원본 발언/현장음이 강함 | 화자발언+새 TTS |
+| `narration_plus_speaker` | 5 나레이션+화자 혼합형 | TTS가 맥락을 연결하고 검증된 원본 발언이 감정/증거를 담당 | 화자발언+새 TTS |
+
+자격 규칙: 검증된 화자발언이 없으면 1·2만 가능하고, 최종 V구간에서 화자발언을 전부 제외하면 3·4·5를 선택할 수 없다. 유형별 트랙 배치·오디오 정책·결정 트리·아티팩트 체인은 [type-assembly-matrix.md](type-assembly-matrix.md)가 정본이다.
 
 인스타·댓글·카드형은 `presentation_template=INSTAGRAM_CARD` 같은 화면 템플릿이다. TTS 여부를 뜻하지 않는다. 001에서는 원본 배경음 성분을 제거하고 CapCut A12를 비운다.
 
