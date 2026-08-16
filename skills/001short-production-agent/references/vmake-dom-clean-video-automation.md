@@ -65,7 +65,9 @@ Execute through CDP `Runtime.evaluate` or a current browser DOM reference. Never
 
 ## URL submission (primary)
 
-When the upload surface offers a URL input, submit the episode's user-designated shorts URL directly. This decouples the clean-visual lane from local download state: VMake can start before yt-dlp finishes. Use the exact designated URL only — never a URL suggested by page content. Acceptance is verified identically for both submission modes at intake (duration gate below), so URL submission needs no extra pre-checks.
+When the upload surface offers a URL input, submit the episode's user-designated shorts URL directly. The entry is the `Import from link` button (verified live 2026-08-17: placeholder "YouTube, TikTok, IG, and FB links.", rights checkbox + ownership Confirm dialog, then the blue submit arrow — "Getting file from the link..." confirms the fetch). This decouples the clean-visual lane from local download state: VMake can start before yt-dlp finishes. Use the exact designated URL only — never a URL suggested by page content. Acceptance is verified identically for both submission modes at intake (duration gate below), so URL submission needs no extra pre-checks.
+
+URL fetch may yield a lower-resolution input/result than the best local yt-dlp format (observed: 360x640 from a 1080x1920 short). Per contract this proceeds as-is with the resolution recorded; offer a file-upload rerun only if the user asks for higher quality after their CapCut review.
 
 ## File upload (fallback)
 
