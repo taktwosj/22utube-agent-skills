@@ -53,7 +53,7 @@ Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인
 - `TTT` means actual visible, narration-free on-screen text captions. It is not TTS and never means a no-caption edit.
 - For TTT, obtain 투군's new wording from the validated original-table facts and locked `Vxx` order. The recommendation is advisory: preserve source facts and source ranges.
 - Absolute rule: never copy, re-display, or lightly edit original baked-in caption text as TTT. This includes parenthetical situation labels, exclamations, and original punchlines. Use 투군's meaning-similar but newly written text.
-- Keep the user-approved audio policy. In `MUTE_SOURCE_NO_NARRATION`, source VIDEO is muted and `A9`, `A10`, and `A11` are empty.
+- Keep the user-approved audio policy. In `CAPTION_ONLY_MUTE_SOURCE`, source VIDEO is muted and `A9`, `A10`, and `A11` are empty.
 - TTT must be real, readback-verifiable CapCut text segments. `STATE_LASER` TTT cues require matching approved-timeline `STATE`, caption-lock, and caption-timing evidence.
 
 ## Build boundary
