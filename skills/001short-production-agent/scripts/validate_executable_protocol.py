@@ -28,8 +28,9 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
     "TTS_ONLY_MUTE_SOURCE",
     "A9_TTS_PLUS_A10_REASSEMBLED",
     "CAPTION_ONLY_MUTE_SOURCE",
+    "SOURCE_ORDER_CLEAN_AUDIO",
 ]
-A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED"}
+A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED", "SOURCE_ORDER_CLEAN_AUDIO"}
 EXPECTED_SOURCE_AUTHORITY_LINE = (
     r"Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`"
 )
@@ -964,7 +965,24 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
         minimum = config.get("minimum_video_segments", 2)
         if len(video) < minimum:
             errors.append("URAKKAI_VIDEO_SEGMENT_COUNT")
-        if config.get("fake_split_forbidden") and _effective_video_groups(video) < minimum:
+        # The fake-split guard stops a disguised non-edit: one continuous take
+        # chopped into pieces with no real reorder. An order-preserving
+        # exclusion trim (final_order is a contiguous slice of original_order)
+        # is a genuine approved structural edit, so it is exempt; out-of-order
+        # or gap-inserting splits still trip the guard.
+        is_order_preserved_trim = (
+            isinstance(original_order, list) and isinstance(final_order, list)
+            and len(final_order) >= 1
+            and any(
+                original_order[start:start + len(final_order)] == final_order
+                for start in range(0, max(len(original_order) - len(final_order), 0) + 1)
+            )
+        )
+        if (
+            config.get("fake_split_forbidden")
+            and _effective_video_groups(video) < minimum
+            and not is_order_preserved_trim
+        ):
             errors.append("URAKKAI_FAKE_SPLIT")
         audio_policy = plan.get("audio_policy", "A10_RETAINED_SYNC")
         if audio_policy not in config.get("allowed_audio_policies", []):

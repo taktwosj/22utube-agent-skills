@@ -246,6 +246,9 @@ def _validate_mode_matrix(lock_path: Path, audio_lock: dict, errors: list[dict])
         ("URAKKAI", "A9_TTS_PLUS_A10_REASSEMBLED", "REASSEMBLED_VOCAL_STEM"),
         ("URAKKAI", "TTS_ONLY_MUTE_SOURCE", "GENERATED_TTS"),
         ("URAKKAI", "CAPTION_ONLY_MUTE_SOURCE", "SILENCE"),
+        # Order-preserving trim under URAKKAI: real original audio cut
+        # directly from the untouched source clip (no Demucs stem needed).
+        ("URAKKAI", "SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
     }
     if (mode, policy, source) not in accepted:
         errors.append({"code": "AUDIO_CAPTION_MODE_MATRIX_MISMATCH", "production_mode": mode, "audio_policy": policy, "audio_source": source})
@@ -527,9 +530,13 @@ def validate_audio_caption(
         if expected_roles is None or set(role_files) != expected_roles:
             errors.append({"code": "AUDIO_CAPTION_ROLE_MATRIX_MISMATCH", "expected": sorted(expected_roles or ()), "actual": sorted(role_files)})
 
+    # Raw SOURCE_CLIP audio is also legal under URAKKAI for an order-preserved
+    # trim (SOURCE_ORDER_CLEAN_AUDIO policy, no Demucs stem available); the
+    # per-segment source_range_us match against paired VIDEO is enforced
+    # elsewhere.
     if audio_lock["audio_source"] == "SOURCE_CLIP" and not (
         audio_lock.get("schema_version") == "001short-audio-lock-v4"
-        and audio_lock.get("production_mode") == "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY"
+        and audio_lock.get("production_mode") in {"SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "URAKKAI"}
         and audio_lock.get("audio_policy") == "SOURCE_ORDER_CLEAN_AUDIO"
     ):
         errors.append({"code": "AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN"})
