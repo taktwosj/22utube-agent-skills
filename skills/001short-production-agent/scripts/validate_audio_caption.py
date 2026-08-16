@@ -340,7 +340,8 @@ def _validate_reassembled_stem(
                 or sha256_file(receipt_path) != expected_production_plan_receipt_sha256
                 or (receipt or {}).get("status") != "PASS"
                 or (receipt or {}).get("errors") != []
-                or receipt_evidence.get("production_plan_path") != str(canonical_plan)
+                or not isinstance(receipt_evidence.get("production_plan_path"), str)
+                or Path(receipt_evidence["production_plan_path"]).resolve() != canonical_plan
                 or receipt_evidence.get("production_plan_sha256") != expected_production_plan_sha256
             ):
                 errors.append({"code": "AUDIO_CAPTION_REASSEMBLED_STEM_AUTHORITY_MISMATCH"})
