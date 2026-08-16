@@ -92,6 +92,14 @@ def _is_reparse_point(path: Path) -> bool:
     return bool(attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0))
 
 
+# macOS ships /var, /tmp, /etc as root-level symlinks into /private; every
+# tempfile path traverses them. Only these exact anchor-level links are
+# benign — any other symlink component is still an alias.
+_SYSTEM_PREFIX_ALIASES = frozenset(
+    (Path("/var"), Path("/tmp"), Path("/etc"))
+)
+
+
 def path_contains_alias(path: Path) -> bool:
     path = Path(path).absolute()
     anchor = Path(path.anchor)
@@ -105,6 +113,8 @@ def path_contains_alias(path: Path) -> bool:
         if not os.path.lexists(current):
             continue
         if current.is_symlink() or _is_reparse_point(current):
+            if current in _SYSTEM_PREFIX_ALIASES:
+                continue
             return True
     return False
 
@@ -138,7 +148,13 @@ def inspect_write_target(
     try:
         relative = target.relative_to(root)
     except ValueError:
-        return "PATH_UNSAFE"
+        # Callers may mix literal and realpath forms (macOS /var vs
+        # /private/var); retry containment in fully resolved space.
+        try:
+            root = root.resolve(strict=True)
+            relative = target.resolve(strict=False).relative_to(root)
+        except (OSError, ValueError):
+            return "PATH_UNSAFE"
     current = root
     for part in relative.parts:
         current = current / part

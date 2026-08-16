@@ -26,7 +26,7 @@ def digest(path: Path) -> str:
 class RevisionedReassemblyConfigTest(unittest.TestCase):
     def test_revision_labels_create_isolated_state_and_output_paths(self):
         with tempfile.TemporaryDirectory() as td:
-            episode = Path(td) / "episode"
+            episode = (Path(td) / "episode").resolve()
             canonical_state = episode / "90_workflow" / "state.json"
             original = {
                 "episode_id": "EP",
@@ -79,7 +79,7 @@ class RevisionedReassemblyConfigTest(unittest.TestCase):
 
     def test_revision_build_config_drift_fails_without_new_write(self):
         with tempfile.TemporaryDirectory() as td:
-            episode = Path(td) / "episode"
+            episode = (Path(td) / "episode").resolve()
             canonical_state = episode / "90_workflow" / "state.json"
             write_json(canonical_state, {
                 "episode_id": "EP", "status": "CAPCUT_STATIC_VALIDATED",
@@ -112,7 +112,7 @@ class RevisionedReassemblyConfigTest(unittest.TestCase):
 
     def test_revision_swap_uses_bound_snapshot_not_mutable_shared_config(self):
         with tempfile.TemporaryDirectory() as td:
-            episode = Path(td) / "episode"
+            episode = (Path(td) / "episode").resolve()
             canonical_state = episode / "90_workflow" / "state.json"
             write_json(canonical_state, {
                 "episode_id": "EP", "status": "CAPCUT_STATIC_VALIDATED",
@@ -146,7 +146,7 @@ class RevisionedReassemblyConfigTest(unittest.TestCase):
 
     def test_legacy_config_keeps_canonical_paths(self):
         with tempfile.TemporaryDirectory() as td:
-            episode = Path(td) / "episode"
+            episode = (Path(td) / "episode").resolve()
             state = episode / "90_workflow" / "state.json"
             config = {
                 "episode_root": str(episode),
@@ -161,7 +161,7 @@ class RevisionedReassemblyConfigTest(unittest.TestCase):
 
     def test_invalid_revision_label_fails_before_creating_paths(self):
         with tempfile.TemporaryDirectory() as td:
-            episode = Path(td) / "episode"
+            episode = (Path(td) / "episode").resolve()
             state = episode / "90_workflow" / "state.json"
             config = {
                 "episode_root": str(episode),
