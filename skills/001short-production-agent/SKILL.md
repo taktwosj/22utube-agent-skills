@@ -52,12 +52,20 @@ SCREEN_EFFECT, VIDEO, A9, A10, A11, A12_RESERVED_EMPTY
 
 Every cell is a real value, `없음`, or `비움`; empty/placeholders/`미확인` fail. A12=`비움`. Original `A9_TEXT` and all `STATE_LASER`: 2×15. Target `A9_TEXT` paired with A9 TTS: 2×10. For approved `CAPTION_ONLY_MUTE_SOURCE`, use STATE_LASER only and leave A9/A9_TEXT/A10/A10_TEXT/A11 empty.
 
-## TTT caption policy
+## Types and caption axes
 
-- `TTT` means actual visible, narration-free on-screen text captions. It is not TTS and never means a no-caption edit.
-- For TTT, obtain 투군's new wording from the validated original-table facts and locked `Vxx` order. The recommendation is advisory: preserve source facts and source ranges.
-- Absolute rule: never copy, re-display, or lightly edit original baked-in caption text as TTT. This includes parenthetical situation labels, exclamations, and original punchlines. Use 투군's meaning-similar but newly written text.
-- Keep the user-approved audio policy. In `CAPTION_ONLY_MUTE_SOURCE`, source VIDEO is muted and `A9`, `A10`, and `A11` are empty.
+Audio type and caption kind are independent axes. Derive type candidates from the 원본표 (no verified 화자발언 → types 1·2 only) and lock the final `execution_strategy` + audio policy at user approval — no extra gate. Decision tree, per-type track usage, and artifact chains: [type-assembly-matrix.md](references/type-assembly-matrix.md).
+
+| Type | Audio | Captions |
+|---|---|---|
+| 1 caption_only | mute (`CAPTION_ONLY_MUTE_SOURCE`) | STATE_LASER TTT only |
+| 2 full_tts | A9, VIDEO mute (`TTS_ONLY_MUTE_SOURCE`) | A9_TEXT ↔ A9 verbatim |
+| 3 original_audio_caption | A10 kept, no A9 | A10_TEXT_WHITE/YELLOW |
+| 4 tts_intro_original_body | A9 intro + A10 body | each text paired to its audio |
+| 5 narration_plus_speaker | A9 + A10, overlap=`source_audio[].mode=duck` | A9_TEXT + A10_TEXT |
+
+- `TTT` = visible captions with no matching narration audio. It never narrows the audio axis: types 3–5 keep A10. Source narration is never carried into production; new explanation is authored as A9 TTS.
+- Author TTT wording newly (via 투군) from validated original-table facts and the locked `Vxx` order; never copy, re-display, or lightly edit source baked-in captions (situation labels, exclamations, punchlines included).
 - TTT must be real, readback-verifiable CapCut text segments. `STATE_LASER` TTT cues require matching approved-timeline `STATE`, caption-lock, and caption-timing evidence.
 
 ## Build boundary
