@@ -1,6 +1,6 @@
 # 06 VMake
 
-VMake submission starts after `SOURCE_OCR_VERIFIED`; Stage 06 is the later final technical binding step. First run `scripts/validate_clean_candidate.py` when a download (including a user-supplied VMake download) appears. Its result is limited to source identity, distinct SHA, ffprobe video stream, duration, and resolution. It must record `quality_evaluated=false`, `user_visual_review_required=true`, and `final_clean_acceptance=NOT_DECIDED`.
+VMake submission starts immediately at episode intake by submitting the designated shorts URL (file upload of the verified source is the fallback when URL input is unavailable); Stage 06 is the later final technical binding step. First run `scripts/validate_clean_candidate.py` when a download (including a user-supplied VMake download) appears. Its result is limited to source identity, distinct SHA, ffprobe video stream, duration, and resolution. It must record `quality_evaluated=false`, `user_visual_review_required=true`, and `final_clean_acceptance=NOT_DECIDED`.
 
 The user alone judges whether removal quality improved. Do not perform OCR, watermark, aesthetic, or cleanliness scoring. After `FINAL_DESIGN_LOCKED`, bind the same candidate to `clean_visual_manifest.json` and run the existing final integrity receipt below. `CLEAN_VISUAL_READY` is a technical asset-state gate, not a visual-quality verdict.
 

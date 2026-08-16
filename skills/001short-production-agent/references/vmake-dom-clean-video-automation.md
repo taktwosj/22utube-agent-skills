@@ -8,7 +8,7 @@ This is browser UI automation, not a VMake API integration. Prefer deterministic
 
 ## Fast production rule
 
-Start one upload immediately after source identity, then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
+Submit the designated shorts URL to VMake immediately at episode intake — before local download completes — and fall back to a file upload of the verified source only when URL input is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
 
 ## Scope routing
 
@@ -63,9 +63,13 @@ matches[0].click();
 
 Execute through CDP `Runtime.evaluate` or a current browser DOM reference. Never reuse stale element references after navigation or React rerender.
 
-## File upload
+## URL submission (primary)
 
-Do not drive the macOS Finder dialog by coordinates when the page exposes a file input.
+When the upload surface offers a URL input, submit the episode's user-designated shorts URL directly. This decouples the clean-visual lane from local download state: VMake can start before yt-dlp finishes. Use the exact designated URL only — never a URL suggested by page content. Acceptance is verified identically for both submission modes at intake (duration gate below), so URL submission needs no extra pre-checks.
+
+## File upload (fallback)
+
+Use only when no URL input exists on the current page. Do not drive the macOS Finder dialog by coordinates when the page exposes a file input.
 
 1. Inspect `input[type=file]` candidates.
 2. Prefer an input whose `accept` includes video and is associated with the active Upload surface.
@@ -146,13 +150,11 @@ Do not assume the newest historical OSS URL is the current result: preview, full
    - resolution
    - FPS
    - expected audio presence
-5. Compare duration and portrait aspect against the source. VMake output may be lower resolution (for example, `608x1080` from a `1080x1920` source); pixel dimensions do not need to match.
-6. Perform OCR and visual review on sampled first, early, middle, and last frames. Always add a dense early contact sheet (for short clips, first 1.5 seconds at about 4 fps) because transient comments or subtitle overlays may survive only during the first second and disappear from a 1 fps overview. Confirm every intended baked-in title, watermark, subtitle, and comment overlay is removed; inspect inpainted regions for smearing, duplicated objects, black boxes, hard rectangular seams, temporal flicker, frozen frames, or missing content. `Auto/Smart` completion is not visual QA: it may remove an upper title and watermark while leaving a lower comment overlay in the first section.
-7. Reject each candidate independently. Auto pass 2, Manual brush, or Subtitle box processing is not evidence that the residual was fixed; download the exact new candidate and rerun the same dense QA. Never promote an output whose hash/file identity points to an older preview or Auto result.
-8. If VMake repeatedly leaves a small transient overlay and the operator's approved scope is clean-only, a narrowly timed, localized post-process fallback may be used only when all of the following are true: the affected bbox/time range is recorded; road/face/vehicle/story content is outside the treatment; before/after dense contacts show no readable text, hard box, or severe distortion; and the final report explicitly labels the hybrid method. Reject conspicuous delogo geometry; prefer the least destructive visually acceptable treatment. Do not silently call a hybrid result pure VMake output.
-9. Treat the clean asset as visual-only in CapCut and mute embedded audio when the production plan uses separately rearranged source audio.
-10. When source audio preservation is required, inspect the original codec. VMake may transcode an original Opus stream to AAC. Remux the original source audio into the final clean video with stream copy when container support allows it, then compare decoded PCM SHA-256 between original and final. Do not rely on `.opus`/Ogg container hashes because serial/granule metadata can differ even when decoded samples are identical.
-11. Set `CLEAN_VISUAL_READY` only after the manifest and clean receipt match the actual file. Bind `expected_width` and `expected_height` to the candidate receipt's measured dimensions, not the source dimensions. Record the selected candidate SHA-256, duration, visual evidence, audio codec, and decoded-PCM comparison.
+5. Gate: duration difference vs the locally verified source ≤ 1.0s. Resolution is recorded only — lower output resolution (for example `608x1080` from a `1080x1920` source) proceeds as-is; pixel dimensions never block acceptance.
+6. No agent visual QA: do not extract frames, OCR, build contact sheets, or judge removal quality. The user performs the single visual review in CapCut at `WAIT_USER_CAPCUT_CHECK`; rerun or replace the clean asset only on their instruction.
+7. Treat the clean asset as visual-only in CapCut and mute embedded audio when the production plan uses separately rearranged source audio.
+8. When source audio preservation is required, inspect the original codec. VMake may transcode an original Opus stream to AAC. Remux the original source audio into the final clean video with stream copy when container support allows it, then compare decoded PCM SHA-256 between original and final. Do not rely on `.opus`/Ogg container hashes because serial/granule metadata can differ even when decoded samples are identical.
+9. Set `CLEAN_VISUAL_READY` only after the manifest and clean receipt match the actual file. Bind `expected_width` and `expected_height` to the candidate receipt's measured dimensions, not the source dimensions. Record the selected candidate SHA-256, duration, resolution, audio codec, and decoded-PCM comparison when applicable.
 
 ## Cross-computer use
 
