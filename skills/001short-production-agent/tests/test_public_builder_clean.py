@@ -50,7 +50,7 @@ class PublicBuilderCleanTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "media tools required")
     def test_public_builder_finishes_with_real_clean_vmake_chain(self):
         with tempfile.TemporaryDirectory() as td:
-            root = Path(td); episode = root / "episode"; episode.mkdir()
+            root = Path(td).resolve(); episode = root / "episode"; episode.mkdir()
             install_valid_grids(episode)
             source, vocals = media(root)
             archive, _, contract = template_archive(root)
