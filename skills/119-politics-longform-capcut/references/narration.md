@@ -1,5 +1,9 @@
 # 나레이션
 
+## Typecast generated narration
+
+For newly requested narration synthesis, read `<factory-root>/00_asset_tools/TYPECAST_TTS_RUNBOOK.md` before generating the WAV. Keep already approved narration audio unchanged; this reference does not authorize a script rewrite or a replacement of locked narration.
+
 대본 승인 뒤 B 작업자 한 명이 수행한다. 입력은 승인 대본의 나레이션 문장이다. 출력은 narration audio/video와 narration SRT뿐이다. source, Resources, root, target, CapCut draft, `episode_cards.json`을 수정하지 않는다.
 
 ASSEMBLY_ONLY에서 승인 대사와 동일하고 실제 audio/SRT·SHA·duration이 PASS이면 다시 합성하지 않는다.
