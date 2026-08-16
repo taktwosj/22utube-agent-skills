@@ -13,6 +13,10 @@ description: Use for original-shorts production, URL/Drive/Desktop intake, CapCu
 
 Use [matt-auxiliary-routing.md](references/matt-auxiliary-routing.md) only for pre-lock ambiguity, reproducible defects, or contract changes.
 
+## Environment preflight
+
+Before Stage 01, `python3 scripts/preflight_env.py --require-fresh` must PASS ([rules](references/environment-preflight.md)). Never install or hunt for tools mid-episode; installs are user-terminal-only.
+
 ## NORMAL_FAST ownership
 
 `NORMAL_FAST` is default. One task-owner performs Stages 01–04 sequentially and owns canonical writes. No Stage 01/03 fanout, candidate promotion, coordinator revalidation, or duplicate barriers. Run each validator once per artifact revision and rerun only after a proven relevant change.
