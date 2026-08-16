@@ -13,25 +13,12 @@ import user_provided_media_overlay
 import validate_original_source_evidence
 
 from common import meaningful_text_length
+from track_contract import HUMAN_GRID_ROWS
 
 
-REQUIRED_ROWS = (
-    "T1",
-    "T2",
-    "A9_TEXT",
-    "A10_TEXT_YELLOW",
-    "A10_TEXT_WHITE",
-    "STATE_LASER",
-    "STATE_GLITCH",
-    "STATE_FLICKER",
-    "SCREEN_WHITE",
-    "SCREEN_EFFECT",
-    "VIDEO",
-    "A9",
-    "A10",
-    "A11",
-    "A12_RESERVED_EMPTY",
-)
+# Human-facing table rows, top-down; single-sourced from the physical track
+# order in track_contract (visual tracks reversed, audio tail appended).
+REQUIRED_ROWS = HUMAN_GRID_ROWS
 HEADER_LABELS = {
     "original": "레이어 \\ 원본 시간",
     "urakkai": "레이어 \\ 목표 시간",

@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 from typing import Any
 
+from audio_policy_matrix import CLEAN_MODE_MATRIX
 from common import read_json, result, sha256_file
 import user_provided_media_overlay
 
@@ -251,11 +252,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
             errors.append(_error("E_SOURCE_ORDER_DURATION"))
         if any(row.get("source_range_us") != row.get("target_range_us") for row in normalized_clips):
             errors.append(_error("E_SOURCE_ORDER_CHANGED"))
-        expected_matrix = {
-            "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY": ("SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
-            "SOURCE_ORDER_UNCHANGED_A10_RETAINED": ("A10_RETAINED_SYNC", "SOURCE_VOCAL_STEM"),
-        }
-        if (payload.get("audio_policy"), payload.get("audio_source")) != expected_matrix[production_mode]:
+        if (payload.get("audio_policy"), payload.get("audio_source")) != CLEAN_MODE_MATRIX[production_mode]:
             errors.append(_error("E_AUDIO_MODE_MATRIX"))
 
     if urakkai.get("reorder_required"):

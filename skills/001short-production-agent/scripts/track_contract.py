@@ -6,6 +6,14 @@ CANONICAL_TRACKS = (
     "A9", "A10", "A11", "A12_RESERVED_EMPTY",
 )
 
+VISUAL_TRACK_COUNT = 11
+# Human-facing grid rows read top-down: the visual tracks reversed (T1 first)
+# followed by the audio tracks in physical order.
+HUMAN_GRID_ROWS = (
+    tuple(reversed(CANONICAL_TRACKS[:VISUAL_TRACK_COUNT]))
+    + CANONICAL_TRACKS[VISUAL_TRACK_COUNT:]
+)
+
 LOGICAL_ROLE_BY_TRACK = (
     "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE", "STATE", "STATE",
     "A10_TEXT", "A10_TEXT", "A9_TEXT", "T2", "T1", "A9", "A10", "A11",

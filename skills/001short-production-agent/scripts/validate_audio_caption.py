@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from audio_policy_matrix import ACCEPTED_MODE_TUPLES
 from common import read_json, resolved_declared_path, result, sha256_file
 from schema_runtime import validate_schema
 
@@ -239,18 +240,7 @@ def _validate_mode_matrix(lock_path: Path, audio_lock: dict, errors: list[dict])
     mode = audio_lock.get("production_mode")
     policy = audio_lock.get("audio_policy")
     source = audio_lock.get("audio_source")
-    accepted = {
-        ("SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
-        ("SOURCE_ORDER_UNCHANGED_A10_RETAINED", "A10_RETAINED_SYNC", "SOURCE_VOCAL_STEM"),
-        ("URAKKAI", "A10_REASSEMBLED_SYNC", "REASSEMBLED_VOCAL_STEM"),
-        ("URAKKAI", "A9_TTS_PLUS_A10_REASSEMBLED", "REASSEMBLED_VOCAL_STEM"),
-        ("URAKKAI", "TTS_ONLY_MUTE_SOURCE", "GENERATED_TTS"),
-        ("URAKKAI", "CAPTION_ONLY_MUTE_SOURCE", "SILENCE"),
-        # Order-preserving trim under URAKKAI: real original audio cut
-        # directly from the untouched source clip (no Demucs stem needed).
-        ("URAKKAI", "SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
-    }
-    if (mode, policy, source) not in accepted:
+    if (mode, policy, source) not in ACCEPTED_MODE_TUPLES:
         errors.append({"code": "AUDIO_CAPTION_MODE_MATRIX_MISMATCH", "production_mode": mode, "audio_policy": policy, "audio_source": source})
         return
     if mode == "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY":
