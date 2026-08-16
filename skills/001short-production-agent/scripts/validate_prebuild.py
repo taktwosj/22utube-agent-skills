@@ -238,7 +238,12 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
         target_cursor = clip["target_range_us"][1]
     if target_cursor != target_duration:
         errors.append(_error("E_VIDEO_RANGE", detail="target_end"))
-    if production_mode == "URAKKAI" and _coalesced_clip_count(normalized_clips) < 2:
+    is_labeled_trim_only = urakkai.get("production_type") == "TRIM_ONLY_NO_REORDER"
+    if (
+        production_mode == "URAKKAI"
+        and _coalesced_clip_count(normalized_clips) < 2
+        and not is_labeled_trim_only
+    ):
         errors.append(_error("E_EFFECTIVE_CLIP"))
 
     if production_mode != "URAKKAI":

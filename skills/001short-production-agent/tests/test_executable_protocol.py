@@ -618,6 +618,38 @@ class ExecutableProtocolContractTest(unittest.TestCase):
             row["placements"][1]["source_range_us"] = source_range
         self.assertIn("URAKKAI_FAKE_SPLIT", module.validate_production_plan(fake, protocol))
 
+    def test_urakkai_order_preserving_trim_passes_with_source_clip_audio(self):
+        module = load_validator()
+        protocol = module.load_protocol(PROTOCOL)
+        valid = json.loads((SKILL / "tests" / "fixtures" / "urakkai_reordered.pass.json").read_text(encoding="utf-8"))
+
+        def build_trim(keys: list[str]) -> dict:
+            trim = json.loads(json.dumps(valid))
+            trim["audio_policy"] = "SOURCE_ORDER_CLEAN_AUDIO"
+            trim["audio_source"] = "SOURCE_CLIP"
+            trim["order_signature"] = list(keys)
+            trim["total_duration_us"] = len(keys) * 1_000_000
+            rows = []
+            for target_index, key in enumerate(keys):
+                source_index = int(key) - 1
+                source_range = [source_index * 1_000_000, (source_index + 1) * 1_000_000]
+                target_range = [target_index * 1_000_000, (target_index + 1) * 1_000_000]
+                row = json.loads(json.dumps(valid["timeline"][0]))
+                row["segment_key"] = key
+                row["target_range_us"] = target_range
+                for placement in row["placements"]:
+                    placement["source_range_us"] = source_range
+                    placement["target_range_us"] = target_range
+                rows.append(row)
+            trim["timeline"] = rows
+            return trim
+
+        self.assertEqual(module.validate_production_plan(build_trim(["2", "3"]), protocol), [])
+
+        single = module.validate_production_plan(build_trim(["2"]), protocol)
+        self.assertIn("URAKKAI_VIDEO_SEGMENT_COUNT", single)
+        self.assertNotIn("URAKKAI_FAKE_SPLIT", single)
+
     def test_urakkai_tts_only_requires_muted_video_empty_a10_and_a9(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -796,7 +828,13 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         self.assertIs(urakkai.get("approved_final_order_required"), True)
         self.assertEqual(
             urakkai.get("allowed_audio_policies"),
-            ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE"],
+            [
+                "A10_REASSEMBLED_SYNC",
+                "TTS_ONLY_MUTE_SOURCE",
+                "A9_TTS_PLUS_A10_REASSEMBLED",
+                "CAPTION_ONLY_MUTE_SOURCE",
+                "SOURCE_ORDER_CLEAN_AUDIO",
+            ],
         )
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)
         self.assertEqual(clean_only.get("video_duration"), "FULL_LENGTH")

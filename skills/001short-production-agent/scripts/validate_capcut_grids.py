@@ -631,7 +631,7 @@ def validate_locked_assembly(
         errors.extend(user_provided_media_overlay.validate_a10_overlap_policy(
             build_manifest.get("source_audio"), checked_overlay.get("items", []),
         ))
-    if original_ranges != manifest_source_ranges:
+    if not set(manifest_source_ranges).issubset(set(original_ranges)):
         errors.append(_error(
             "TABLE_VIDEO_RANGE_MISMATCH",
             "original",

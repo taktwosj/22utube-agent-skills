@@ -113,6 +113,61 @@ class AudioCaptionContractV4Test(unittest.TestCase):
             result = validate_audio_caption(lock, caption)
             self.assertEqual(result["status"], "PASS", result)
 
+    def test_urakkai_order_preserving_trim_accepts_raw_source_clip_a10(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            clip = root / "source_clip.wav"
+            duration = wav(clip)
+            identity = root / "source_identity.json"
+            write(identity, {"schema_version": "source-identity-v1", "episode_id": "EP", "source_id": "S",
+                             "source_fingerprint": sha(clip), "media_path": clip.name,
+                             "media_sha256": sha(clip), "duration_us": duration})
+            lock = root / "audio_lock.json"
+            write(lock, {"schema_version": "001short-audio-lock-v4", "episode_id": "EP", "status": "PASS",
+                         "production_mode": "URAKKAI", "audio_policy": "SOURCE_ORDER_CLEAN_AUDIO",
+                         "audio_source": "SOURCE_CLIP", "audio_path": clip.name, "audio_sha256": sha(clip),
+                         "measured_duration_us": duration, "audio_codec": "pcm_s16le", "ffprobe_verified": True,
+                         "role_files": [{"role": "A10", "audio_path": clip.name, "audio_sha256": sha(clip),
+                                         "measured_duration_us": duration, "audio_codec": "pcm_s16le",
+                                         "ffprobe_verified": True}]})
+            caption = zero_caption(root, lock, "EP")
+
+            result = validate_audio_caption(lock, caption)
+            self.assertEqual(result["status"], "PASS", result)
+
+    def test_urakkai_trim_only_label_relaxes_effective_clip_floor(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "source.mp4"; source.write_bytes(b"source")
+            template = root / "root.zip"; template.write_bytes(b"root")
+            manifest = root / "build_manifest.json"
+            clips = [
+                {"clip_id": "V01", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]},
+                {"clip_id": "V02", "source_sha256": sha(source), "source_range_us": [2_000_000, 3_000_000], "target_range_us": [1_000_000, 2_000_000]},
+            ]
+            payload = {
+                "schema_version": "001short-build-manifest-v1", "episode_id": "EP",
+                "visual_asset_mode": "SOURCE_VIDEO_PROVISIONAL",
+                "production_mode": "URAKKAI",
+                "audio_policy": "SOURCE_ORDER_CLEAN_AUDIO", "audio_source": "SOURCE_CLIP",
+                "source": {"path": str(source), "sha256": sha(source), "duration_us": 3_000_000},
+                "template": {"root_name": "shrt white", "root_zip_path": str(template), "root_zip_sha256": sha(template)},
+                "urakkai": {"production_type": "TRIM_ONLY_NO_REORDER", "target_duration_us": 2_000_000,
+                            "reorder_required": False, "video_clips": clips},
+                "source_audio": [
+                    {"clip_id": "V01", "mode": "on", "source_sha256": sha(source), "source_range_us": [1_000_000, 2_000_000], "target_range_us": [0, 1_000_000]},
+                    {"clip_id": "V02", "mode": "on", "source_sha256": sha(source), "source_range_us": [2_000_000, 3_000_000], "target_range_us": [1_000_000, 2_000_000]},
+                ],
+            }
+            write(manifest, payload)
+            passed = subprocess.run([sys.executable, str(PREBUILD), "--build-manifest", str(manifest)], capture_output=True, text=True, encoding="utf-8", check=False)
+            self.assertEqual(passed.returncode, 0, passed.stdout)
+            payload["urakkai"]["production_type"] = "REORDER"
+            write(manifest, payload)
+            failed = subprocess.run([sys.executable, str(PREBUILD), "--build-manifest", str(manifest)], capture_output=True, text=True, encoding="utf-8", check=False)
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("E_EFFECTIVE_CLIP", failed.stdout)
+
     def test_urakkai_reassembled_stem_is_bound_to_valid_full_stem_and_mapping(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

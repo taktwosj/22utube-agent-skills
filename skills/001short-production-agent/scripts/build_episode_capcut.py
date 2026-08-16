@@ -1892,7 +1892,20 @@ def _stage_prerequisites(
     final_srt = resolved_declared_path(caption_lock, caption_payload["final_srt_path"])
     audio_source = resolved_declared_path(audio_lock, audio_payload["audio_path"])
     measured_duration = audio_payload.get("measured_duration_us")
-    duration_matches = (
+    # SOURCE_ORDER_CLEAN_AUDIO + SOURCE_CLIP under URAKKAI is the order-
+    # preserving trim path: audio_path intentionally points at the whole,
+    # untouched original source clip (so build_manifest.source_audio can cut
+    # each Vxx segment straight from real, unmodified audio), so its measured
+    # duration is the ORIGINAL source duration, not the trimmed output
+    # duration. The per-segment source_range_us match against paired VIDEO is
+    # enforced elsewhere, so skip the duration comparison for that specific,
+    # already-guarded combination.
+    is_urakkai_source_clip_trim = (
+        audio_payload.get("production_mode") == "URAKKAI"
+        and audio_payload.get("audio_policy") == "SOURCE_ORDER_CLEAN_AUDIO"
+        and audio_payload.get("audio_source") == "SOURCE_CLIP"
+    )
+    duration_matches = is_urakkai_source_clip_trim or (
         isinstance(measured_duration, int) and not isinstance(measured_duration, bool)
         and (
             abs(measured_duration - duration) <= validate_prebuild.SOURCE_ORDER_DURATION_TOLERANCE_US
@@ -1912,15 +1925,18 @@ def _stage_prerequisites(
     # under MIXED the generated A9 narration rides alongside it as a role file.
     if audio_payload.get("schema_version") == "001short-audio-lock-v4":
         expected_matrix = {
-            "SOURCE_ORDER_CLEAN_AUDIO": ("SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_CLIP"),
-            "A10_RETAINED_SYNC": ("SOURCE_ORDER_UNCHANGED_A10_RETAINED", "SOURCE_VOCAL_STEM"),
-            "A10_REASSEMBLED_SYNC": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
-            "A9_TTS_PLUS_A10_REASSEMBLED": ("URAKKAI", "REASSEMBLED_VOCAL_STEM"),
-            "TTS_ONLY_MUTE_SOURCE": ("URAKKAI", "GENERATED_TTS"),
-            "CAPTION_ONLY_MUTE_SOURCE": ("URAKKAI", "SILENCE"),
+            "SOURCE_ORDER_CLEAN_AUDIO": {
+                ("SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_CLIP"),
+                ("URAKKAI", "SOURCE_CLIP"),
+            },
+            "A10_RETAINED_SYNC": {("SOURCE_ORDER_UNCHANGED_A10_RETAINED", "SOURCE_VOCAL_STEM")},
+            "A10_REASSEMBLED_SYNC": {("URAKKAI", "REASSEMBLED_VOCAL_STEM")},
+            "A9_TTS_PLUS_A10_REASSEMBLED": {("URAKKAI", "REASSEMBLED_VOCAL_STEM")},
+            "TTS_ONLY_MUTE_SOURCE": {("URAKKAI", "GENERATED_TTS")},
+            "CAPTION_ONLY_MUTE_SOURCE": {("URAKKAI", "SILENCE")},
         }
         observed = (config.get("production_mode"), audio_payload.get("audio_source"))
-        if expected_matrix.get(config.get("audio_policy")) != observed or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):
+        if observed not in expected_matrix.get(config.get("audio_policy"), set()) or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):
             raise RuntimeError("STAGE07_AUDIO_MODE_MATRIX_MISMATCH")
     elif config.get("audio_policy") in STEM_POLICIES and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
         raise RuntimeError("STAGE07_VALIDATED_VOCAL_STEM_REQUIRED")
