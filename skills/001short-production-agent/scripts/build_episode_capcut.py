@@ -34,6 +34,7 @@ import validate_design_lock
 import validate_executable_protocol
 import resolve_shorts_capcut_root
 import user_provided_media_overlay
+from audio_policy_matrix import MODE_SOURCES_BY_POLICY
 from capcut_io import iter_primary_draft_documents
 from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
 from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
@@ -1924,19 +1925,8 @@ def _stage_prerequisites(
     # Any policy that keeps A10 must bind the primary audio to the separated stem;
     # under MIXED the generated A9 narration rides alongside it as a role file.
     if audio_payload.get("schema_version") == "001short-audio-lock-v4":
-        expected_matrix = {
-            "SOURCE_ORDER_CLEAN_AUDIO": {
-                ("SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_CLIP"),
-                ("URAKKAI", "SOURCE_CLIP"),
-            },
-            "A10_RETAINED_SYNC": {("SOURCE_ORDER_UNCHANGED_A10_RETAINED", "SOURCE_VOCAL_STEM")},
-            "A10_REASSEMBLED_SYNC": {("URAKKAI", "REASSEMBLED_VOCAL_STEM")},
-            "A9_TTS_PLUS_A10_REASSEMBLED": {("URAKKAI", "REASSEMBLED_VOCAL_STEM")},
-            "TTS_ONLY_MUTE_SOURCE": {("URAKKAI", "GENERATED_TTS")},
-            "CAPTION_ONLY_MUTE_SOURCE": {("URAKKAI", "SILENCE")},
-        }
         observed = (config.get("production_mode"), audio_payload.get("audio_source"))
-        if observed not in expected_matrix.get(config.get("audio_policy"), set()) or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):
+        if observed not in MODE_SOURCES_BY_POLICY.get(config.get("audio_policy"), set()) or audio_payload.get("production_mode") != observed[0] or audio_payload.get("audio_policy") != config.get("audio_policy"):
             raise RuntimeError("STAGE07_AUDIO_MODE_MATRIX_MISMATCH")
     elif config.get("audio_policy") in STEM_POLICIES and audio_payload.get("audio_source") != "SOURCE_VOCAL_STEM":
         raise RuntimeError("STAGE07_VALIDATED_VOCAL_STEM_REQUIRED")
