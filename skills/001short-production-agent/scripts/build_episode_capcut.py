@@ -167,7 +167,8 @@ def validate_grid_harness(config: dict, *, state_payload: dict | None = None) ->
     if (
         receipt.get("status") != "PASS"
         or receipt.get("errors") != []
-        or receipt_evidence.get("production_plan_path") != str(artifact_paths["production_plan"])
+        or os.path.realpath(str(receipt_evidence.get("production_plan_path", "")))
+        != os.path.realpath(str(artifact_paths["production_plan"]))
         or str(receipt_evidence.get("production_plan_sha256", "")).lower()
         != _sha(artifact_paths["production_plan"]).lower()
     ):

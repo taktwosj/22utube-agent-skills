@@ -72,7 +72,7 @@ class VocalStemContractTest(unittest.TestCase):
             _, vocals, manifest = self._fixture(Path(temporary))
             result = validate_vocal_stem(manifest)
             self.assertEqual(result["status"], "PASS")
-            self.assertEqual(Path(result["evidence"]["a10_audio_path"]), vocals)
+            self.assertEqual(Path(result["evidence"]["a10_audio_path"]).resolve(), vocals.resolve())
             self.assertEqual(result["evidence"]["a12_policy"], "EMPTY")
             self.assertTrue(result["evidence"]["human_listen_qc_required"])
             self.assertEqual(result["evidence"]["human_listen_qc_status"], "NOT_VERIFIED")

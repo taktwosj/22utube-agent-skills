@@ -7,7 +7,7 @@ import argparse
 import json
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -52,7 +52,13 @@ def _locator_source_id(kind: str, locator: Any) -> str | None:
         if parsed.scheme not in {"http", "https"} or parsed.netloc not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
             return None
         return parse_qs(parsed.query).get("v", [None])[0] or next((part for part in reversed(parsed.path.split("/")) if part), None)
-    return str(Path(locator).resolve()) if Path(locator).is_absolute() else None
+    candidate = Path(locator)
+    if candidate.is_absolute():
+        return str(candidate.resolve())
+    # Desktop receipts may be authored on the other platform (Windows home
+    # PC vs this Mac); accept a foreign-platform absolute path as-is.
+    windows_candidate = PureWindowsPath(locator)
+    return str(windows_candidate) if windows_candidate.is_absolute() else None
 
 
 def _probe_duration_us(path: Path) -> int | None:

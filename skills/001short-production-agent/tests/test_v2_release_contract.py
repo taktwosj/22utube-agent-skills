@@ -170,7 +170,7 @@ class V2ReleaseContractTest(unittest.TestCase):
             episode = factory / "0000shrt" / "260808_launch-demo_abc123"
             resolved = resolver.resolve_episode_root(factory, "260808_launch-demo_abc123")
             self.assertEqual(resolved, episode.resolve())
-            self.assertEqual(resolver.required_episode_paths(resolved)["source_media"], episode / "00_input" / "source.mp4")
+            self.assertEqual(Path(resolver.required_episode_paths(resolved)["source_media"]).resolve(), (episode / "00_input" / "source.mp4").resolve())
             with self.assertRaisesRegex(ValueError, "EPISODE_ROOT_NAME_INVALID"):
                 resolver.resolve_episode_root(factory, "bad name")
 

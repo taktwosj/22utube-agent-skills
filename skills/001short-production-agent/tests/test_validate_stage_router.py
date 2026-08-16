@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -458,7 +459,7 @@ class ValidateStageRouterTest(unittest.TestCase):
             episode = Path(td) / "episode"; workflow = episode / "90_workflow"; workflow.mkdir(parents=True)
             state = workflow / "state.json"
             target = episode / "20_script" / "receipt.json"; target.parent.mkdir(); target.write_text("{}", encoding="utf-8")
-            with patch("common._is_reparse_point", side_effect=lambda path: Path(path) == target.parent):
+            with patch("common._is_reparse_point", side_effect=lambda path: os.path.realpath(path) == os.path.realpath(target.parent)):
                 with self.assertRaisesRegex(ValueError, "STATE_ARTIFACT_PATH_UNSAFE"):
                     validate_stage._state_declared_path(state, "20_script/receipt.json")
 
