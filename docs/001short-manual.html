@@ -123,7 +123,7 @@ a{color:var(--accent)}
 
 <header class="mast">
   <h1>001쇼츠 제작 규범</h1>
-  <p class="sub">원본 쇼츠를 우라까이해 새 쇼츠로 만드는 전 과정의 단일 기준. 사람이 읽는 흐름과 작업자(AI)가 지켜야 할 규칙을 한 문서에 담았다.</p>
+  <p class="sub">원본 쇼츠를 우라까이해 새 쇼츠로 만드는 전 과정의 단일 기준. 무엇이 허용되고 무엇이 실패를 부르는지를 정한다. 실행 절차가 아니라 규범이다 — 0장을 먼저 읽어라.</p>
   <div class="meta">
     <span>001short-production-agent</span>
     <span>2026-08-17 개정</span>
@@ -134,13 +134,51 @@ a{color:var(--accent)}
 <div class="readers">
   <div class="reader">
     <h3>사람이 보는 것</h3>
-    <p>어떤 순서로 뭐가 나오는지, 내가 직접 해야 하는 게 뭔지. <strong>3·4·9장</strong>만 봐도 된다.</p>
+    <p>어떤 순서로 뭐가 나오는지, 내가 직접 해야 하는 게 뭔지. <strong>1·3·9장</strong>만 봐도 된다.</p>
   </div>
   <div class="reader">
     <h3>작업자가 보는 것</h3>
-    <p>바꾸면 안 되는 값과 실패 조건. <strong>5·6·7·8장</strong>이 규칙이다. 추측 금지, 근거는 코드에서 읽는다.</p>
+    <p>바꾸면 안 되는 값과 실패 조건. <strong>5·6·7장</strong>이 규칙이다. 추측 금지, 근거는 코드에서 읽는다.</p>
   </div>
 </div>
+
+<section id="scope" style="margin-top:40px">
+  <h2><span class="n">00</span>이 문서의 자리</h2>
+
+  <div class="rule-block note">
+    <h4>이건 규범이지 실행 절차서가 아니다</h4>
+    <p>여기 있는 것은 <strong>어떤 선택이 허용되고 무엇이 실패를 부르는가</strong>다. 명령어·스키마·도구 사용법은 없다.
+      이 문서만 읽고 첫 산출물을 만들 수는 없으며, <strong>그렇게 설계했다.</strong>
+      작업자는 매번 확정값이 박힌 실행 봉투를 따로 받는다. 이 문서는 그 봉투가 왜 그렇게 생겼는지를 설명한다.</p>
+  </div>
+
+  <p>절차가 필요하면 아래를 본다. 이 문서가 코드와 어긋나면 <strong>코드가 이긴다.</strong></p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>찾는 것</th><th>어디에</th></tr></thead>
+    <tbody>
+      <tr><td>단계별 실행 순서, 입력·산출물</td><td><code>references/production-orchestrator.md</code>, <code>workflow.json</code></td></tr>
+      <tr><td>표의 열 구조와 셀 규칙</td><td><code>templates/original-capcut-grid.md</code>, <code>templates/urakkai-capcut-grid.md</code></td></tr>
+      <tr><td>JSON 스키마와 필드</td><td><code>schemas/*.schema.json</code></td></tr>
+      <tr><td>validator 실행법과 인자</td><td><code>scripts/validate_*.py --help</code></td></tr>
+      <tr><td>유형별 트랙·정책 상세</td><td><code>references/type-assembly-matrix.md</code></td></tr>
+      <tr><td>자막 판독·경계 검출 실무</td><td><code>references/original-source-transcript.md</code></td></tr>
+      <tr><td>보컬 스템 분리</td><td><code>references/source-vocal-separation.md</code></td></tr>
+      <tr><td>TTS 하우스 사운드와 생성기</td><td><code>&lt;factory&gt;/00_asset_tools/TYPECAST_TTS_RUNBOOK.md</code></td></tr>
+      <tr><td>CapCut 조립·템플릿·정지 조건</td><td><code>steps/08-capcut-assembly.md</code>, <code>references/capcut-build-readiness.md</code></td></tr>
+      <tr><td>계약 정본</td><td><code>protocol.json</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="font-size:1.1rem; margin:34px 0 4px">두 역할</h3>
+  <div class="lanes">
+    <div class="lane"><div class="k">지휘</div><div class="v"><strong>판단하고 검증하고 커밋한다</strong><p>유형 결정, 재배열 설계, 문구 작성, 최종 확인. 작업자의 PASS 보고를 그대로 믿지 않고 직접 다시 돌려본다. 네트워크가 필요한 작업(TTS 생성, 원본 다운로드, VMake)도 지휘가 한다.</p></div></div>
+    <div class="lane"><div class="k">작업자</div><div class="v"><strong>확정값을 형식에 맞춘다</strong><p>경계 검출, 자막 판독, 표·증거·잠금 JSON 작성, validator 통과. 설계 판단을 하지 않는다. 확정값을 바꿔야 통과할 것 같으면 멈추고 보고한다.</p></div></div>
+  </div>
+  <p style="margin-top:14px"><strong>"validator PASS"는 작업자의 일이고, "PASS를 믿을지"는 지휘의 일이다.</strong> 작업자가 통과시켜 놓으면 지휘가 같은 명령을 다시 돌려 확인한 뒤에야 그 단계가 끝난다.</p>
+</section>
 
 <section id="flow">
   <h2><span class="n">01</span>전체 흐름</h2>
@@ -173,7 +211,7 @@ a{color:var(--accent)}
     <tbody>
       <tr><td><strong>1</strong> 화면+상황자막</td><td>없음 (원본 무음)</td><td>STATE_LASER만</td><td><code>CAPTION_ONLY_MUTE_SOURCE</code></td></tr>
       <tr><td><strong>2</strong> 전체 TTS</td><td>A9 전체, 원본 무음</td><td>A9_TEXT ↔ A9 1:1</td><td><code>TTS_ONLY_MUTE_SOURCE</code></td></tr>
-      <tr><td><strong>3</strong> 원본 화자발언</td><td>A10 육성만</td><td>A10_TEXT (+STATE)</td><td><code>A10_REASSEMBLED_SYNC</code> 계열</td></tr>
+      <tr><td><strong>3</strong> 원본 화자발언</td><td>A10 육성만</td><td>A10_TEXT (+STATE)</td><td><code>A10_REASSEMBLED_SYNC</code><br><span style="color:var(--ink-faint);font-size:.85em">원본 순서를 그대로 두고 다듬기만 하면 <code>SOURCE_ORDER_CLEAN_AUDIO</code></span></td></tr>
       <tr><td><strong>4</strong> TTS 도입+화자 본문</td><td>A9 도입 2~4초 + A10</td><td>각 자막을 해당 음성에 페어링</td><td><code>A9_TTS_PLUS_A10_REASSEMBLED</code></td></tr>
       <tr><td><strong>5</strong> 나레이션+화자 혼합</td><td>A9 연결 + A10 증거</td><td>A9_TEXT + A10_TEXT</td><td><code>A9_TTS_PLUS_A10_REASSEMBLED</code></td></tr>
     </tbody>
@@ -189,7 +227,11 @@ a{color:var(--accent)}
     <div class="lane"><div class="k">A9</div><div class="v"><strong>새 TTS 나레이션</strong><p>Typecast 하우스 사운드로 생성. 유형 2·4·5에서만 존재한다.</p></div></div>
     <div class="lane"><div class="k">A10</div><div class="v"><strong>원본 화자 육성</strong><p>Demucs 보컬 스템에서 재조립. CapCut 내장 분리 기능은 쓰지 않는다.</p></div></div>
     <div class="lane"><div class="k">A11</div><div class="v"><strong>효과음</strong><p>실제 효과음이 있을 때만 배치.</p></div></div>
-    <div class="lane"><div class="k">A12</div><div class="v"><strong>예약 — 항상 비움</strong><p>부재는 <code>없음</code>, 예약 앵커는 <code>비움</code>. 둘을 섞지 않는다.</p></div></div>
+    <div class="lane"><div class="k">A12</div><div class="v"><strong>예약 — 항상 비움</strong>
+      <p>두 값을 가르는 기준은 <strong>그 자리에 무언가 올 수 있었는가</strong>다.
+      올 수 있었는데 이번 화에 없으면 <code>없음</code>(예: 효과음을 안 쓴 A11).
+      애초에 아무것도 두지 않기로 계약된 예약 자리면 <code>비움</code>(A12, STATE_GLITCH, STATE_FLICKER).
+      섞으면 validator가 잡는다.</p></div></div>
   </div>
 </section>
 
@@ -251,6 +293,7 @@ a{color:var(--accent)}
     <div class="lane"><div class="k">호출</div><div class="v"><strong><code>-i</code>는 파일마다 하나씩</strong><p>셸 변수에 모아 확장하면 뒤따르는 <code>-</code> 위치 인자가 깨진다.</p></div></div>
     <div class="lane"><div class="k">지시</div><div class="v"><strong>"맞춤법·오타를 고치지 마라"를 넣어라</strong><p>그래도 모델이 정규화하려 든다. 화면의 <code>민동산</code>을 <code>민둥산</code>으로 고쳐 읽은 사례가 있다. 원본표는 화면 그대로가 원칙이다.</p></div></div>
     <div class="lane"><div class="k">신호</div><div class="v"><strong>확신 낮은 구간을 SUSPECT로 표시시켜라</strong><p>실제 오독과 잘 맞는다. 세 신호가 겹친다 — SUSPECT 표시, 말이 안 되는 한국어, STT 발화와 불일치.</p></div></div>
+    <div class="lane"><div class="k">확정</div><div class="v"><strong>표시된 구간만 원본 프레임에서 확인한다</strong><p>"1회 판독"은 <em>전부를</em> 한 번만 본다는 뜻이다. 신호가 뜬 몇 개는 해당 시각의 프레임을 폭 1000px로 확대해 눈으로 끝낸다. 41구간짜리에서 확대 이미지 한 장으로 끝난 적이 있다.</p></div></div>
   </div>
 </section>
 
@@ -273,7 +316,12 @@ a{color:var(--accent)}
 
   <div class="rule-block">
     <h4>T1 · T2는 각 한 줄 12자, 줄바꿈 불가</h4>
-    <p>제목 비교가 <strong>정규화 없는 완전일치</strong>라 표 셀의 <code>&lt;br&gt;</code>가 타임라인의 개행과 매칭되지 않는다. 제목 두 줄은 T1이 1줄, T2가 2줄이다. A9_TEXT(15자)·A10_TEXT(16자)는 정규화 비교라 <code>&lt;br&gt;</code>를 써도 된다.</p>
+    <p>제목 비교가 <strong>정규화 없는 완전일치</strong>라 표 셀의 <code>&lt;br&gt;</code>가 타임라인의 개행과 매칭되지 않는다.
+   <strong>T1과 T2는 각각 그 자체로 한 줄이다.</strong> 화면에 두 줄로 보이는 제목은 T1이 윗줄, T2가 아랫줄이며
+   두 값 모두 줄바꿈 없이 12자 이하여야 한다.</p>
+   <p style="font-family:ui-monospace,Menlo,monospace;font-size:.86rem;color:var(--ink)">
+   T1 <code>구해준 독수리가</code> · T2 <code>며칠 뒤 찾아왔다</code></p>
+   <p>A9_TEXT(15자)·A10_TEXT(16자)는 정규화 비교라 <code>&lt;br&gt;</code>로 두 줄까지 쓸 수 있다.</p>
     <span class="code">TABLE_TITLE_TEXT_MISMATCH · CAPTION_LINE_TOO_LONG</span>
   </div>
 
@@ -361,8 +409,8 @@ a{color:var(--accent)}
 </section>
 
 <p class="foot">
-  이 문서는 요약이다. 값이 어긋나면 <code>protocol.json</code>과 <code>scripts/</code>의 validator가 정본이다.
-  근거는 추측하지 말고 코드에서 읽는다.
+  규범은 여기, 절차는 스킬, 정본은 코드다 — 0장의 표를 따라간다.
+  이 문서와 <code>protocol.json</code>·validator가 어긋나면 코드가 이긴다. 근거는 추측하지 말고 코드에서 읽는다.
 </p>
 
 </div>
