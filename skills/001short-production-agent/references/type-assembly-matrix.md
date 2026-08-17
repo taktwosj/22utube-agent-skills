@@ -80,3 +80,26 @@
 9. `30_audio_srt/caption_timing_evidence.json` — `mapping[]`과 `cues[]`(authority=`SPEECH_AUDIO`/`STATE`) 모두 필수
 10. `90_workflow/state.json` — 절대경로+SHA, `status=AUDIO_CAPTION_VALIDATED`, `next_action=CAPCUT_BUILD`
 11. `50_capcut_project/build_config.json` → `build_episode_capcut.py --config`
+
+## 유형 2(전체 TTS)의 문장 길이 예산
+
+`urakkai-artifact-contract.md`의 제약 2 때문에 **A9 나레이션 한 cue는 V 열 하나를 넘을 수 없다.**
+유형 2는 나레이션이 영상 전체를 덮으므로 이 제약이 설계 단계에서 바로 걸린다.
+
+- **나레이션 문장 하나 = V 열 하나 안.** 문장이 두 열에 걸치게 쓰면 조립이 막힌다.
+- 짧은 V 열까지 전부 채우려 하지 마라. 문장이 토막나서 읽기 나빠진다.
+  **긴 열 위주로 절반 정도만 얹는 편이 호흡도 낫다.** (26열 중 14 cue가 실제로 잘 나왔다.)
+- cue가 열보다 짧아도 된다. 뒤에 공백이 남는 것이 정상이다. 열과 길이를 맞출 필요는 없다.
+
+### 문장 길이 잡는 법
+
+생성 전 글자수로 추정하지 말고 **만들고 재라.** 하우스 사운드(tempo 1.2) 기준
+`총 길이`에는 앞뒤 무음 0.2~0.35초가 붙는다.
+
+1. 문장을 쓰고 `make_typecast_tts.py`로 생성한다.
+2. 실제 길이를 재서 해당 V 열 길이와 비교한다.
+3. 초과하면 **앞뒤 무음만 다듬어** 본다. 발화 구간만 재서 열에 들어가면 무손실로 해결된다.
+   (실측: 초과 3건 전부 무음 트림만으로 해결됐다.)
+4. 발화 자체가 열보다 길면 그때 문장을 줄여라.
+
+무음 트림은 발화 앞 0.08초, 뒤 0.10초를 남기면 자연스럽다.
