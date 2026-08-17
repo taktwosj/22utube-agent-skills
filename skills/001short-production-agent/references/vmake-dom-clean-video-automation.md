@@ -178,3 +178,20 @@ Never copy one machine's absolute paths, browser element IDs, cookies, or sessio
 - Payment/credit/terms or full-download subscription prompt: do not approve automatically; set `WAIT_VMAKE_PRO_OR_FULL_CLEAN_FILE`.
 - Download button clicked but no file: remain incomplete and inspect browser download state.
 - Processing stalls: inspect current page/server status; do not claim that VMake is generally broken.
+
+## 배치 업로드 (Batch Editor) 운영 메모
+
+여러 편을 한 번에 돌릴 때. 260817 5편 배치에서 확인한 것.
+
+- **플랜 한도가 배치당 3편이다**(Plus 기준, 화면에 `Batch processing limits: Plus 3 files, Pro 30 files`로 표시).
+  3편을 넣고 끝난 뒤 다음 3편을 넣는다.
+- 파일은 `input[type=file][multiple]`에 직접 `setInputFiles`로 넣는다.
+  화면의 `Batch upload` 버튼은 드롭다운 안에 있어 크기가 0이라 클릭이 타임아웃난다.
+- 처리가 끝나면 카드에 `Removed <파일명>`이 붙는다.
+- **`Download All`은 다운로드 이벤트를 여러 개 발생시킨다.** `waitForEvent('download')`로는 첫 개만 잡힌다.
+  `page.on('download', d => got.push(d))`로 수집한 뒤 충분히 기다렸다가 한꺼번에 처리하라.
+- **다음 배치를 돌리기 전에 완료된 카드의 선택을 해제하라.** `Select all`은 완료분까지 잡는다.
+  카드 요소의 클래스에 `selected--`가 들어 있는지로 선택 상태를 확인하고, 완료 카드만 클릭해 해제한다.
+- 다른 세션이 남긴 카드가 섞여 있을 수 있다. **카드 텍스트에 이번 에피소드 파일명이 들어있는지로 반드시 대조**하고 조작하라.
+
+산출물 검수 여부는 사용자 지시를 따른다. 기본은 길이·해상도만 확인하고 인테이크한다.
