@@ -1,0 +1,368 @@
+<title>001쇼츠 제작 규범</title>
+<style>
+:root{
+  --bg:#F1F2F4; --surface:#FFFFFF; --surface-2:#E9EBEF;
+  --ink:#14161A; --ink-soft:#5A6068; --ink-faint:#868D96;
+  --rule:#D3D7DD; --rule-soft:#E4E7EB;
+  --accent:#1F4E79; --accent-soft:#DCE7F1;
+  --pass:#186A45; --fail:#A82219; --warn:#8A5A00;
+  --lane:#F6F7F9;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#131519; --surface:#1B1E23; --surface-2:#23272D;
+    --ink:#E7EAEE; --ink-soft:#A0A7B0; --ink-faint:#7C848D;
+    --rule:#2E333A; --rule-soft:#252A30;
+    --accent:#83B4DE; --accent-soft:#1E2C39;
+    --pass:#5CB98A; --fail:#E58C83; --warn:#D6A94E;
+    --lane:#191C21;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#131519; --surface:#1B1E23; --surface-2:#23272D;
+  --ink:#E7EAEE; --ink-soft:#A0A7B0; --ink-faint:#7C848D;
+  --rule:#2E333A; --rule-soft:#252A30;
+  --accent:#83B4DE; --accent-soft:#1E2C39;
+  --pass:#5CB98A; --fail:#E58C83; --warn:#D6A94E;
+  --lane:#191C21;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+  font-size:16px; line-height:1.72; margin:0;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1080px; margin:0 auto; padding:0 28px 120px}
+code,.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.86em}
+code{background:var(--surface-2); padding:.1em .38em; border-radius:3px; word-break:break-word}
+h1,h2,h3{font-family:AppleMyungjo,"Nanum Myeongjo","Source Han Serif K",serif; font-weight:400; text-wrap:balance}
+
+/* masthead */
+.mast{border-bottom:2px solid var(--ink); padding:64px 0 22px; margin-bottom:8px}
+.mast h1{font-size:clamp(2.2rem,5.4vw,3.4rem); line-height:1.12; margin:0 0 14px; letter-spacing:-.01em}
+.mast .sub{color:var(--ink-soft); font-size:1.02rem; max-width:60ch; margin:0}
+.meta{display:flex; flex-wrap:wrap; gap:8px 22px; margin-top:26px;
+  font-size:.74rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint)}
+
+/* two readers */
+.readers{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin:34px 0 12px}
+.reader{background:var(--surface); border:1px solid var(--rule); padding:20px 22px}
+.reader h3{margin:0 0 8px; font-size:1.06rem}
+.reader p{margin:0; color:var(--ink-soft); font-size:.94rem; line-height:1.65}
+
+section{margin-top:64px; scroll-margin-top:20px}
+section > h2{
+  font-size:1.5rem; margin:0 0 6px; padding-bottom:10px;
+  border-bottom:1px solid var(--rule); display:flex; align-items:baseline; gap:14px;
+}
+section > h2 .n{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.7rem; letter-spacing:.14em;
+  color:var(--accent); border:1px solid var(--accent); padding:2px 7px; border-radius:2px;
+  flex:none; position:relative; top:-2px;
+}
+.lede{color:var(--ink-soft); margin:14px 0 26px; max-width:68ch}
+p{max-width:68ch}
+
+/* lane rows — mirrors the 15-row grid of the production tables */
+.lanes{border-top:1px solid var(--rule)}
+.lane{display:grid; grid-template-columns:132px 1fr; gap:0; border-bottom:1px solid var(--rule-soft); background:var(--lane)}
+.lane:nth-child(even){background:var(--surface)}
+.lane .k{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.72rem; letter-spacing:.06em;
+  color:var(--ink-faint); padding:16px 14px 16px 0; border-right:1px solid var(--rule-soft);
+  text-align:right; line-height:1.5;
+}
+.lane .v{padding:16px 0 16px 18px}
+.lane .v strong{font-weight:600}
+.lane .v p{margin:.35em 0 0; color:var(--ink-soft); font-size:.93rem; max-width:64ch}
+@media(max-width:640px){
+  .lane{grid-template-columns:1fr}
+  .lane .k{text-align:left; border-right:0; padding:14px 0 0}
+  .lane .v{padding:6px 0 16px}
+}
+
+/* rule blocks — hard constraints */
+.rule-block{background:var(--surface); border:1px solid var(--rule); border-left:3px solid var(--fail); padding:18px 20px; margin:16px 0}
+.rule-block.ok{border-left-color:var(--pass)}
+.rule-block.note{border-left-color:var(--warn)}
+.rule-block h4{margin:0 0 6px; font-size:1rem; font-weight:650; font-family:inherit}
+.rule-block p{margin:.4em 0 0; font-size:.94rem; color:var(--ink-soft)}
+.rule-block .code{display:inline-block; margin-top:8px; font-family:ui-monospace,Menlo,monospace;
+  font-size:.76rem; color:var(--fail); background:var(--surface-2); padding:3px 8px; border-radius:3px}
+
+/* tables */
+.tw{overflow-x:auto; margin:22px 0; border:1px solid var(--rule); background:var(--surface)}
+table{border-collapse:collapse; width:100%; font-size:.9rem; min-width:560px}
+th,td{text-align:left; padding:11px 14px; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+th{background:var(--surface-2); font-weight:650; font-size:.76rem; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); white-space:nowrap}
+tbody tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums; white-space:nowrap}
+.tag{font-family:ui-monospace,Menlo,monospace; font-size:.74rem; padding:2px 7px; border-radius:2px; white-space:nowrap}
+.tag.p{background:var(--accent-soft); color:var(--accent)}
+.tag.f{color:var(--fail); border:1px solid var(--fail)}
+
+/* flow */
+.flow{display:grid; gap:2px; margin:24px 0; border:1px solid var(--rule)}
+.step{display:grid; grid-template-columns:62px 1fr auto; gap:16px; align-items:center;
+  background:var(--surface); padding:13px 16px; font-size:.93rem}
+.step .s{font-family:ui-monospace,Menlo,monospace; font-size:.72rem; color:var(--ink-faint)}
+.step .who{font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); white-space:nowrap}
+.step.user{background:var(--accent-soft)}
+.step.user .who{color:var(--accent); font-weight:700}
+@media(max-width:640px){ .step{grid-template-columns:52px 1fr; } .step .who{grid-column:2; margin-top:2px} }
+
+ul{padding-left:1.15em; max-width:68ch} li{margin:.4em 0; color:var(--ink-soft)}
+li strong{color:var(--ink)}
+hr{border:0; border-top:1px solid var(--rule); margin:44px 0}
+.foot{margin-top:80px; padding-top:20px; border-top:1px solid var(--rule); color:var(--ink-faint); font-size:.82rem}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <h1>001쇼츠 제작 규범</h1>
+  <p class="sub">원본 쇼츠를 우라까이해 새 쇼츠로 만드는 전 과정의 단일 기준. 사람이 읽는 흐름과 작업자(AI)가 지켜야 할 규칙을 한 문서에 담았다.</p>
+  <div class="meta">
+    <span>001short-production-agent</span>
+    <span>2026-08-17 개정</span>
+    <span>계약 정본 = protocol.json</span>
+  </div>
+</header>
+
+<div class="readers">
+  <div class="reader">
+    <h3>사람이 보는 것</h3>
+    <p>어떤 순서로 뭐가 나오는지, 내가 직접 해야 하는 게 뭔지. <strong>3·4·9장</strong>만 봐도 된다.</p>
+  </div>
+  <div class="reader">
+    <h3>작업자가 보는 것</h3>
+    <p>바꾸면 안 되는 값과 실패 조건. <strong>5·6·7·8장</strong>이 규칙이다. 추측 금지, 근거는 코드에서 읽는다.</p>
+  </div>
+</div>
+
+<section id="flow">
+  <h2><span class="n">01</span>전체 흐름</h2>
+  <p class="lede">사용자에게 보이는 단계는 셋뿐이다 — <strong>원본표 → 우라까이표 → CapCut 조립</strong>. 나머지는 그 사이를 잇는 잠금 작업이다.</p>
+
+  <div class="flow">
+    <div class="step"><span class="s">S01</span><span>원본 인테이크 · 자막 경계 검출 · <strong>원본표</strong></span><span class="who">작업자</span></div>
+    <div class="step"><span class="s">S02</span><span>유형 결정 (원본표에서 도출)</span><span class="who">지휘</span></div>
+    <div class="step"><span class="s">S04</span><span><strong>우라까이표</strong> — 재배열 · 새 문구 · 나레이션 설계</span><span class="who">지휘</span></div>
+    <div class="step"><span class="s">S05</span><span>설계 잠금 (timeline · handoff · production plan)</span><span class="who">작업자</span></div>
+    <div class="step"><span class="s">S06</span><span>VMake 클린 영상 · 보컬 스템 분리</span><span class="who">작업자</span></div>
+    <div class="step"><span class="s">S07</span><span>오디오 · 자막 잠금 (TTS 생성 포함)</span><span class="who">작업자</span></div>
+    <div class="step"><span class="s">S08</span><span><strong>CapCut 조립</strong> → <code>WAIT_USER_CAPCUT_CHECK</code></span><span class="who">지휘</span></div>
+    <div class="step user"><span class="s">S09</span><span>시각 확인 · 최종 다듬기 · 렌더 · 업로드</span><span class="who">사용자 전용</span></div>
+  </div>
+
+  <div class="rule-block ok">
+    <h4>자동화는 조립에서 멈춘다</h4>
+    <p>CapCut 시각 승인·렌더·업로드는 사용자만 한다. 작업자는 <code>WAIT_USER_CAPCUT_CHECK</code>에서 정지하고, 실행하지 않은 단계는 <code>NOT RUN</code>으로 적는다. PASS라고 주장하지 않는다.</p>
+  </div>
+</section>
+
+<section id="types">
+  <h2><span class="n">02</span>유형 다섯 가지</h2>
+  <p class="lede">두 축이 독립이다. <strong>음성 축</strong>은 A9(새 TTS 나레이션)와 A10(원본 화자 육성), <strong>텍스트 축</strong>은 A9_TEXT·A10_TEXT·STATE_LASER. 자막만 새로 쓰는 것(TTT)은 6번째 유형이 아니라 자막 방식이다.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>유형</th><th>음성</th><th>자막</th><th>audio_policy</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1</strong> 화면+상황자막</td><td>없음 (원본 무음)</td><td>STATE_LASER만</td><td><code>CAPTION_ONLY_MUTE_SOURCE</code></td></tr>
+      <tr><td><strong>2</strong> 전체 TTS</td><td>A9 전체, 원본 무음</td><td>A9_TEXT ↔ A9 1:1</td><td><code>TTS_ONLY_MUTE_SOURCE</code></td></tr>
+      <tr><td><strong>3</strong> 원본 화자발언</td><td>A10 육성만</td><td>A10_TEXT (+STATE)</td><td><code>A10_REASSEMBLED_SYNC</code> 계열</td></tr>
+      <tr><td><strong>4</strong> TTS 도입+화자 본문</td><td>A9 도입 2~4초 + A10</td><td>각 자막을 해당 음성에 페어링</td><td><code>A9_TTS_PLUS_A10_REASSEMBLED</code></td></tr>
+      <tr><td><strong>5</strong> 나레이션+화자 혼합</td><td>A9 연결 + A10 증거</td><td>A9_TEXT + A10_TEXT</td><td><code>A9_TTS_PLUS_A10_REASSEMBLED</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="rule-block note">
+    <h4>유형은 원본표에서 도출한다. 고르는 게 아니다</h4>
+    <p>검증된 <strong>화자발언이 없으면 1·2만</strong> 가능하다. 있으면 다섯 개 전부 후보다. 원본 나레이션은 어떤 유형에서도 반입 금지 — 기록만 하고 해설은 새로 쓴다.</p>
+  </div>
+
+  <div class="lanes">
+    <div class="lane"><div class="k">A9</div><div class="v"><strong>새 TTS 나레이션</strong><p>Typecast 하우스 사운드로 생성. 유형 2·4·5에서만 존재한다.</p></div></div>
+    <div class="lane"><div class="k">A10</div><div class="v"><strong>원본 화자 육성</strong><p>Demucs 보컬 스템에서 재조립. CapCut 내장 분리 기능은 쓰지 않는다.</p></div></div>
+    <div class="lane"><div class="k">A11</div><div class="v"><strong>효과음</strong><p>실제 효과음이 있을 때만 배치.</p></div></div>
+    <div class="lane"><div class="k">A12</div><div class="v"><strong>예약 — 항상 비움</strong><p>부재는 <code>없음</code>, 예약 앵커는 <code>비움</code>. 둘을 섞지 않는다.</p></div></div>
+  </div>
+</section>
+
+<section id="stage01">
+  <h2><span class="n">03</span>원본표 — 어디에 힘을 쓰나</h2>
+  <p class="lede">원본표는 "몇 초에 무엇이 있었나"를 기록한다. 실제로 사고가 나는 곳은 문구가 아니라 <strong>시간</strong>이다.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>대상</th><th>기준</th><th>이유</th></tr></thead>
+    <tbody>
+      <tr><td>구간 경계 · 시간</td><td><span class="tag f">엄격</span></td><td>경계 하나를 놓치면 그 뒤 자막이 전부 한 칸씩 밀린다. 그 상태로도 모든 validator가 PASS로 통과한다</td></tr>
+      <tr><td>화자 / 나레이션 / 상황자막</td><td><span class="tag f">엄격</span></td><td>유형이 여기서 갈린다</td></tr>
+      <tr><td>자막 문구</td><td><span class="tag p">1회 판독</span></td><td>우라까이에서 우리 문장으로 새로 쓴다. 글자 차이는 결과물에 안 남는다</td></tr>
+      <tr><td>화면 구성 묘사</td><td><span class="tag p">의도만</span></td><td>조립에 쓰이지 않는다</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>자막을 글자 단위로 맞추는 데 시간을 쓰지 마라. <strong>틀리면 안 되는 건 "어느 시간대에 무엇이 있었나"이지 "정확히 어떤 글자였나"가 아니다.</strong></p>
+
+  <div class="rule-block">
+    <h4>자막 대역은 잘림 자가검사를 통과해야 한다</h4>
+    <p>눈대중으로 잡으면 틀린다. 실제로 4편 중 2편이 틀렸고, 한 편은 자막이 통째로 크롭 밖이었다. 확정한 crop으로 크롭을 뽑은 뒤 <strong>맨 윗줄·맨 아랫줄에 글자 마스크가 남아 있으면 그 방향으로 대역이 부족하다.</strong> 최소 8개 시각에서, <strong>2줄 자막이 나오는 시각을 반드시 포함해</strong> 검사한다.</p>
+  </div>
+
+  <div class="rule-block">
+    <h4>영상 위에 겹친 자막에 raw MAD를 쓰지 마라</h4>
+    <p>배경이 움직이면 프레임 차분이 자막 전환과 구별되지 않는다. 글자 픽셀만 이진 마스크로 남기고 <strong>프레임 간 마스크 XOR 픽셀 수</strong>를 지표로 쓴다. 하단 흰 패널에 검은 글씨가 놓이는 형태는 raw MAD로 충분하다.</p>
+  </div>
+
+  <div class="rule-block ok">
+    <h4>STT로 경계를 검증한다</h4>
+    <p>발화가 있는 영상에서 자막 경계는 발화 경계와 <strong>0.2~0.4초</strong> 안에서 대응한다(자막이 조금 늦게 끝난다). 0.6초 이상 어긋나면 놓친 경계가 있다. <strong>대응이 0건이면 대역 자체가 틀린 것이다</strong> — 이 신호로 실제 오설정을 잡았고, 고치자 구간이 29개에서 32개로 늘었다.</p>
+  </div>
+
+  <div class="rule-block note">
+    <h4>과분할은 병합으로 고치고, 누락은 못 고친다</h4>
+    <p>연속 구간의 문구가 완전히 같으면 하나로 병합하고 번호를 다시 매긴다. 그러니 <strong>임계는 느슨하게 잡아라.</strong> 놓치는 것보다 많이 잡는 편이 안전하다.</p>
+  </div>
+</section>
+
+<section id="reading">
+  <h2><span class="n">04</span>자막 판독은 위임한다</h2>
+  <p class="lede">Codex는 이미지를 받는다. 자막 대역 시트를 그대로 넘기면 된다. tesseract는 이 용도로 쓰지 않는다 — 흰 배경 검은 고딕에서도 41개 중 37개가 깨졌다.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>편</th><th class="num">구간</th><th class="num">정확도</th><th>잡힌 오독</th></tr></thead>
+    <tbody>
+      <tr><td>산림</td><td class="num">41</td><td class="num">90%</td><td>수로→수도, 물바다→돌바다, 6배→매년, 민동산→민둥산</td></tr>
+      <tr><td>김치</td><td class="num">29</td><td class="num">97%</td><td>울고싶다→물고싶다 (본인이 SUSPECT 표시)</td></tr>
+      <tr><td>소녀시대</td><td class="num">32</td><td class="num">100%</td><td>없음</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="lanes">
+    <div class="lane"><div class="k">호출</div><div class="v"><strong><code>-i</code>는 파일마다 하나씩</strong><p>셸 변수에 모아 확장하면 뒤따르는 <code>-</code> 위치 인자가 깨진다.</p></div></div>
+    <div class="lane"><div class="k">지시</div><div class="v"><strong>"맞춤법·오타를 고치지 마라"를 넣어라</strong><p>그래도 모델이 정규화하려 든다. 화면의 <code>민동산</code>을 <code>민둥산</code>으로 고쳐 읽은 사례가 있다. 원본표는 화면 그대로가 원칙이다.</p></div></div>
+    <div class="lane"><div class="k">신호</div><div class="v"><strong>확신 낮은 구간을 SUSPECT로 표시시켜라</strong><p>실제 오독과 잘 맞는다. 세 신호가 겹친다 — SUSPECT 표시, 말이 안 되는 한국어, STT 발화와 불일치.</p></div></div>
+  </div>
+</section>
+
+<section id="urakkai">
+  <h2><span class="n">05</span>우라까이표 — 조립을 막는 제약</h2>
+  <p class="lede">설계 단계에서 미리 맞춰라. 조립 직전에 걸리면 표·타임라인·잠금을 전부 다시 만들어야 한다.</p>
+
+  <div class="rule-block">
+    <h4>같은 Bxx를 두 번 쓸 수 없다</h4>
+    <p>콜드오픈에 쓴 구간을 뒤에서 회수용으로 다시 쓰는 설계는 불가능하다. 부분 구간으로 피하려 하지 마라 — 자막 타이밍 검사가 V열의 소스 범위를 <strong>원본표 헤더에서 다시 계산</strong>하므로 또 막힌다.</p>
+    <p><strong>해법:</strong> 그 Bxx를 콜드오픈에만 두고 원래 자리에서 뺀다. 재배열은 남은 구간으로 만든다.</p>
+    <span class="code">DUPLICATE_SOURCE_RANGE</span>
+  </div>
+
+  <div class="rule-block">
+    <h4>자막 cue 하나는 V열 하나를 넘을 수 없다</h4>
+    <p><code>mapping[]</code>은 V열과 1:1이어야 하고 여분 행을 넣을 수 없다. 나레이션이 여러 열에 걸치면 cue를 V 경계에서 쪼개되, <strong>오디오 cue도 같이 쪼개야 한다</strong> — 설계 잠금이 A9와 A9_TEXT의 cue_id 집합 일치를 요구한다. 연속 wav를 V 경계에서 자른 조각은 이어붙이면 원본과 비트 단위로 같으므로 재생은 끊기지 않는다. 자를 지점은 <strong>실제 발화 쉼</strong>과 맞춰라.</p>
+    <span class="code">CAPTION_TIMING_BUILD_MAPPING_MISMATCH · A9_TEXT_PAIRING_MISMATCH</span>
+  </div>
+
+  <div class="rule-block">
+    <h4>T1 · T2는 각 한 줄 12자, 줄바꿈 불가</h4>
+    <p>제목 비교가 <strong>정규화 없는 완전일치</strong>라 표 셀의 <code>&lt;br&gt;</code>가 타임라인의 개행과 매칭되지 않는다. 제목 두 줄은 T1이 1줄, T2가 2줄이다. A9_TEXT(15자)·A10_TEXT(16자)는 정규화 비교라 <code>&lt;br&gt;</code>를 써도 된다.</p>
+    <span class="code">TABLE_TITLE_TEXT_MISMATCH · CAPTION_LINE_TOO_LONG</span>
+  </div>
+
+  <div class="rule-block note">
+    <h4>유형 2는 문장 길이 예산이 필요하다</h4>
+    <p>나레이션이 영상 전체를 덮으므로 위 제약이 바로 걸린다. <strong>문장 하나 = V열 하나 안.</strong> 짧은 열까지 다 채우려 하지 마라 — 문장이 토막나서 읽기 나빠진다. 긴 열 위주로 절반쯤만 얹는 편이 호흡도 낫다(26열에 14 cue가 잘 나왔다). cue가 열보다 짧아도 되고, 뒤에 공백이 남는 게 정상이다.</p>
+  </div>
+
+  <div class="rule-block ok">
+    <h4>글자수로 추정하지 말고 만들어서 재라</h4>
+    <p>총 길이에는 앞뒤 무음 0.2~0.35초가 붙는다. 초과하면 <strong>무음만 다듬어</strong> 보라 — 실측에서 초과 3건이 전부 무음 트림으로 해결됐다. 발화 자체가 열보다 길 때만 문장을 줄인다. 발화 앞 0.08초, 뒤 0.10초를 남기면 자연스럽다.</p>
+  </div>
+</section>
+
+<section id="assembly">
+  <h2><span class="n">06</span>조립 — 값이 맞아야 하는 곳</h2>
+  <p class="lede">CapCut 근본 프로젝트는 건드리지 않는다. 복제본에 새 ID를 부여하고 그 앵커에만 이번 화 미디어와 문구를 주입한다.</p>
+
+  <div class="lanes">
+    <div class="lane"><div class="k">표 A9 행</div><div class="v"><strong>파일명이 아니라 문장</strong><p>text role로 검사된다. 오디오 바인딩은 <code>audio_lock.role_files</code>가 한다.</p></div></div>
+    <div class="lane"><div class="k">타임라인</div><div class="v"><strong>role=A10 오디오 행이 따로 필요</strong><p>V열마다 하나씩. <code>A10_TEXT</code>와 segment_id가 겹치면 안 되므로 <code>A10_AUDIO_Vxx</code>처럼 구분한다.</p></div></div>
+    <div class="lane"><div class="k">content_type</div><div class="v"><strong>enum은 다섯 개뿐</strong><p><code>TITLE · TTS · SPEAKER · SITUATION · STATE</code>. 색은 <code>color_role</code>의 <code>WHITE</code>/<code>YELLOW</code>.</p></div></div>
+    <div class="lane"><div class="k">A10 길이</div><div class="v"><strong>타임라인과 정확히 일치</strong><p>완전일치를 본다. 44.1kHz로 리샘플하면 µs가 안 떨어질 수 있다 — <strong>48kHz 스템은 리샘플하지 말고 그대로 이어붙여라.</strong></p></div></div>
+    <div class="lane"><div class="k">evidence</div><div class="v"><strong>화면 OCR 뒤가 literal_ocr와 완전일치</strong><p><code>situation_description</code>을 <code>"화면 OCR:"</code>로 잘라 비교한다. 놓치면 전 구간이 떨어진다.</p></div></div>
+    <div class="lane"><div class="k">템플릿</div><div class="v"><strong>shrt_white_base_v2 고정</strong><p>계약 프로파일 키는 <code>home_windows_v2</code>다. 이름과 무관하게 OS 중립이며 아카이브 해석에만 쓰인다. <code>root_contract_path</code>는 workspace 상대경로여야 한다.</p></div></div>
+  </div>
+</section>
+
+<section id="delegate">
+  <h2><span class="n">07</span>위임 규격</h2>
+  <p class="lede">기계적인 작업은 전부 Codex에 넘긴다. 판단·검증·commit은 지휘가 한다.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>일</th><th>주체</th></tr></thead>
+    <tbody>
+      <tr><td>경계 검출 · 크롭 · 시트 생성</td><td>작업자</td></tr>
+      <tr><td>자막 문구 판독 (이미지 첨부)</td><td>작업자</td></tr>
+      <tr><td>표 · 증거 · 잠금 JSON 작성, validator PASS</td><td>작업자</td></tr>
+      <tr><td>유형 결정 · 재배열 설계 · 문구 작성</td><td>지휘</td></tr>
+      <tr><td>TTS 생성 (네트워크 필요)</td><td>지휘</td></tr>
+      <tr><td>CapCut 빌더 실행 · 최종 검증 · commit</td><td>지휘</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="rule-block ok">
+    <h4>호출 봉투에 반드시 넣을 것</h4>
+    <p><strong>확정값</strong>(바꾸면 안 되는 수치와 문구) · <strong>형식 정본</strong>(이미 PASS한 에피소드 경로, 읽기 전용) · <strong>Do Not Change</strong>(credential 금지, 다른 에피소드 폴더 금지, 타 세션 미커밋 파일 금지) · <strong>중단 조건</strong>(같은 에러 3회, 근거 없는 필드는 지어내지 말고 보고).</p>
+    <p>작업자가 "확정값을 바꿔야 PASS된다"고 보고하면 그건 <strong>설계 오류 신호</strong>다. 통과시키지 말고 지휘가 판단한다.</p>
+  </div>
+
+  <div class="rule-block note">
+    <h4>작업자 PASS 문구만으로 완료가 아니다</h4>
+    <p>지휘가 diff·validator·readback을 직접 확인한다. 실제로 작업자가 규칙대로 멈춘 덕에 잡힌 문제가 여럿 있었다 — 상류 증거 파일 누락, 선행 산출물 부재, 7µs 초과.</p>
+  </div>
+</section>
+
+<section id="vmake">
+  <h2><span class="n">08</span>VMake 운영</h2>
+  <div class="lanes">
+    <div class="lane"><div class="k">한도</div><div class="v"><strong>배치당 3편</strong><p>3편 넣고 끝나면 다음 3편. 화면에 한도가 표시된다.</p></div></div>
+    <div class="lane"><div class="k">업로드</div><div class="v"><strong>파일 입력에 직접 넣는다</strong><p>화면의 <code>Batch upload</code> 버튼은 드롭다운 안이라 크기가 0이고 클릭이 타임아웃난다.</p></div></div>
+    <div class="lane"><div class="k">다운로드</div><div class="v"><strong>이벤트가 여러 개 발생한다</strong><p>한 번만 기다리면 첫 개만 잡힌다. 리스너로 모아 처리한다.</p></div></div>
+    <div class="lane"><div class="k">재처리</div><div class="v"><strong>완료 카드 선택을 먼저 해제</strong><p>전체 선택은 완료분까지 잡는다. 다른 세션 카드가 섞여 있으니 파일명으로 대조하고 조작한다.</p></div></div>
+    <div class="lane"><div class="k">검수</div><div class="v"><strong>사용자 지시를 따른다</strong><p>기본은 길이·해상도만 확인하고 인테이크. 잔여물 QA는 요청이 있을 때만.</p></div></div>
+  </div>
+</section>
+
+<section id="user">
+  <h2><span class="n">09</span>사용자만 하는 일</h2>
+  <p class="lede">아래는 위임되지 않는다. 권한을 넓게 받아도 마찬가지다.</p>
+  <ul>
+    <li><strong>CapCut 시각 확인과 최종 다듬기</strong> — 조립은 형식만 보장한다. 보기 좋은지는 사람이 판단한다.</li>
+    <li><strong>렌더</strong> — 실행하지 않은 상태는 <code>NOT RUN</code>으로 기록된다.</li>
+    <li><strong>업로드</strong> — <code>upload_ready</code>는 승인 전까지 <code>false</code>다.</li>
+    <li><strong>보안 설정 변경</strong> — quarantine 해제 같은 것. 작업자는 명령만 제시하고 멈춘다.</li>
+    <li><strong>API 키 최초 세팅</strong> — 키는 읽지도 출력하지도 않는다. 401·403이면 재설정 명령만 제시한다.</li>
+  </ul>
+
+  <div class="rule-block ok">
+    <h4>조립이 끝나면 CapCut을 한 번 열었다 닫는다</h4>
+    <p>3분쯤 열어두면 프로젝트가 색인되고 썸네일이 생긴다. 닫은 뒤 draft 길이와 트랙 수가 그대로면 정상이다.</p>
+  </div>
+</section>
+
+<p class="foot">
+  이 문서는 요약이다. 값이 어긋나면 <code>protocol.json</code>과 <code>scripts/</code>의 validator가 정본이다.
+  근거는 추측하지 말고 코드에서 읽는다.
+</p>
+
+</div>
