@@ -42,6 +42,11 @@ def _normalized_windows(value: str) -> str:
 
 
 def _is_within(value: str, root: str) -> bool:
+    if value.startswith("/") and root.startswith("/"):
+        candidate_path = Path(value).resolve(strict=False)
+        root_path = Path(root).resolve(strict=False)
+        return candidate_path == root_path or root_path in candidate_path.parents
+
     candidate = _normalized_windows(value)
     normalized_root = _normalized_windows(root)
     try:
