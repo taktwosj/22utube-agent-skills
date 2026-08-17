@@ -2,6 +2,7 @@
 
 유형 선택부터 오디오 정책, 트랙 배치, 아티팩트 체인까지의 단일 조립설명서.
 공식 시각 설명서(https://jsjtaktwo.mycafe24.com/skills/001short/)와 동기화.
+제작 전 과정 요약은 `docs/001short-manual.html`. 값이 어긋나면 `protocol.json`과 validator가 정본이다.
 
 ## 두 축
 
