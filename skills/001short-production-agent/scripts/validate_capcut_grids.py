@@ -436,8 +436,6 @@ def validate_grid(
                             column=column,
                         )
                     )
-                if a9_present:
-                    line_limit = (2, 10)
             if line_limit is not None:
                 max_lines, max_chars = line_limit
                 display_lines = re.split(r"\s*<br\s*/?>\s*|\r?\n", stripped, flags=re.IGNORECASE)

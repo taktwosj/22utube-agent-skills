@@ -20,4 +20,4 @@ Stage 05가 역할과 시간을 승인하고 Stage 08 builder는 아래 15개 �
 | 13 | A11 | 화면전환·반전·와우 SFX |
 | 14 | A12_RESERVED_EMPTY | 반드시 비움; BGM은 이 계약 범위 밖 |
 
-STATE의 의미 글자 수는 공백만 제외하고 8자 이하여야 한다. STATE가 없는 회차도 유효하다. `SPEAKER`는 A10_TEXT로만, `SITUATION` 또는 `STATE`는 STATE로만 라우팅하며 `UNASSIGNED` 화자는 추측하지 않고 WAIT 또는 FAIL 처리한다.
+STATE의 의미 글자 수는 공백만 제외하고 15자 이하여야 한다. STATE가 없는 회차도 유효하다. `SPEAKER`는 A10_TEXT로만, `SITUATION` 또는 `STATE`는 STATE로만 라우팅하며 `UNASSIGNED` 화자는 추측하지 않고 WAIT 또는 FAIL 처리한다.

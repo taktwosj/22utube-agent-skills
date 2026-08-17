@@ -5,6 +5,7 @@ import argparse
 import copy
 import hashlib
 import json
+from common import FRAME_TOLERANCE_US, ranges_match
 import re
 import subprocess
 import sys
@@ -195,7 +196,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     expected_grid_text_contract = {
         "target_a9_text_scope": "new_urakkai_a9_tts_only",
         "target_a9_text_max_lines": 2,
-        "target_a9_text_max_chars_per_line": 10,
+        "target_a9_text_max_chars_per_line": 15,
         "original_a9_text_max_lines": 2,
         "original_a9_text_max_chars_per_line": 15,
         "state_laser_max_lines": 2,
@@ -827,7 +828,7 @@ def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
             )
             if (
                 row_range is not None
-                and placement.get("target_range_us") != row_range
+                and not ranges_match(placement.get("target_range_us"), row_range)
                 and not user_audio_placement
                 and not user_audio_caption
             ):

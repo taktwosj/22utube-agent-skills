@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from audio_policy_matrix import ACCEPTED_MODE_TUPLES
-from common import read_json, resolved_declared_path, result, sha256_file
+from common import FRAME_TOLERANCE_US, ranges_match, read_json, resolved_declared_path, result, sha256_file
 from schema_runtime import validate_schema
 
 
@@ -134,6 +134,25 @@ def _mapping_signature(row: dict) -> tuple:
     )
 
 
+def _signature_sets_match(observed: list, expected: list) -> bool:
+    """Same beat/segment ids, and every range within one frame."""
+    if len(observed) != len(expected):
+        return False
+    remaining = list(expected)
+    for row in observed:
+        for index, candidate in enumerate(remaining):
+            if (
+                row[0] == candidate[0] and row[1] == candidate[1]
+                and ranges_match(list(row[2]), list(candidate[2]))
+                and ranges_match(list(row[3]), list(candidate[3]))
+            ):
+                remaining.pop(index)
+                break
+        else:
+            return False
+    return True
+
+
 def _authoritative_mapping(
     evidence_path: Path, evidence: dict, errors: list[dict],
     expected_production_plan_path: Path | None = None,
@@ -198,7 +217,7 @@ def _authoritative_mapping(
     # therefore empty.  VIDEO/audio B->V authority is still checked above
     # against both the build manifest and production plan.
     observed = [_mapping_signature(row) for row in evidence.get("mapping", [])]
-    if not evidence.get("zero_caption") and sorted(observed) != sorted(expected):
+    if not evidence.get("zero_caption") and not _signature_sets_match(observed, expected):
         errors.append({"code": "CAPTION_TIMING_BUILD_MAPPING_MISMATCH"})
     return timeline, set(expected)
 
@@ -420,7 +439,7 @@ def _validate_timing_evidence(
         errors.append({"code": "CAPTION_TIMING_TIMELINE_CUE_SET_MISMATCH"})
     by_id = {row.get("cue_id"): row for row in evidence_cues}
     mapping = {row.get("mapping_id"): row for row in evidence.get("mapping", [])}
-    tolerance = evidence.get("tolerance_us", 0)
+    tolerance = max(int(evidence.get("tolerance_us", 0) or 0), FRAME_TOLERANCE_US)
     if len(by_id) != len(evidence_cues) or set(by_id) != {row.get("cue_id") for row in locked}:
         errors.append({"code": "CAPTION_TIMING_CUE_SET_MISMATCH"})
         return

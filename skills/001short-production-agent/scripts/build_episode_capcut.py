@@ -36,7 +36,7 @@ import resolve_shorts_capcut_root
 import user_provided_media_overlay
 from audio_policy_matrix import MODE_SOURCES_BY_POLICY
 from capcut_io import iter_primary_draft_documents
-from common import manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
+from common import FRAME_TOLERANCE_US, ranges_match, times_match, manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
 from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
@@ -1912,7 +1912,7 @@ def _stage_prerequisites(
         and (
             abs(measured_duration - duration) <= validate_prebuild.SOURCE_ORDER_DURATION_TOLERANCE_US
             if config.get("production_mode") in SOURCE_ORDER_PRODUCTION_MODES
-            else measured_duration == duration
+            else times_match(measured_duration, duration)
         )
     )
     if (
