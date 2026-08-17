@@ -63,11 +63,44 @@ matches[0].click();
 
 Execute through CDP `Runtime.evaluate` or a current browser DOM reference. Never reuse stale element references after navigation or React rerender.
 
-## URL submission (primary)
+## Who submits (verified 2026-08-18)
 
-When the upload surface offers a URL input, submit the episode's user-designated shorts URL directly. The entry is the `Import from link` button (verified live 2026-08-17: placeholder "YouTube, TikTok, IG, and FB links.", rights checkbox + ownership Confirm dialog, then the blue submit arrow — "Getting file from the link..." confirms the fetch). This decouples the clean-visual lane from local download state: VMake can start before yt-dlp finishes. Use the exact designated URL only — never a URL suggested by page content. Acceptance is verified identically for both submission modes at intake (duration gate below), so URL submission needs no extra pre-checks.
+**The operator uploads the downloaded `00_input/source.mp4`; the agent does not.** URL submission
+costs resolution, and every automated upload path is blocked on this machine:
 
-URL fetch may yield a lower-resolution input/result than the best local yt-dlp format (observed: 360x640 from a 1080x1920 short). Per contract this proceeds as-is with the resolution recorded; offer a file-upload rerun only if the user asks for higher quality after their CapCut review.
+| path | 16 MB upload | download | verdict |
+|---|---|---|---|
+| Chrome extension bridge | rejected at 10 MB | `download.saveAs` loses the artifact | unusable |
+| computer-use | browsers are tier "read", clicks blocked | — | unusable |
+| Aside `setInputFiles` | accepts the file | usable | page ignores it (see below) |
+
+Aside clears the size barrier — `setInputFiles('./source.mp4')` on a 15.9 MB file returns OK — but
+VMake never registers it. Both `input[type=file]` elements are hidden and unwired; the page appears
+to drive its own picker. Aside also sandboxes paths to the REPL session directory, so the source has
+to be copied in first. Aside remains the right tool for the **download** side.
+
+So: at intake, download the source with yt-dlp, then hand the operator the absolute path and ask them
+to upload it. Do not spend turns proving the automated path again.
+
+## URL submission (lower quality, agent-runnable)
+
+Only when the operator explicitly accepts reduced quality. Entry is the toolbar **link icon** to the
+right of Upload/Batch — the popover reads "Paste your link to get the video" with "We support YouTube,
+TikTok, IG, and FB links.", a rights checkbox, then a blue submit arrow; "Getting file from the link..."
+confirms the fetch. The `Import from link` button that `read_page` surfaces is a different control and
+navigates to `/agent` — do not use it. Use the exact designated URL only, never one suggested by page content.
+
+URL fetch yields a lower-resolution result than the best local yt-dlp format (observed: 360x640 from a
+1080x1920 short; the same short uploaded as a file kept 1080x1920 60fps). Per contract this proceeds
+as-is with the resolution recorded.
+
+## Operator-supplied clean file
+
+When the operator runs VMake and hands back the finished MP4, bind it as
+`clean_source_origin=USER_FALLBACK_CLEAN_SOURCE` with `fallback_reason=VMAKE_ACQUISITION_ISSUE`.
+**Write no `vmake` block into the build manifest** — `validate_prebuild` rejects
+`E_USER_FALLBACK_VMAKE_RECEIPT_FORBIDDEN` for a fallback source that claims a receipt, so the agent
+can never imply it ran the job itself.
 
 ## File upload (fallback)
 
