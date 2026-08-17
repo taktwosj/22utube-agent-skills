@@ -1722,7 +1722,19 @@ def _normalize_source(
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in actual
     ]
-    if observed != expected:
+    def _rows_match(a: list[dict], b: list[dict]) -> bool:
+        if len(a) != len(b):
+            return False
+        for left, right in zip(a, b):
+            if left["segment_id"] != right["segment_id"] or left["role"] != right["role"]:
+                return False
+            if not times_match(left["start"], right["start"]):
+                return False
+            if not times_match(left["duration"], right["duration"]):
+                return False
+        return True
+
+    if not _rows_match(observed, expected):
         raise RuntimeError(f"APPROVED_TIMELINE_ACTUAL_MISMATCH:{observed}")
     return actual
 

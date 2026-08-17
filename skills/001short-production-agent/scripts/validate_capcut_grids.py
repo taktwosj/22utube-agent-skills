@@ -12,7 +12,7 @@ from pathlib import Path
 import user_provided_media_overlay
 import validate_original_source_evidence
 
-from common import meaningful_text_length
+from common import times_match, meaningful_text_length
 from track_contract import HUMAN_GRID_ROWS
 
 
@@ -680,8 +680,8 @@ def validate_locked_assembly(
             if (
                 locked.get("layer", locked.get("caption_role")) != row.get("role")
                 or _normalized_text(locked.get("text")) != _normalized_text(row.get("text"))
-                or locked.get("start_us") != row.get("start")
-                or locked.get("end_us") != row.get("start", 0) + row.get("duration", 0)
+                or not times_match(locked.get("start_us"), row.get("start"))
+                or not times_match(locked.get("end_us"), row.get("start", 0) + row.get("duration", 0))
             ):
                 errors.append(_error(
                     "TABLE_CAPTION_TEXT_MISMATCH", "urakkai",

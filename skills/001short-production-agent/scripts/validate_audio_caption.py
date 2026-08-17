@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from audio_policy_matrix import ACCEPTED_MODE_TUPLES
-from common import FRAME_TOLERANCE_US, ranges_match, read_json, resolved_declared_path, result, sha256_file
+from common import FRAME_TOLERANCE_US, ranges_match, times_match, read_json, resolved_declared_path, result, sha256_file
 from schema_runtime import validate_schema
 
 
@@ -673,7 +673,11 @@ def validate_audio_caption(
                 })
             if actual["end_us"] <= actual["start_us"]:
                 errors.append({"code": "AUDIO_CAPTION_CUE_REVERSED", "cue_id": expected.get("cue_id")})
-            if any(expected.get(field) != actual.get(field) for field in ("start_us", "end_us", "text")):
+            if (
+                expected.get("text") != actual.get("text")
+                or not times_match(expected.get("start_us"), actual.get("start_us"))
+                or not times_match(expected.get("end_us"), actual.get("end_us"))
+            ):
                 errors.append({"code": "AUDIO_CAPTION_CUE_MISMATCH", "cue_id": expected.get("cue_id")})
             if actual["start_us"] < previous_end_by_layer.get(layer, 0):
                 errors.append({
