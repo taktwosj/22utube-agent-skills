@@ -65,22 +65,66 @@ Execute through CDP `Runtime.evaluate` or a current browser DOM reference. Never
 
 ## Who submits (verified 2026-08-18)
 
-**The operator uploads the downloaded `00_input/source.mp4`; the agent does not.** URL submission
-costs resolution, and every automated upload path is blocked on this machine:
+**The agent uploads, through Aside.** Aside has no size ceiling and its `setInputFiles` drives the
+page's hidden input correctly; a 34 MB / 56.7 s source went up and started processing. The other two
+routes stay unusable, so do not reach for them:
 
-| path | 16 MB upload | download | verdict |
-|---|---|---|---|
-| Chrome extension bridge | rejected at 10 MB | `download.saveAs` loses the artifact | unusable |
-| computer-use | browsers are tier "read", clicks blocked | — | unusable |
-| Aside `setInputFiles` | accepts the file | usable | page ignores it (see below) |
+| path | large upload | verdict |
+|---|---|---|
+| Aside `setInputFiles` | 34 MB accepted, page registers it | **use this** |
+| Chrome extension bridge | hard-rejected over 10 MB | unusable |
+| computer-use | browsers are tier "read", clicks blocked | unusable |
 
-Aside clears the size barrier — `setInputFiles('./source.mp4')` on a 15.9 MB file returns OK — but
-VMake never registers it. Both `input[type=file]` elements are hidden and unwired; the page appears
-to drive its own picker. Aside also sandboxes paths to the REPL session directory, so the source has
-to be copied in first. Aside remains the right tool for the **download** side.
+The one obstacle is Aside's path sandbox, and it has a fixed workaround.
 
-So: at intake, download the source with yt-dlp, then hand the operator the absolute path and ask them
-to upload it. Do not spend turns proving the automated path again.
+### Getting the file past the sandbox
+
+Aside refuses any path outside its REPL session directory:
+
+```text
+Error: Path "/Volumes/.../source.mp4" escapes the session directory
+```
+
+So copy the source into that directory and pass the in-session path. The directory name is random per
+run and Aside flushes stdout only at exit, so its own log cannot be read mid-run — watch the sessions
+folder from outside instead and copy in while the script sleeps:
+
+```bash
+touch /tmp/marker
+aside repl "
+  console.log('PWD=' + pwd);
+  await sleep(35000);                       # window for the copy below
+  const p = await openTab('https://vmake.ai/video-watermark-remover/editor');
+  await sleep(9000);
+  const inputs = await p.locator('input[type=file]').all();
+  await inputs[0].setInputFiles(pwd + '/source.mp4');
+" > upload.log 2>&1 &
+D=""
+until [ -n "$D" ]; do
+  D=$(find ~/.aside/u/0/sessions -mindepth 1 -maxdepth 1 -type d -newer /tmp/marker | head -1)
+  sleep 1
+done
+cp <absolute source path> "$D/source.mp4"
+```
+
+`-mindepth 1` matters — without it `find` returns the `sessions` parent and the copy lands in the
+wrong place. `setInputFiles` does **not** raise on a missing in-session file, so a silent no-op looks
+like success; confirm by reading the project list for the new duration rather than trusting the call.
+
+Run the whole thing detached. A foreground shell that dies at a two-minute limit kills the upload
+with it.
+
+### Confirming it landed
+
+The editor lists every past project, so "the page mentions source.mp4" proves nothing — `source.mp4`
+is a substring of `source_1080.mp4`. Match on the **duration** instead:
+
+```javascript
+const t = await p.locator('body').innerText();
+const durs = t.split('\n').map(s => s.trim()).filter(s => /^00:\d\d\.\d\d$/.test(s));
+```
+
+The new job is the first entry, and its duration equals the measured source length.
 
 ## URL submission (lower quality, agent-runnable)
 
