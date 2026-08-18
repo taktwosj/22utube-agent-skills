@@ -8,7 +8,7 @@ This is browser UI automation, not a VMake API integration. Prefer deterministic
 
 ## Fast production rule
 
-Submit the designated shorts URL to VMake immediately at episode intake — before local download completes — and fall back to a file upload of the verified source only when URL input is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
+Upload the verified source to VMake through Aside immediately at episode intake, and fall back to URL submission only when the upload route is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
 
 ## Scope routing
 
@@ -76,6 +76,11 @@ routes stay unusable, so do not reach for them:
 | computer-use | browsers are tier "read", clicks blocked | unusable |
 
 The one obstacle is Aside's path sandbox, and it has a fixed workaround.
+
+**Aside covers the upload only.** Take the finished file in Chrome instead — open the editor there
+and download the ready card. Aside's job ends once the source is submitted, so do not spend turns
+wiring its download events. The Download section below documents the page's controls for whoever is
+at the browser.
 
 ### Getting the file past the sandbox
 
