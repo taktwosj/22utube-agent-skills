@@ -129,6 +129,58 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             work_root=Path(self._tmp.name) / "work",
         )
 
+    def _make_caption_only(self) -> None:
+        """Rewrite the fixture as a type 1 episode: STATE captions, no voice at all."""
+        source_sha = _sha(self.root / "00_input" / "source.mp4")
+        _write_json(self.root / "20_script" / "v_plan.json", {
+            "V": self.v_rows, "DUR": self.duration, "type": "1",
+            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE", "execution_strategy": "caption_only",
+            "audio_source": "SILENCE", "T1": "제목 하나", "T2": "제목 둘", "cues": [],
+        })
+        segments = [
+            {"segment_id": row[0], "role": "VIDEO", "start": row[2], "duration": row[3] - row[2],
+             "source_ref": "abcdefghijk", "source_beat_id": row[1],
+             "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]],
+             "volume": 0, "timeline_order": index}
+            for index, row in enumerate(self.v_rows, start=1)
+        ]
+        for index, row in enumerate(self.v_rows):
+            segments.append({
+                "segment_id": f"STATE_{row[0]}", "role": "STATE", "start": row[2],
+                "duration": row[3] - row[2], "source_ref": "abcdefghijk",
+                "text": "상황 하나" if row[0] == "V01" else "상황 둘",
+                "content_type": "STATE", "cue_id": f"STATE_{row[0]}",
+                "timeline_order": 20 + index,
+            })
+        _write_json(self.root / "20_script" / "approved_timeline.json", {
+            "schema_version": "001short-approved-timeline-v2", "episode_id": self.root.name,
+            "source_fingerprint": source_sha, "production_mode": "URAKKAI",
+            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE", "execution_strategy": "caption_only",
+            "segments": segments,
+        })
+
+    def test_a_caption_only_episode_builds_without_any_audio(self) -> None:
+        """Type 1 carries no voice, so both audio axes clear and no TTS cue is emitted."""
+        self._make_caption_only()
+        result = self._generate()
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["tts_cue_count"], 0)
+        self.assertEqual(result["state_cue_count"], len(self.v_rows))
+        plan = json.loads((self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        for anchor in ("A9", "A9_TEXT", "A10", "A10_TEXT"):
+            self.assertIn(anchor, plan["cleared_anchors"])
+        config = json.loads((self.root / "50_capcut_project" / "build_config.json").read_text(encoding="utf-8"))
+        self.assertNotIn("tts_cues", config)
+
+    def test_a_state_caption_never_claims_speech_authority(self) -> None:
+        """A STATE caption has no matching audio; labelling it SPEECH_AUDIO would lie."""
+        self._make_caption_only()
+        self._generate()
+        evidence = json.loads(
+            (self.root / "30_audio_srt" / "caption_timing_evidence.json").read_text(encoding="utf-8"))
+        self.assertTrue(evidence["cues"])
+        self.assertEqual({cue["authority"] for cue in evidence["cues"]}, {"STATE"})
+
     def test_design_handoff_matches_its_schema(self) -> None:
         """The build refuses a handoff whose schema_version is not the tikitaka constant."""
         self._generate()

@@ -34,10 +34,14 @@ CAPTION_TIMING_SCHEMA_VERSION = "001short-caption-timing-evidence-v2"
 
 CAPTION_ROLES = ("A9_TEXT", "A10_TEXT", "STATE")
 CLEARED_BY_TYPE = {
+    # Type 1 is caption-only: no voice of any kind, so both audio axes clear.
+    "1": ["A9", "A9_TEXT", "A10", "A10_TEXT"],
     "2": ["A10", "A10_TEXT", "STATE", "STATE_LASER"],
     "4": ["A10", "A10_TEXT", "A9", "A9_TEXT"],
     "5": ["A10", "A10_TEXT", "A9", "A9_TEXT"],
 }
+# A STATE caption has no matching audio, so it cannot claim speech authority.
+CAPTION_AUTHORITY = {"STATE": "STATE"}
 ALWAYS_CLEARED = ["A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH", "STATE_FLICKER"]
 
 
@@ -290,7 +294,7 @@ def build_captions(episode_id: str, episode_root: Path, plan: dict, timeline: di
         evidence["cues"].append({
             "cue_id": caption["cue_id"],
             "text": caption["text"],
-            "authority": "SPEECH_AUDIO",
+            "authority": CAPTION_AUTHORITY.get(caption["role"], "SPEECH_AUDIO"),
             "mapping_id": f"MAP_{host[0]}",
             "source_range_us": [host[4] + (start - host[2]), host[4] + (end - host[2])],
             "target_range_us": [start, end],
