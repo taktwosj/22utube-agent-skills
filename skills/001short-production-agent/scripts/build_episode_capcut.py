@@ -607,11 +607,19 @@ def _revision_snapshot_path(config: dict) -> Path | None:
     return Path(config["state_path"]).resolve().with_name("build_config.json")
 
 
+_REVISION_SNAPSHOT_EXCLUDED_KEYS = frozenset({"user_provided_media_overlay"})
+
+
 def _revision_snapshot_payload(config: dict) -> dict:
+    # user_provided_media_overlay is derived fresh from build_manifest by
+    # _bind_user_media_overlay on every build_episode() call; excluding it
+    # here matches the "_"-prefixed convention for runtime-computed keys so
+    # a revision snapshot taken before that bind (build_episode) still
+    # matches the observed config re-checked after it (_build_episode_once).
     return {
         key: copy.deepcopy(value)
         for key, value in config.items()
-        if not key.startswith("_")
+        if not key.startswith("_") and key not in _REVISION_SNAPSHOT_EXCLUDED_KEYS
     }
 
 
