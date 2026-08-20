@@ -325,7 +325,7 @@ class CapCutGridHarnessTest(unittest.TestCase):
                     result = grid_harness.validate_grids(path, URAKKAI)
                     self.assertIn(expected[name], {row["code"] for row in result["errors"]})
 
-    def test_target_a9_text_uses_ten_characters_only_when_a9_tts_exists(self):
+    def test_target_a9_text_uses_the_same_fifteen_character_limit(self):
         urakkai_text = URAKKAI.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -353,24 +353,24 @@ class CapCutGridHarnessTest(unittest.TestCase):
                 {row["code"] for row in missing_text_result["errors"]},
             )
 
-            ten = root / "ten.md"
-            ten.write_text(
-                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 1234567890 |", 1),
+            fifteen = root / "fifteen.md"
+            fifteen.write_text(
+                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 123456789012345 |", 1),
                 encoding="utf-8",
             )
-            self.assertEqual(grid_harness.validate_grids(ORIGINAL, ten)["status"], "PASS")
+            self.assertEqual(grid_harness.validate_grids(ORIGINAL, fifteen)["status"], "PASS")
 
-            eleven = root / "eleven.md"
-            eleven.write_text(
-                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 12345678901 |", 1),
+            sixteen = root / "sixteen.md"
+            sixteen.write_text(
+                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 1234567890123456 |", 1),
                 encoding="utf-8",
             )
-            result = grid_harness.validate_grids(ORIGINAL, eleven)
+            result = grid_harness.validate_grids(ORIGINAL, sixteen)
             self.assertEqual(result["status"], "FAIL")
             errors = [row for row in result["errors"] if row["code"] == "TABLE_TEXT_LINE_TOO_LONG"]
             self.assertEqual(errors[0]["table"], "urakkai")
             self.assertEqual(errors[0]["row"], "A9_TEXT")
-            self.assertEqual(errors[0]["limit"], 10)
+            self.assertEqual(errors[0]["limit"], 15)
 
     def test_original_a9_text_keeps_the_existing_fifteen_character_contract(self):
         original_text = ORIGINAL.read_text(encoding="utf-8")

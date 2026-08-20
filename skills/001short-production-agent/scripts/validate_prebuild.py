@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from audio_policy_matrix import CLEAN_MODE_MATRIX
-from common import read_json, result, sha256_file
+from common import FRAME_TOLERANCE_US, times_match, read_json, result, sha256_file
 import user_provided_media_overlay
 
 
@@ -225,7 +225,7 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
             )
             or target_range[1] > target_duration
             or clip.get("source_sha256", "").lower() != str(source_sha).lower()
-            or source_range[1] - source_range[0] != target_range[1] - target_range[0]
+            or abs((source_range[1] - source_range[0]) - (target_range[1] - target_range[0])) > FRAME_TOLERANCE_US
         ):
             errors.append(_error("E_VIDEO_RANGE", clip_id=clip.get("clip_id")))
             continue
@@ -233,11 +233,11 @@ def validate_prebuild(build_manifest_path: Path) -> dict:
     ordered = sorted(normalized_clips, key=lambda row: row["target_range_us"][0])
     target_cursor = 0
     for clip in ordered:
-        if clip["target_range_us"][0] != target_cursor:
+        if not times_match(clip["target_range_us"][0], target_cursor):
             errors.append(_error("E_VIDEO_RANGE", detail="target_coverage"))
             break
         target_cursor = clip["target_range_us"][1]
-    if target_cursor != target_duration:
+    if not times_match(target_cursor, target_duration):
         errors.append(_error("E_VIDEO_RANGE", detail="target_end"))
     is_labeled_trim_only = urakkai.get("production_type") == "TRIM_ONLY_NO_REORDER"
     if (

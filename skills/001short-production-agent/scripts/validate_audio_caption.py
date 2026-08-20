@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from audio_policy_matrix import ACCEPTED_MODE_TUPLES
-from common import read_json, resolved_declared_path, result, sha256_file
+from common import FRAME_TOLERANCE_US, ranges_match, times_match, read_json, resolved_declared_path, result, sha256_file
 from schema_runtime import validate_schema
 
 
@@ -134,6 +134,25 @@ def _mapping_signature(row: dict) -> tuple:
     )
 
 
+def _signature_sets_match(observed: list, expected: list) -> bool:
+    """Same beat/segment ids, and every range within one frame."""
+    if len(observed) != len(expected):
+        return False
+    remaining = list(expected)
+    for row in observed:
+        for index, candidate in enumerate(remaining):
+            if (
+                row[0] == candidate[0] and row[1] == candidate[1]
+                and ranges_match(list(row[2]), list(candidate[2]))
+                and ranges_match(list(row[3]), list(candidate[3]))
+            ):
+                remaining.pop(index)
+                break
+        else:
+            return False
+    return True
+
+
 def _authoritative_mapping(
     evidence_path: Path, evidence: dict, errors: list[dict],
     expected_production_plan_path: Path | None = None,
@@ -198,7 +217,7 @@ def _authoritative_mapping(
     # therefore empty.  VIDEO/audio B->V authority is still checked above
     # against both the build manifest and production plan.
     observed = [_mapping_signature(row) for row in evidence.get("mapping", [])]
-    if not evidence.get("zero_caption") and sorted(observed) != sorted(expected):
+    if not evidence.get("zero_caption") and not _signature_sets_match(observed, expected):
         errors.append({"code": "CAPTION_TIMING_BUILD_MAPPING_MISMATCH"})
     return timeline, set(expected)
 
@@ -344,7 +363,15 @@ def _validate_reassembled_stem(
     ordered = sorted(mapping, key=lambda row: row.get("target_range_us", [0, 0])[0])
     cursor = 0
     for row in ordered:
-        if not _valid_range(row.get("source_range_us")) or not _valid_range(row.get("target_range_us")) or row["target_range_us"][0] != cursor or row["source_range_us"][1] - row["source_range_us"][0] != row["target_range_us"][1] - row["target_range_us"][0]:
+        if (
+            not _valid_range(row.get("source_range_us"))
+            or not _valid_range(row.get("target_range_us"))
+            or not times_match(row["target_range_us"][0], cursor)
+            or not times_match(
+                row["source_range_us"][1] - row["source_range_us"][0],
+                row["target_range_us"][1] - row["target_range_us"][0],
+            )
+        ):
             errors.append({"code": "AUDIO_CAPTION_REASSEMBLED_STEM_MAPPING_INVALID"})
             break
         cursor = row["target_range_us"][1]
@@ -365,7 +392,7 @@ def _validate_reassembled_stem(
         or not isinstance(source_duration, int)
         or any(row.get("source_range_us", [0, source_duration + 1])[1] > source_duration for row in mapping)
         or not reassembled.is_file() or sha256_file(reassembled) != manifest["reassembled_audio_sha256"]
-        or cursor != manifest["target_duration_us"]
+        or not times_match(cursor, manifest["target_duration_us"])
         or abs(manifest["target_duration_us"] - audio_lock["measured_duration_us"]) > 50_000
         or resolved_declared_path(lock_path, audio_lock["audio_path"]) != reassembled
         or a10 is None or resolved_declared_path(lock_path, a10["audio_path"]) != reassembled
@@ -420,7 +447,7 @@ def _validate_timing_evidence(
         errors.append({"code": "CAPTION_TIMING_TIMELINE_CUE_SET_MISMATCH"})
     by_id = {row.get("cue_id"): row for row in evidence_cues}
     mapping = {row.get("mapping_id"): row for row in evidence.get("mapping", [])}
-    tolerance = evidence.get("tolerance_us", 0)
+    tolerance = max(int(evidence.get("tolerance_us", 0) or 0), FRAME_TOLERANCE_US)
     if len(by_id) != len(evidence_cues) or set(by_id) != {row.get("cue_id") for row in locked}:
         errors.append({"code": "CAPTION_TIMING_CUE_SET_MISMATCH"})
         return
@@ -430,7 +457,10 @@ def _validate_timing_evidence(
         if not map_row or not _valid_range(receipt.get("source_range_us")) or not _valid_range(receipt.get("target_range_us")) or not _valid_range(map_row.get("source_range_us")) or not _valid_range(map_row.get("target_range_us")):
             errors.append({"code": "CAPTION_TIMING_SOURCE_MISMATCH", "cue_id": cue["cue_id"]})
             continue
-        if receipt["source_range_us"][0] < map_row["source_range_us"][0] or receipt["source_range_us"][1] > map_row["source_range_us"][1]:
+        if (
+            receipt["source_range_us"][0] < map_row["source_range_us"][0] - tolerance
+            or receipt["source_range_us"][1] > map_row["source_range_us"][1] + tolerance
+        ):
             errors.append({"code": "CAPTION_TIMING_SOURCE_MISMATCH", "cue_id": cue["cue_id"]})
             continue
         derived = [map_row["target_range_us"][0] + receipt["source_range_us"][i] - map_row["source_range_us"][0] for i in (0, 1)]
@@ -654,7 +684,11 @@ def validate_audio_caption(
                 })
             if actual["end_us"] <= actual["start_us"]:
                 errors.append({"code": "AUDIO_CAPTION_CUE_REVERSED", "cue_id": expected.get("cue_id")})
-            if any(expected.get(field) != actual.get(field) for field in ("start_us", "end_us", "text")):
+            if (
+                expected.get("text") != actual.get("text")
+                or not times_match(expected.get("start_us"), actual.get("start_us"))
+                or not times_match(expected.get("end_us"), actual.get("end_us"))
+            ):
                 errors.append({"code": "AUDIO_CAPTION_CUE_MISMATCH", "cue_id": expected.get("cue_id")})
             if actual["start_us"] < previous_end_by_layer.get(layer, 0):
                 errors.append({
@@ -662,7 +696,10 @@ def validate_audio_caption(
                     "cue_id": expected.get("cue_id"),
                     "layer": layer,
                 })
-            if actual["end_us"] > audio_lock["measured_duration_us"]:
+            if (
+                actual["end_us"] > audio_lock["measured_duration_us"]
+                and not times_match(actual["end_us"], audio_lock["measured_duration_us"])
+            ):
                 errors.append({"code": "AUDIO_CAPTION_CUE_OUTSIDE_AUDIO", "cue_id": expected.get("cue_id")})
             previous_end_by_layer[layer] = actual["end_us"]
     return result(errors, {

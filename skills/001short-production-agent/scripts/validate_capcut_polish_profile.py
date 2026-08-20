@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from apply_capcut_polish_profile import _content_documents, _material_index, _range
+from apply_capcut_polish_profile import _content_documents, _material_index, _range, select_flash_orders
 
 
 def _refs(index: dict, segment: dict, group: str) -> list[dict]:
@@ -34,6 +34,7 @@ def validate_project(project: Path) -> dict:
                     audio.append((segment, material, segment.get("role") in {"A10", "A11"} or any(
                         token in name for token in ("source_audio", "a10_vocal_stem")
                     )))
+        flashes = set(select_flash_orders(videos))
         for order, (segment, material) in enumerate(videos):
             if material.get("video_algorithm", {}).get("quality_enhance", {}).get("level") != 3:
                 errors.append({"code": "POLISH_AI_HD_MISSING", "segment": segment.get("id")})
@@ -41,8 +42,11 @@ def validate_project(project: Path) -> dict:
             expected_color = 0.42 if order % 2 == 0 else 0.47
             if effects.get("smart_color_adjust") != expected_color or effects.get("sharpen") != 0.5 or effects.get("clear") != 0.5:
                 errors.append({"code": "POLISH_VIDEO_ADJUSTMENT_MISSING", "segment": segment.get("id")})
-            if order < len(videos) - 1 and not any(row.get("name") == "W Flash" for row in _refs(index, segment, "transitions")):
+            transitions = _refs(index, segment, "transitions")
+            if order in flashes and not any(row.get("name") == "W Flash" for row in transitions):
                 errors.append({"code": "POLISH_W_FLASH_MISSING", "segment": segment.get("id")})
+            if order not in flashes and transitions:
+                errors.append({"code": "POLISH_W_FLASH_UNEXPECTED", "segment": segment.get("id")})
         for segment, material, is_source in audio:
             loudness = _refs(index, segment, "loudnesses")
             if not any(row.get("enable") is True and row.get("target_loudness") == -14.0 for row in loudness):
@@ -54,7 +58,7 @@ def validate_project(project: Path) -> dict:
                     errors.append({"code": "POLISH_NARRATION_MUTE_MISSING", "segment": segment.get("id")})
                 if _refs(index, segment, "vocal_separations"):
                     errors.append({"code": "POLISH_CAPCUT_VOCAL_METADATA_FORBIDDEN", "segment": segment.get("id")})
-    return {"status": "PASS" if not errors else "FAIL", "errors": errors, "profile": "001short-capcut-polish-v3"}
+    return {"status": "PASS" if not errors else "FAIL", "errors": errors, "profile": "001short-capcut-polish-v4"}
 
 
 def main() -> int:

@@ -398,7 +398,7 @@
       },
       "new_tools": false,
       "a10_authority": "validated_demucs_source_vocal_stem",
-      "capcut_polish_profile": "001short-capcut-polish-v3",
+      "capcut_polish_profile": "001short-capcut-polish-v4",
       "capcut_polish_validator": "scripts/validate_capcut_polish_profile.py",
       "source_audio_separation": "external_demucs_vocal_stem_when_a10_is_retained",
       "source_audio_during_a9": "mute",

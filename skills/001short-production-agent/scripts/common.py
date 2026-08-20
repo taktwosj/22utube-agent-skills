@@ -180,3 +180,29 @@ def inspect_write_target(
 def meaningful_text_length(text: str) -> int:
     """Canonical STATE budget: ignore whitespace, count all visible punctuation."""
     return len("".join(str(text).split()))
+
+
+# One source frame. Every cross-file time comparison uses this instead of exact
+# equality: the tables carry times as 3-decimal text, the media carries them as
+# frame indices, and the SRT carries them as milliseconds, so the same boundary
+# legitimately differs by a few hundred microseconds depending on who wrote it.
+# 34 ms covers one frame at 30 fps and two at 60 fps, and is far below what a
+# viewer can perceive.
+FRAME_TOLERANCE_US = 34_000
+
+
+def times_match(a: object, b: object, tolerance: int = FRAME_TOLERANCE_US) -> bool:
+    """True when two microsecond values name the same boundary."""
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        return False
+    return abs(int(a) - int(b)) <= tolerance
+
+
+def ranges_match(a: object, b: object, tolerance: int = FRAME_TOLERANCE_US) -> bool:
+    """True when two [start, end] microsecond ranges name the same span."""
+    if not (isinstance(a, (list, tuple)) and isinstance(b, (list, tuple))):
+        return False
+    if len(a) != 2 or len(b) != 2:
+        return False
+    return all(times_match(x, y, tolerance) for x, y in zip(a, b))
+

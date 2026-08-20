@@ -269,7 +269,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         timeline = {"segments": [
             {"segment_id": "V", "role": "VIDEO", "start": 0, "duration": 1_000_000},
             {"segment_id": "T1", "role": "T1", "start": 0, "duration": 1_000_000,
-             "text": "12345678901", "content_type": "TITLE"},
+             "text": "1234567890123", "content_type": "TITLE"},
             {"segment_id": "T2", "role": "T2", "start": 0, "duration": 1_000_000,
              "text": "subtitle", "content_type": "TITLE"},
             {"segment_id": "FX", "role": "SCREEN_EFFECT", "start": 0, "duration": 1_000_000},

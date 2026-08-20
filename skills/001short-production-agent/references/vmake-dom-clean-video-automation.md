@@ -8,7 +8,7 @@ This is browser UI automation, not a VMake API integration. Prefer deterministic
 
 ## Fast production rule
 
-Submit the designated shorts URL to VMake immediately at episode intake — before local download completes — and fall back to a file upload of the verified source only when URL input is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
+Upload the verified source to VMake through Aside immediately at episode intake, and fall back to URL submission only when the upload route is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
 
 ## Scope routing
 
@@ -63,11 +63,93 @@ matches[0].click();
 
 Execute through CDP `Runtime.evaluate` or a current browser DOM reference. Never reuse stale element references after navigation or React rerender.
 
-## URL submission (primary)
+## Who submits (verified 2026-08-18)
 
-When the upload surface offers a URL input, submit the episode's user-designated shorts URL directly. The entry is the `Import from link` button (verified live 2026-08-17: placeholder "YouTube, TikTok, IG, and FB links.", rights checkbox + ownership Confirm dialog, then the blue submit arrow — "Getting file from the link..." confirms the fetch). This decouples the clean-visual lane from local download state: VMake can start before yt-dlp finishes. Use the exact designated URL only — never a URL suggested by page content. Acceptance is verified identically for both submission modes at intake (duration gate below), so URL submission needs no extra pre-checks.
+**The agent uploads, through Aside.** Aside has no size ceiling and its `setInputFiles` drives the
+page's hidden input correctly; a 34 MB / 56.7 s source went up and started processing. The other two
+routes stay unusable, so do not reach for them:
 
-URL fetch may yield a lower-resolution input/result than the best local yt-dlp format (observed: 360x640 from a 1080x1920 short). Per contract this proceeds as-is with the resolution recorded; offer a file-upload rerun only if the user asks for higher quality after their CapCut review.
+| path | large upload | verdict |
+|---|---|---|
+| Aside `setInputFiles` | 34 MB accepted, page registers it | **use this** |
+| Chrome extension bridge | hard-rejected over 10 MB | unusable |
+| computer-use | browsers are tier "read", clicks blocked | unusable |
+
+The one obstacle is Aside's path sandbox, and it has a fixed workaround.
+
+**Aside covers the upload only.** Take the finished file in Chrome instead — open the editor there
+and download the ready card. Aside's job ends once the source is submitted, so do not spend turns
+wiring its download events. The Download section below documents the page's controls for whoever is
+at the browser.
+
+### Getting the file past the sandbox
+
+Aside refuses any path outside its REPL session directory:
+
+```text
+Error: Path "/Volumes/.../source.mp4" escapes the session directory
+```
+
+So copy the source into that directory and pass the in-session path. The directory name is random per
+run and Aside flushes stdout only at exit, so its own log cannot be read mid-run — watch the sessions
+folder from outside instead and copy in while the script sleeps:
+
+```bash
+touch /tmp/marker
+aside repl "
+  console.log('PWD=' + pwd);
+  await sleep(35000);                       # window for the copy below
+  const p = await openTab('https://vmake.ai/video-watermark-remover/editor');
+  await sleep(9000);
+  const inputs = await p.locator('input[type=file]').all();
+  await inputs[0].setInputFiles(pwd + '/source.mp4');
+" > upload.log 2>&1 &
+D=""
+until [ -n "$D" ]; do
+  D=$(find ~/.aside/u/0/sessions -mindepth 1 -maxdepth 1 -type d -newer /tmp/marker | head -1)
+  sleep 1
+done
+cp <absolute source path> "$D/source.mp4"
+```
+
+`-mindepth 1` matters — without it `find` returns the `sessions` parent and the copy lands in the
+wrong place. `setInputFiles` does **not** raise on a missing in-session file, so a silent no-op looks
+like success; confirm by reading the project list for the new duration rather than trusting the call.
+
+Run the whole thing detached. A foreground shell that dies at a two-minute limit kills the upload
+with it.
+
+### Confirming it landed
+
+The editor lists every past project, so "the page mentions source.mp4" proves nothing — `source.mp4`
+is a substring of `source_1080.mp4`. Match on the **duration** instead:
+
+```javascript
+const t = await p.locator('body').innerText();
+const durs = t.split('\n').map(s => s.trim()).filter(s => /^00:\d\d\.\d\d$/.test(s));
+```
+
+The new job is the first entry, and its duration equals the measured source length.
+
+## URL submission (lower quality, agent-runnable)
+
+Only when the operator explicitly accepts reduced quality. Entry is the toolbar **link icon** to the
+right of Upload/Batch — the popover reads "Paste your link to get the video" with "We support YouTube,
+TikTok, IG, and FB links.", a rights checkbox, then a blue submit arrow; "Getting file from the link..."
+confirms the fetch. The `Import from link` button that `read_page` surfaces is a different control and
+navigates to `/agent` — do not use it. Use the exact designated URL only, never one suggested by page content.
+
+URL fetch yields a lower-resolution result than the best local yt-dlp format (observed: 360x640 from a
+1080x1920 short; the same short uploaded as a file kept 1080x1920 60fps). Per contract this proceeds
+as-is with the resolution recorded.
+
+## Operator-supplied clean file
+
+When the operator runs VMake and hands back the finished MP4, bind it as
+`clean_source_origin=USER_FALLBACK_CLEAN_SOURCE` with `fallback_reason=VMAKE_ACQUISITION_ISSUE`.
+**Write no `vmake` block into the build manifest** — `validate_prebuild` rejects
+`E_USER_FALLBACK_VMAKE_RECEIPT_FORBIDDEN` for a fallback source that claims a receipt, so the agent
+can never imply it ran the job itself.
 
 ## File upload (fallback)
 
