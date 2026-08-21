@@ -5,7 +5,6 @@
   "active_shorts_script_authority": "skills/001short-production-agent/SKILL.md",
   "onedrive_role": "production-data-only",
   "skills": [
-
     {
       "name": "001short-production-agent",
       "category": "22utube",
@@ -49,14 +48,10 @@
     {
       "name": "1caveman",
       "category": "workflow",
-      "targets": ["codex", "claude", "hermes"],
-      "enabled": true
-    },
-    {
-      "name": "naver-blog-posting",
-      "category": "naver-blog",
       "targets": [
-        "codex"
+        "codex",
+        "claude",
+        "hermes"
       ],
       "enabled": true
     }

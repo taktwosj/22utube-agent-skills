@@ -1,7 +1,0 @@
-interface:
-  display_name: "Naver Blog Posting"
-  short_description: "Naver blog draft and publish flow"
-  default_prompt: "Use $naver-blog-posting for: 글작성하자\n메인키워드:\n어디블로그:\n대략적인 내용요약:"
-
-policy:
-  allow_implicit_invocation: true
