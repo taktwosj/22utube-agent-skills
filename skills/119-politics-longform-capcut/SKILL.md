@@ -27,11 +27,11 @@ description: Use only when a political-longform request explicitly contains CapC
 
 다음 설치 경로의 파일은 직접 create·edit·copy·delete·relink하지 않는다.
 
-- `C:\Users\arajun\.codex\skills\119-politics-longform-capcut`
-- `C:\Users\arajun\.claude\skills\119-politics-longform-capcut`
-- `C:\Users\arajun\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut`
+- `%USERPROFILE%\.codex\skills\119-politics-longform-capcut`
+- `%USERPROFILE%\.claude\skills\119-politics-longform-capcut`
+- `%USERPROFILE%\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut`
 
-119 스킬 변경은 Git 정본 `C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다. 변경을 commit한 뒤 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
+119 스킬 변경은 Git 정본 `%USERPROFILE%\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다. 변경을 commit한 뒤 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
 
 ## 생산 중 계약 충돌
 

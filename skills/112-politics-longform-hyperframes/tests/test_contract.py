@@ -27,8 +27,8 @@ RULE_PHRASES = (
 )
 
 EXPECTED_KEEP_UNCHANGED = (
-    r"C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut",
-    r"C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform",
+    r"%USERPROFILE%\agent-skills\skills\119-politics-longform-capcut",
+    r"%USERPROFILE%\worktrees\agent-skills-000-politics-new\skills\000-politics-longform",
 )
 EXPECTED_TEMPLATE_DEFAULT = r"${PL_HYPERFRAMES_REPO}\template"
 
@@ -105,8 +105,8 @@ def check_keep_unchanged_paths(text: str, doc_name: str) -> list[str]:
         if expected not in values:
             violations.append(f"{doc_name}: KEEP_UNCHANGED 경로 소실 {expected}")
     for value in values:
-        if not re.match(r"^[A-Za-z]:[\\/]", value):
-            violations.append(f"{doc_name}: KEEP_UNCHANGED 상대경로 {value}")
+        if not re.match(r"^(?:[A-Za-z]:|%USERPROFILE%)[\\/]", value):
+            violations.append(f"{doc_name}: KEEP_UNCHANGED 루트 미고정 경로 {value}")
     return violations
 
 
@@ -176,7 +176,7 @@ DOC_REGRESSIONS = (
         "REG-7 template_default를 OneDrive 사본으로 변경",
         "SKILL.md",
         "template_default=" + EXPECTED_TEMPLATE_DEFAULT,
-        r"template_default=C:\Users\arajun\OneDrive\22utube\22factory_20260628\template",
+        r"template_default=%USERPROFILE%\OneDrive\22utube\22factory_20260628\template",
     ),
     (
         "REG-9 기존 lane 수정 금지 선언 소멸",

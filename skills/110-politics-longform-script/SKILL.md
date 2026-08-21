@@ -12,8 +12,8 @@ description: "Use when the user says 정치롱폼, 정치미드폼, 민주진영
 
 ```text
 CapCut lane(119) = OUT_OF_SCOPE
-KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut
-KEEP_UNCHANGED = C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
+KEEP_UNCHANGED = %USERPROFILE%\agent-skills\skills\119-politics-longform-capcut
+KEEP_UNCHANGED = %USERPROFILE%\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
 MODIFY_119_OR_ITS_WORKTREE = FORBIDDEN
 MODIFY_000_OR_ITS_WORKTREE = FORBIDDEN
 NEXT_STAGE = 111-politics-longform-voice-srt

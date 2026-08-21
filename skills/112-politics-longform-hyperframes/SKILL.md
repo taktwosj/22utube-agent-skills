@@ -11,8 +11,8 @@ HyperFrames 정치롱폼만 소유한다. 아래 선언이 단일 lane 경계다
 
 ```text
 CapCut lane(119)=OUT_OF_SCOPE
-KEEP_UNCHANGED=C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut
-KEEP_UNCHANGED=C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
+KEEP_UNCHANGED=%USERPROFILE%\agent-skills\skills\119-politics-longform-capcut
+KEEP_UNCHANGED=%USERPROFILE%\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
 HYPERFRAMES_FAILURE_AUTO_RUN_119=FORBIDDEN
 MODIFY_119_OR_ITS_WORKTREE=FORBIDDEN
 MODIFY_000_OR_ITS_WORKTREE=FORBIDDEN
@@ -41,8 +41,8 @@ syntax와 CLI 계약을 위해 읽는다. 없으면 설치를 추정하지 말�
 ## Source Of Truth
 
 ```text
-skill_git_authority=C:\Users\arajun\agent-skills\skills\112-politics-longform-hyperframes
-PL_HYPERFRAMES_REPO=C:\Users\arajun\repos\politics-longform-hyperframes
+skill_git_authority=%USERPROFILE%\agent-skills\skills\112-politics-longform-hyperframes
+PL_HYPERFRAMES_REPO=%USERPROFILE%\repos\politics-longform-hyperframes
 template_default=${PL_HYPERFRAMES_REPO}\template
 episode_project={episode}\60_hyperframes\project
 default_visual_profile=assets/political-documentary-defaults.json

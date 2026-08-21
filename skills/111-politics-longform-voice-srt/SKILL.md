@@ -20,8 +20,8 @@ OUT = 나레이션 WAV + 오디오 시간축 정본 + 최종 SRT 초안 + 자막
 
 ```text
 CapCut lane(119) = OUT_OF_SCOPE
-KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut
-KEEP_UNCHANGED = C:\Users\arajun\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
+KEEP_UNCHANGED = %USERPROFILE%\agent-skills\skills\119-politics-longform-capcut
+KEEP_UNCHANGED = %USERPROFILE%\worktrees\agent-skills-000-politics-new\skills\000-politics-longform
 HYPERFRAMES_FAILURE_AUTO_RUN_119 = FORBIDDEN
 MODIFY_119_OR_ITS_WORKTREE = FORBIDDEN
 MODIFY_000_OR_ITS_WORKTREE = FORBIDDEN

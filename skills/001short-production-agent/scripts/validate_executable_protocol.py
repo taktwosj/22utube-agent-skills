@@ -33,13 +33,13 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
 ]
 A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED", "SOURCE_ORDER_CLEAN_AUDIO"}
 EXPECTED_SOURCE_AUTHORITY_LINE = (
-    r"Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`"
+    r"Source authority: `%USERPROFILE%\agent-skills\skills\001short-production-agent`"
 )
-EXPECTED_SOURCE_REPOSITORY_LINE = r"Worktree source repository: `C:\Users\arajun\agent-skills`"
+EXPECTED_SOURCE_REPOSITORY_LINE = r"Worktree source repository: `%USERPROFILE%\agent-skills`"
 EXPECTED_RUNTIME_ENTRYPOINT_LINES = {
-    "Codex": r"Codex: C:\Users\arajun\.codex\skills\001short-production-agent",
-    "Claude": r"Claude: C:\Users\arajun\.claude\skills\001short-production-agent",
-    "Hermes": r"Hermes: C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent",
+    "Codex": r"Codex: %USERPROFILE%\.codex\skills\001short-production-agent",
+    "Claude": r"Claude: %USERPROFILE%\.claude\skills\001short-production-agent",
+    "Hermes": r"Hermes: %USERPROFILE%\AppData\Local\hermes\skills\22utube\001short-production-agent",
 }
 EXPECTED_ESCALATION_OPTION_LINES = [
     "1. 별도 승인 — 이번 작업만",
@@ -47,7 +47,7 @@ EXPECTED_ESCALATION_OPTION_LINES = [
     "3. 스킬 수정하기 — 스킬 수정 폴더에서",
 ]
 EXPECTED_RELEASE_RECIPE_LINES = [
-    r"1. Isolated worktree derived from `C:\Users\arajun\agent-skills`",
+    r"1. Isolated worktree derived from `%USERPROFILE%\agent-skills`",
     "2. Tests",
     "3. Independent review",
     "4. Approved revision on GitHub `main`",

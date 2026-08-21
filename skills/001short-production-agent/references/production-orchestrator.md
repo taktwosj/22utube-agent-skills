@@ -10,21 +10,21 @@ The same task-owner may submit the VMake job after source identity verification 
 
 ## Source authority and divergence gate
 
-Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`
+Source authority: `%USERPROFILE%\agent-skills\skills\001short-production-agent`
 
-Worktree source repository: `C:\Users\arajun\agent-skills`
+Worktree source repository: `%USERPROFILE%\agent-skills`
 
 Modify the skill only in an isolated Git worktree derived from that repository. The installed entrypoints and active runtime releases are immutable, read-only entrypoints:
 
 ```text
-Codex: C:\Users\arajun\.codex\skills\001short-production-agent
-Claude: C:\Users\arajun\.claude\skills\001short-production-agent
-Hermes: C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent
+Codex: %USERPROFILE%\.codex\skills\001short-production-agent
+Claude: %USERPROFILE%\.claude\skills\001short-production-agent
+Hermes: %USERPROFILE%\AppData\Local\hermes\skills\22utube\001short-production-agent
 ```
 
 Never edit those entrypoints or active runtime release contents. Release only in this order after the required user approvals:
 
-1. Isolated worktree derived from `C:\Users\arajun\agent-skills`
+1. Isolated worktree derived from `%USERPROFILE%\agent-skills`
 2. Tests
 3. Independent review
 4. Approved revision on GitHub `main`

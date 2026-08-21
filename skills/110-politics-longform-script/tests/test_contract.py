@@ -30,8 +30,8 @@ POLITICAL_NEWS_FRAMEWORK = (
 REQUIRED_ANCHORS = {
     "SKILL.md": (
         r"(?m)^CapCut lane\(119\) = OUT_OF_SCOPE\s*$",
-        r"(?m)^KEEP_UNCHANGED = [A-Za-z]:[\\/]\S*119-politics-longform-capcut\s*$",
-        r"(?m)^KEEP_UNCHANGED = [A-Za-z]:[\\/]\S*000-politics-longform\s*$",
+        r"(?m)^KEEP_UNCHANGED = (?:[A-Za-z]:|%USERPROFILE%)[\\/]\S*119-politics-longform-capcut\s*$",
+        r"(?m)^KEEP_UNCHANGED = (?:[A-Za-z]:|%USERPROFILE%)[\\/]\S*000-politics-longform\s*$",
         r"(?m)^MODIFY_119_OR_ITS_WORKTREE = FORBIDDEN\s*$",
         r"(?m)^MODIFY_000_OR_ITS_WORKTREE = FORBIDDEN\s*$",
         r"(?m)^NEXT_STAGE = 111-politics-longform-voice-srt\s*$",
