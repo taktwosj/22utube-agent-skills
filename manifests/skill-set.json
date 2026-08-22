@@ -5,7 +5,12 @@
   "active_shorts_script_authority": "skills/001short-production-agent/SKILL.md",
   "onedrive_role": "production-data-only",
   "skills": [
-
+    {
+      "name": "000handoff",
+      "category": "workflow",
+      "targets": ["codex"],
+      "enabled": true
+    },
     {
       "name": "001short-production-agent",
       "category": "22utube",
