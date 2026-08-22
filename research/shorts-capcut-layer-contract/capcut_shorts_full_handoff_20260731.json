@@ -1,0 +1,436 @@
+{
+  "schema_version": "shorts-capcut-full-handoff-v1",
+  "generated_at": "2026-07-31T01:01:01.6428675+09:00",
+  "language": "ko-KR",
+  "purpose": "새 채팅에서도 30개 쇼츠 분석 이후의 Gemini 관찰 설계, 우라까이, CapCut 레이어 계약, 실패와 수정 이력을 그대로 이어가기 위한 기계 판독형 인계",
+  "overall_status": "CANDIDATE_WORKER_PASS_INDEPENDENT_VERIFICATION_PENDING",
+  "promotion_allowed": false,
+  "canonical_skill_modified": false,
+  "runtime_skill_modified": false,
+  "locked_root_zip_modified": false,
+  "live_capcut_draft_modified": false,
+  "actual_short_rendered_in_this_contract_task": false,
+  "target_workflow": {
+    "goal": "쇼츠 주소 입력부터 분석, 우라까이, CapCut 프로젝트 조립까지 최대 20분 안에 한 편을 안전하게 제작",
+    "ordered_stages": [
+      "SOURCE_IDENTITY_LOCK",
+      "DOWNLOAD_AND_SOURCE_MATCH_CHECK",
+      "VMAKE_CLEAN",
+      "MULTIMODAL_ORIGINAL_ANALYSIS",
+      "URAKKAI_STRUCTURE_REDESIGN",
+      "EXECUTABLE_PRODUCTION_PLAN",
+      "CAPCUT_BUILD",
+      "POSTBUILD_READBACK",
+      "USER_VISUAL_REVIEW",
+      "RENDER_AND_EXPORT"
+    ],
+    "parallelizable": [
+      "download metadata and source probe",
+      "OCR, STT, frame observation",
+      "story-pattern assessment and production-type assessment",
+      "read-only evidence and validator preparation"
+    ],
+    "never_parallelize": [
+      "same CapCut draft writes",
+      "same GUI ownership",
+      "same canonical file writes",
+      "promotion and independent verification"
+    ],
+    "performance_status": "NOT_RUN_REAL_20_MINUTE_PILOT"
+  },
+  "analysis_contract": {
+    "gemini_role": "RAW_INTERVAL_OBSERVATION_ONLY",
+    "codex_role": "SOURCE_MP4_STT_OCR_FRAME_VERIFICATION_AND_FINAL_PRODUCTION_AUTHORITY",
+    "four_way_observation_split": [
+      "visible_fact_ko",
+      "speaker_quote_candidate_ko",
+      "onscreen_text_ko",
+      "tts_interpretation_candidate_ko"
+    ],
+    "story_axis": [
+      "S1_reversal_preview",
+      "S2_ranking_reorder",
+      "S3_tikitaka_variety",
+      "S4_observation_situation",
+      "S5_emotion_payoff",
+      "S6_info_explainer",
+      "S7_card_story",
+      "unknown"
+    ],
+    "production_axis": [
+      "full_tts_bgm",
+      "bgm_caption_only",
+      "narration_plus_speaker",
+      "original_audio_caption",
+      "tts_intro_original_body",
+      "instagram_card_tts",
+      "unknown"
+    ],
+    "urakkai_rule": "강한 장면을 복사해 앞에 붙이는 것만으로는 부족하며, 훅 이후의 장면 순서, 정보 공개 순서, TTS, 원본 대사, 자막 역할을 실제로 재설계해야 함",
+    "gemini_prompt_status": "LIGHTWEIGHT_INTERVAL_JSON_DESIGN_ESTABLISHED_BUT_LARGE_BATCH_API_VALUE_NOT_YET_FINALIZED"
+  },
+  "orchestration_contract": {
+    "orchestrator": "main Codex acting as Hermes",
+    "worker": "fresh CLI Codex with full 1caveman",
+    "worker_scope": "evidence, isolated candidate edit, tests only",
+    "canonical_write_owner": "orchestrator only after independent verification",
+    "terminated_session_reuse": false,
+    "fresh_workspace_required": true,
+    "read_write_enforcement": "fresh cwd, copied read set, OS read-only flags on non-write files, prompt write allowlist, post-run diff and SHA verification",
+    "same_root_cause_stop_count": 3,
+    "gui_owner_count": 1,
+    "report_interval_rule": "meaningful change immediately; long work no more than about one minute without concise status for this user",
+    "promotion_rule": "worker PASS is never sufficient"
+  },
+  "root_authority": {
+    "authority_type": "LOCKED_WINDOWS_ROOT_ZIP",
+    "zip_path": "C:/Users/arajun/OneDrive/22utube/22factory_20260628/00_asset_tools/templates/capcut/shrt_white_base_v1/shrt_white_base_v1_CAPCUT_20260709_openfix.zip",
+    "zip_sha256": "4AF774A3FF8B539D1CE3121998F444CF9063A0D5D6F1DDB9A2A75ACBCF84BD4F",
+    "builder_path": "C:/Users/arajun/agent-skills/skills/001short-production-agent/scripts/build_episode_capcut.py",
+    "builder_sha256": "1247AA32B6133F6CB422AECFE656BBB1374ACEF66A0302151A5D8B7825D9FB15",
+    "local_draft_policy": "CROSS_CHECK_ONLY",
+    "gui_evidence_status": "PASS_USER_SCREENSHOTS_LOCKED",
+    "root_timeline_id": "ECBA28FA-2BAA-42af-9353-042C47D9715B",
+    "root_duration_us_observed": 48133333
+  },
+  "capcut_two_axis_contract": {
+    "vertical_axis": {
+      "physical_track_array": [
+        "VIDEO",
+        "SCREEN_EFFECT",
+        "SCREEN_WHITE",
+        "STATE",
+        "A10_TEXT",
+        "A9_TEXT",
+        "T2",
+        "T1",
+        "A9",
+        "A10",
+        "A11",
+        "A12"
+      ],
+      "visual_timeline_rows_bottom_to_top": [
+        "VIDEO",
+        "SCREEN_EFFECT",
+        "SCREEN_WHITE",
+        "STATE",
+        "A10_TEXT",
+        "A9_TEXT",
+        "T2",
+        "T1"
+      ],
+      "screen_compositor_layers_bottom_to_top": [
+        "VIDEO",
+        "SCREEN_WHITE",
+        "STATE",
+        "A10_TEXT",
+        "A9_TEXT",
+        "T2",
+        "T1"
+      ],
+      "audio_lanes": [
+        "A9",
+        "A10",
+        "A11",
+        "A12"
+      ],
+      "important_distinction": "physical track array order, visible timeline row order, screen compositor order, and audio lanes are different facts"
+    },
+    "time_axis": {
+      "time_unit": "microseconds",
+      "range_semantics": "HALF_OPEN_START_INCLUSIVE_END_EXCLUSIVE",
+      "absolute_roles": [
+        "BASE_VISUAL",
+        "T1",
+        "T2",
+        "ROOT_FIXED_FRAME_BACKGROUND"
+      ],
+      "absolute_range": "0_TO_TOTAL_DURATION_US",
+      "max_gap_us": 0,
+      "base_visual_overlap_allowed": false,
+      "timed_roles": [
+        "A9",
+        "A9_TEXT",
+        "A10",
+        "A10_TEXT",
+        "STATE",
+        "A11",
+        "SCREEN_EFFECT"
+      ]
+    },
+    "root_fixed_mapping": {
+      "logical_role": "ROOT_FIXED_FRAME_BACKGROUND",
+      "physical_role": "SCREEN_WHITE",
+      "material": "transparent_center_white_1080x1920.png",
+      "required_range": "0_TO_TOTAL_DURATION_US"
+    },
+    "screen_effect": {
+      "physical_role": "SCREEN_EFFECT",
+      "meaning": "timed mirroring effect",
+      "absolute": false
+    },
+    "optional_order_rule": "A9_TEXT may be absent; if present its locked relative position must be preserved"
+  },
+  "canonical_plan_shape": {
+    "allowed": "timeline[].placements",
+    "global_placements_forbidden": true,
+    "v1_compatibility_required": true,
+    "v2_default_cli_rule": "physical SCREEN_WHITE readback and actual visual/compositor order evidence missing means non-PASS",
+    "prebuild_rule": "a separate explicit declaration-only gate may return DECLARED_ONLY with production_ready=false",
+    "production_ready_rule": "only postbuild actual draft readback can allow PASS"
+  },
+  "chronology": [
+    {
+      "seq": 1,
+      "phase": "30_SHORTS_ANALYSIS",
+      "result": "PARTIAL_SUCCESS",
+      "event": "30개 쇼츠를 소재가 아니라 원본 전달 구조와 서사 패턴으로 다시 분류",
+      "success_reason": "스토리 S1-S7과 제작 A-F를 분리하고 BGM, TTS, 원본 대사, 카드형을 독립 축으로 정의",
+      "remaining": "30개 전체의 최종 수치표와 실제 20분 제작 검증은 아직 정본 승격되지 않음",
+      "next_alternative": "대표 유형 3개로 실제 CapCut 제작 파일럿 후 분류값 보정"
+    },
+    {
+      "seq": 2,
+      "phase": "GEMINI_PROMPT_DESIGN",
+      "result": "DESIGN_SUCCESS",
+      "event": "초단위 강제 대신 변화 구간별 시각, 음성, 화면글자, 해석 4분리 경량 JSON 설계",
+      "success_reason": "대량 처리 토큰을 줄이면서 Codex 최종 검증에 필요한 원시 관찰값 유지",
+      "failure_reason": "초기 프롬프트는 후보 배열과 정책 필드가 중복되어 과도하게 큼",
+      "next_alternative": "2개 영상씩 기준값과 비교하는 프롬프트 루프"
+    },
+    {
+      "seq": 3,
+      "phase": "CAPCUT_CONTRACT_INITIAL_CANDIDATE",
+      "result": "FAIL_PARTIAL_VALIDATOR",
+      "event": "레이어 coverage와 stack 계약 후보 5개 파일 작성",
+      "failure_reason": "layer stack gate, ROOT_FIXED 전체시간 검증, BASE_VISUAL overlap 차단이 실제 validator에 완전 구현되지 않음",
+      "correction": "후보 보존, 승격 금지, 스키마와 semantic validator와 negative test 일치 요구",
+      "next_alternative": "실제 root fixture 근거를 먼저 잠금"
+    },
+    {
+      "seq": 4,
+      "phase": "ROOT_AUTHORITY_AUDIT",
+      "result": "SUCCESS",
+      "event": "로컬 shrt white(2)가 아니라 SHA 잠긴 Windows root ZIP을 정본으로 확정",
+      "success_reason": "복원 로컬 draft는 변경 가능한 파생본이므로 CROSS_CHECK_ONLY로 강등",
+      "next_alternative": "ZIP 로컬 deterministic parse와 GUI 증거 결합"
+    },
+    {
+      "seq": 5,
+      "phase": "PHYSICAL_VS_VISUAL_ORDER",
+      "result": "FAIL_THEN_CORRECTED",
+      "event": "12개 physical track array를 그대로 화면 z-order로 확정하려던 위험 발견",
+      "failure_reason": "오디오 lane, 저장 배열, 타임라인 행, 화면 합성 순서를 혼동",
+      "correction": "4개 축을 분리하고 JSON으로 증명되지 않는 시각 순서는 WAIT_GUI_OR_RENDER로 보류",
+      "next_alternative": "사용자 CapCut 전체창 스크린샷 요청"
+    },
+    {
+      "seq": 6,
+      "phase": "GUI_EVIDENCE",
+      "result": "SUCCESS",
+      "event": "사용자 제공 스크린샷 3장으로 visible row order와 ROOT_FIXED 물리 역할 확인",
+      "success_reason": "T1, T2, 자막, 상태, SCREEN_WHITE, SCREEN_EFFECT, VIDEO의 실제 타임라인 배치를 직접 관찰",
+      "correction": "ROOT_FIXED_FRAME_BACKGROUND는 SCREEN_WHITE only, SCREEN_EFFECT는 timed effect로 잠금",
+      "next_alternative": "잠긴 GUI JSON을 계약 후보 입력으로 사용"
+    },
+    {
+      "seq": 7,
+      "phase": "LOCAL_PARSER",
+      "result": "FAIL_THEN_SUCCESS",
+      "event": "root ZIP deterministic parser 실행",
+      "failure_reason": "Windows 실행정책, PowerShell 변수-colon 파싱, optional JSON field 직접 접근",
+      "correction": "ExecutionPolicy Bypass, 변수 중괄호, presence-check로 수정 후 PASS",
+      "next_alternative": "parser output SHA 잠금"
+    },
+    {
+      "seq": 8,
+      "phase": "GUI_AUTOMATION",
+      "result": "FAIL_WITH_SAFE_FALLBACK",
+      "event": "Computer Use가 CapCut 창 캡처 실패",
+      "failure_reason": "SetIsBorderRequired failed가 2회 반복",
+      "correction": "Computer Use 중단, 사용자 스크린샷을 보존 증거로 사용",
+      "next_alternative": "GUI 자동화 재시도 없이 user evidence 유지"
+    },
+    {
+      "seq": 9,
+      "phase": "CLI_TRANSPORT_PREFLIGHT",
+      "result": "FAIL_THEN_SUCCESS",
+      "event": "CLI Codex 네트워크 사전검사",
+      "failure_reason": "sandbox 내부 WebSocket os error 10013와 HTTP fallback disconnect",
+      "correction": "새 세션, 승인된 외부 네트워크 실행, 성공 이력 있는 runner 사용",
+      "next_alternative": "동일 transport 실패 3회면 중단 보고"
+    },
+    {
+      "seq": 10,
+      "phase": "V3_CANDIDATE_MODIFIER_B",
+      "result": "WORKER_PASS_PARENT_TEST_PASS",
+      "event": "4개 계약 파일 수정과 37개 unittest 통과",
+      "success_reason": "fixed jsonschema 4.25.1 runtime, schema-first CLI, gap/overlap, full-duration, locked array tests 통과",
+      "duration_sec": 472.53,
+      "token_usage": {
+        "input_tokens": 826538,
+        "cached_input_tokens": 772352,
+        "output_tokens": 19766,
+        "reasoning_output_tokens": 10178
+      },
+      "warning": "worker PASS는 독립 검증 전 승격 근거가 아님",
+      "next_alternative": "fresh read-only verifier"
+    },
+    {
+      "seq": 11,
+      "phase": "V3_INDEPENDENT_VERIFIER",
+      "result": "FAIL_FALSE_PASS_FOUND",
+      "event": "37개 기존 테스트는 PASS했으나 미검사 거짓 PASS 3건 발견",
+      "failure_reason": [
+        "root schema가 unknown global_placements를 허용",
+        "_root_layer_record가 ROOT_FIXED_FRAME_BACKGROUND alias와 bare record를 허용",
+        "v2 CLI가 SCREEN_WHITE readback과 실제 order check NOT RUN 상태에서 PASS 가능"
+      ],
+      "test_result": "37_PASS",
+      "false_pass_risk": "HIGH",
+      "token_usage": {
+        "input_tokens": 575968,
+        "cached_input_tokens": 511744,
+        "output_tokens": 8075,
+        "reasoning_output_tokens": 4593
+      },
+      "correction": "승격 금지, 세 원인만 새 격리 작업자에서 수정",
+      "next_alternative": "global field explicit forbid, SCREEN_WHITE-only readback, default v2 fail-closed"
+    },
+    {
+      "seq": 12,
+      "phase": "PINPOINT_C_LAUNCH",
+      "result": "FAIL_NO_CANDIDATE_CHANGE",
+      "event": "Start-Process 기반 숨김 worker 호출",
+      "failure_reason": [
+        "Windows Path/PATH duplicate environment error",
+        "PowerShell ErrorActionPreference=Stop이 native stderr warning을 terminating error로 취급",
+        "sandbox network os error 10013"
+      ],
+      "correction": "후보 변경 0건 확인 후 세션 종료, 재사용 금지",
+      "next_alternative": "known-good runner and approved network"
+    },
+    {
+      "seq": 13,
+      "phase": "PINPOINT_D_POLICY_TEST",
+      "result": "FAIL_READ_ONLY",
+      "event": "--ignore-user-config로 토큰 절약을 시도한 worker",
+      "failure_reason": "기본 Codex 실행정책까지 제거되어 workspace-write가 사실상 read-only로 동작하고 apply_patch와 hash 명령이 차단",
+      "changed_files": [],
+      "test_result": "NOT_RUN",
+      "token_usage": {
+        "input_tokens": 599934,
+        "cached_input_tokens": 509440,
+        "output_tokens": 5906,
+        "reasoning_output_tokens": 2798
+      },
+      "correction": "ignore-user-config 금지, 성공 이력 runner 복귀",
+      "next_alternative": "full read dependencies plus four OS-writable files only"
+    },
+    {
+      "seq": 14,
+      "phase": "PINPOINT_E_MODIFIER",
+      "result": "WORKER_PASS_PENDING_INDEPENDENT_VERIFIER",
+      "event": "성공 이력 runner, full 1caveman, 전체 read dependency, 4개 OS-writable file로 새 worker 실행",
+      "workspace": "_isolated_workers/layer-contract-v3-pinpoint-e-20260731T010000000",
+      "write_set": [
+        "protocol.json",
+        "schemas/executable_production_plan.schema.json",
+        "scripts/validate_executable_protocol.py",
+        "tests/test_executable_protocol.py"
+      ],
+      "changed_files": [
+        "protocol.json",
+        "schemas/executable_production_plan.schema.json",
+        "scripts/validate_executable_protocol.py",
+        "tests/test_executable_protocol.py"
+      ],
+      "test_result": "41_PASS_IN_6_738_SEC",
+      "elapsed_sec": 261.834,
+      "token_usage": {
+        "input_tokens": 835777,
+        "cached_input_tokens": 768768,
+        "output_tokens": 10031,
+        "reasoning_output_tokens": 4543
+      },
+      "promotion_allowed": false,
+      "next_alternative": "fresh read-only verifier에서 거짓 PASS 3건과 전체 회귀를 독립 재검증"
+    }
+  ],
+  "candidate_artifacts": {
+    "last_worker_pass_candidate": {
+      "workspace": "_isolated_workers/layer-contract-v3-pinpoint-b-20260731T002258743",
+      "status": "REJECTED_BY_INDEPENDENT_VERIFIER",
+      "promotion_allowed": false,
+      "sha256": {
+        "protocol.json": "3DEEB17496E0D3A616D9A15E8EAF23290D2363072DA990C1B6BBC5ECB0778272",
+        "schemas/executable_production_plan.schema.json": "A98D81C5D9C21459B73DB11BD1A047AFC9E4BDCBCA334F368328993D59DDD5B5",
+        "scripts/validate_executable_protocol.py": "8EC46027FCD7656E5A9F48B9DED6D50BB7E212DD41248BC220694D83C03E346D",
+        "tests/test_executable_protocol.py": "7B677B582FB3EAA4A4E76F6D25B1046B26C0F8B42B41C40CFCDAF5BEE4F136A4",
+        "tests/requirements-test.txt": "44FF0DC2F1E40311B8239E83146749AB9D9CEE2A650E699F5464755D552EE20D"
+      }
+    },
+    "locked_evidence": {
+      "_orchestration/locked_root_physical_logical_evidence.json": "A59BFA004E4B995F4DD0721910F1218B4E0EB486C5C0D24CD4E15AFF72246230",
+      "_orchestration/root_gui_visual_order_evidence.json": "B8D8D89B1056C5CF96FB67657CFC5B773E5C77232F1ED4ED1262A434BC132D8B"
+    },
+    "current_worker_candidate": {
+      "workspace": "_isolated_workers/layer-contract-v3-pinpoint-e-20260731T010000000",
+      "status": "WORKER_PASS_INDEPENDENT_VERIFICATION_PENDING",
+      "promotion_allowed": false,
+      "sha256": {
+        "protocol.json": "6F8534A593B064D85037B744D13B998FC24EF0A6FA01BB7A90C41EFE90A52407",
+        "schemas/executable_production_plan.schema.json": "42BF87911573F207EE17FDE2CF54992D081C392B2FC2309B4FFE5C3788A9CD69",
+        "scripts/validate_executable_protocol.py": "97ACC22480E5957F9B573FA92A55414BB497DA3609D046AE7D36E31971E01FEF",
+        "tests/test_executable_protocol.py": "AE57B3AB9C211E0DF4A7B6D83DA56F04F17103BA38F861E5C472A3F3F8AAC1F3",
+        "tests/requirements-test.txt": "44FF0DC2F1E40311B8239E83146749AB9D9CEE2A650E699F5464755D552EE20D"
+      }
+    },
+    "current_worker_log": "_orchestration/layer_contract_v3_pinpoint_e.events.jsonl",
+    "current_worker_receipt": "_orchestration/layer_contract_v3_pinpoint_e.events.jsonl.done.json"
+  },
+  "real_plan_compatibility": {
+    "real_urakkai_plan_count_found": 2,
+    "real_urakkai_plan_json_status": "INVALID",
+    "real_clean_only_plan_found": false,
+    "compatibility_test_status": "NOT_RUN_REAL_VALID_PLAN",
+    "live_episode_repair_authorized": false,
+    "promotion_blocker": "valid real URAKKAI and clean-only fixtures are missing"
+  },
+  "hard_warnings": [
+    "Do not promote the whole isolated workspace or whole files without approved diff review.",
+    "Do not treat track array order as visual z-order.",
+    "Do not place audio lanes in visual z-order.",
+    "Do not map ROOT_FIXED_FRAME_BACKGROUND to SCREEN_EFFECT.",
+    "Do not accept ROOT_FIXED_FRAME_BACKGROUND as a physical readback alias; require SCREEN_WHITE.",
+    "Do not allow SCREEN_EFFECT to become an absolute 0-to-end layer.",
+    "Do not allow BASE_VISUAL gap or overlap.",
+    "Do not accept global_placements; canonical plan shape is timeline[].placements.",
+    "Do not return v2 production PASS when root readback or actual order evidence is NOT RUN.",
+    "Do not execute IMAGE or CARD base visuals until an executor exists.",
+    "Do not copy .worker_tmp, node cache, pyc, backup, or helper leftovers into a candidate or canonical skill.",
+    "Do not reuse a terminated worker session or workspace for a new worker.",
+    "Do not edit the live CapCut draft or canonical skill during candidate repair.",
+    "Do not call a unit-test PASS a real 20-minute episode PASS."
+  ],
+  "success_gates_remaining": [
+    "FRESH_READ_ONLY_FALSE_PASS_VERIFIER_PASS",
+    "PARENT_SHA_AND_ALLOWED_DIFF_PASS",
+    "FIXED_JSONSCHEMA_4_25_1_FULL_SUITE_PASS",
+    "REAL_VALID_URAKKAI_FIXTURE_PASS",
+    "REAL_OR_EQUIVALENT_CLEAN_ONLY_FIXTURE_PASS",
+    "ROOT_SCREEN_WHITE_POSTBUILD_READBACK_PASS",
+    "USER_PROMOTION_APPROVAL"
+  ],
+  "next_action_tree": {
+    "current_selected_path": "clone only candidate and required read dependencies into a new read-only verifier workspace; rerun false-PASS probes and full suite",
+    "if_pinpoint_e_write_policy_fails": "stop candidate loop, repair runner policy in isolation, run a tiny write preflight, then use another fresh workspace",
+    "if_same_root_failure_reaches_3": "STOP_AND_REPORT_INCIDENT",
+    "if_independent_verifier_fails": "preserve candidate, identify first failing boundary, new root-cause-only modifier; no promotion",
+    "if_all_static_gates_pass": "build isolated valid real-plan compatibility fixtures without editing live episode files",
+    "if_real_compatibility_passes": "promotion review only; canonical copy still requires user approval"
+  },
+  "resume_action": "Read this JSON, verify the PINPOINT_E five-file SHA values, then create one fresh read-only verifier workspace and rerun the three false-PASS probes plus the 41-test suite without redoing root ZIP or GUI evidence.",
+  "current_gate": "WAIT_FRESH_READ_ONLY_VERIFIER",
+  "final_warning": "현재까지 실제 CapCut 프로젝트 조립, 렌더, 20분 파일럿, 정본 스킬 승격은 모두 NOT RUN 또는 FORBIDDEN이다."
+}
