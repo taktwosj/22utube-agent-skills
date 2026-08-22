@@ -22,7 +22,6 @@ EXPECTED_SHARED_SKILLS = [
     "119-politics-longform-capcut",
     "1caveman",
     "222mara",
-    "naver-blog-posting",
     "top5isu-shorts",
 ]
 
