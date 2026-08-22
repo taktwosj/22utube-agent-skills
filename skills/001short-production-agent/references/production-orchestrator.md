@@ -69,9 +69,17 @@ After assembly, the first item in the result report is the exact CapCut 프로�
 
 The original table is immutable authority for every `Bxx` source range, source facts and visible events, source speakers and utterances, source narration, and original audio availability/timing. 투군 GPT is an advisor, not an authority: it may suggest `Vxx` order, T1/T2, generated A9 narration, captions, effects, and audio treatment. Reject or repair any suggestion that invents facts, changes `Bxx` times, relabels source speech, exceeds available source ranges, or creates unexplained duplicate use. If one `Bxx` is reused, explicitly lock each reused subrange; original speech may be retained only once unless the user approves repetition.
 
+투군 project entry point:
+
+```text
+https://chatgpt.com/g/g-p-69bec5d5e6d481918a435189a9a3e2a7-tugun/project
+```
+
+Open this project and start a new chat there whenever no 투군 tab can be attached. A browser runtime that exposes only its own tab group (Claude-in-Chrome) cannot list or attach the user's other tabs, so navigating to this URL is the normal path, not a fallback.
+
 The task owner operates the user's live 투군 GPT tab directly:
 
-1. List the open browser tabs and attach the matching 투군 tab.
+1. Attach the open 투군 tab when the runtime can list it; otherwise navigate to the project URL above.
 2. Read the current page state before writing.
 3. Paste the validated original-table prompt and submit it.
 4. Read the response and save it as `20_script/togun-recommendation.md` bound to the original-grid SHA256.

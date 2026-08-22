@@ -4,7 +4,38 @@
 
 Use this reference whenever the operator says `VMAKE`, `VMAKE 클린영상`, `클린영상 뽑기`, `자막 제거 영상`, or asks to turn a source Short into a clean visual asset.
 
-This is browser UI automation, not a VMake API integration. Prefer deterministic DOM/CDP operations over screen coordinates.
+Two routes exist. **The official API SDK is the default; the DOM automation in the rest of this file is the fallback** for when credentials are missing or the API rejects the job. Within the DOM route, prefer deterministic DOM/CDP operations over screen coordinates.
+
+## API route (default)
+
+Verified 2026-08-23 on the Windows PC. Faster and immune to the web app's single-tab session lock (`Vmake: active_in_other_tab`), which leaves the editor stuck on a spinner and blocks the DOM route entirely.
+
+| item | value |
+|---|---|
+| entry point | `https://vmake.ai/developers` — `Api Key` tab issues keys, `Doc` tab holds the SDK zip URL |
+| SDK (Windows) | `C:\Users\arajun\.local\share\vmake_sdk\` — `sdk\cli.py` plus `.venv` |
+| SDK (macOS) | `~/.local/share/vmake_sdk/` — same layout |
+| credentials | `MT_AK` / `MT_SK` in `~/.openclaw/.env` (Windows: `C:\Users\arajun\.openclaw\.env`); `core/client.py` reads these env names |
+| dependencies | `requests`, `alibabacloud_oss_v2` |
+| clean task | `videoscreenclear` (= the UI's "Smart"); `Smart pro` is Pro-plan only and hits a paywall |
+
+Auth probe first — it consumes no credit and lists the tasks the account may run:
+
+```text
+cli.py list-tasks
+```
+
+Then run the job:
+
+```text
+cli.py run-task --task videoscreenclear --input <source.mp4> --params '{"parameter":{"rsp_media_type":"url"}}'
+```
+
+The result carries `output_urls[0]`, a signed URL. **Never print that URL to chat or write it into a receipt** — fetch it directly to `clean_source.mp4` and record only the local path, SHA-256, duration, and resolution. A 7 s source completes in well under a minute; roughly two minutes for 25 s.
+
+The operator issues and stores the keys. Never read, echo, or copy plaintext `MT_AK`/`MT_SK` values, and never move them between machines on the operator's behalf.
+
+Record `vmake_route=VMAKE_API_SDK` in state. Everything downstream is unchanged: the candidate receipt, the duration gate (≤ 1.0 s difference), resolution as a recorded value only, and the no-agent-visual-QA rule all apply exactly as in the DOM route.
 
 ## Fast production rule
 

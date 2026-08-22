@@ -45,7 +45,8 @@ For newly requested A9 TTS, read `<factory-root>/00_asset_tools/TYPECAST_TTS_RUN
 
 - Keep `owner_skill=001short-production-agent`, `lane=general_shorts_production`; never chain another production skill.
 - `PAPERCLIP_DISABLED`: Do not request, register, create, validate, wait on, or report Paperclip.
-- VMake: the agent uploads the downloaded source through Aside at intake, nonblocking; URL submission is the fallback and costs resolution ([contract](references/vmake-dom-clean-video-automation.md)).
+- VMake: run the official API SDK (`videoscreenclear`) at intake, nonblocking; the browser DOM route and URL submission are fallbacks. Signed result URLs are never printed or stored ([contract](references/vmake-dom-clean-video-automation.md)).
+- 투군: `https://chatgpt.com/g/g-p-69bec5d5e6d481918a435189a9a3e2a7-tugun/project`. Attach an open 투군 tab when the runtime can list one; otherwise open this project and start a new chat ([procedure](references/production-orchestrator.md#투군-live-tab-procedure)).
 - Stage 04의 승인 권위는 사용자다. CapCut visual approval, render, and upload are user-manual-only; stop at `WAIT_USER_CAPCUT_CHECK`.
 
 ## New Session Handoff Bootstrap
