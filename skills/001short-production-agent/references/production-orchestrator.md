@@ -67,7 +67,22 @@ After assembly, the first item in the result report is the exact CapCut 프로�
 
 ## 투군 live-tab procedure
 
-The original table is immutable authority for every `Bxx` source range, source facts and visible events, source speakers and utterances, source narration, and original audio availability/timing. 투군 GPT is an advisor, not an authority: it may suggest `Vxx` order, T1/T2, generated A9 narration, captions, effects, and audio treatment. Reject or repair any suggestion that invents facts, changes `Bxx` times, relabels source speech, exceeds available source ranges, or creates unexplained duplicate use. If one `Bxx` is reused, explicitly lock each reused subrange; original speech may be retained only once unless the user approves repetition.
+The original table is immutable authority for every `Bxx` source range, source facts and visible events, source speakers and utterances, source narration, and original audio availability/timing. 투군 GPT is an advisor, not an authority: it may suggest `Vxx` order, T1/T2, generated A9 narration, captions, effects, and audio treatment. Reject or repair any suggestion that invents facts, changes `Bxx` times, relabels source speech, exceeds available source ranges, or creates unexplained duplicate use. If one `Bxx` is reused, explicitly lock each reuse; original speech may be retained only once unless the user approves repetition.
+
+## Vxx is one whole Bxx
+
+A `Vxx` column takes exactly one `Bxx` and takes it whole. Three checks enforce this, none of which any other document states:
+
+- `scripts/validate_capcut_grids.py` — the urakkai header pattern accepts a single `B\d{2}`, and each clip's source range must match an original-table header range exactly (`issubset`), so a partial range fails.
+- `scripts/validate_prebuild.py` — `abs(source duration - target duration) > FRAME_TOLERANCE_US` is `E_VIDEO_RANGE`, so **speed changes are impossible**. A `Vxx` lasts exactly as long as its `Bxx`.
+- `scripts/validate_audio_caption.py` — caption timing recomputes each `Vxx` source range from the original-table header.
+
+Consequences to design around, not to discover at build time:
+
+- Final duration is tuned by **dropping `Bxx` values, never by trimming or retiming them**. A 0.8 s beat stays 0.8 s.
+- Slow motion, speed ramps, and freeze frames cannot be requested here. Treat any advisor suggestion of a playback speed as inapplicable.
+- **The `Bxx` count is the hard ceiling on the `Vxx` count.** A single-`Bxx` original table makes urakkai structurally impossible, because there is nothing to reorder. Split the original table on real change points before promising an urakkai.
+- Reusing a `Bxx` means two `Vxx` columns naming the same whole `Bxx`, not two different slices of it.
 
 투군 project entry point:
 
