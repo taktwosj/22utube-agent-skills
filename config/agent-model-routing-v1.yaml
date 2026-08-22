@@ -1,0 +1,225 @@
+schema_version: agent_model_routing_v1
+policy_status: proposed_enforcement
+
+cost_control:
+  ultra:
+    enabled_by_default: false
+    automatic_call: false
+    normal_production: forbidden
+    allowed_only_when:
+      - isolated_worktree_root_cause
+      - single_agent_sol_extra_high_or_max_failed_with_evidence
+      - parallel_independent_hypotheses_required
+      - explicit_user_approval
+    max_runs_per_incident: 1
+    disable_after_run: true
+  escalation_order:
+    - luna_medium
+    - terra_medium
+    - terra_high
+    - sol_high
+    - sol_extra_high
+    - sol_max
+  skip_escalation_steps: false
+  extra_high_auto_repeat: false
+  max_auto_repeat: false
+  per_stage_model_call_limit: 2
+  same_error_retry_limit: 2
+  reread_full_logs: false
+  reread_full_repository: false
+  third_same_root_cause_status: WAIT_ROOT_CAUSE
+  execution_receipt:
+    required:
+      - actual_model
+      - actual_effort
+      - ultra_used
+    record_when_available:
+      - input_tokens
+      - cached_input_tokens
+      - output_tokens
+    mismatch_status: WAIT_MODEL_ROUTE_MISMATCH
+
+paperclip:
+  model: none
+  responsibilities:
+    - work_ticket_and_owner
+    - stage_cost_and_heartbeat
+    - input_output_sha
+    - failure_responsibility_and_fix_history
+    - user_approval_record
+  forbidden:
+    - canonical_judgment
+    - direct_code_edit
+    - replace_skill_state_json
+  source_of_truth:
+    - actual_files
+    - state_json
+    - approved_artifacts
+    - validator_results
+
+hermes:
+  default: {model: terra, effort: medium}
+  simple_state_check: {model: luna, effort: low}
+  high_escalation_conditions:
+    - multiple_contract_conflict
+    - canonical_promotion_judgment
+    - worker_results_disagree
+    - post_promotion_incident_responsibility
+  canonical_promotion_audit: {model: terra, effort: high, fresh_context: true}
+  root_cause_audit: {model: sol, effort: extra_high, fresh_context: true}
+  hardest_audit:
+    model: sol
+    effort: max
+    write_access: false
+    explicit_user_approval: true
+
+workers:
+  precision_edit: {harness: 1caveman, model: terra, effort: high}
+  deterministic_edit: {harness: 1caveman, model: luna, effort: medium}
+  deterministic_validator: {executor: main_runtime, model: none}
+  validator_failure_interpretation: {model: luna, effort: medium}
+  independent_semantic_review: {model: terra, effort: high, fresh_context: true}
+
+fresh_context_packet:
+  allow:
+    - target_artifact
+    - changed_diff
+    - directly_relevant_contracts
+    - validator_results
+    - input_output_sha
+    - necessary_source_cues
+  forbid:
+    - full_repository
+    - unrelated_skill_md
+    - full_success_logs
+    - all_prior_episode_artifacts
+
+lazy_codex:
+  enabled_by_default: false
+  allowed_for:
+    - skill_workflow_protocol_schema_conflict
+    - builder_and_validator_both_wrong
+    - chained_multifile_test_failures
+    - hyperframes_renderer_root_cause
+    - large_migration
+  forbidden_targets:
+    - active_capcut_draft
+    - active_hyperframes_episode
+    - canonical_state_json
+    - approved_script_or_blueprint
+    - vmake_flow_capcut_gui
+    - single_file_simple_edit
+  plan:
+    default: {model: sol, effort: high, write_access: false, max_runs: 1}
+    extra_high_conditions:
+      - multiple_contract_conflict
+      - terra_high_root_cause_failed
+      - builder_and_validator_both_wrong
+  implementation: {model: terra, effort: high, location: isolated_worktree_or_staging}
+  loop:
+    enabled_by_default: false
+    allowed_location: isolated_fixture_or_worktree
+    max_external_repeats: 2
+    third_same_root_cause_status: WAIT_ROOT_CAUSE
+
+skills:
+  001short-production-agent:
+    default: {model: terra, effort: high}
+    stages:
+      stage_00_source_identity_lock: {model: luna, effort: medium}
+      stage_01_source_analysis: {model: terra, effort: high}
+      stage_02_source_blueprint: {model: terra, effort: high}
+      stage_03_urakkai: {model: sol, effort: high}
+      stage_03_complex_reversal: {model: sol, effort: extra_high, max_runs: 1}
+      stage_04_external_review: {mode: user_manual, model: none, automatic_call: false}
+      stage_05_compile_plan: {model: terra, effort: high}
+      stage_06_vmake: {model: luna, effort: medium}
+      stage_06_visual_damage_review: {model: terra, effort: high}
+      stage_07_timeline_execution: {model: luna, effort: medium}
+      stage_07_semantic_sync_review: {model: terra, effort: high}
+      stage_08_capcut_pilot: {harness: 1caveman, model: terra, effort: high}
+      stage_08_stable_repeats: {harness: 1caveman, model: luna, effort: medium}
+      stage_08_complex_builder_error: {harness: lazy_codex}
+      stage_09_postbuild_validation: {executor: main_runtime, model: none}
+      final_visual_judgment: {authority: user, assistant: terra_high}
+
+  110-politics-longform-script:
+    default: {model: sol, effort: high}
+    stages:
+      s0_data_lookup: {model: luna, effort: medium}
+      s0_candidate_evaluation: {model: terra, effort: high}
+      s0t_term_selection: {model: terra, effort: medium, ambiguous_case: terra_high}
+      s0r_source_srt_semantic_review: {model: terra, effort: high}
+      s1_source_packet: {model: luna, effort: medium}
+      s2_first_draft: {model: sol, effort: high}
+      s2r_full_rewrite:
+        model: sol
+        effort: extra_high
+        max_runs_per_episode: 1
+        repeat_same_source_packet: false
+      s2r_followup_edit:
+        model: sol
+        effort: high
+        input_scope: changed_chapters_and_related_evidence_only
+        full_rewrite: false
+      s3_machine_validation: {executor: main_runtime, model: none}
+      s4_independent_review: {mode: user_manual_or_explicit_request, automatic_call: false}
+      s5_structure_edit: {model: sol, effort: high}
+      s5_local_semantic_edit: {model: terra, effort: high}
+      s5_notation_edit: {model: luna, effort: medium}
+      s6_diff_review: {model: terra, effort: high, fresh_context: true}
+      s7_user_approval: {model: none, authority: user}
+      s8_lock: {executor: main_runtime, model: none}
+      s9_handoff_111: {model: luna, effort: low}
+
+  111-politics-longform-voice-srt:
+    default: {model: terra, effort: high}
+    stages:
+      p00_authority_record: {model: luna, effort: low}
+      p00b_script_lock_check: {executor: main_runtime, model: none}
+      p01_source_integrity: {executor: main_runtime, model: none}
+      p02_supertone_api: {executor: main_runtime, model: none}
+      p02_voice_pronunciation_review: {model: terra, effort: high}
+      p02b_forced_alignment: {executor: main_runtime, model: none, failure_analysis: terra_high}
+      p02c_audio_timeline: {model: luna, effort: medium}
+      p03_srt_generation: {model: terra, effort: medium}
+      p03_complex_drift: {model: terra, effort: high}
+      p03_final_caption_qc:
+        model: sol
+        effort: high
+        fresh_context: true
+        input_scope: final_srt_script_and_related_source_cues_only
+      p04_handoff_112: {model: luna, effort: medium}
+
+  112-politics-longform-hyperframes:
+    default: {model: terra, effort: high}
+    stages:
+      p1_preflight: {executor: main_runtime, model: none}
+      p2_template_contract: {model: terra, effort: high}
+      p3_lint_check_preview: {executor: main_runtime, model: none}
+      p3_error_analysis: {model: terra, effort: high}
+      p4_user_preview: {model: none, authority: user}
+      p5_visual_grammar: {model: sol, effort: high}
+      p5_v4_complex_design: {model: sol, effort: extra_high, max_runs: 1}
+      p5_html_css_svg: {model: terra, effort: high}
+      p5_speech_sync_audio: {model: terra, effort: high}
+      render_ffprobe_validator: {executor: main_runtime, model: none}
+      renderer_root_cause: {harness: lazy_codex}
+
+external_review_policy:
+  mode: user_manual
+  automatic_call: false
+  fixed_rounds: false
+  external_pass_is_final: false
+  remove_contracts:
+    - 001_fixed_claude_two_rounds
+    - 110_automatic_claude_required_call
+
+completion_conditions:
+  - actual_artifact_exists
+  - input_output_sha_match
+  - independent_validator_pass
+  - normal_path_regression_pass
+  - actual_draft_or_mp4_verified
+  - user_visual_approval
+  - paperclip_ticket_and_responsibility_recorded
