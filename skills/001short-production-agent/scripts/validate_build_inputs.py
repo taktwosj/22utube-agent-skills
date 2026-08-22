@@ -104,9 +104,19 @@ def validate_build_inputs(
     binding_cue_ids = {row.get("cue_id") for row in contract.get("caption_bindings", [])}
     if locked_cue_ids != binding_cue_ids or len(contract.get("caption_bindings", [])) != len(binding_cue_ids):
         errors.append({"code": "BUILD_INPUTS_CAPTION_BINDING_SET_MISMATCH"})
-    if set(approved_by_id) != set(contract.get("approved_actual_order", [])):
+    # user_provided_media_overlay segments are appended to the built contract
+    # (segment_id "USER_MEDIA::<overlay_id>") but are never part of the
+    # locked approved_timeline.json - they're bound separately from
+    # build_manifest. Only allow that specific, prefixed extra; any other
+    # discrepancy still fails as a real mismatch.
+    overlay_only_ids = {
+        segment_id for segment_id in contract_by_id
+        if segment_id not in approved_by_id
+        and isinstance(segment_id, str) and segment_id.startswith("USER_MEDIA::")
+    }
+    if set(approved_by_id) != set(contract.get("approved_actual_order", [])) - overlay_only_ids:
         errors.append({"code": "BUILD_INPUTS_TIMELINE_ORDER_MISMATCH"})
-    if set(approved_by_id) != set(contract_by_id):
+    if set(approved_by_id) != set(contract_by_id) - overlay_only_ids:
         errors.append({"code": "BUILD_INPUTS_TIMELINE_CONTENT_MISMATCH"})
     else:
         for segment_id, approved in approved_by_id.items():

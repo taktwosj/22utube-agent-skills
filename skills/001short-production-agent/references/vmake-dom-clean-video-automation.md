@@ -1,8 +1,13 @@
-# VMake DOM Clean-Video Automation
+# VMake DOM Clean-Video Automation (fallback)
 
 ## Purpose
 
-Use this reference whenever the operator says `VMAKE`, `VMAKE 클린영상`, `클린영상 뽑기`, `자막 제거 영상`, or asks to turn a source Short into a clean visual asset.
+**Try [references/vmake-api-clean-video.md](vmake-api-clean-video.md) first.** VMake now publishes an
+official API/SDK that does the same job without browser automation, on the same plan/credit balance.
+Use this DOM reference only when the API errors, times out, or no key is provisioned yet on the
+current machine.
+
+Use this reference whenever the operator says `VMAKE`, `VMAKE 클린영상`, `클린영상 뽑기`, `자막 제거 영상`, or asks to turn a source Short into a clean visual asset and the API path above is unavailable.
 
 This is browser UI automation, not a VMake API integration. Prefer deterministic DOM/CDP operations over screen coordinates.
 
