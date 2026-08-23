@@ -37,6 +37,9 @@ CLEARED_BY_TYPE = {
     # Type 1 is caption-only: no voice of any kind, so both audio axes clear.
     "1": ["A9", "A9_TEXT", "A10", "A10_TEXT"],
     "2": ["A10", "A10_TEXT", "STATE", "STATE_LASER"],
+    # Type 3 keeps the original speaker audio and its captions; no TTS exists,
+    # so both A9 anchors clear. STATE stays available for situation captions.
+    "3": ["A9", "A9_TEXT"],
     "4": ["A10", "A10_TEXT", "A9", "A9_TEXT"],
     "5": ["A10", "A10_TEXT", "A9", "A9_TEXT"],
 }
