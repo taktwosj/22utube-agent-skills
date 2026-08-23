@@ -49,8 +49,14 @@ def _portrait_aspect_compatible(
 ) -> bool:
     if min(source_width, source_height, candidate_width, candidate_height) <= 0:
         return False
-    if source_width >= source_height or candidate_width >= candidate_height:
+    if candidate_width >= candidate_height:
         return False
+    # A landscape source reframed to portrait is a deliberate longform-to-shorts
+    # edit (pillarbox, blurred backdrop, or crop), so its aspect deliberately
+    # differs from the source and the ratio comparison below does not apply.
+    # Only a portrait source has to keep the source aspect.
+    if source_width >= source_height:
+        return True
     source_ratio = source_width / source_height
     candidate_ratio = candidate_width / candidate_height
     return abs(candidate_ratio - source_ratio) / source_ratio <= ASPECT_RATIO_RELATIVE_TOLERANCE
