@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from audio_policy_matrix import A10_POLICIES  # noqa: E402
 from common import read_json, sha256_file, write_json  # noqa: E402
 from schema_runtime import validate_schema  # noqa: E402
 
@@ -37,8 +38,14 @@ CLEARED_BY_TYPE = {
     # Type 1 is caption-only: no voice of any kind, so both audio axes clear.
     "1": ["A9", "A9_TEXT", "A10", "A10_TEXT"],
     "2": ["A10", "A10_TEXT", "STATE", "STATE_LASER"],
-    "4": ["A10", "A10_TEXT", "A9", "A9_TEXT"],
-    "5": ["A10", "A10_TEXT", "A9", "A9_TEXT"],
+    # Type 3 keeps the original speaker audio and its captions, and writes no
+    # TTS at all, so only the A9 pair clears.  STATE stays available.
+    "3": ["A9", "A9_TEXT"],
+    # Types 4 and 5 carry BOTH voices - a new TTS on A9 and the original
+    # speaker on A10 - per the per-type row summary in
+    # references/type-assembly-matrix.md, so neither audio axis clears.
+    "4": [],
+    "5": [],
 }
 # A STATE caption has no matching audio, so it cannot claim speech authority.
 CAPTION_AUTHORITY = {"STATE": "STATE"}
@@ -134,6 +141,47 @@ def build_manifest(
     if str(vmake_evidence.get("downloaded_output_sha256", "")).lower() != clean_sha.lower():
         raise ValueError("VMAKE_EVIDENCE_OUTPUT_SHA_MISMATCH")
     intake = read_json(episode_root / "00_input" / "source_intake_receipt.json")
+    audio_policy = plan["audio_policy"]
+    urakkai_production_type = plan.get("urakkai_production_type", "URAKKAI")
+    keep_a10 = audio_policy in A10_POLICIES
+    narration_ranges = [
+        [cue[4], cue[5]] for cue in plan.get("cues", []) if cue[1] != "NOFIT"
+    ]
+
+    def audio_mode(row: list) -> str:
+        # Every lane used to be hardcoded mute, which is why types 3-5 built a
+        # silent draft: build_episode_capcut emits an A10 segment only for rows
+        # whose mode is "on" or "duck".
+        if not keep_a10:
+            return "mute"
+        target = [row[2], row[3]]
+        covering = [
+            narration for narration in narration_ranges
+            if max(target[0], narration[0]) < min(target[1], narration[1])
+        ]
+        if not covering:
+            return "on"
+        # Types 4 and 5 lay a new A9 narration over the retained speaker, and
+        # both the protocol gate and the builder require A10 to be silent for
+        # exactly the segments A9 covers - "on" everywhere earns
+        # URAKKAI_MIXED_A10_NOT_MUTED_UNDER_A9.  Neither side supports a cue
+        # that covers only part of a Vxx, so refuse it here rather than let a
+        # later validator find it after the receipts are written.
+        if any(
+            narration[0] > target[0] or narration[1] < target[1]
+            for narration in covering
+        ):
+            raise ValueError(f"MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED:{row[0]}")
+        return "duck"
+
+    def capcut_range(row: list) -> dict:
+        # A reassembled stem is already in target order, so the builder may reuse
+        # the target range.  SOURCE_CLIP plays the untouched source, so its CapCut
+        # source range has to name the real original span.
+        if audio_policy != "SOURCE_ORDER_CLEAN_AUDIO":
+            return {}
+        return {"capcut_source_range_us": [row[4], row[5]]}
+
     return {
         "schema_version": BUILD_MANIFEST_SCHEMA_VERSION,
         "episode_id": episode_id,
@@ -156,9 +204,9 @@ def build_manifest(
         "clean_source": clean_source_block(vmake_evidence, clean_path, clean_sha),
         **vmake_block(vmake_evidence, episode_root, clean_path, clean_sha),
         "urakkai": {
-            "production_type": "URAKKAI",
+            "production_type": urakkai_production_type,
             "target_duration_us": plan["DUR"],
-            "reorder_required": True,
+            "reorder_required": urakkai_production_type != "TRIM_ONLY_NO_REORDER",
             "locked_permutation": [row[0] for row in v_rows],
             "video_clips": [
                 {"clip_id": row[0], "source_sha256": source_sha,
@@ -167,8 +215,9 @@ def build_manifest(
             ],
         },
         "source_audio": [
-            {"clip_id": row[0], "mode": "mute", "source_sha256": source_sha,
-             "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]]}
+            {"clip_id": row[0], "mode": audio_mode(row), "source_sha256": source_sha,
+             "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]],
+             **capcut_range(row)}
             for row in v_rows
         ],
     }
@@ -176,12 +225,19 @@ def build_manifest(
 
 def build_production_plan(
     episode_id: str, episode_root: Path, plan: dict, timeline: dict, identity: dict,
-    audio_source: str, root_profile: str,
+    manifest: dict, root_profile: str,
 ) -> dict:
+    audio_source = manifest["audio_source"]
     v_rows = plan["V"]
     cues = [cue for cue in plan.get("cues", []) if cue[1] != "NOFIT"]
     a9_text = {row["cue_id"]: row for row in timeline["segments"] if row["role"] == "A9"}
     states = {row["segment_id"]: row for row in timeline["segments"] if row["role"] == "STATE"}
+    a10_texts = sorted(
+        (row for row in timeline["segments"] if row["role"] == "A10_TEXT"),
+        key=lambda row: row["start"],
+    )
+    audio_modes = {row["clip_id"]: row["mode"] for row in manifest["source_audio"]}
+    a10_asset_key = "source_audio"
     rows = []
     for segment_id, beat_id, start, end, source_start, source_end in v_rows:
         target = [start, end]
@@ -201,6 +257,27 @@ def build_production_plan(
             placements.append({
                 "anchor": "A9_TEXT", "operation": "replace_text_preserve_style",
                 "text": cue[2].replace("<br>", "\n"), "target_range_us": [cue[4], cue[5]],
+            })
+        mode = audio_modes.get(segment_id, "mute")
+        if mode in {"on", "duck"}:
+            # A10 spans the whole Vxx, exactly like its VIDEO twin: the mapping
+            # gate in validate_executable_protocol requires one A10 per V with
+            # identical source and target ranges.  duck keeps the lane present
+            # under a narration bed at zero volume rather than dropping it.
+            placements.append({
+                "anchor": "A10", "operation": "replace_media_and_range",
+                "asset_key": a10_asset_key,
+                "source_range_us": [source_start, source_end], "target_range_us": target,
+                "volume": 0 if mode == "duck" else 1,
+            })
+        for caption in a10_texts:
+            caption_end = caption["start"] + caption["duration"]
+            if caption["start"] < start or caption_end > end:
+                continue
+            placements.append({
+                "anchor": "A10_TEXT", "operation": "replace_text_preserve_style",
+                "text": caption["text"].replace("<br>", "\n"),
+                "target_range_us": [caption["start"], caption_end],
             })
         state = states.get(f"STATE_{segment_id}")
         if state:
@@ -342,6 +419,7 @@ def build_config(
         "production_mode": "URAKKAI",
         "audio_policy": plan["audio_policy"],
         "duration_us": plan["DUR"],
+        **({"audio_role": "A10"} if plan["audio_policy"] in A10_POLICIES else {}),
         "T1": plan["T1"],
         "T2": plan["T2"],
         "state_cues": [
@@ -393,7 +471,7 @@ def generate(
     write_json(episode_root / "50_capcut_project" / "build_manifest.json", manifest)
 
     production_plan = build_production_plan(
-        episode_id, episode_root, plan, timeline, identity, manifest["audio_source"], root_profile
+        episode_id, episode_root, plan, timeline, identity, manifest, root_profile
     )
     errors = validate_schema(
         production_plan, read_json(SCHEMAS / "executable_production_plan.schema.json")
