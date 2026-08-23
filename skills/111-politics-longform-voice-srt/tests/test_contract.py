@@ -137,11 +137,11 @@ def check_forbidden_target_is_specific(text):
     )
     # 아무 대문자 토큰이나 인정하면 `# NO_AUTO_RUN` 주석만 붙여도 통과한다.
     # 경로 구분자 하나만 인정해도 마찬가지다. 금지 대상을 실제로 지목하는
-    # 고유명사 · 스킬 식별자 · 드라이브 절대경로만 인정한다.
+    # 고유명사 · 스킬 식별자 · 루트 고정 절대경로만 인정한다.
     specific_target = re.compile(
         r"CapCut|캡컷|Supertone|HyperFrames|"
         r"\b(?:000|110|111|112|119)-[a-z-]+|"
-        r"[A-Za-z]:[\\/]",
+        r"(?:[A-Za-z]:|%USERPROFILE%)[\\/]",
     )
     violations = []
     for line_no, line in enumerate(text.splitlines(), 1):
@@ -165,8 +165,8 @@ def check_forbidden_target_is_specific(text):
 REQUIRED_ANCHORS = {
     "SKILL.md": [
         # 상대경로는 어느 루트 기준인지 말하지 않는다. 112 는 둘 다 절대경로다.
-        r"KEEP_UNCHANGED\s*=\s*[A-Za-z]:[\\/]\S*119-politics-longform-capcut",
-        r"KEEP_UNCHANGED\s*=\s*[A-Za-z]:[\\/]\S*000-politics-longform",
+        r"KEEP_UNCHANGED\s*=\s*(?:[A-Za-z]:|%USERPROFILE%)[\\/]\S*119-politics-longform-capcut",
+        r"KEEP_UNCHANGED\s*=\s*(?:[A-Za-z]:|%USERPROFILE%)[\\/]\S*000-politics-longform",
         r"HYPERFRAMES_FAILURE_AUTO_RUN_119\s*=\s*FORBIDDEN",
     ],
     "lane-contract.md": [
@@ -190,7 +190,7 @@ class TestBoundaryDeclarationStrength(unittest.TestCase):
 
     def test_keep_unchanged_accepts_paths(self):
         text = (
-            "KEEP_UNCHANGED=C:\\Users\\arajun\\agent-skills\\skills\\119-politics-longform-capcut\n"
+            "KEEP_UNCHANGED=%USERPROFILE%\\agent-skills\\skills\\119-politics-longform-capcut\n"
             "KEEP_UNCHANGED = skills\\119-politics-longform-capcut"
         )
         self.assertEqual(check_keep_unchanged_has_path(text), [])
@@ -276,11 +276,11 @@ class TestBoundaryDeclarationStrength(unittest.TestCase):
 # 앞 4건은 지난 회차에 실제로 일어난 훼손, 뒤 3건은 검사식 우회 시도다.
 DOC_REGRESSIONS = [
     ("REG-1a  KEEP_UNCHANGED 를 이름 선언으로 대체", "SKILL.md",
-     r"KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills"
+     r"KEEP_UNCHANGED = %USERPROFILE%\agent-skills\skills"
      r"\119-politics-longform-capcut",
      "MODIFY_119_OR_ITS_WORKTREE = FORBIDDEN"),
     ("REG-1c  절대경로를 상대경로로 격하", "SKILL.md",
-     r"KEEP_UNCHANGED = C:\Users\arajun\agent-skills\skills"
+     r"KEEP_UNCHANGED = %USERPROFILE%\agent-skills\skills"
      r"\119-politics-longform-capcut",
      r"KEEP_UNCHANGED = skills\119-politics-longform-capcut"),
     ("REG-2   capcut_dependency 개명", "lane-contract.md",

@@ -17,12 +17,12 @@ SCHEMA = SKILL / "schemas" / "executable_protocol.schema.json"
 PLAN_SCHEMA = SKILL / "schemas" / "executable_production_plan.schema.json"
 COMPLETION_SCHEMA = SKILL / "schemas" / "completion_report.schema.json"
 VALIDATOR = SKILL / "scripts" / "validate_executable_protocol.py"
-SOURCE_AUTHORITY = r"C:\Users\arajun\agent-skills\skills\001short-production-agent"
-SOURCE_REPOSITORY = r"C:\Users\arajun\agent-skills"
+SOURCE_AUTHORITY = r"%USERPROFILE%\agent-skills\skills\001short-production-agent"
+SOURCE_REPOSITORY = r"%USERPROFILE%\agent-skills"
 RUNTIME_ENTRYPOINTS = {
-    "Codex": r"C:\Users\arajun\.codex\skills\001short-production-agent",
-    "Claude": r"C:\Users\arajun\.claude\skills\001short-production-agent",
-    "Hermes": r"C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent",
+    "Codex": r"%USERPROFILE%\.codex\skills\001short-production-agent",
+    "Claude": r"%USERPROFILE%\.claude\skills\001short-production-agent",
+    "Hermes": r"%USERPROFILE%\AppData\Local\hermes\skills\22utube\001short-production-agent",
 }
 
 

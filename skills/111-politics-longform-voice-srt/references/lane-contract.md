@@ -178,7 +178,7 @@ PROJECT_GPT_CORRECTED_SRT_LOCK 이후 문구 변경 금지
 ## 템플릿 정본
 
 ```text
-SOURCE_OF_TRUTH = C:\Users\arajun\repos\politics-longform-hyperframes\template
+SOURCE_OF_TRUTH = %USERPROFILE%\repos\politics-longform-hyperframes\template
 FORBIDDEN       = ...\22factory_*\02_politics_longform\templates\politics-longform-template-v1
 ```
 

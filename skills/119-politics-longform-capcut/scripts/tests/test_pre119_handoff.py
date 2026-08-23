@@ -111,13 +111,55 @@ next_card=END
 
         self.assertEqual(
             [card["card_type"] for card in seed["cards"]],
-            ["SOURCE_VIDEO", "NARRATION_VIDEO", "SOURCE_VIDEO", "CHAPTER_CARD"],
+            [
+                "SOURCE_VIDEO",
+                "CHAPTER_CARD",
+                "SOURCE_VIDEO",
+                "NARRATION_VIDEO",
+                "SOURCE_VIDEO",
+                "CHAPTER_CARD",
+            ],
         )
         self.assertEqual(
             [card["lower_mode"] for card in seed["cards"]],
-            ["SRT", "SRT", "COMMENTARY_2LINE", "NONE"],
+            ["SRT", "NONE", "SRT", "SRT", "COMMENTARY_2LINE", "NONE"],
         )
         self.assertTrue(all(str(card.get("chapter_label", "")).strip() for card in seed["cards"]))
+
+    def test_approved_script_template_opens_with_montage_hook(self) -> None:
+        seed = pre119_validator.parse_assembly_only_seed(APPROVED_SCRIPT_TEMPLATE)
+        cards = seed["cards"]
+
+        hook = cards[0]
+        self.assertEqual(hook["card_type"], "SOURCE_VIDEO")
+        self.assertTrue(str(hook["card_id"]).startswith("C00_HOOK"))
+        self.assertEqual(hook["chapter_label"], "오프닝")
+        self.assertEqual(hook["lower_mode"], "SRT")
+        self.assertEqual(hook["source_audio"], "ON")
+        self.assertEqual(hook["narration_audio"], "OFF")
+
+        cta = cards[1]
+        self.assertEqual(cta["card_id"], "C00_HOOK_CTA")
+        self.assertEqual(cta["card_type"], "CHAPTER_CARD")
+        self.assertEqual(cta["chapter_label"], "오프닝")
+        self.assertEqual(cta["lower_mode"], "NONE")
+        self.assertEqual(cta["next_card"], cards[2]["card_id"])
+
+        body_labels = {card["chapter_label"] for card in cards[2:]}
+        self.assertNotIn("오프닝", body_labels)
+
+    def test_montage_contract_is_documented_for_the_authoring_gpt(self) -> None:
+        template = APPROVED_SCRIPT_TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("## 오프닝 몽타주", template)
+        self.assertIn("시간 순서가 아니라 세기 순서로 배치한다", template)
+
+        review = (
+            APPROVED_SCRIPT_TEMPLATE.parent.parent
+            / "references"
+            / "chatgpt_politics_longform_review_contract.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("첫 45초가 본편 최강 발화 몽타주로 구성돼 있는지", review)
+        self.assertIn("후킹이 적대 진영 비판에 머물러 결론이 예측되는지", review)
 
     def test_strong_marker_locks_pre119_before_direct_script_fallback(self) -> None:
         self.write_valid_packet()
