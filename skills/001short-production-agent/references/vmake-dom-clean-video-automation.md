@@ -19,19 +19,26 @@ Verified 2026-08-23 on the Windows PC. Faster and immune to the web app's single
 | dependencies | `requests`, `alibabacloud_oss_v2` |
 | clean task | `videoscreenclear` (= the UI's "Smart"); `Smart pro` is Pro-plan only and hits a paywall |
 
-Auth probe first — it consumes no credit and lists the tasks the account may run:
+Auth probe first — it consumes no credit, lists the tasks the account may run, and is the
+credential preflight.  If it fails, the credentials are missing or the plan does not cover the
+task: take the DOM fallback instead of retrying.
 
 ```text
 cli.py list-tasks
 ```
 
-Then run the job:
+`cli.py run-task` prints its whole result to stdout, and that result carries `output_urls[0]`,
+a signed URL.  **Never run it with stdout attached to the transcript.**  Redirect the result to
+a local file, then fetch from that file, so the URL only ever exists on disk:
 
 ```text
-cli.py run-task --task videoscreenclear --input <source.mp4> --params '{"parameter":{"rsp_media_type":"url"}}'
+cli.py run-task --task videoscreenclear --input <source.mp4> --params '{"parameter":{"rsp_media_type":"url"}}' > <scratch>/vmake_result.json
+python -c "import json,sys,urllib.request; u=json.load(open(sys.argv[1],encoding='utf-8'))['output_urls'][0]; urllib.request.urlretrieve(u, sys.argv[2])" <scratch>/vmake_result.json <episode>/40_assets_used/clean_source.mp4
 ```
 
-The result carries `output_urls[0]`, a signed URL. **Never print that URL to chat or write it into a receipt** — fetch it directly to `clean_source.mp4` and record only the local path, SHA-256, duration, and resolution. A 7 s source completes in well under a minute; roughly two minutes for 25 s.
+Delete `vmake_result.json` once the fetch succeeds.  Record only the local path, SHA-256,
+duration, and resolution — never the URL, and never in a receipt.  A 7 s source completes in
+well under a minute; roughly two minutes for 25 s.
 
 The operator issues and stores the keys. Never read, echo, or copy plaintext `MT_AK`/`MT_SK` values, and never move them between machines on the operator's behalf.
 

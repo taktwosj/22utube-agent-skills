@@ -404,7 +404,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "session_handoff_owner_must_remain_001",
         "old_episode_access_requires_explicit_resume",
         "state_advance_after_validator_pass_only",
-        "vmake_dom_first",
+        "vmake_api_first",
         "vmake_submit_after_source_identity",
         "vmake_candidate_integrity_only",
         "vmake_visual_quality_authority_user",
