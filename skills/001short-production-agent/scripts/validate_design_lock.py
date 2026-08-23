@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from audio_policy_matrix import TTS_POLICIES
 from common import inspect_write_target, meaningful_text_length, read_json, resolved_declared_path, result, sha256_file, write_json
 from schema_runtime import validate_schema
 
@@ -143,7 +144,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
             or sound.get("text") != text.get("text")
         ):
             errors.append({"code": "A9_TEXT_PAIRING_MISMATCH", "cue_id": cue_id})
-    if timeline.get("audio_policy") in {"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"} and not a9:
+    if timeline.get("audio_policy") in TTS_POLICIES and not a9:
         errors.append({"code": "A9_REQUIRED_FOR_TTS_POLICY"})
     return errors
 

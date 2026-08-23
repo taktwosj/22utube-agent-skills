@@ -67,7 +67,10 @@ cue 포함 검사에 걸린다).
 | ③ 화자 유지 우라까이 | BGM을 빼야 함 | `URAKKAI` × `A10_REASSEMBLED_SYNC` | V순서 재조립 stem | 필요 |
 | ④ 원음 그대로 우라까이 | BGM을 그대로 둠 | `URAKKAI` × `SOURCE_ORDER_CLEAN_AUDIO` + `audio_source=SOURCE_CLIP` | 원본에서 V구간대로 직접 컷 | 불필요 |
 
-**③과 ④를 가르는 것은 순서가 아니라 BGM이다.** ④는 V순서 재배열과 순서보존 트림을 모두 할 수 있다.
+**③과 ④를 가르는 것은 순서가 아니라 A10에 넣을 재료다.** ③은 Demucs로 분리한 보컬 stem,
+④는 원본 오디오 그대로다 — 그래서 ④에는 BGM이 남는다. 다만 이건 재료 선택의 결과일 뿐이고,
+BGM이 실제로 빠졌는지 검사하는 코드는 없다. stem 품질은 사용자가 CapCut에서 확인한다.
+④는 V순서 재배열과 순서보존 트림을 모두 할 수 있다.
 각 A10 세그먼트가 짝 VIDEO의 원본 구간을 그대로 들고 오므로 재배열해도 stem이 필요 없다.
 `capcut_source_range_us`에 실제 원본 구간을 명시하면 CapCut이 원본에서 그 지점을 찾아 재생한다.
 

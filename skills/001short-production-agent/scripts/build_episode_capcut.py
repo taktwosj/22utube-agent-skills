@@ -35,7 +35,8 @@ import validate_executable_protocol
 import resolve_shorts_capcut_root
 import user_provided_media_overlay
 from audio_policy_matrix import (  # noqa: F401
-    A10_POLICIES, MODE_SOURCES_BY_POLICY, STEM_POLICIES, TTS_POLICIES,
+    A10_POLICIES, MIXED_A9_A10_POLICIES, MODE_SOURCES_BY_POLICY,
+    SOURCE_CLIP_A10_POLICIES, STEM_POLICIES, TTS_POLICIES,
 )
 from capcut_io import iter_primary_draft_documents
 from common import FRAME_TOLERANCE_US, ranges_match, times_match, manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
@@ -1157,7 +1158,7 @@ def _range_fully_covered(inner: list[int], outer: list[int]) -> bool:
 
 
 def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
-    if config.get("audio_policy") not in {"A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"}:
+    if config.get("audio_policy") not in MIXED_A9_A10_POLICIES:
         return
     narration_cues = config.get("tts_cues", [])
     user_audio_items = [
@@ -1917,7 +1918,7 @@ def _stage_prerequisites(
     # already-guarded combination.
     is_urakkai_source_clip_trim = (
         audio_payload.get("production_mode") == "URAKKAI"
-        and audio_payload.get("audio_policy") == "SOURCE_ORDER_CLEAN_AUDIO"
+        and audio_payload.get("audio_policy") in SOURCE_CLIP_A10_POLICIES
         and audio_payload.get("audio_source") == "SOURCE_CLIP"
     )
     duration_matches = is_urakkai_source_clip_trim or (

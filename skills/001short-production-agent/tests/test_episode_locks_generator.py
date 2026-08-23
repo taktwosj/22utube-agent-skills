@@ -12,6 +12,9 @@ if str(SKILL_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
 import audio_policy_matrix  # noqa: E402
+import build_episode_capcut  # noqa: E402
+import validate_audio_caption  # noqa: E402
+import validate_design_lock  # noqa: E402
 import build_episode_locks as generator  # noqa: E402
 import validate_executable_protocol  # noqa: E402
 from schema_runtime import validate_schema  # noqa: E402
@@ -428,16 +431,72 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             [],
         )
 
-    def test_the_new_mixed_policy_is_not_a_stem_policy(self) -> None:
-        """Listing it under STEM_POLICIES would send build_episode_capcut looking
-        for a Demucs stem, which is the whole thing this policy avoids."""
-        self.assertIn("A9_TTS_PLUS_A10_SOURCE_CLIP", audio_policy_matrix.A10_POLICIES)
-        self.assertIn("A9_TTS_PLUS_A10_SOURCE_CLIP", audio_policy_matrix.TTS_POLICIES)
-        self.assertNotIn("A9_TTS_PLUS_A10_SOURCE_CLIP", audio_policy_matrix.STEM_POLICIES)
+    def test_the_new_mixed_policy_reaches_every_gate_that_names_policies(self) -> None:
+        """Each of these used to test for one policy name, so the new one slipped
+        past the duck rules, was rejected as raw source audio, and was measured
+        against the full source duration."""
+        policy = "A9_TTS_PLUS_A10_SOURCE_CLIP"
         self.assertIn(
-            ("URAKKAI", "A9_TTS_PLUS_A10_SOURCE_CLIP", "SOURCE_CLIP"),
-            audio_policy_matrix.ACCEPTED_MODE_TUPLES,
+            ("URAKKAI", policy, "SOURCE_CLIP"), audio_policy_matrix.ACCEPTED_MODE_TUPLES)
+        self.assertNotIn(policy, audio_policy_matrix.STEM_POLICIES)
+
+        # The builder skips its duck checks entirely for a policy it does not know.
+        self.assertIn(policy, build_episode_capcut.MIXED_A9_A10_POLICIES)
+        with self.assertRaises(RuntimeError) as caught:
+            build_episode_capcut._validate_mixed_audio_modes(
+                {
+                    "audio_policy": policy,
+                    "tts_cues": [{"target_range_us": [0, 1_400_000]}],
+                },
+                {"source_audio": [
+                    {"clip_id": "V01", "mode": "on", "target_range_us": [0, 1_400_000]},
+                ]},
+            )
+        self.assertIn("MIXED_A10", str(caught.exception))
+
+        # validate_audio_caption refuses raw SOURCE_CLIP for any policy it does
+        # not recognise as a SOURCE_CLIP policy.
+        self.assertIn(policy, validate_audio_caption.SOURCE_CLIP_A10_POLICIES)
+        # design_lock demands the A9 every TTS policy generates.
+        self.assertIn(policy, validate_design_lock.TTS_POLICIES)
+
+    def test_a_declared_original_order_is_checked_against_the_original_table(self) -> None:
+        """A declaration nothing checks is worth no more than the derivation it
+        replaced: an operator could name beats the original table never had and
+        turn any non-edit into a passing URAKKAI."""
+        self._make_original_audio_caption()
+        grid = self.root / "20_script" / "original-capcut-grid.md"
+        grid.write_text(
+            "### B01 0.000-1.400\n본문\n\n"
+            "### B02 1.400-2.800\n본문\n\n"
+            "### B03 2.800-4.400\n본문\n",
+            encoding="utf-8",
         )
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+        v_plan["original_order"] = ["B01", "B02", "B03", "B99"]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("V_PLAN_ORIGINAL_ORDER_MISMATCH", str(caught.exception))
+
+        v_plan["original_order"] = ["B01", "B01", "B02", "B03"]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("V_PLAN_ORIGINAL_ORDER_DUPLICATE", str(caught.exception))
+
+        # V01 takes B02 and V02 takes B01, so dropping B02 orphans a used beat.
+        v_plan["original_order"] = ["B01", "B03"]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("V_PLAN_ORIGINAL_ORDER_MISSING_BEAT", str(caught.exception))
+
+        v_plan["original_order"] = ["B01", "B02", "B03"]
+        _write_json(plan_path, v_plan)
+        self.assertEqual(self._generate()["status"], "PASS")
 
     def test_a_caption_only_episode_builds_without_any_audio(self) -> None:
         """Type 1 carries no voice, so both audio axes clear and no TTS cue is emitted."""

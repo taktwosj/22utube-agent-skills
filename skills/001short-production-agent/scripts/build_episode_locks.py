@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -50,6 +51,36 @@ CLEARED_BY_TYPE = {
 # A STATE caption has no matching audio, so it cannot claim speech authority.
 CAPTION_AUTHORITY = {"STATE": "STATE"}
 ALWAYS_CLEARED = ["A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH", "STATE_FLICKER"]
+
+
+ORIGINAL_BEAT_HEADER = re.compile(r"^###\s+(B\d{2})\s", re.MULTILINE)
+
+
+def resolve_original_order(plan: dict, original_grid: Path, v_rows: list[list]) -> list[str]:
+    """Return the original beat list the URAKKAI order gates compare against.
+
+    Derived from the surviving V rows alone, an exclusion trim looks identical to
+    its own output and can never pass URAKKAI_STRUCTURE_UNCHANGED, so a trim has
+    to declare the full list.  A declaration nothing checks is worth no more than
+    the derivation it replaced, so it is matched against the original table.
+    """
+    final_order = [row[1] for row in v_rows]
+    declared = plan.get("original_order")
+    if declared is None:
+        return sorted(set(final_order))
+    if not isinstance(declared, list) or not declared:
+        raise ValueError("V_PLAN_ORIGINAL_ORDER_INVALID")
+    if len(set(declared)) != len(declared):
+        raise ValueError(f"V_PLAN_ORIGINAL_ORDER_DUPLICATE:{declared}")
+    missing = [beat for beat in final_order if beat not in declared]
+    if missing:
+        raise ValueError(f"V_PLAN_ORIGINAL_ORDER_MISSING_BEAT:{sorted(set(missing))}")
+    # A legacy or fixture grid carries no "### Bxx" blocks; the checks above still
+    # apply, but there is nothing to compare the declaration against.
+    beats = ORIGINAL_BEAT_HEADER.findall(original_grid.read_text(encoding="utf-8"))
+    if beats and declared != beats:
+        raise ValueError(f"V_PLAN_ORIGINAL_ORDER_MISMATCH:{declared}!={beats}")
+    return declared
 
 
 def srt_timestamp(us: int) -> str:
@@ -225,7 +256,7 @@ def build_manifest(
 
 def build_production_plan(
     episode_id: str, episode_root: Path, plan: dict, timeline: dict, identity: dict,
-    manifest: dict, root_profile: str,
+    manifest: dict, root_profile: str, original_order: list[str],
 ) -> dict:
     audio_source = manifest["audio_source"]
     v_rows = plan["V"]
@@ -238,7 +269,6 @@ def build_production_plan(
     )
     audio_modes = {row["clip_id"]: row["mode"] for row in manifest["source_audio"]}
     a10_asset_key = "source_audio"
-    original_order = plan.get("original_order") or sorted({row[1] for row in v_rows})
     rows = []
     for segment_id, beat_id, start, end, source_start, source_end in v_rows:
         target = [start, end]
@@ -472,12 +502,16 @@ def generate(
     if not vmake_receipt.is_file():
         raise ValueError("VMAKE_FINAL_DOWNLOAD_EVIDENCE_REQUIRED")
     vmake_evidence = read_json(vmake_receipt)
+    original_order = resolve_original_order(
+        plan, episode_root / "20_script" / "original-capcut-grid.md", plan["V"]
+    )
 
     manifest = build_manifest(episode_id, episode_root, plan, identity, template_zip, vmake_evidence)
     write_json(episode_root / "50_capcut_project" / "build_manifest.json", manifest)
 
     production_plan = build_production_plan(
-        episode_id, episode_root, plan, timeline, identity, manifest, root_profile
+        episode_id, episode_root, plan, timeline, identity, manifest, root_profile,
+        original_order,
     )
     errors = validate_schema(
         production_plan, read_json(SCHEMAS / "executable_production_plan.schema.json")

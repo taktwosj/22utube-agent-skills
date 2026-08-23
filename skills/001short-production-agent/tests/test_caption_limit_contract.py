@@ -113,11 +113,32 @@ class ProtocolSchemaContractTest(unittest.TestCase):
     old cloud_row_required_fields name, and its URAKKAI policy enum was missing
     SOURCE_ORDER_CLEAN_AUDIO - a policy protocol.json has been allowing all along."""
 
-    def test_protocol_validates_against_its_own_schema(self):
-        schema = json.loads(
+    def _schema(self) -> dict:
+        return json.loads(
             (SKILL_ROOT / "schemas" / "executable_protocol.schema.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(validate_schema(PROTOCOL, schema), [])
+
+    def test_protocol_validates_against_its_own_schema(self):
+        self.assertEqual(validate_schema(PROTOCOL, self._schema()), [])
+
+    def test_the_schema_still_refuses_what_it_is_meant_to_refuse(self):
+        """A schema that passes because it stopped constraining anything is worse
+        than no schema, so check it rejects as well as accepts."""
+        import copy
+
+        unknown_policy = copy.deepcopy(PROTOCOL)
+        unknown_policy["production_modes"]["URAKKAI"]["allowed_audio_policies"].append(
+            "NOT_A_REAL_POLICY"
+        )
+        self.assertTrue(validate_schema(unknown_policy, self._schema()))
+
+        stray_pointer = copy.deepcopy(PROTOCOL)
+        stray_pointer["schemas"]["not_a_real_schema"] = "schemas/nope.schema.json"
+        self.assertTrue(validate_schema(stray_pointer, self._schema()))
+
+        missing_field = copy.deepcopy(PROTOCOL)
+        del missing_field["completion_report"]["cloud_sync_row_required_fields"]
+        self.assertTrue(validate_schema(missing_field, self._schema()))
 
 
 if __name__ == "__main__":

@@ -43,6 +43,9 @@ A10_POLICIES = frozenset({
 # policies that need no externally separated vocal stem.
 SOURCE_CLIP_A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A9_TTS_PLUS_A10_SOURCE_CLIP"})
 STEM_POLICIES = A10_POLICIES - SOURCE_CLIP_A10_POLICIES
+# A policy that generates A9 AND keeps A10 lays a new narration over the
+# retained speaker, which is what the duck-under-A9 rules govern.
+MIXED_A9_A10_POLICIES = TTS_POLICIES & A10_POLICIES
 
 URAKKAI_AUDIO_POLICIES = tuple(dict.fromkeys(
     policy for mode, policy, _source in CANONICAL_MODE_MATRIX if mode == "URAKKAI"
