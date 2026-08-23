@@ -18,8 +18,8 @@
 
 ## 네 작업 범위
 
-너는 텍스트와 웹 검색만 쓴다. 영상·음성은 열지 않는다.
-아래는 하지 마라. 대신 119 가 한다.
+너는 텍스트, 웹 검색, 코드 실행을 쓴다. zip 읽기·쓰기와 SHA-256 계산은 네가 직접 한다.
+영상과 음성은 열지 못한다. 아래는 하지 마라. 대신 119 가 한다.
 
 - 화면 구도, 표정, 자막 겹침 판단
 - 목소리 톤·강조·속도 판단
@@ -38,9 +38,8 @@
 수집 크론이 만든 그 회차 폴더.
 `정치_수집보고서.md`, `SRT_모음.zip`, `SRT_출처_목록.md`
 
-**SRT 는 압축을 푼 텍스트로 받아야 한다.** 너는 zip 을 열 수 없다.
-`source.cleaned.srt` 8편의 본문이 텍스트로 들어오지 않았으면 시작하지 말고
-그 사실만 한 줄로 알려라.
+`SRT_모음.zip` 은 그대로 읽으면 된다. 안의 `source.cleaned.srt` 는 회차마다 같은
+이름이므로 상위 폴더명(video_id)으로 구분해라.
 
 영상 길이는 `정치_수집보고서.md` 에 적힌 값을 쓴다. 그건 수집 시점 값이고
 119 가 실측으로 다시 확인한다. 네 계산에는 그 값을 분모로 쓰면 된다.
@@ -84,10 +83,37 @@ validator 가 이 6개를 찾는다. 이름이나 폴더가 다르면 즉시 실
 쇼츠는 validator 대상이 아니지만 함께 만든다.
 
 ```
-30_shorts/shorts_plan.md
+shorts_candidates.md
 ```
 
-텍스트로만 전달한다. ZIP 금지.
+## 전달 — Google Drive
+
+패키지 6개를 **위 폴더 구조 그대로** zip 으로 묶는다. zip 을 풀면 곧바로
+`package-root` 가 되어야 한다. 최상위에 폴더를 한 겹 더 감싸지 마라.
+
+정치쇼츠는 zip 밖에 따로 올린다. validator 대상이 아니고 119 조립과 수명이 다르다.
+
+```
+Drive 회차 폴더/
+├─ PRE119_<episode_id>.zip      ← 위 6개 파일
+└─ 정치쇼츠/
+   └─ shorts_candidates.md
+```
+
+Drive 에 올린 뒤 **실제 주소**를 전달한다. 파일 본문을 대화에 붙여넣지 마라.
+
+## 최종 보고 형식
+
+```
+PRE-119 제작: PASS
+ZIP 생성: PASS
+Google Drive 업로드: PASS
+Drive 폴더: <실제 주소>
+PRE-119 ZIP: <실제 주소>
+정치쇼츠 후보: <실제 주소>
+119_final_script.md SHA-256: <64자 소문자>
+119 상태: 다운로드·로컬 검증 대기
+```
 
 ## 20_script/119_final_script.md
 
@@ -189,7 +215,7 @@ validator 가 값까지 대조한다. 아래 문자열은 한 글자도 바꾸�
   "cta_like_subscribe": "OFF",
   "minimal_edit_plan": {},
   "script_lock": {
-    "current_final_script_sha256": "WAIT_A"
+    "current_final_script_sha256": "<64자 소문자 SHA-256>"
   }
 }
 ```
@@ -198,9 +224,18 @@ validator 가 값까지 대조한다. 아래 문자열은 한 글자도 바꾸�
 - `lower_mode` 는 `SRT` `COMMENTARY_2LINE` `NONE` `MIXED` 중 하나. 회차 전체 정책이다.
 - `cta_like_subscribe` 는 `ON` 또는 `OFF`.
 - 시드 정책부에도 같은 키를 쓴다면 **값이 handoff 와 같아야** 한다. 다르면 거부된다.
-- `script_lock.current_final_script_sha256` 은 `WAIT_A` 로 둬라. 너는 파일 해시를
-  계산할 수 없다. 119 가 대본 파일을 저장한 뒤 실제 SHA-256 을 계산해 채우고,
-  사용자 승인 증거와 대조한다.
+- `script_lock.current_final_script_sha256` 은 **네가 직접 계산해서 채운다.**
+  `20_script/119_final_script.md` 를 zip 에 넣을 때의 **정확한 바이트**로 SHA-256 을 낸다.
+
+  ```python
+  import hashlib, pathlib
+  h = hashlib.sha256(pathlib.Path("20_script/119_final_script.md").read_bytes()).hexdigest()
+  ```
+
+  해시를 낸 뒤에는 그 파일을 **한 바이트도 고치지 마라.** 고쳤으면 다시 계산해서
+  `handoff.json` 을 갱신하고 zip 을 다시 만든다.
+  119 는 zip 을 풀어 같은 해시가 나오는지 대조한다. 다르면 `WAIT_APPROVAL_HASH_MISMATCH`
+  로 막히고 회차 전체가 멈춘다.
 
 ## 00_source/source_packet.md
 
@@ -223,7 +258,7 @@ card_id | video_id | url | channel | published | speaker | role | in_est | out_e
 출처·인용·사실관계는 `source_packet.md` 에 **한 번만** 적는다. 다른 파일에서는
 `source_id` 로 참조만 해라. 같은 인용문을 여러 파일에 반복해 쓰지 마라.
 
-## 30_shorts/shorts_plan.md
+## shorts_candidates.md
 
 ```
 [SHORT]
@@ -275,24 +310,91 @@ SRT cue 끝을 컷 경계로 쓰지 마라. 말이 잘린다.
 민주당·이재명에 유리하게. 확정되지 않은 범죄는 단정하지 않는다.
 인용은 발화 주체의 주장으로 표기한다.
 
-## 보내기 전 자기점검 — 결과를 3줄로 적어라
+## 보내기 전 자체 검증 — 직접 돌려라
 
-1. `[ASSEMBLY_ONLY_SEED]` 가 파일 전체에 한 번만 있다
-2. 첫 `[CARD]` 앞에 `execution_mode: ASSEMBLY_ONLY` 가 있다
-3. 모든 카드가 23개 키를 같은 순서로 갖고 있다
-4. 시드 블록 안에 `key: value` 와 `[CARD]` `[/CARD]` 외의 줄이 없다
-5. `card_id` 중복이 없고 `next_card` 가 끊긴 데가 없다
-6. 모든 `card_id` 가 `source_packet.md` 에 있다
-7. `CHAPTER_CARD`·논평이 전부 2줄, 21자 이하다
-8. 나레이션에 아라비아 숫자가 없다
-9. 훅 5개 중 3개 이상이 `shorts_plan.md` 에 있다
-10. `quote` 가 SRT 원문과 한 글자도 다르지 않다
-11. 훅 구간이 무자막 구간과 겹치지 않는다
-12. 마지막 카드의 `next_card` 가 `END` 다
-13. 모든 `source_id` 가 `source_packet.md` 에 있다
-14. `pre119_handoff.json` 의 고정 문자열 4개가 정확하다
-    (`togun-pre119-handoff-v3`, `TOGUN_PRE119_TO_119_DIRECT`, `TOGUN_PRE119`, `PRE119_SOURCE_CANDIDATE`)
-15. 시드 정책부와 `handoff.json` 의 `lower_mode`·`execution_mode`·`cta_like_subscribe` 값이 같다
+너는 코드를 실행할 수 있다. 눈으로 훑지 말고 아래를 실행해서 통과시킨 뒤 zip 을 만든다.
+이 검사는 119 의 validator 가 시드에 적용하는 규칙과 같다.
+
+````python
+import hashlib, json, pathlib, re
+
+KEYS = ["order","card_id","card_type","chapter_label","chapter_title","chapter_hook",
+        "source_id","source_range_policy","source_in_candidate","source_out_candidate",
+        "visual_asset_ref","visual_role","style_profile","narration_asset_ref",
+        "narration_text","source_audio","narration_audio","lower_mode",
+        "lower_line1","lower_line2","cta_like_subscribe","why_this_segment","next_card"]
+ASSIGN = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)")
+
+root = pathlib.Path(".")
+text = (root/"20_script/119_final_script.md").read_text(encoding="utf-8")
+lines = text.splitlines()
+marks = [i for i,l in enumerate(lines) if l.strip() == "[ASSEMBLY_ONLY_SEED]"]
+assert len(marks) == 1, f"시드 마커가 {len(marks)}개다. 정확히 1개여야 한다"
+
+policy, cards, cur = {}, [], None
+for i in range(marks[0]+1, len(lines)):
+    line = lines[i].strip()
+    if not line or line in ("```", "```text"): continue
+    if line == "[/ASSEMBLY_ONLY_SEED]": break
+    if line == "[CARD]": cur = {}; cards.append(cur); continue
+    if line == "[/CARD]": cur = None; continue
+    m = ASSIGN.fullmatch(line)
+    assert m, f"{i+1}행이 key: value 가 아니다 -> {line!r}"
+    tgt = policy if cur is None else cur
+    assert m.group(1).lower() not in tgt, f"{i+1}행 키 중복 -> {m.group(1)}"
+    tgt[m.group(1).lower()] = m.group(2).strip()
+
+assert policy.get("execution_mode") == "ASSEMBLY_ONLY", "정책부 execution_mode 누락"
+assert cards, "카드가 없다"
+ids = [c["card_id"] for c in cards]
+assert len(ids) == len(set(ids)), "card_id 중복"
+for n, c in enumerate(cards, 1):
+    assert list(c.keys()) == KEYS, f"{n}번 카드 키가 23개 순서와 다르다 -> {set(KEYS)^set(c)}"
+    assert c["card_type"] in {"SOURCE_VIDEO","SOURCE_TTS","NARRATION_VIDEO",
+                              "NARRATION_IMAGE","NARRATION_TTS","CHAPTER_CARD"}, c["card_type"]
+    assert c["lower_mode"] in {"SRT","COMMENTARY_2LINE","NONE","MIXED"}, c["lower_mode"]
+    for k in ("lower_line1","lower_line2"):
+        assert len(c[k]) <= 21, f"{c['card_id']} {k} 가 21자 초과"
+    nxt = c["next_card"]
+    assert nxt == "END" or nxt in ids, f"{c['card_id']} 의 next_card 가 끊겼다 -> {nxt}"
+assert cards[-1]["next_card"] == "END", "마지막 카드의 next_card 가 END 가 아니다"
+
+h = json.loads((root/"20_script/pre119_handoff.json").read_text(encoding="utf-8"))
+assert h["schema"] == "togun-pre119-handoff-v3"
+assert h["route"] == "TOGUN_PRE119_TO_119_DIRECT"
+assert h["editorial_owner"] == "TOGUN_PRE119"
+assert h["source_state"] == "PRE119_SOURCE_CANDIDATE"
+for k in ("episode_id","project_name","central_question","selected_thesis","chapter_order",
+          "between_image","between_narration","lower_mode","execution_mode","cta_like_subscribe"):
+    assert h.get(k) not in (None, "", []), f"handoff 필드 누락 -> {k}"
+assert h["execution_mode"] == "ASSEMBLY_ONLY"
+assert str(h["cta_like_subscribe"]).upper() in {"ON","OFF"}
+
+sha = hashlib.sha256((root/"20_script/119_final_script.md").read_bytes()).hexdigest()
+assert h["script_lock"]["current_final_script_sha256"] == sha, f"SHA 불일치. 실제 {sha}"
+
+for f in ("00_README.md","00_source/source_packet.md","10_analysis/pre119_editorial_packet.md",
+          "20_script/119_final_script.md","20_script/pre119_handoff.json",
+          "90_reports/source_gap_and_status.md"):
+    assert (root/f).is_file(), f"필수 파일 없음 -> {f}"
+
+print("SELF_CHECK PASS  카드", len(cards), " SHA", sha)
+````
+
+하나라도 실패하면 고쳐서 다시 돌려라. 실패한 채로 올리지 마라.
+
+## 사람이 확인할 항목 — 결과를 3줄로 적어라
+
+위 스크립트가 잡지 못하는 것만 남겼다. 기계가 못 보는 항목이다.
+
+1. `quote` 가 SRT 원문과 한 글자도 다르지 않다
+2. 모든 `source_id` 가 `source_packet.md` 에 있다
+3. 훅 구간이 무자막 구간과 겹치지 않는다
+4. 나레이션에 아라비아 숫자가 없다
+5. `CHAPTER_CARD` 문구가 2줄이고 각 줄 21자 이하다
+6. 훅 5개 중 3개 이상이 `shorts_candidates.md` 에 있다
+7. 시드 정책부와 `handoff.json` 의 `lower_mode`·`execution_mode`·`cta_like_subscribe` 값이 같다
+8. zip 을 풀면 최상위가 곧바로 `00_README.md` 와 `20_script/` 다. 폴더가 한 겹 더 있지 않다
 
 ## 금지
 
