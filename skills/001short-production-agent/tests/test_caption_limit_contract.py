@@ -141,47 +141,81 @@ class ProtocolSchemaContractTest(unittest.TestCase):
         self.assertTrue(validate_schema(missing_field, self._schema()))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-class LegacyPolicyAliasTest(unittest.TestCase):
-    """A9_TTS_PLUS_A10_RETAINED sat in the policy sets beside current policies with
-    nothing marking it as a v1 name, so deriving MIXED_A9_A10_POLICIES from those
-    sets silently pulled a legacy string into a current rule.  These assertions
-    keep its status legible: legacy data still validates, current plans cannot
-    reach it."""
+class LegacyV1PolicyRewriteTest(unittest.TestCase):
+    """A v1 plan may name a RETAINED policy under URAKKAI, which no current URAKKAI
+    combination allows, so validate_executable_protocol rewrites it before
+    validating.  That mapping used to be a bare dict inside the validator while
+    the matrix declared its own partial copy of the same idea."""
 
     def _matrix(self):
         import audio_policy_matrix
         return audio_policy_matrix
 
-    def test_the_alias_is_declared_as_legacy(self):
-        matrix = self._matrix()
-        self.assertEqual(
-            matrix.LEGACY_V1_POLICY_ALIASES,
-            {"A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED"},
-        )
-        for alias, current in matrix.LEGACY_V1_POLICY_ALIASES.items():
-            # Legacy timelines still carry the string, so the sets keep accepting it.
-            self.assertIn(alias, matrix.A10_POLICIES)
-            self.assertIn(alias, matrix.TTS_POLICIES)
-            # But it names no current combination, and its replacement does.
-            self.assertNotIn(
-                alias, {policy for _mode, policy, _source in matrix.CANONICAL_MODE_MATRIX})
-            self.assertIn(
-                current, {policy for _mode, policy, _source in matrix.CANONICAL_MODE_MATRIX})
+    def _validator(self):
+        import validate_executable_protocol
+        return validate_executable_protocol
 
-    def test_a_current_plan_cannot_use_the_alias(self):
-        schema = json.loads(
-            (SKILL_ROOT / "schemas" / "executable_production_plan.schema.json")
+    def test_the_validator_uses_the_shared_map(self):
+        self.assertIs(
+            self._validator().LEGACY_V1_URAKKAI_POLICY_REWRITES,
+            self._matrix().LEGACY_V1_URAKKAI_POLICY_REWRITES,
+        )
+
+    def test_every_rewrite_maps_a_v1_name_onto_a_current_urakkai_policy(self):
+        rewrites = self._matrix().LEGACY_V1_URAKKAI_POLICY_REWRITES
+        self.assertTrue(rewrites)
+        v1_schema = json.loads(
+            (SKILL_ROOT / "schemas" / "executable_production_plan_v1.schema.json")
             .read_text(encoding="utf-8")
         )
-        allowed = schema["properties"]["audio_policy"]["enum"]
-        for alias in self._matrix().LEGACY_V1_POLICY_ALIASES:
-            self.assertNotIn(alias, allowed)
-        allowed_urakkai = (
-            PROTOCOL["production_modes"]["URAKKAI"]["allowed_audio_policies"]
+        v1_policies = v1_schema["properties"]["audio_policy"]["enum"]
+        allowed_urakkai = PROTOCOL["production_modes"]["URAKKAI"]["allowed_audio_policies"]
+        for old_name, current in rewrites.items():
+            # Rewriting anything a v1 plan cannot carry would be dead code.
+            self.assertIn(old_name, v1_policies)
+            # And rewriting onto a name URAKKAI still refuses would fix nothing.
+            self.assertNotIn(old_name, allowed_urakkai)
+            self.assertIn(current, allowed_urakkai)
+
+    def test_a_v1_urakkai_plan_is_not_rejected_for_its_legacy_policy(self):
+        """The rewrite has to actually run: without it the plan below fails
+        URAKKAI_AUDIO_POLICY_INVALID before any real check is reached."""
+        validator = self._validator()
+        for old_name in self._matrix().LEGACY_V1_URAKKAI_POLICY_REWRITES:
+            plan = {
+                "schema_version": "001short-production-plan-v1",
+                "episode_id": "EP", "root_profile": "test", "project_name": "EP",
+                "production_mode": "URAKKAI", "total_duration_us": 2_000_000,
+                "audio_policy": old_name,
+                "order_signature": ["B02", "B01"],
+                "original_order": ["B01", "B02"],
+                "timeline": [
+                    {"segment_key": "B02", "target_range_us": [0, 1_000_000], "placements": []},
+                    {"segment_key": "B01", "target_range_us": [1_000_000, 2_000_000], "placements": []},
+                ],
+            }
+            errors = validator.validate_production_plan(plan, validator.load_protocol())
+            self.assertNotIn("URAKKAI_AUDIO_POLICY_INVALID", errors, old_name)
+
+
+class DerivedPolicySetTest(unittest.TestCase):
+    """The protocol validator kept its own hand-listed copy of the URAKKAI policies
+    that retain A10.  Missing a new policy there drops the VIDEO-to-A10 count and
+    range checks without any failure to notice."""
+
+    def test_the_urakkai_a10_set_is_derived_not_listed(self):
+        import audio_policy_matrix
+        import validate_executable_protocol
+        self.assertEqual(
+            set(validate_executable_protocol.A10_AUDIO_POLICIES),
+            set(audio_policy_matrix.URAKKAI_AUDIO_POLICIES) & audio_policy_matrix.A10_POLICIES,
         )
-        for alias in self._matrix().LEGACY_V1_POLICY_ALIASES:
-            self.assertNotIn(alias, allowed_urakkai)
+        # Every URAKKAI policy that keeps A10 has to be in it, or its episodes skip
+        # the mapping gate entirely.
+        for mode, policy, _source in audio_policy_matrix.CANONICAL_MODE_MATRIX:
+            if mode == "URAKKAI" and policy in audio_policy_matrix.A10_POLICIES:
+                self.assertIn(policy, validate_executable_protocol.A10_AUDIO_POLICIES)
+
+
+if __name__ == "__main__":
+    unittest.main()

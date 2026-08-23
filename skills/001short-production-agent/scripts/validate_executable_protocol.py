@@ -16,7 +16,10 @@ SCRIPT_ROOT = Path(__file__).resolve().parent
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from audio_policy_matrix import MIXED_A9_A10_POLICIES
+from audio_policy_matrix import (
+    A10_POLICIES, LEGACY_V1_URAKKAI_POLICY_REWRITES, MIXED_A9_A10_POLICIES,
+    URAKKAI_AUDIO_POLICIES,
+)
 from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 from schema_runtime import validate_schema
 import user_provided_media_overlay
@@ -33,10 +36,10 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
     "SOURCE_ORDER_CLEAN_AUDIO",
     "A9_TTS_PLUS_A10_SOURCE_CLIP",
 ]
-A10_AUDIO_POLICIES = {
-    "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED", "SOURCE_ORDER_CLEAN_AUDIO",
-    "A9_TTS_PLUS_A10_SOURCE_CLIP",
-}
+# The URAKKAI policies that keep A10.  Listing them by hand meant a new A10
+# policy could miss this set and silently lose the VIDEO-to-A10 count and range
+# checks below, so derive it from the canonical table instead.
+A10_AUDIO_POLICIES = frozenset(URAKKAI_AUDIO_POLICIES) & A10_POLICIES
 EXPECTED_SOURCE_AUTHORITY_LINE = (
     r"Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`"
 )
@@ -879,10 +882,9 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
             return ["PRODUCTION_PLAN_V1_CURRENT_FIELDS_FORBIDDEN"]
         plan = copy.deepcopy(plan)
         if plan.get("production_mode") == "URAKKAI":
-            plan["audio_policy"] = {
-                "A10_RETAINED_SYNC": "A10_REASSEMBLED_SYNC",
-                "A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED",
-            }.get(plan.get("audio_policy"), plan.get("audio_policy"))
+            plan["audio_policy"] = LEGACY_V1_URAKKAI_POLICY_REWRITES.get(
+                plan.get("audio_policy"), plan.get("audio_policy")
+            )
             plan["audio_source"] = "GENERATED_TTS" if plan.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE" else "REASSEMBLED_VOCAL_STEM"
         else:
             plan["audio_policy"] = "SOURCE_ORDER_CLEAN_AUDIO"
