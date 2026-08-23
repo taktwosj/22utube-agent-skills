@@ -16,15 +16,25 @@ EVIDENCE_SCHEMA = SCHEMA.with_name("design_lock_evidence.schema.json")
 
 LEGAL_ROLES = {
     "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "T1", "T2", "A9", "A9_TEXT",
-    "A10", "A10_TEXT", "STATE", "A11", "A12",
+    "A10", "A10_TEXT", "STATE", "A11", "A12", "SOURCE_CREDIT",
 }
 
 # shrt_white_base_v2/v3 seeds are placeholders with no width or wrap settings, and
 # the builder swaps text without touching font size, so CapCut neither shrinks
 # nor wraps.  These are the measured per-line budgets before text leaves frame.
-MAX_LINE_LENGTH_BY_ROLE = {"T1": 12, "T2": 12, "A10_TEXT": 15, "A9_TEXT": 10, "STATE": 15}
-MAX_LINE_COUNT_BY_ROLE = {"A9_TEXT": 2, "STATE": 2}
+# SOURCE_CREDIT is not measured: it is scaled from T2's 12 characters at font
+# size 16 down to the credit lane's size 12.0, which is the more conservative of
+# the two title ratios.  Measure it against a real render before raising it.
+MAX_LINE_LENGTH_BY_ROLE = {
+    "T1": 12, "T2": 12, "A10_TEXT": 15, "A9_TEXT": 10, "STATE": 15,
+    "SOURCE_CREDIT": 16,
+}
+MAX_LINE_COUNT_BY_ROLE = {"A9_TEXT": 2, "STATE": 2, "SOURCE_CREDIT": 1}
 FULL_SPAN_ROLES = ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT")
+# The credit lane is v3-only and optional, so it cannot be required outright:
+# a v2 episode declares no SOURCE_CREDIT and track 3 stays empty.  When a plan
+# does declare it, it spans the whole timeline exactly like T1/T2.
+OPTIONAL_FULL_SPAN_ROLES = ("SOURCE_CREDIT",)
 
 
 def _overlong_line(text: str, limit: int) -> str | None:
@@ -63,6 +73,22 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
                 "expected_start": 0, "expected_duration": timeline_total,
                 "observed_count": len(matches),
             })
+    for role in OPTIONAL_FULL_SPAN_ROLES:
+        matches = [row for row in rows if row.get("role") == role]
+        if not matches:
+            continue
+        if (
+            timeline_total <= 0 or len(matches) != 1
+            or matches[0].get("start") != 0
+            or matches[0].get("duration") != timeline_total
+        ):
+            errors.append({
+                "code": "FULL_SPAN_ANCHOR_INVALID", "role": role,
+                "expected_start": 0, "expected_duration": timeline_total,
+                "observed_count": len(matches),
+            })
+        elif not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():
+            errors.append({"code": "TITLE_TEXT_REQUIRED", "role": role})
     for role in ("T1", "T2"):
         matches = [row for row in rows if row.get("role") == role]
         if len(matches) != 1 or not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():

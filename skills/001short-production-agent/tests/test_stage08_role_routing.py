@@ -13,6 +13,7 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import build_episode_capcut as builder
+import validate_build_inputs as build_inputs
 import validate_capcut_project as readback
 import validate_design_lock
 from track_contract import TRACK_LAYOUT
@@ -406,6 +407,100 @@ class Stage08RoleRoutingTest(unittest.TestCase):
         self.assertIn("V2_ROLE_TRACK_MISMATCH", {
             item["code"] for item in readback.validate_v2_role_routing(model, contract)
         })
+
+
+class SourceCreditContractOnlyRoleTest(unittest.TestCase):
+    """The credit row lives in the contract but never in the approved timeline.
+
+    Its authority is v_plan, so the builder injects it after the timeline was
+    approved.  Both timeline-vs-contract gates have to skip it or the episode is
+    unbuildable either way: declared in the approved timeline it is counted twice
+    against the draft, omitted it reads as contract-only drift.
+    """
+
+    @staticmethod
+    def _rows():
+        return [
+            {"segment_id": "V01", "role": "VIDEO", "start": 0, "duration": 8_000_000},
+            {"segment_id": "T1_FULL", "role": "T1", "start": 0, "duration": 8_000_000},
+        ]
+
+    def _contract(self, rows, *, with_credit):
+        timeline = list(rows)
+        if with_credit:
+            timeline.append({
+                "segment_id": "SOURCE_CREDIT", "role": "SOURCE_CREDIT",
+                "start": 0, "duration": 8_000_000,
+            })
+        return {
+            "timeline": timeline,
+            "approved_actual_order": [row["segment_id"] for row in timeline],
+        }
+
+    def test_credit_row_is_excluded_from_the_timeline_authority_comparison(self):
+        rows = self._rows()
+        contract = self._contract(rows, with_credit=True)
+        only = {
+            row["segment_id"] for row in contract["timeline"]
+            if row["role"] in build_inputs.CONTRACT_ONLY_ROLES
+        }
+        self.assertEqual(only, {"SOURCE_CREDIT"})
+        kept = [r for r in contract["timeline"] if r["role"] not in build_inputs.CONTRACT_ONLY_ROLES]
+        order = [i for i in contract["approved_actual_order"] if i not in only]
+        self.assertEqual({r["segment_id"] for r in kept}, {r["segment_id"] for r in rows})
+        self.assertEqual(order, [r["segment_id"] for r in rows])
+
+    def test_both_gates_read_the_same_exclusion_set(self):
+        self.assertIs(readback.CONTRACT_ONLY_ROLES, build_inputs.CONTRACT_ONLY_ROLES)
+
+    def test_a_contract_without_a_credit_is_unaffected(self):
+        rows = self._rows()
+        contract = self._contract(rows, with_credit=False)
+        kept = [r for r in contract["timeline"] if r["role"] not in build_inputs.CONTRACT_ONLY_ROLES]
+        self.assertEqual(kept, rows)
+
+
+class SourceCreditDesignLockRoleTest(unittest.TestCase):
+    """SOURCE_CREDIT is legal and full-span, but only when a plan declares it."""
+
+    @staticmethod
+    def _timeline(credit=None):
+        rows = [
+            {"segment_id": "V01", "role": "VIDEO", "start": 0, "duration": 8_000_000},
+            {"segment_id": "T1_FULL", "role": "T1", "start": 0, "duration": 8_000_000,
+             "text": "제목 하나", "content_type": "TITLE"},
+            {"segment_id": "T2_FULL", "role": "T2", "start": 0, "duration": 8_000_000,
+             "text": "제목 둘", "content_type": "TITLE"},
+            {"segment_id": "SCREEN_WHITE_FULL", "role": "SCREEN_WHITE", "start": 0, "duration": 8_000_000},
+            {"segment_id": "SCREEN_EFFECT_FULL", "role": "SCREEN_EFFECT", "start": 0, "duration": 8_000_000},
+        ]
+        if credit is not None:
+            rows.append({"segment_id": "SOURCE_CREDIT", "role": "SOURCE_CREDIT", **credit})
+        return {"segments": rows}
+
+    def _codes(self, timeline):
+        return {row["code"] for row in validate_design_lock.validate_role_contract(timeline)}
+
+    def test_source_credit_is_a_legal_role(self):
+        self.assertIn("SOURCE_CREDIT", validate_design_lock.LEGAL_ROLES)
+
+    def test_a_timeline_without_a_credit_still_passes(self):
+        codes = self._codes(self._timeline())
+        self.assertNotIn("ROLE_ANCHOR_INVALID", codes)
+        self.assertNotIn("FULL_SPAN_ANCHOR_INVALID", codes)
+
+    def test_a_declared_credit_must_span_the_whole_timeline(self):
+        partial = self._timeline({"start": 0, "duration": 4_000_000, "text": "출처 : 채널"})
+        self.assertIn("FULL_SPAN_ANCHOR_INVALID", self._codes(partial))
+
+    def test_a_declared_credit_must_carry_text(self):
+        blank = self._timeline({"start": 0, "duration": 8_000_000, "text": "   "})
+        self.assertIn("TITLE_TEXT_REQUIRED", self._codes(blank))
+
+    def test_an_overlong_credit_is_rejected(self):
+        limit = validate_design_lock.MAX_LINE_LENGTH_BY_ROLE["SOURCE_CREDIT"]
+        long_credit = self._timeline({"start": 0, "duration": 8_000_000, "text": "가" * (limit + 1)})
+        self.assertIn("CAPTION_LINE_TOO_LONG", self._codes(long_credit))
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ from common import inspect_write_target, manifest_sha256, read_json, result, sha
 from schema_runtime import validate_schema
 from validate_design_lock import validate_handoff
 from validate_audio_caption import validate_audio_caption
-from validate_build_inputs import validate_build_inputs
+from validate_build_inputs import CONTRACT_ONLY_ROLES, validate_build_inputs
 import user_provided_media_overlay
 from track_contract import (
     A10_TEXT_TRACK_BY_COLOR,
@@ -1166,10 +1166,23 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
     approved_rows = sorted(
         approved_timeline.get("segments", []), key=lambda row: (row.get("start", 0), row.get("segment_id", ""))
     )
-    contract_rows = contract.get("timeline", [])
+    # The credit lane is declared in v_plan, so the builder injects it into the
+    # contract and the approved timeline never carries it.  It is excluded here
+    # for the same reason it is excluded in validate_build_inputs.
+    contract_only_ids = {
+        row.get("segment_id") for row in contract.get("timeline", [])
+        if row.get("role") in CONTRACT_ONLY_ROLES
+    }
+    contract_rows = [
+        row for row in contract.get("timeline", [])
+        if row.get("role") not in CONTRACT_ONLY_ROLES
+    ]
+    contract_order = [
+        segment_id for segment_id in contract.get("approved_actual_order") or []
+        if segment_id not in contract_only_ids
+    ]
     if (
-        [row.get("segment_id") for row in approved_rows]
-        != contract.get("approved_actual_order")
+        [row.get("segment_id") for row in approved_rows] != contract_order
         or len(approved_rows) != len(contract_rows)
         or any(
             any(approved.get(field) != planned.get(field) for field in ("segment_id", "role", "start", "duration"))
