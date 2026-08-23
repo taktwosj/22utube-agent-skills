@@ -35,7 +35,7 @@ EMPTY_MARKERS = {"", "-", "–", "—"}
 DECLARED_EMPTY_VALUES = {"없음", "비움"}
 LINE_LIMITS = {
     ("original", "A9_TEXT"): (2, 15),
-    ("urakkai", "A9_TEXT"): (2, 15),
+    ("urakkai", "A9_TEXT"): (2, 10),
     ("original", "STATE_LASER"): (2, 15),
     ("urakkai", "STATE_LASER"): (2, 15),
 }

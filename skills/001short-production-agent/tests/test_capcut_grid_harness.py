@@ -325,7 +325,7 @@ class CapCutGridHarnessTest(unittest.TestCase):
                     result = grid_harness.validate_grids(path, URAKKAI)
                     self.assertIn(expected[name], {row["code"] for row in result["errors"]})
 
-    def test_target_a9_text_uses_the_same_fifteen_character_limit(self):
+    def test_target_a9_text_uses_the_ten_character_limit(self):
         urakkai_text = URAKKAI.read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -333,7 +333,7 @@ class CapCutGridHarnessTest(unittest.TestCase):
 
             empty_a9 = root / "empty-a9.md"
             empty_a9.write_text(
-                urakkai_text.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 12345678901 |", 1),
+                urakkai_text.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 1234567890 |", 1),
                 encoding="utf-8",
             )
             empty_result = grid_harness.validate_grids(ORIGINAL, empty_a9)
@@ -353,24 +353,24 @@ class CapCutGridHarnessTest(unittest.TestCase):
                 {row["code"] for row in missing_text_result["errors"]},
             )
 
-            fifteen = root / "fifteen.md"
-            fifteen.write_text(
-                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 123456789012345 |", 1),
+            at_limit = root / "at-limit.md"
+            at_limit.write_text(
+                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 1234567890 |", 1),
                 encoding="utf-8",
             )
-            self.assertEqual(grid_harness.validate_grids(ORIGINAL, fifteen)["status"], "PASS")
+            self.assertEqual(grid_harness.validate_grids(ORIGINAL, at_limit)["status"], "PASS")
 
-            sixteen = root / "sixteen.md"
-            sixteen.write_text(
-                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 1234567890123456 |", 1),
+            over_limit = root / "over-limit.md"
+            over_limit.write_text(
+                with_a9.replace("| A9_TEXT | 비움 |", "| A9_TEXT | 12345678901 |", 1),
                 encoding="utf-8",
             )
-            result = grid_harness.validate_grids(ORIGINAL, sixteen)
+            result = grid_harness.validate_grids(ORIGINAL, over_limit)
             self.assertEqual(result["status"], "FAIL")
             errors = [row for row in result["errors"] if row["code"] == "TABLE_TEXT_LINE_TOO_LONG"]
             self.assertEqual(errors[0]["table"], "urakkai")
             self.assertEqual(errors[0]["row"], "A9_TEXT")
-            self.assertEqual(errors[0]["limit"], 15)
+            self.assertEqual(errors[0]["limit"], 10)
 
     def test_original_a9_text_keeps_the_existing_fifteen_character_contract(self):
         original_text = ORIGINAL.read_text(encoding="utf-8")
