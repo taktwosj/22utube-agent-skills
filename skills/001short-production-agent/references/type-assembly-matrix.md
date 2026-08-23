@@ -64,10 +64,22 @@ cue 포함 검사에 걸린다).
 |---|---|---|---|---|
 | ① 클린 원본순서 | 순서 변경 0, 컷 0 | `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` × `SOURCE_ORDER_CLEAN_AUDIO` | raw `SOURCE_CLIP` | 불필요 |
 | ② 화자 유지 원본순서 | 순서 유지, BGM 제거 | `SOURCE_ORDER_UNCHANGED_A10_RETAINED` × `A10_RETAINED_SYNC` | 전체 stem | 필요 |
-| ③ 화자 유지 우라까이 | V순서 재배열 | `URAKKAI` × `A10_REASSEMBLED_SYNC` | V순서 재조립 stem | 필요 |
-| ④ 순서보존 트림 | 일부 B만 제외, 순서 유지 | `URAKKAI` × `SOURCE_ORDER_CLEAN_AUDIO` + `audio_source=SOURCE_CLIP`, `urakkai.production_type="TRIM_ONLY_NO_REORDER"` | 원본에서 V구간대로 직접 컷 | 불필요 |
+| ③ 화자 유지 우라까이 | BGM을 빼야 함 | `URAKKAI` × `A10_REASSEMBLED_SYNC` | V순서 재조립 stem | 필요 |
+| ④ 원음 그대로 우라까이 | BGM을 그대로 둠 | `URAKKAI` × `SOURCE_ORDER_CLEAN_AUDIO` + `audio_source=SOURCE_CLIP` | 원본에서 V구간대로 직접 컷 | 불필요 |
 
-④ 안전장치: 사용 구간은 검증된 원본 Bxx의 부분집합, `final_order`는 `original_order`의 순서 보존 부분열, 각 A10 세그먼트 구간 = 짝 VIDEO 구간 완전 일치. 위반 시 기존 가드가 그대로 차단한다.
+**③과 ④를 가르는 것은 순서가 아니라 BGM이다.** ④는 V순서 재배열과 순서보존 트림을 모두 할 수 있다.
+각 A10 세그먼트가 짝 VIDEO의 원본 구간을 그대로 들고 오므로 재배열해도 stem이 필요 없다.
+`capcut_source_range_us`에 실제 원본 구간을 명시하면 CapCut이 원본에서 그 지점을 찾아 재생한다.
+
+순서보존 트림(일부 B만 제외하고 순서 유지)을 할 때만 두 가지를 더 선언한다.
+
+- `v_plan.original_order` — 제외한 B까지 포함한 **원본 B 전체 목록**.
+  이걸 빼면 `original_order`가 살아남은 V행에서만 파생되어 `final_order`와 같아지고,
+  트림이 `URAKKAI_STRUCTURE_UNCHANGED`로 거부된다.
+- `v_plan.urakkai_production_type="TRIM_ONLY_NO_REORDER"` — `E_EFFECTIVE_CLIP`(가짜 분할) 면제용.
+
+안전장치: 사용 구간은 검증된 원본 Bxx의 부분집합, `final_order`는 `original_order`의 순서 보존 부분열,
+각 A10 세그먼트 구간 = 짝 VIDEO 구간 완전 일치. 위반 시 기존 가드가 그대로 차단한다.
 
 ## 유형별 15행 값 요약 (최종 표 기준)
 

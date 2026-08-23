@@ -238,6 +238,7 @@ def build_production_plan(
     )
     audio_modes = {row["clip_id"]: row["mode"] for row in manifest["source_audio"]}
     a10_asset_key = "source_audio"
+    original_order = plan.get("original_order") or sorted({row[1] for row in v_rows})
     rows = []
     for segment_id, beat_id, start, end, source_start, source_end in v_rows:
         target = [start, end]
@@ -304,7 +305,12 @@ def build_production_plan(
         "execution_strategy": plan["execution_strategy"],
         "visual_asset_mode": "CLEAN_VISUAL_READY",
         "total_duration_us": plan["DUR"],
-        "original_order": sorted({row[1] for row in v_rows}),
+        # URAKKAI_STRUCTURE_UNCHANGED and the fake-split guard both compare the
+        # final order against the ORIGINAL beat list, and the guard exempts a
+        # trim whose final_order is a contiguous slice of it.  Deriving this
+        # from v_rows alone dropped every excluded beat, so an order-preserving
+        # trim looked identical to its own output and could never be built.
+        "original_order": original_order,
         "order_signature": [row[1] for row in v_rows],
         "final_order": [row[1] for row in v_rows],
         "timeline": rows,

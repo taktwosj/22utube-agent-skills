@@ -359,6 +359,39 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             self._generate()
         self.assertIn("MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED", str(caught.exception))
 
+    def test_an_order_preserving_trim_reads_as_a_structural_edit(self) -> None:
+        """Dropping beats without reordering is a real URAKKAI edit.  original_order
+        used to be derived from the surviving V rows alone, so the excluded beats
+        vanished, final_order matched it exactly and every trim was rejected as
+        URAKKAI_STRUCTURE_UNCHANGED."""
+        self.v_rows = [
+            ["V01", "B01", 0, 1_400_000, 0, 1_400_000],
+            ["V02", "B03", 1_400_000, 3_000_000, 2_800_000, 4_400_000],
+        ]
+        self._make_original_audio_caption()
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        v_plan["original_order"] = ["B01", "B02", "B03"]
+        v_plan["urakkai_production_type"] = "TRIM_ONLY_NO_REORDER"
+        _write_json(plan_path, v_plan)
+        self._generate()
+
+        manifest = json.loads(
+            (self.root / "50_capcut_project" / "build_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["urakkai"]["production_type"], "TRIM_ONLY_NO_REORDER")
+        self.assertFalse(manifest["urakkai"]["reorder_required"])
+
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["original_order"], ["B01", "B02", "B03"])
+        self.assertEqual(plan["final_order"], ["B01", "B03"])
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
     def test_a_caption_only_episode_builds_without_any_audio(self) -> None:
         """Type 1 carries no voice, so both audio axes clear and no TTS cue is emitted."""
         self._make_caption_only()
