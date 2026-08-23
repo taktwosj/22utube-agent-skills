@@ -1,5 +1,4 @@
 import json
-import re
 import sys
 import unittest
 from pathlib import Path
@@ -13,7 +12,10 @@ if str(SCRIPTS) not in sys.path:
 import validate_design_lock
 from validate_capcut_grids import LINE_LIMITS
 
-PROTOCOL = json.loads((SKILL_ROOT / "protocol.json").read_text(encoding="utf-8"))
+from schema_runtime import validate_schema
+
+PROTOCOL_PATH = SKILL_ROOT / "protocol.json"
+PROTOCOL = json.loads(PROTOCOL_PATH.read_text(encoding="utf-8"))
 GRID_HARNESS = PROTOCOL["grid_harness"]
 ORIGINAL_TEMPLATE = SKILL_ROOT / "templates" / "original-capcut-grid.md"
 URAKKAI_TEMPLATE = SKILL_ROOT / "templates" / "urakkai-capcut-grid.md"
@@ -103,5 +105,21 @@ class CaptionLimitContractTest(unittest.TestCase):
         self.assertIn("CAPTION_LINE_TOO_LONG", self._a9_text_codes(limit + 1))
 
 
+
+class ProtocolSchemaContractTest(unittest.TestCase):
+    """Nothing validated protocol.json against schemas/executable_protocol.schema.json,
+    so the schema quietly fell three changes behind: it never learned the
+    source_intake_receipt and vocal_stem_manifest pointers, it still required the
+    old cloud_row_required_fields name, and its URAKKAI policy enum was missing
+    SOURCE_ORDER_CLEAN_AUDIO - a policy protocol.json has been allowing all along."""
+
+    def test_protocol_validates_against_its_own_schema(self):
+        schema = json.loads(
+            (SKILL_ROOT / "schemas" / "executable_protocol.schema.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(validate_schema(PROTOCOL, schema), [])
+
+
 if __name__ == "__main__":
     unittest.main()
+

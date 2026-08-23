@@ -71,6 +71,11 @@ cue 포함 검사에 걸린다).
 각 A10 세그먼트가 짝 VIDEO의 원본 구간을 그대로 들고 오므로 재배열해도 stem이 필요 없다.
 `capcut_source_range_us`에 실제 원본 구간을 명시하면 CapCut이 원본에서 그 지점을 찾아 재생한다.
 
+유형 4·5처럼 새 TTS 나레이션을 얹으면서도 stem을 만들고 싶지 않으면
+`URAKKAI` × `A9_TTS_PLUS_A10_SOURCE_CLIP` + `audio_source=SOURCE_CLIP`을 쓴다.
+A10은 A9가 덮는 Vxx에서 `duck`, 나머지에서 `on`이며 이 판정은 빌더가 자동으로 한다.
+A9 cue가 Vxx의 일부만 덮는 것은 양쪽 다 미지원이라 manifest 작성 시점에 거부된다.
+
 순서보존 트림(일부 B만 제외하고 순서 유지)을 할 때만 두 가지를 더 선언한다.
 
 - `v_plan.original_order` — 제외한 B까지 포함한 **원본 B 전체 목록**.

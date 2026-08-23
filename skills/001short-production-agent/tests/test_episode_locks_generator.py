@@ -11,6 +11,7 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(SKILL_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
+import audio_policy_matrix  # noqa: E402
 import build_episode_locks as generator  # noqa: E402
 import validate_executable_protocol  # noqa: E402
 from schema_runtime import validate_schema  # noqa: E402
@@ -390,6 +391,52 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
                 plan, validate_executable_protocol.load_protocol()
             ),
             [],
+        )
+
+    def test_a_mixed_narration_needs_no_demucs_stem(self) -> None:
+        """A9_TTS_PLUS_A10_SOURCE_CLIP is the same mixed A9/A10 shape as
+        A9_TTS_PLUS_A10_REASSEMBLED but plays the untouched source, so an operator
+        who does not want a Demucs stem still gets types 4 and 5."""
+        self._make_tts_intro_original_body()
+        for name in ("v_plan.json", "approved_timeline.json"):
+            path = self.root / "20_script" / name
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["audio_policy"] = "A9_TTS_PLUS_A10_SOURCE_CLIP"
+            if "audio_source" in payload:
+                payload["audio_source"] = "SOURCE_CLIP"
+            _write_json(path, payload)
+        self.assertEqual(self._generate()["status"], "PASS")
+
+        manifest = json.loads(
+            (self.root / "50_capcut_project" / "build_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {row["clip_id"]: row["mode"] for row in manifest["source_audio"]},
+            {"V01": "duck", "V02": "on"},
+        )
+        # SOURCE_CLIP means CapCut seeks inside the original media, so unlike a
+        # reassembled stem every row has to name its real source span.
+        for row, v_row in zip(manifest["source_audio"], self.v_rows):
+            self.assertEqual(row["capcut_source_range_us"], [v_row[4], v_row[5]])
+
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["audio_source"], "SOURCE_CLIP")
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_the_new_mixed_policy_is_not_a_stem_policy(self) -> None:
+        """Listing it under STEM_POLICIES would send build_episode_capcut looking
+        for a Demucs stem, which is the whole thing this policy avoids."""
+        self.assertIn("A9_TTS_PLUS_A10_SOURCE_CLIP", audio_policy_matrix.A10_POLICIES)
+        self.assertIn("A9_TTS_PLUS_A10_SOURCE_CLIP", audio_policy_matrix.TTS_POLICIES)
+        self.assertNotIn("A9_TTS_PLUS_A10_SOURCE_CLIP", audio_policy_matrix.STEM_POLICIES)
+        self.assertIn(
+            ("URAKKAI", "A9_TTS_PLUS_A10_SOURCE_CLIP", "SOURCE_CLIP"),
+            audio_policy_matrix.ACCEPTED_MODE_TUPLES,
         )
 
     def test_a_caption_only_episode_builds_without_any_audio(self) -> None:

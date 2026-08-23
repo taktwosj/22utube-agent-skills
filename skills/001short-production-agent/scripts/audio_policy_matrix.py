@@ -19,6 +19,9 @@ CANONICAL_MODE_MATRIX = (
     # Order-preserving trim: real original audio cut directly from the
     # untouched source clip (no Demucs stem involved).
     ("URAKKAI", "SOURCE_ORDER_CLEAN_AUDIO", "SOURCE_CLIP"),
+    # Same untouched source audio, plus a new TTS narration over it.  This is
+    # what types 4 and 5 need when the operator does not want a Demucs stem.
+    ("URAKKAI", "A9_TTS_PLUS_A10_SOURCE_CLIP", "SOURCE_CLIP"),
 )
 
 ACCEPTED_MODE_TUPLES = frozenset(CANONICAL_MODE_MATRIX)
@@ -29,14 +32,17 @@ ACCEPTED_MODE_TUPLES = frozenset(CANONICAL_MODE_MATRIX)
 # the two must never drift apart - they live here, not in either builder.
 TTS_POLICIES = frozenset({
     "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED",
+    "A9_TTS_PLUS_A10_SOURCE_CLIP",
 })
 A10_POLICIES = frozenset({
     "SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC",
     "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED",
+    "A9_TTS_PLUS_A10_SOURCE_CLIP",
 })
-# SOURCE_ORDER_CLEAN_AUDIO plays the untouched source, so it is the one A10
-# policy that needs no externally separated vocal stem.
-STEM_POLICIES = A10_POLICIES - {"SOURCE_ORDER_CLEAN_AUDIO"}
+# The SOURCE_CLIP policies play the untouched source, so they are the A10
+# policies that need no externally separated vocal stem.
+SOURCE_CLIP_A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A9_TTS_PLUS_A10_SOURCE_CLIP"})
+STEM_POLICIES = A10_POLICIES - SOURCE_CLIP_A10_POLICIES
 
 URAKKAI_AUDIO_POLICIES = tuple(dict.fromkeys(
     policy for mode, policy, _source in CANONICAL_MODE_MATRIX if mode == "URAKKAI"

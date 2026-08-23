@@ -834,6 +834,7 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 "A9_TTS_PLUS_A10_REASSEMBLED",
                 "CAPTION_ONLY_MUTE_SOURCE",
                 "SOURCE_ORDER_CLEAN_AUDIO",
+                "A9_TTS_PLUS_A10_SOURCE_CLIP",
             ],
         )
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)

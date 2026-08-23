@@ -544,6 +544,7 @@ def validate_audio_caption(
             "A10_RETAINED_SYNC": {"A10"},
             "A10_REASSEMBLED_SYNC": {"A10"},
             "A9_TTS_PLUS_A10_REASSEMBLED": {"A9", "A10"},
+            "A9_TTS_PLUS_A10_SOURCE_CLIP": {"A9", "A10"},
             "TTS_ONLY_MUTE_SOURCE": {"A9"},
             "CAPTION_ONLY_MUTE_SOURCE": set(),
         }.get(audio_lock.get("audio_policy"))

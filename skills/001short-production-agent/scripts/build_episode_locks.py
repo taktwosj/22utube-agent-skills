@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from audio_policy_matrix import A10_POLICIES  # noqa: E402
+from audio_policy_matrix import A10_POLICIES, SOURCE_CLIP_A10_POLICIES  # noqa: E402
 from common import read_json, sha256_file, write_json  # noqa: E402
 from schema_runtime import validate_schema  # noqa: E402
 
@@ -178,7 +178,7 @@ def build_manifest(
         # A reassembled stem is already in target order, so the builder may reuse
         # the target range.  SOURCE_CLIP plays the untouched source, so its CapCut
         # source range has to name the real original span.
-        if audio_policy != "SOURCE_ORDER_CLEAN_AUDIO":
+        if audio_policy not in SOURCE_CLIP_A10_POLICIES:
             return {}
         return {"capcut_source_range_us": [row[4], row[5]]}
 

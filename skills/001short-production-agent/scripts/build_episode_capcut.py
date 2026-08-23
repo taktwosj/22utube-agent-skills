@@ -49,6 +49,7 @@ ROLE_BY_TRACK = list(CANONICAL_TRACKS)
 AUDIO_POLICIES = frozenset({
     "SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC",
     "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE",
+    "A9_TTS_PLUS_A10_SOURCE_CLIP",
 })
 SOURCE_ORDER_PRODUCTION_MODES = frozenset({
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED",
@@ -1248,12 +1249,13 @@ def _normalize_source(
         if audio_source is None:
             raise RuntimeError("SOURCE_AUDIO_REQUIRED")
         audio_suffix = audio_source.suffix.lower() or ".wav"
-        # This is the externally separated Demucs vocal stem, not the raw
-        # source audio.  Keep that distinction visible in the portable asset.
+        # A stem policy carries the externally separated Demucs vocals; a
+        # SOURCE_CLIP policy carries the raw source audio.  Keep that
+        # distinction visible in the portable asset name.
         audio_name = (
-            f"a10_source_clean_audio{audio_suffix}"
-            if policy == "SOURCE_ORDER_CLEAN_AUDIO"
-            else f"a10_vocal_stem{audio_suffix}"
+            f"a10_vocal_stem{audio_suffix}"
+            if policy in STEM_POLICIES
+            else f"a10_source_clean_audio{audio_suffix}"
         )
         shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)

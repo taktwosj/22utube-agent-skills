@@ -30,8 +30,15 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
     "A9_TTS_PLUS_A10_REASSEMBLED",
     "CAPTION_ONLY_MUTE_SOURCE",
     "SOURCE_ORDER_CLEAN_AUDIO",
+    "A9_TTS_PLUS_A10_SOURCE_CLIP",
 ]
-A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED", "SOURCE_ORDER_CLEAN_AUDIO"}
+A10_AUDIO_POLICIES = {
+    "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED", "SOURCE_ORDER_CLEAN_AUDIO",
+    "A9_TTS_PLUS_A10_SOURCE_CLIP",
+}
+# Both mixed policies lay a new A9 over the retained speaker, so both owe the
+# duck-under-A9 rules below; only the stem source differs.
+MIXED_A9_A10_POLICIES = {"A9_TTS_PLUS_A10_REASSEMBLED", "A9_TTS_PLUS_A10_SOURCE_CLIP"}
 EXPECTED_SOURCE_AUTHORITY_LINE = (
     r"Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`"
 )
@@ -1003,9 +1010,9 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
                     errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
                     break
-            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED" and not tts:
+            if audio_policy in MIXED_A9_A10_POLICIES and not tts:
                 errors.append("URAKKAI_MIXED_A9_REQUIRED")
-            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED":
+            if audio_policy in MIXED_A9_A10_POLICIES:
                 if _segments(tracks, "A11"):
                     errors.append("URAKKAI_MIXED_A11_FORBIDDEN")
                 for retained in audio:
