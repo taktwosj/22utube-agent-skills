@@ -53,6 +53,12 @@
       "enabled": true
     },
     {
+      "name": "idm",
+      "category": "workflow",
+      "targets": ["codex", "claude", "hermes"],
+      "enabled": true
+    },
+    {
       "name": "naver-blog-posting",
       "category": "naver-blog",
       "targets": [
