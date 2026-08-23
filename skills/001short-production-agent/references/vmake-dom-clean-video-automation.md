@@ -46,7 +46,7 @@ Record `vmake_route=VMAKE_API_SDK` in state. Everything downstream is unchanged:
 
 ## Fast production rule
 
-Upload the verified source to VMake through Aside immediately at episode intake, and fall back to URL submission only when the upload route is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
+Submit the verified source to VMake immediately at episode intake through the API route above; the Aside upload is the first fallback and URL submission the second, in that order. Then continue source analysis, blueprint, and urakkai while the job runs. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
 
 ## Scope routing
 

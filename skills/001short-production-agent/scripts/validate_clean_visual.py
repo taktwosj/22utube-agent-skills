@@ -61,7 +61,7 @@ def _portrait_aspect_compatible(
         return False
     if candidate_width >= candidate_height:
         return False
-    if source_width >= source_height:
+    if source_width > source_height:
         return visual_transform == "REFRAME_TO_PORTRAIT"
     source_ratio = source_width / source_height
     candidate_ratio = candidate_width / candidate_height

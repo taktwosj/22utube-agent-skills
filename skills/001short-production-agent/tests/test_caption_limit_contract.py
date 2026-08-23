@@ -144,3 +144,44 @@ class ProtocolSchemaContractTest(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+class LegacyPolicyAliasTest(unittest.TestCase):
+    """A9_TTS_PLUS_A10_RETAINED sat in the policy sets beside current policies with
+    nothing marking it as a v1 name, so deriving MIXED_A9_A10_POLICIES from those
+    sets silently pulled a legacy string into a current rule.  These assertions
+    keep its status legible: legacy data still validates, current plans cannot
+    reach it."""
+
+    def _matrix(self):
+        import audio_policy_matrix
+        return audio_policy_matrix
+
+    def test_the_alias_is_declared_as_legacy(self):
+        matrix = self._matrix()
+        self.assertEqual(
+            matrix.LEGACY_V1_POLICY_ALIASES,
+            {"A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED"},
+        )
+        for alias, current in matrix.LEGACY_V1_POLICY_ALIASES.items():
+            # Legacy timelines still carry the string, so the sets keep accepting it.
+            self.assertIn(alias, matrix.A10_POLICIES)
+            self.assertIn(alias, matrix.TTS_POLICIES)
+            # But it names no current combination, and its replacement does.
+            self.assertNotIn(
+                alias, {policy for _mode, policy, _source in matrix.CANONICAL_MODE_MATRIX})
+            self.assertIn(
+                current, {policy for _mode, policy, _source in matrix.CANONICAL_MODE_MATRIX})
+
+    def test_a_current_plan_cannot_use_the_alias(self):
+        schema = json.loads(
+            (SKILL_ROOT / "schemas" / "executable_production_plan.schema.json")
+            .read_text(encoding="utf-8")
+        )
+        allowed = schema["properties"]["audio_policy"]["enum"]
+        for alias in self._matrix().LEGACY_V1_POLICY_ALIASES:
+            self.assertNotIn(alias, allowed)
+        allowed_urakkai = (
+            PROTOCOL["production_modes"]["URAKKAI"]["allowed_audio_policies"]
+        )
+        for alias in self._matrix().LEGACY_V1_POLICY_ALIASES:
+            self.assertNotIn(alias, allowed_urakkai)

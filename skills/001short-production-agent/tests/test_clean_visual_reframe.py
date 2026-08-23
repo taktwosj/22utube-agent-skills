@@ -36,6 +36,15 @@ class CleanVisualReframeTest(unittest.TestCase):
         self.assertFalse(
             _portrait_aspect_compatible(*PORTRAIT, 720, 1560, "REFRAME_TO_PORTRAIT"))
 
+    def test_a_square_source_is_not_a_landscape_one(self):
+        """The declaration covers pulling a Short out of a landscape longform.
+        A square source reframed to 9:16 is a different shape change, and letting
+        the same word wave it through would widen the exception past its reason."""
+        SQUARE = (1080, 1080)
+        self.assertFalse(
+            _portrait_aspect_compatible(*SQUARE, *PORTRAIT, "REFRAME_TO_PORTRAIT"))
+        self.assertFalse(_portrait_aspect_compatible(*SQUARE, *PORTRAIT))
+
     def test_the_result_still_has_to_be_portrait(self):
         for transform in (None, "REFRAME_TO_PORTRAIT"):
             self.assertFalse(_portrait_aspect_compatible(*LANDSCAPE, *LANDSCAPE, transform))

@@ -26,6 +26,13 @@ CANONICAL_MODE_MATRIX = (
 
 ACCEPTED_MODE_TUPLES = frozenset(CANONICAL_MODE_MATRIX)
 
+# A9_TTS_PLUS_A10_RETAINED is a v1 plan name, not a current combination: it has
+# no CANONICAL_MODE_MATRIX tuple, the v2 plan schema rejects it, and
+# validate_executable_protocol rewrites it to A9_TTS_PLUS_A10_REASSEMBLED when a
+# legacy URAKKAI plan carries it.  It stays in the sets below because legacy
+# timelines and audio locks still hold the string and have to keep validating.
+LEGACY_V1_POLICY_ALIASES = {"A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED"}
+
 # A9 carries narration we generate; A10 carries the retained source speech.
 # build_episode_capcut emits A10 segments only for A10_POLICIES, and
 # build_episode_locks marks source_audio audible only for the same set, so
