@@ -31,7 +31,13 @@ description: Use only when a political-longform request explicitly contains CapC
 - `%USERPROFILE%\.claude\skills\119-politics-longform-capcut`
 - `%USERPROFILE%\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut`
 
-119 스킬 변경은 Git 정본 `%USERPROFILE%\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다. 변경을 commit한 뒤 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
+119 스킬 변경은 Git 정본 저장소 `taktwosj/22utube-agent-skills`의 `skills/119-politics-longform-capcut`에서만 수행한다. 공유 정본은 원격 `main`이다.
+
+로컬 작업 경로는 고정하지 않는다. 그 저장소의 깨끗한 worktree면 어디든 된다. 특정 PC나 특정 절대경로를 정본이라고 부르지 않는다. 어떤 경로가 정본인지 확인할 때는 `git remote -v`로 저장소를 확인하고 `git log`로 해당 커밋이 `main`에 있는지 본다.
+
+변경은 commit하고 `main`에 반영한 뒤, 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
+
+브랜치에만 있고 `main`에 없는 변경은 아직 공유 정본이 아니다. 설치본이나 `main`을 읽고 최신이라고 단정하지 마라. 둘 다 마지막 release 시점의 상태이며 그 사이의 브랜치 작업은 보이지 않는다.
 
 ## 생산 중 계약 충돌
 

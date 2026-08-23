@@ -32,10 +32,13 @@ class CapcutMaterialPathTests(unittest.TestCase):
             with self.subTest(installed_path=installed_path):
                 self.assertIn(f"`{installed_path}`", skill)
         self.assertIn("직접 create·edit·copy·delete·relink하지 않는다", skill)
-        self.assertIn(
-            r"Git 정본 `%USERPROFILE%\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다",
-            skill,
-        )
+        # 정본은 저장소로 지정한다. 특정 PC 절대경로를 정본이라고 부르면
+        # 그 경로에 스킬이 없는 순간 다른 에이전트가 길을 잃는다.
+        self.assertIn("Git 정본 저장소 `taktwosj/22utube-agent-skills`", skill)
+        self.assertIn("공유 정본은 원격 `main`이다", skill)
+        self.assertIn("로컬 작업 경로는 고정하지 않는다", skill)
+        self.assertIn("브랜치에만 있고 `main`에 없는 변경은 아직 공유 정본이 아니다", skill)
+        self.assertNotIn(r"Git 정본 `%USERPROFILE%gent-skills", skill)
         self.assertIn("공식 release `publish → activate → verify`", skill)
         self.assertIn("첫 불일치에서 중단하고 문제·증거·영향·안전 rollback point를 보고", skill)
         for choice in (
