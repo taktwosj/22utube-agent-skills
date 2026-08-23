@@ -60,7 +60,7 @@
     "urakkai_path": "20_script/urakkai-capcut-grid.md",
     "row_order": [
       "T1", "T2", "A9_TEXT", "A10_TEXT_YELLOW", "A10_TEXT_WHITE",
-      "STATE_LASER", "STATE_GLITCH", "STATE_FLICKER", "SCREEN_WHITE",
+      "STATE_LASER", "STATE_GLITCH", "SOURCE_CREDIT", "SCREEN_WHITE",
       "SCREEN_EFFECT", "VIDEO", "A9", "A10", "A11", "A12_RESERVED_EMPTY"
     ],
     "empty_cell_error": "TABLE_EMPTY_CELL_FORBIDDEN",
@@ -139,9 +139,9 @@
       "TABLE_AUDIO_CAPTION_LOCK_INVALID"
     ]
   },
-  "track_layout": "shrt_white_base_v2_15",
+  "track_layout": "shrt_white_base_v3_15",
   "canonical_tracks": [
-    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
+    "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "SOURCE_CREDIT", "STATE_GLITCH",
     "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
     "A9", "A10", "A11", "A12_RESERVED_EMPTY"
   ],

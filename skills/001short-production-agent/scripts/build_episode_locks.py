@@ -50,7 +50,22 @@ CLEARED_BY_TYPE = {
 }
 # A STATE caption has no matching audio, so it cannot claim speech authority.
 CAPTION_AUTHORITY = {"STATE": "STATE"}
-ALWAYS_CLEARED = ["A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH", "STATE_FLICKER"]
+ALWAYS_CLEARED = ["A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH"]
+
+
+def source_credit_text(plan: dict) -> str | None:
+    """Return the declared full-span credit, or None when the plan omits it.
+
+    Absence is the key being missing.  A present key must carry a non-empty
+    string: an empty value would otherwise be indistinguishable from absence and
+    would silently leave the template placeholder on track 3.
+    """
+    if "SOURCE_CREDIT" not in plan:
+        return None
+    value = plan["SOURCE_CREDIT"]
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("SOURCE_CREDIT_DECLARED_EMPTY")
+    return value
 
 
 ORIGINAL_BEAT_HEADER = re.compile(r"^###\s+(B\d{2})\s", re.MULTILINE)
@@ -278,6 +293,15 @@ def build_production_plan(
             {"anchor": "T1", "operation": "replace_template_text", "text": plan["T1"], "target_range_us": target},
             {"anchor": "T2", "operation": "replace_template_text", "text": plan["T2"], "target_range_us": target},
         ]
+        # SOURCE_CREDIT is a full-span title lane like T1/T2.  A plan that does
+        # not declare it leaves track 3 empty, so v2-era episodes rebuild
+        # unchanged.
+        credit = source_credit_text(plan)
+        if credit is not None:
+            placements.append({
+                "anchor": "SOURCE_CREDIT", "operation": "replace_template_text",
+                "text": credit, "target_range_us": target,
+            })
         for cue in cues:
             if cue[0] != segment_id:
                 continue
@@ -344,7 +368,11 @@ def build_production_plan(
         "order_signature": [row[1] for row in v_rows],
         "final_order": [row[1] for row in v_rows],
         "timeline": rows,
-        "cleared_anchors": ALWAYS_CLEARED + CLEARED_BY_TYPE[plan["type"]],
+        "cleared_anchors": (
+            ALWAYS_CLEARED
+            + CLEARED_BY_TYPE[plan["type"]]
+            + ([] if source_credit_text(plan) is not None else ["SOURCE_CREDIT"])
+        ),
         "audio_bindings": {
             "audio_lock_path": "../30_audio_srt/audio_lock.json",
             "audio_lock_sha256": sha256_file(episode_root / "30_audio_srt" / "audio_lock.json"),
@@ -446,6 +474,7 @@ def build_config(
 ) -> dict:
     cues = [cue for cue in plan.get("cues", []) if cue[1] != "NOFIT"]
     a9 = {row["cue_id"]: row for row in timeline["segments"] if row["role"] == "A9"}
+    credit = source_credit_text(plan)
     config = {
         "episode_id": episode_id,
         "visual_asset_mode": "CLEAN_VISUAL_READY",
@@ -458,6 +487,7 @@ def build_config(
         **({"audio_role": "A10"} if plan["audio_policy"] in A10_POLICIES else {}),
         "T1": plan["T1"],
         "T2": plan["T2"],
+        **({"SOURCE_CREDIT": credit} if credit is not None else {}),
         "state_cues": [
             {"cue_id": row["cue_id"], "start_us": row["start"],
              "end_us": row["start"] + row["duration"], "text": row["text"]}

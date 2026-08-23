@@ -20,7 +20,7 @@ from audio_policy_matrix import (
     A10_POLICIES, LEGACY_V1_URAKKAI_POLICY_REWRITES, MIXED_A9_A10_POLICIES,
     URAKKAI_AUDIO_POLICIES,
 )
-from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
+from track_contract import CANONICAL_TRACKS, TEMPLATE_PROFILE, TRACK_LAYOUT
 from schema_runtime import validate_schema
 import user_provided_media_overlay
 
@@ -726,7 +726,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_TOOLS_PRODUCTION_TRACKS_MISMATCH")
             if tools.get("root_profiles") != ["home_windows", "macmini"]:
                 errors.append("PROTOCOL_TOOLS_ROOT_PROFILES_MISMATCH")
-            if tools.get("template_profile") != "shrt_white_base_v2":
+            if tools.get("template_profile") != TEMPLATE_PROFILE:
                 errors.append("PROTOCOL_TOOLS_TEMPLATE_PROFILE_MISMATCH")
         except Exception:
             pass

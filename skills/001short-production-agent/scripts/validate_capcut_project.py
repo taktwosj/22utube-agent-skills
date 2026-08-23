@@ -27,7 +27,16 @@ from validate_design_lock import validate_handoff
 from validate_audio_caption import validate_audio_caption
 from validate_build_inputs import validate_build_inputs
 import user_provided_media_overlay
-from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, LOGICAL_ROLE_BY_TRACK, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
+from track_contract import (
+    A10_TEXT_TRACK_BY_COLOR,
+    A12_INDEX,
+    LOGICAL_ROLE_BY_LAYOUT,
+    LOGICAL_ROLE_BY_TRACK,
+    STATE_TRACK_BY_EFFECT,
+    TEMPLATE_PROFILE_BY_TRACK_LAYOUT,
+    TRACK_INDEX,
+    V3_TRACK_LAYOUT,
+)
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -55,16 +64,24 @@ def _segments(model) -> list[dict]:
 
 
 def validate_v2_role_routing(model, contract: dict) -> list[dict]:
-    if contract.get("track_layout_version") != TRACK_LAYOUT:
+    layout = contract.get("track_layout_version")
+    logical_role_by_track = LOGICAL_ROLE_BY_LAYOUT.get(layout)
+    if logical_role_by_track is None:
         return [_error("V2_TRACK_LAYOUT_REQUIRED")]
     declared_extensions, extension_errors = user_provided_media_overlay.declared_track_layout_extension(
         contract.get("track_layout_extension")
     )
     if extension_errors:
         return extension_errors
-    if len(model.tracks) != len(LOGICAL_ROLE_BY_TRACK) + len(declared_extensions):
+    if len(model.tracks) != len(logical_role_by_track) + len(declared_extensions):
         return [_error("V2_TRACK_LAYOUT_MISMATCH", observed=len(model.tracks))]
     errors: list[dict] = []
+    expected_template_profile = TEMPLATE_PROFILE_BY_TRACK_LAYOUT[layout]
+    if (
+        contract.get("root_template_profile") is not None
+        and contract.get("root_template_profile") != expected_template_profile
+    ):
+        errors.append(_error("TRACK_LAYOUT_TEMPLATE_PROFILE_MISMATCH"))
     materials = {
         row.get("id"): row for row in iter_materials(model.materials)
         if isinstance(row.get("id"), str)
@@ -77,24 +94,36 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
         if row.get("role") == "VIDEO" and isinstance(row.get("end"), int)
     ]
     timeline_total = max(video_ends, default=0)
-    for role in ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT"):
+    role_text = contract.get("approved_role_text", {})
+    source_credit_declared = "SOURCE_CREDIT" in role_text
+    if source_credit_declared and layout != V3_TRACK_LAYOUT:
+        errors.append(_error("SOURCE_CREDIT_V3_REQUIRED"))
+    full_span_roles = ["T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT"]
+    if layout == V3_TRACK_LAYOUT and source_credit_declared:
+        full_span_roles.append("SOURCE_CREDIT")
+    for role in full_span_roles:
         index = TRACK_INDEX[role]
         segments = model.tracks[index].get("segments", [])
         timerange = _range(segments[0]) if len(segments) == 1 else None
         if timeline_total <= 0 or timerange is None or timerange[:2] != (0, timeline_total):
             errors.append(_error("FULL_SPAN_ANCHOR_MISMATCH", role=role))
+    if layout == V3_TRACK_LAYOUT and not source_credit_declared:
+        if model.tracks[TRACK_INDEX["SOURCE_CREDIT"]].get("segments", []):
+            errors.append(_error("SOURCE_CREDIT_UNDECLARED_PRESENT"))
     for segment in _segments(model):
         index = segment["_actual_track_index"]
-        if index >= len(LOGICAL_ROLE_BY_TRACK):
+        if index >= len(logical_role_by_track):
             continue
-        expected = LOGICAL_ROLE_BY_TRACK[index]
+        expected = logical_role_by_track[index]
         if index == A12_INDEX or segment.get("role") != expected:
             errors.append(_error(
                 "V2_ROLE_TRACK_MISMATCH", segment_id=segment.get("id"),
                 role=segment.get("role"), track_index=index,
             ))
-    role_text = contract.get("approved_role_text", {})
-    for role in ("T1", "T2"):
+    authority_roles = ["T1", "T2"]
+    if layout == V3_TRACK_LAYOUT and source_credit_declared:
+        authority_roles.append("SOURCE_CREDIT")
+    for role in authority_roles:
         index = TRACK_INDEX[role]
         segments = model.tracks[index].get("segments", [])
         material = materials.get(segments[0].get("material_id")) if len(segments) == 1 else None

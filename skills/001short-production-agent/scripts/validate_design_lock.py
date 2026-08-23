@@ -19,7 +19,7 @@ LEGAL_ROLES = {
     "A10", "A10_TEXT", "STATE", "A11", "A12",
 }
 
-# shrt_white_base_v2 seeds are placeholders with no width or wrap settings, and
+# shrt_white_base_v2/v3 seeds are placeholders with no width or wrap settings, and
 # the builder swaps text without touching font size, so CapCut neither shrinks
 # nor wraps.  These are the measured per-line budgets before text leaves frame.
 MAX_LINE_LENGTH_BY_ROLE = {"T1": 12, "T2": 12, "A10_TEXT": 15, "A9_TEXT": 10, "STATE": 15}

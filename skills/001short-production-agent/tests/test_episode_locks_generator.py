@@ -327,7 +327,14 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             self.assertNotIn("capcut_source_range_us", row)
         plan = json.loads(
             (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
-        self.assertEqual(plan["cleared_anchors"], generator.ALWAYS_CLEARED)
+        # This fixture declares no SOURCE_CREDIT, so track 3 joins the cleared
+        # anchors and no placement is emitted for it.
+        self.assertEqual(
+            plan["cleared_anchors"], generator.ALWAYS_CLEARED + ["SOURCE_CREDIT"])
+        self.assertNotIn(
+            "SOURCE_CREDIT",
+            {item["anchor"] for row in plan["timeline"] for item in row["placements"]},
+        )
         volumes = {
             row["target_segment_id"]: [
                 item["volume"] for item in row["placements"] if item["anchor"] == "A10"
@@ -348,6 +355,40 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             ),
             [],
         )
+
+    def test_source_credit_declaration_reaches_plan_and_build_config(self) -> None:
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        v_plan["SOURCE_CREDIT"] = "출처 : 실제 채널"
+        _write_json(plan_path, v_plan)
+
+        self._generate()
+
+        production_plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8")
+        )
+        placements = [
+            item
+            for row in production_plan["timeline"]
+            for item in row["placements"]
+            if item["anchor"] == "SOURCE_CREDIT"
+        ]
+        self.assertEqual(len(placements), len(self.v_rows))
+        self.assertEqual({item["text"] for item in placements}, {"출처 : 실제 채널"})
+        self.assertNotIn("SOURCE_CREDIT", production_plan["cleared_anchors"])
+        build_config = json.loads(
+            (self.root / "50_capcut_project" / "build_config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(build_config["SOURCE_CREDIT"], "출처 : 실제 채널")
+
+    def test_blank_source_credit_is_rejected(self) -> None:
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        v_plan["SOURCE_CREDIT"] = "   "
+        _write_json(plan_path, v_plan)
+
+        with self.assertRaisesRegex(ValueError, "SOURCE_CREDIT_DECLARED_EMPTY"):
+            self._generate()
 
     def test_an_a9_cue_covering_part_of_a_segment_is_refused(self) -> None:
         """Partial overlap is unsupported downstream; failing here keeps the build

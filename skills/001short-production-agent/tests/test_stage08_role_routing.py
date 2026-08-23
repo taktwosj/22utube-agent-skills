@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -52,7 +53,7 @@ def approved_timeline():
 
 def project_payload():
     roles = [
-        "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH",
+        "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "SOURCE_CREDIT", "STATE_GLITCH",
         "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1",
         "A9", "A10", "A11", "A12_RESERVED_EMPTY",
     ]
@@ -61,7 +62,10 @@ def project_payload():
         material_id = f"m-{role}"
         material = {
             "id": material_id, "type": "text", "role": role,
-            "content": json.dumps({"text": "seed", "styles": [{"range": [0, 4]}]}),
+            "content": json.dumps({
+                "text": "출처 : 채널명" if role == "SOURCE_CREDIT" else "seed",
+                "styles": [{"range": [0, 8 if role == "SOURCE_CREDIT" else 4]}],
+            }),
         }
         if role in {"VIDEO", "A9", "A10", "A11", "A12_RESERVED_EMPTY"}:
             material = {
@@ -79,6 +83,206 @@ def project_payload():
 
 
 class Stage08RoleRoutingTest(unittest.TestCase):
+    def _normalize_source_credit_fixture(self, source_credit=None):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / "project"
+            media = project / "Resources" / "media"
+            media.mkdir(parents=True)
+            (media / "transparent_center_white_1080x1920.png").write_bytes(b"white")
+            video = root / "source.mp4"; video.write_bytes(b"video")
+            audio = root / "vocals.wav"; audio.write_bytes(b"audio")
+            timeline_path = root / "timeline.json"
+            timeline_path.write_text(json.dumps(approved_timeline()), encoding="utf-8")
+            document = project / "draft_content.json"
+            document.write_text(json.dumps(project_payload()), encoding="utf-8")
+            (project / "draft_meta_info.json").write_text(
+                json.dumps({"draft_id": "fixture"}), encoding="utf-8"
+            )
+            config = {
+                "episode_id": "EP", "duration_us": 1_000,
+                "approved_timeline_path": str(timeline_path),
+                "T1": "Seoul day", "T2": "Stream view",
+                "state_cues": [{"text": "Firstsee", "start_us": 800, "end_us": 1_000}],
+                "audio_role": "A10",
+                "_visual_input": {"video_input_path": str(video), "resource_name": "source.mp4"},
+                "_resolved_root_contract": {"template_profile": "shrt_white_base_v3"},
+            }
+            if source_credit is not None:
+                config["SOURCE_CREDIT"] = source_credit
+            manifest = {
+                "urakkai": {"video_clips": [{
+                    "clip_id": "video", "source_range_us": [0, 1_000],
+                    "target_range_us": [0, 1_000],
+                }]},
+                "source_audio": [],
+            }
+            with patch.object(builder, "_video_dimensions", return_value=(1080, 1920)):
+                builder._normalize_source(project, config, audio, manifest)
+            return json.loads(document.read_text(encoding="utf-8"))
+
+    def test_source_credit_is_rebuilt_full_span_only_when_declared(self):
+        declared = self._normalize_source_credit_fixture("출처 : 실제 채널")
+        segments = declared["tracks"][3]["segments"]
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(segments[0]["role"], "SOURCE_CREDIT")
+        self.assertEqual(segments[0]["target_timerange"], {"start": 0, "duration": 1_000})
+        material = next(
+            row for row in declared["materials"]["items"]
+            if row["id"] == segments[0]["material_id"]
+        )
+        self.assertEqual(json.loads(material["content"])["text"], "출처 : 실제 채널")
+
+        undeclared = self._normalize_source_credit_fixture()
+        self.assertEqual(undeclared["tracks"][3]["segments"], [])
+
+    def test_v3_source_credit_readback_is_layout_range_and_text_bound(self):
+        built = self._normalize_source_credit_fixture("출처 : 실제 채널")
+        model = SimpleNamespace(tracks=built["tracks"], materials=built["materials"])
+        timeline = approved_timeline()
+        contract = {
+            "track_layout_version": "shrt_white_base_v3_15",
+            "timeline": [
+                {**row, "end": row["start"] + row["duration"]}
+                for row in timeline["segments"]
+            ],
+            "approved_role_text": {
+                "T1": "Seoul day", "T2": "Stream view",
+                "SOURCE_CREDIT": "출처 : 실제 채널",
+            },
+            "approved_segment_text": {
+                row["segment_id"]: {
+                    "role": row["role"], "start": row["start"],
+                    "duration": row["duration"], "text": row["text"],
+                    **({"color_role": row["color_role"]} if row["role"] == "A10_TEXT" else {}),
+                    **({"state_effect": row["state_effect"]} if row["role"] == "STATE" else {}),
+                }
+                for row in timeline["segments"]
+                if row["role"] in {"A10_TEXT", "STATE"}
+            },
+        }
+        self.assertEqual(readback.validate_v2_role_routing(model, contract), [])
+
+        model.tracks[3]["segments"][0]["target_timerange"]["duration"] = 999
+        self.assertIn("FULL_SPAN_ANCHOR_MISMATCH", {
+            item["code"] for item in readback.validate_v2_role_routing(model, contract)
+        })
+        model.tracks[3]["segments"][0]["target_timerange"]["duration"] = 1_000
+        source_material = next(
+            row for row in model.materials["items"]
+            if row["id"] == model.tracks[3]["segments"][0]["material_id"]
+        )
+        source_material["content"] = json.dumps({
+            "text": "출처 : 다른 채널", "styles": [{"range": [0, 10]}]
+        })
+        self.assertIn("TITLE_TEXT_AUTHORITY_MISMATCH", {
+            item["code"] for item in readback.validate_v2_role_routing(model, contract)
+        })
+
+    def test_v2_layout_remains_valid_with_track_three_empty(self):
+        built = self._normalize_source_credit_fixture()
+        model = SimpleNamespace(tracks=built["tracks"], materials=built["materials"])
+        timeline = approved_timeline()
+        contract = {
+            "track_layout_version": "shrt_white_base_v2_15",
+            "root_template_profile": "shrt_white_base_v2",
+            "timeline": [
+                {**row, "end": row["start"] + row["duration"]}
+                for row in timeline["segments"]
+            ],
+            "approved_role_text": {"T1": "Seoul day", "T2": "Stream view"},
+            "approved_segment_text": {
+                row["segment_id"]: {
+                    "role": row["role"], "start": row["start"],
+                    "duration": row["duration"], "text": row["text"],
+                    **({"color_role": row["color_role"]} if row["role"] == "A10_TEXT" else {}),
+                    **({"state_effect": row["state_effect"]} if row["role"] == "STATE" else {}),
+                }
+                for row in timeline["segments"]
+                if row["role"] in {"A10_TEXT", "STATE"}
+            },
+        }
+        self.assertEqual(readback.validate_v2_role_routing(model, contract), [])
+
+    def test_build_contract_schema_keeps_source_credit_optional_and_nonempty(self):
+        schema = json.loads(readback.BUILD_SCHEMA.read_text(encoding="utf-8"))
+        role_schema = schema["properties"]["approved_role_text"]
+        self.assertEqual(
+            readback.validate_schema({"T1": "title", "T2": "subtitle"}, role_schema),
+            [],
+        )
+        self.assertEqual(
+            readback.validate_schema({
+                "T1": "title", "T2": "subtitle", "SOURCE_CREDIT": "출처 : 채널",
+            }, role_schema),
+            [],
+        )
+        self.assertTrue(readback.validate_schema({
+            "T1": "title", "T2": "subtitle", "SOURCE_CREDIT": "",
+        }, role_schema))
+        self.assertEqual(
+            schema["properties"]["track_layout_version"]["enum"],
+            ["shrt_white_base_v2_15", "shrt_white_base_v3_15"],
+        )
+        self.assertEqual(
+            schema["properties"]["root_template_profile"]["enum"],
+            ["shrt_white_base_v2", "shrt_white_base_v3"],
+        )
+
+    def test_builder_binds_v2_and_v3_profiles_to_their_layout_ids(self):
+        expected = {
+            "shrt_white_base_v2": "shrt_white_base_v2_15",
+            "shrt_white_base_v3": "shrt_white_base_v3_15",
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            contract_path = root / "contract.json"
+            contract_path.write_text("{}", encoding="utf-8")
+            archive = root / "template.zip"
+            archive.write_bytes(b"zip")
+            for profile, layout in expected.items():
+                config = {
+                    "workspace_root": str(root), "root_profile": "fixture",
+                    "root_contract_path": "contract.json",
+                }
+                resolved = {
+                    "profile": "fixture", "template_profile": profile,
+                    "archive_sha256": "a" * 64, "archive": str(archive),
+                }
+                with patch.object(
+                    builder.resolve_shorts_capcut_root,
+                    "resolve_root_contract",
+                    return_value=resolved,
+                ):
+                    builder._bind_portable_root_contract(config)
+                self.assertEqual(
+                    config["_resolved_root_contract"]["track_layout_version"], layout
+                )
+
+    def test_v3_template_requires_source_credit_seed_but_v2_remains_valid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+
+            def archive_for(name, payload):
+                archive = root / name
+                with zipfile.ZipFile(archive, "w") as bundle:
+                    raw = json.dumps(payload)
+                    bundle.writestr("root/draft_content.json", raw)
+                    bundle.writestr("root/Timelines/main/draft_content.json", raw)
+                return archive
+
+            populated = archive_for("populated.zip", project_payload())
+            builder._validate_template_track_layout(populated, "shrt_white_base_v3")
+
+            missing_payload = project_payload()
+            missing_payload["tracks"][3]["segments"] = []
+            missing = archive_for("missing.zip", missing_payload)
+            with self.assertRaisesRegex(
+                RuntimeError, "PINNED_TEMPLATE_ANCHOR_MISSING:SOURCE_CREDIT"
+            ):
+                builder._validate_template_track_layout(missing, "shrt_white_base_v3")
+            builder._validate_template_track_layout(missing, "shrt_white_base_v2")
+
     def test_design_role_contract_accepts_canonical_rows(self):
         self.assertEqual(validate_design_lock.validate_role_contract(approved_timeline()), [])
 

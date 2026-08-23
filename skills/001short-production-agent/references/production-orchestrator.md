@@ -146,8 +146,10 @@ a rejection gate. This mode is not VMake evidence, is not
 The canonical base layout stays at 15 tracks. Only an evidence-bound
 `001short-user-provided-media-overlay-layout-v1` may append declared overlays
 after index 14; every undeclared extra track fails. Only `STATE_LASER` is
-routable for STATE cues (`LASER_CUT`); `STATE_FLICKER` and `STATE_GLITCH` stay
-physically present and empty. File/SHA/duration-bound overlapping user audio keeps
+routable for STATE cues (`LASER_CUT`); `STATE_GLITCH` stays physically present
+and empty. `SOURCE_CREDIT` is a full-span title lane like T1/T2: a plan that
+declares it places one segment over the whole timeline, and a plan that omits
+it leaves the track empty. File/SHA/duration-bound overlapping user audio keeps
 A10 on at volume 1.0 for manual volume adjustment and is never auto-ducked.
 Retained-speaker captions use the two
 `A10_TEXT_WHITE` and `A10_TEXT_YELLOW` lanes while A10 remains one audio stem.

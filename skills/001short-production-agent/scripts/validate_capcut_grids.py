@@ -697,11 +697,10 @@ def validate_locked_assembly(
                 accepted = observed_role == "A10_TEXT" and row.get("color_role") == "WHITE"
             elif role == "A10_TEXT_YELLOW":
                 accepted = observed_role == "A10_TEXT" and row.get("color_role") == "YELLOW"
-            elif role in {"STATE_LASER", "STATE_GLITCH", "STATE_FLICKER"}:
+            elif role in {"STATE_LASER", "STATE_GLITCH"}:
                 expected_effect = {
                     "STATE_LASER": "LASER_CUT",
                     "STATE_GLITCH": "GLITCH_SHAKE",
-                    "STATE_FLICKER": "FLICKER_RAVE",
                 }[role]
                 accepted = observed_role == "STATE" and row.get("state_effect") == expected_effect
             else:
@@ -715,7 +714,7 @@ def validate_locked_assembly(
     source_audio = build_manifest.get("source_audio", [])
     checked_roles = (
         "A9", "A9_TEXT", "A10", "A10_TEXT_WHITE", "A10_TEXT_YELLOW",
-        "STATE_LASER", "STATE_GLITCH", "STATE_FLICKER",
+        "STATE_LASER", "STATE_GLITCH",
     )
     audio_roles = {
         row.get("role") for row in audio_lock.get("role_files", []) if isinstance(row, dict)
@@ -765,7 +764,7 @@ def validate_locked_assembly(
 
             text_role = role in {
                 "A9", "A9_TEXT", "A10_TEXT_WHITE", "A10_TEXT_YELLOW",
-                "STATE_LASER", "STATE_GLITCH", "STATE_FLICKER",
+                "STATE_LASER", "STATE_GLITCH",
             }
             if actual and not declared_empty and text_role:
                 ordered_rows = sorted(actual_rows, key=lambda row: (row.get("start", 0), row.get("segment_id", "")))

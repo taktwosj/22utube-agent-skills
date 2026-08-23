@@ -40,7 +40,17 @@ from audio_policy_matrix import (  # noqa: F401
 )
 from capcut_io import iter_primary_draft_documents
 from common import FRAME_TOLERANCE_US, ranges_match, times_match, manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
-from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
+from track_contract import (
+    A10_TEXT_TRACK_BY_COLOR,
+    A12_INDEX,
+    CANONICAL_TRACKS,
+    STATE_TRACK_BY_EFFECT,
+    TRACK_INDEX,
+    TRACK_LAYOUT,
+    TRACK_LAYOUT_BY_TEMPLATE_PROFILE,
+    V2_TEMPLATE_PROFILE,
+    V3_TEMPLATE_PROFILE,
+)
 
 
 ROLE_BY_TRACK = list(CANONICAL_TRACKS)
@@ -247,8 +257,15 @@ def _extract_template(template_zip: Path, destination: Path) -> Path:
     return candidates[0]
 
 
-def _validate_template_track_layout(template_zip: Path) -> None:
+def _validate_template_track_layout(
+    template_zip: Path, template_profile: str = V2_TEMPLATE_PROFILE,
+) -> None:
     """Preflight every primary draft in the pinned archive without writing files."""
+    if template_profile not in TRACK_LAYOUT_BY_TEMPLATE_PROFILE:
+        raise RuntimeError("PINNED_TEMPLATE_PROFILE_INVALID")
+    required_seed_roles = REQUIRED_TEMPLATE_SEED_ROLES + (
+        ("SOURCE_CREDIT",) if template_profile == V3_TEMPLATE_PROFILE else ()
+    )
     try:
         with zipfile.ZipFile(template_zip) as archive:
             root_candidates = []
@@ -294,7 +311,7 @@ def _validate_template_track_layout(template_zip: Path) -> None:
             row.get("id"): row for row in _materials(payload.get("materials", {}))
             if isinstance(row, dict) and isinstance(row.get("id"), str)
         }
-        for role in REQUIRED_TEMPLATE_SEED_ROLES:
+        for role in required_seed_roles:
             segments = tracks[TRACK_INDEX[role]]["segments"]
             if (
                 not segments or not isinstance(segments[0], dict)
@@ -374,15 +391,18 @@ def _bind_portable_root_contract(config: dict) -> dict | None:
     resolved = resolve_shorts_capcut_root.resolve_root_contract(
         workspace_root, profile, contract_path
     )
-    if resolved.get("template_profile") != "shrt_white_base_v2":
-        raise ValueError("ROOT_CONTRACT_V2_PROFILE_REQUIRED")
+    template_profile = resolved.get("template_profile")
+    track_layout = TRACK_LAYOUT_BY_TEMPLATE_PROFILE.get(template_profile)
+    if track_layout is None:
+        raise ValueError("ROOT_CONTRACT_TEMPLATE_PROFILE_REQUIRED")
     declared = config.get("template_zip")
     if declared is not None and Path(str(declared)).resolve() != Path(resolved["archive"]):
         raise ValueError("ROOT_CONTRACT_TEMPLATE_MISMATCH")
     config["template_zip"] = resolved["archive"]
     config["_resolved_root_contract"] = {
         "profile": resolved["profile"],
-        "template_profile": resolved["template_profile"],
+        "template_profile": template_profile,
+        "track_layout_version": track_layout,
         "archive_sha256": resolved["archive_sha256"],
     }
     return resolved
@@ -764,6 +784,12 @@ def _validate_config(config: dict, *, revision_operation: str = "build") -> None
     duration = config["duration_us"]
     if not isinstance(duration, int) or duration <= 0:
         raise ValueError("DURATION_INVALID")
+    source_credit = config.get("SOURCE_CREDIT")
+    if source_credit is not None:
+        if not isinstance(source_credit, str) or not source_credit.strip():
+            raise ValueError("SOURCE_CREDIT_DECLARED_EMPTY")
+        if config["_resolved_root_contract"]["template_profile"] != V3_TEMPLATE_PROFILE:
+            raise ValueError("SOURCE_CREDIT_V3_REQUIRED")
     timeline = read_json(Path(config["approved_timeline_path"]).resolve())
     role_errors = validate_design_lock.validate_role_contract(timeline, expected_duration=duration)
     if role_errors:
@@ -1337,11 +1363,30 @@ def _normalize_source(
             ):
                 raise RuntimeError("USER_MEDIA_OVERLAY_TEMPLATE_MISSING")
 
-        # Existing v2 lanes only: no track is added.  Every generated lane is
-        # rebuilt from the approved plan; A12 is always empty.
+        # No track is added. Every generated lane is rebuilt from approved
+        # authority; clearing track 3 first prevents the v3 placeholder from
+        # leaking into episodes that declare no source credit.
         for index in range(3, 15):
             if index not in (9, 10):
                 tracks[index]["segments"] = []
+
+        source_credit = config.get("SOURCE_CREDIT")
+        if source_credit is not None:
+            if config.get("_resolved_root_contract", {}).get("template_profile") != V3_TEMPLATE_PROFILE:
+                raise RuntimeError("SOURCE_CREDIT_V3_REQUIRED")
+            if not isinstance(source_credit, str) or not source_credit.strip():
+                raise ValueError("SOURCE_CREDIT_DECLARED_EMPTY")
+            index = TRACK_INDEX["SOURCE_CREDIT"]
+            seed = seed_segments.get(index)
+            material = material_map.get(seed.get("material_id")) if isinstance(seed, dict) else None
+            if material is None:
+                raise RuntimeError("SOURCE_CREDIT_TEMPLATE_MISSING")
+            segment = copy.deepcopy(seed)
+            segment["id"] = "SOURCE_CREDIT"
+            segment["role"] = "SOURCE_CREDIT"
+            segment["target_timerange"] = {"start": 0, "duration": duration}
+            _set_text(material, source_credit, "SOURCE_CREDIT")
+            tracks[index]["segments"] = [segment]
 
         base_video_segment = tracks[TRACK_INDEX["VIDEO"]]["segments"][0]
         video_material = material_map[base_video_segment["material_id"]]
@@ -1711,7 +1756,10 @@ def _normalize_source(
     expected = sorted([
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in approved
-    ] + [
+    ] + ([{
+        "segment_id": "SOURCE_CREDIT", "role": "SOURCE_CREDIT",
+        "start": 0, "duration": duration,
+    }] if config.get("SOURCE_CREDIT") is not None else []) + [
         {
             "segment_id": item["segment_id"],
             "role": item["role"],
@@ -2053,7 +2101,7 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
     receipt_path = build_root / "build_inputs_receipt.json"
     contract = {
         "schema_version": "001short-build-contract-v1", "episode_id": config["episode_id"],
-        "track_layout_version": TRACK_LAYOUT,
+        "track_layout_version": config["_resolved_root_contract"]["track_layout_version"],
         "track_layout_extension": user_provided_media_overlay.build_track_layout_extension(
             config.get("user_provided_media_overlay", [])
         ),
@@ -2091,7 +2139,10 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
         "structure_snapshot_sha256": _sha(snapshot_path), "project_id": project_id,
         "draft_id": draft_id, "main_timeline_id": timeline_id,
         "required_asset_paths": sorted(required_assets), "approved_text": sorted(approved_text),
-        "approved_role_text": {"T1": config["T1"], "T2": config["T2"]},
+        "approved_role_text": {
+            "T1": config["T1"], "T2": config["T2"],
+            **({"SOURCE_CREDIT": config["SOURCE_CREDIT"]} if "SOURCE_CREDIT" in config else {}),
+        },
         "approved_segment_text": {
             row["segment_id"]: {
                 "role": row["role"], "start": row["start"], "duration": row["duration"],
@@ -2418,7 +2469,12 @@ def build_episode(config: dict) -> dict:
         _validate_config(config)
     else:
         _validate_config(config)
-    _validate_template_track_layout(Path(config["template_zip"]).resolve())
+    _validate_template_track_layout(
+        Path(config["template_zip"]).resolve(),
+        config.get("_resolved_root_contract", {}).get(
+            "template_profile", V2_TEMPLATE_PROFILE
+        ),
+    )
     prepared_revision = prepare_revision_state_payload(config)
     revision_state = prepared_revision[0] if prepared_revision is not None else None
     if prepared_revision is not None:

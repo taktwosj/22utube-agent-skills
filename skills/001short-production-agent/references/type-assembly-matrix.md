@@ -36,7 +36,7 @@ cue 포함 검사에 걸린다).
 | 4 TTS 도입+화자 본문형 | `tts_intro_original_body` | A9 도입 2~4초 + A10 본문 | 각 자막을 해당 음성에 페어링 | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` |
 | 5 나레이션+화자 혼합형 | `narration_plus_speaker` | A9 연결 + A10 증거·감정 | A9_TEXT + A10_TEXT | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED`, overlap=`source_audio[].mode=duck` |
 
-공통: T1/T2 항상, SCREEN_WHITE/SCREEN_EFFECT 전체 구간 템플릿 1개씩, STATE_GLITCH/STATE_FLICKER 예약, A12 항상 `비움`, VIDEO 항상 음소거(소리는 A9/A10 트랙 담당).
+공통: T1/T2 항상, SCREEN_WHITE/SCREEN_EFFECT 전체 구간 템플릿 1개씩, STATE_GLITCH/SOURCE_CREDIT 예약, A12 항상 `비움`, VIDEO 항상 음소거(소리는 A9/A10 트랙 담당).
 
 ## 자격 규칙 (재료 → 가능한 유형)
 
