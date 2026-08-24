@@ -119,6 +119,10 @@ def runtime_arguments(temp: Path) -> list[str]:
     ]
 
 
+def two_pow_arguments(temp: Path) -> list[str]:
+    return ["--2pow-root", str(temp / "2pow-skill-runtime")]
+
+
 def make_tree_writable(root: Path) -> None:
     if not root.exists():
         return
@@ -367,6 +371,103 @@ class VerifiedSkillReleaseTests(unittest.TestCase):
                 self.assertEqual(destination.resolve(), expected)
                 self.assertNotEqual(destination.resolve(), (repo / "skills" / "demo-skill").resolve())
                 self.assertFalse(str(destination.resolve()).startswith(str(release_root.resolve())))
+
+    def test_all_activation_and_verify_sync_verified_immutable_release_to_2pow(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            _, release_root, commit = publish_fixture(temp)
+            cache_root = temp / "cache"
+            mirror_root = temp / "2pow-skill-runtime"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                *runtime_arguments(temp), *two_pow_arguments(temp),
+            ]
+
+            activated = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(activated.returncode, 0, activated.stdout + activated.stderr)
+            self.assertIn("MIRROR PASS target=2pow", activated.stdout)
+            verified = run(
+                "verify", "--cache-root", str(cache_root), *runtime_arguments(temp), *two_pow_arguments(temp),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+            self.assertEqual(verified.returncode, 0, verified.stdout + verified.stderr)
+            self.assertIn("MIRROR VERIFY PASS target=2pow", verified.stdout)
+
+            local_release = cache_root / "releases" / commit
+            mirror_release = mirror_root / "releases" / commit
+            active = json.loads((mirror_root / "active.json").read_text(encoding="utf-8"))
+            self.assertEqual(active["release_id"], commit)
+            self.assertEqual(
+                (mirror_release / "manifest.json").read_bytes(),
+                (local_release / "manifest.json").read_bytes(),
+            )
+            self.assertEqual(
+                (mirror_release / "IMMUTABLE").read_text(encoding="utf-8"),
+                (local_release / "IMMUTABLE").read_text(encoding="utf-8"),
+            )
+            self.assertTrue((mirror_release / "skills" / "demo-skill" / "SKILL.md").is_file())
+
+    def test_2pow_only_activation_does_not_create_agent_runtime_links(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            _, release_root, commit = publish_fixture(temp)
+            cache_root = temp / "cache"
+
+            activated = run(
+                "activate", "--release-root", str(release_root), "--cache-root", str(cache_root),
+                "--target", "2pow", *two_pow_arguments(temp),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+
+            self.assertEqual(activated.returncode, 0, activated.stdout + activated.stderr)
+            self.assertTrue(
+                (temp / "2pow-skill-runtime" / "releases" / commit / "skills" / "demo-skill" / "SKILL.md").is_file()
+            )
+            for root_name in ("codex", "claude", "hermes"):
+                self.assertFalse((temp / root_name).exists())
+
+    def test_2pow_mirror_failure_rolls_back_agent_links_and_active_release(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temp = Path(temporary)
+            repo, release_root, old_commit = publish_fixture(temp)
+            cache_root = temp / "cache"
+            mirror_root = temp / "2pow-skill-runtime"
+            arguments = [
+                "--release-root", str(release_root), "--cache-root", str(cache_root),
+                *runtime_arguments(temp), *two_pow_arguments(temp),
+            ]
+            first = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+
+            (repo / "skills" / "demo-skill" / "asset.txt").write_text("new release\n", encoding="utf-8")
+            new_commit = commit_repo(repo, "new mirrored release")
+            published = run(
+                "publish", "--repo-root", str(repo), "--release-root", str(release_root),
+                env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"},
+            )
+            self.assertEqual(published.returncode, 0, published.stdout + published.stderr)
+            corrupt_release = mirror_root / "releases" / new_commit
+            corrupt_release.mkdir(parents=True)
+            (corrupt_release / "manifest.json").write_text("{}\n", encoding="utf-8")
+            (corrupt_release / "READY").write_text("bad\n", encoding="utf-8")
+
+            failed = run("activate", *arguments, env={"AGENT_SKILLS_TEST_ROOT_OVERRIDE": "1"})
+
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("READY manifest SHA mismatch", failed.stderr)
+            self.assertEqual(
+                json.loads((cache_root / "active.json").read_text(encoding="utf-8"))["release_id"], old_commit
+            )
+            self.assertEqual(
+                json.loads((mirror_root / "active.json").read_text(encoding="utf-8"))["release_id"], old_commit
+            )
+            expected_old = (cache_root / "releases" / old_commit / "skills" / "demo-skill").resolve()
+            for destination in (
+                temp / "codex" / "demo-skill",
+                temp / "claude" / "demo-skill",
+                temp / "hermes" / "22utube" / "demo-skill",
+            ):
+                self.assertEqual(destination.resolve(), expected_old)
 
     def test_local_cache_has_verified_immutable_seal_and_blocks_tampered_reactivation(self):
         with tempfile.TemporaryDirectory() as temporary:

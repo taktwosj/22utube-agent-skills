@@ -37,7 +37,7 @@ Do not delegate unless the user or workspace explicitly requests delegation. Do 
 
 ## Local Shared Skill Update
 
-Use this only for current computer Codex, Claude, and Hermes only. Never deploy to another PC.
+Use this only for current computer Codex, Claude, Hermes, and the Mac mini local 2pow verified mirror. Never deploy to another PC.
 
 Require a clean confirmed source commit before activation. If source state or commit confirmation is missing, return `WAIT_COMMIT_CONFIRMATION`. Compare source `HEAD` with local runtime `active.json.release_id`.
 

@@ -29,6 +29,12 @@ PROTECTED_SKILL_NAMES = {
 }
 PROTECTED_PATH_SEGMENTS = {".system", ".plugins", "plugins", "plugin-cache"}
 SUPPORTED_TARGET_NAMES = {"codex", "claude", "hermes"}
+AGENT_TARGET_NAMES = ("codex", "claude", "hermes")
+MIRROR_TARGET_NAME = "2pow"
+TWOPOW_MIRROR_ENV = "AGENT_SKILLS_2POW_MIRROR_ROOT"
+DEFAULT_TWOPOW_MIRROR_ROOT = Path(
+    "/Volumes/2pow/_LOCAL_WORK/22utube/22factory_20260628/00_mcp/skill-runtime"
+)
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
@@ -367,8 +373,34 @@ def default_cache_root() -> Path:
 
 def selected_targets(value: str) -> list[str]:
     if value == "all":
-        return ["codex", "claude", "hermes"]
+        return list(AGENT_TARGET_NAMES)
+    if value == MIRROR_TARGET_NAME:
+        return []
     return [value]
+
+
+def default_2pow_mirror_root() -> Path:
+    configured = os.environ.get(TWOPOW_MIRROR_ENV)
+    return Path(configured).expanduser().resolve() if configured else DEFAULT_TWOPOW_MIRROR_ROOT
+
+
+def selected_2pow_mirror(args: argparse.Namespace) -> Path | None:
+    if args.target not in {"all", MIRROR_TARGET_NAME}:
+        return None
+    explicit_root = getattr(args, "two_pow_root", None)
+    if explicit_root:
+        root = Path(explicit_root).resolve()
+    elif os.environ.get(TEST_OVERRIDE_ENV) == "1":
+        if args.target == MIRROR_TARGET_NAME:
+            raise ReleaseError("2pow target requires --2pow-root in guarded tests")
+        return None
+    else:
+        root = default_2pow_mirror_root()
+        if args.target == "all" and not os.environ.get(TWOPOW_MIRROR_ENV) and not Path("/Volumes/2pow").is_dir():
+            print(f"MIRROR SKIP target=2pow reason=volume_unavailable root={root}")
+            return None
+    ensure_unprotected_path(root)
+    return root
 
 
 def target_paths(
@@ -598,11 +630,80 @@ def verify_link_plans(plans: list[LinkPlan]) -> None:
             raise ReleaseError(f"runtime skill is missing SKILL.md: {plan.target_name}/{plan.skill_name}")
 
 
+def verify_2pow_mirror(
+    mirror_root: Path, release_id: str, manifest_sha: str, local_release: Path
+) -> Path:
+    mirror_release_id, mirror_manifest_sha = read_active(mirror_root)
+    if mirror_release_id != release_id or mirror_manifest_sha != manifest_sha:
+        raise ReleaseError(
+            "2pow active release mismatch: "
+            f"expected={release_id}/{manifest_sha} actual={mirror_release_id}/{mirror_manifest_sha}"
+        )
+    mirror_release = mirror_root / "releases" / release_id
+    manifest = verify_release_directory(mirror_release, manifest_sha, require_immutable=True)
+    if manifest.get("release_id") != release_id or manifest.get("source_commit") != release_id:
+        raise ReleaseError("2pow mirror release identity mismatch")
+    if (mirror_release / "manifest.json").read_bytes() != (local_release / "manifest.json").read_bytes():
+        raise ReleaseError(f"2pow mirror manifest differs from local verified release: {release_id}")
+    return mirror_release
+
+
+def sync_2pow_mirror(
+    mirror_root: Path, release_id: str, manifest_sha: str, local_release: Path
+) -> bytes | None:
+    ensure_unprotected_path(mirror_root)
+    active_path = mirror_root / "active.json"
+    previous_active = active_path.read_bytes() if active_path.is_file() else None
+    staging = mirror_root / ".staging" / f"{release_id}-{uuid.uuid4().hex}"
+    mirror_release = mirror_root / "releases" / release_id
+    staging.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copytree(local_release, staging)
+        verify_release_directory(staging, manifest_sha, require_immutable=True)
+        mirror_release.parent.mkdir(parents=True, exist_ok=True)
+        if mirror_release.exists():
+            verify_release_directory(mirror_release, manifest_sha, require_immutable=True)
+            if (mirror_release / "manifest.json").read_bytes() != (local_release / "manifest.json").read_bytes():
+                raise ReleaseError(f"immutable 2pow mirror release differs: {release_id}")
+        else:
+            make_tree_writable_for_cleanup(staging)
+            os.replace(staging, mirror_release)
+            make_local_release_immutable(mirror_release, manifest_sha)
+        atomic_write(
+            active_path,
+            json_bytes({"schema_version": 1, "release_id": release_id, "manifest_sha256": manifest_sha}),
+        )
+        verify_2pow_mirror(mirror_root, release_id, manifest_sha, local_release)
+    finally:
+        if staging.exists():
+            make_tree_writable_for_cleanup(staging)
+            shutil.rmtree(staging)
+    print(f"MIRROR PASS target=2pow release_id={release_id} root={mirror_release}")
+    return previous_active
+
+
+def restore_2pow_active(mirror_root: Path, previous_active: bytes | None) -> None:
+    active_path = mirror_root / "active.json"
+    if previous_active is None:
+        if active_path.exists():
+            active_path.unlink()
+    else:
+        atomic_write(active_path, previous_active)
+
+
 def activation_options(args: argparse.Namespace) -> tuple[Path, dict[str, Path], dict[str, Path]]:
     cache_root = Path(args.cache_root).resolve() if args.cache_root else default_cache_root().resolve()
     runtime_overrides = parse_root_overrides(args.runtime_root)
     backup_overrides = parse_root_overrides(args.backup_root)
-    require_test_guard_if_overridden(bool(args.cache_root or runtime_overrides or backup_overrides or getattr(args, "release_root", None)))
+    require_test_guard_if_overridden(
+        bool(
+            args.cache_root
+            or runtime_overrides
+            or backup_overrides
+            or getattr(args, "release_root", None)
+            or getattr(args, "two_pow_root", None)
+        )
+    )
     ensure_unprotected_path(cache_root)
     return cache_root, runtime_overrides, backup_overrides
 
@@ -618,8 +719,12 @@ def activate(args: argparse.Namespace) -> None:
     if manifest.get("release_id") != release_id or manifest.get("source_commit") != release_id:
         raise ReleaseError("active release identity mismatch")
     semantic_preflight(manifest.get("skills", []), manifest.get("targets", {}))
+    mirror_root = selected_2pow_mirror(args)
     if args.dry_run:
-        print(f"DRYRUN ACTIVATE release_id={release_id} cache_root={cache_root}")
+        print(
+            f"DRYRUN ACTIVATE release_id={release_id} cache_root={cache_root} "
+            f"mirror_2pow={mirror_root or 'SKIP'}"
+        )
         return
 
     staging = cache_root / ".staging" / f"{release_id}-{uuid.uuid4().hex}"
@@ -682,6 +787,8 @@ def activate(args: argparse.Namespace) -> None:
             raise ReleaseError("AGENT_SKILLS_TEST_FAIL_LINK_AFTER must be non-negative")
 
     changes: list[LinkChange] = []
+    mirror_previous_active: bytes | None = None
+    mirror_updated = False
     try:
         if previous_manifest is not None:
             changes.extend(reconcile_omitted_managed_links(previous_manifest, manifest, target_names, previous_plans))
@@ -691,11 +798,18 @@ def activate(args: argparse.Namespace) -> None:
             changes.append(install_runtime_link(plan.destination, plan.source, plan.backup_root))
         verify_release_directory(local_release, manifest_sha, require_immutable=True)
         verify_link_plans(plans)
+        if mirror_root is not None:
+            mirror_previous_active = sync_2pow_mirror(
+                mirror_root, release_id, manifest_sha, local_release
+            )
+            mirror_updated = True
         atomic_write(
             local_active_path,
             json_bytes({"schema_version": 1, "release_id": release_id, "manifest_sha256": manifest_sha}),
         )
     except Exception:
+        if mirror_root is not None and mirror_updated:
+            restore_2pow_active(mirror_root, mirror_previous_active)
         rollback_link_changes(changes)
         if previous_active is None:
             if local_active_path.exists():
@@ -743,6 +857,7 @@ def verify(args: argparse.Namespace) -> None:
     manifest = verify_release_directory(local_release, manifest_sha, require_immutable=True)
     if manifest.get("release_id") != release_id or manifest.get("source_commit") != release_id:
         raise ReleaseError("local active release identity mismatch")
+    mirror_root = selected_2pow_mirror(args)
     for target_name in selected_targets(args.target):
         runtime_root, _, layout = target_paths(manifest, target_name, runtime_overrides, backup_overrides)
         target_config = manifest["targets"][target_name]
@@ -762,6 +877,9 @@ def verify(args: argparse.Namespace) -> None:
                 raise ReleaseError(f"runtime skill is missing SKILL.md: {target_name}/{skill['name']}")
             if args.self_check:
                 run_self_check(destination)
+    if mirror_root is not None:
+        verify_2pow_mirror(mirror_root, release_id, manifest_sha, local_release)
+        print(f"MIRROR VERIFY PASS target=2pow release_id={release_id} root={mirror_root}")
     print(f"VERIFY PASS release_id={release_id} target={args.target}")
 
 
@@ -833,17 +951,23 @@ def parser() -> argparse.ArgumentParser:
     activate_parser = subcommands.add_parser("activate")
     activate_parser.add_argument("--release-root")
     activate_parser.add_argument("--cache-root")
-    activate_parser.add_argument("--target", choices=("all", "codex", "claude", "hermes"), default="all")
+    activate_parser.add_argument(
+        "--target", choices=("all", "codex", "claude", "hermes", "2pow"), default="all"
+    )
     activate_parser.add_argument("--runtime-root", action="append")
     activate_parser.add_argument("--backup-root", action="append")
+    activate_parser.add_argument("--2pow-root", dest="two_pow_root")
     activate_parser.add_argument("--dry-run", action="store_true")
     activate_parser.set_defaults(handler=activate)
 
     verify_parser = subcommands.add_parser("verify")
     verify_parser.add_argument("--cache-root")
-    verify_parser.add_argument("--target", choices=("all", "codex", "claude", "hermes"), default="all")
+    verify_parser.add_argument(
+        "--target", choices=("all", "codex", "claude", "hermes", "2pow"), default="all"
+    )
     verify_parser.add_argument("--runtime-root", action="append")
     verify_parser.add_argument("--backup-root", action="append")
+    verify_parser.add_argument("--2pow-root", dest="two_pow_root")
     verify_parser.add_argument("--self-check", action="store_true")
     verify_parser.set_defaults(handler=verify)
     return result

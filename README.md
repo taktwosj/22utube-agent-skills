@@ -101,6 +101,7 @@ python -B scripts/skill_release.py verify --target all --self-check
 
 - `publish` refuses a dirty source repository.
 - Activate only a published immutable release and always target `all` in this managed flow.
+- On the Mac mini, `--target all` also copies the verified immutable release to `/Volumes/2pow/_LOCAL_WORK/22utube/22factory_20260628/00_mcp/skill-runtime`; `--target 2pow` can sync or verify that mirror alone.
 - Never copy into or edit runtime entrypoints or active release contents.
 - A release is incomplete until `verify --target all --self-check` passes.
 

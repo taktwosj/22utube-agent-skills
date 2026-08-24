@@ -37,7 +37,7 @@ class OneCavemanSkillContractTests(unittest.TestCase):
             self.assertIn(trigger, frontmatter)
 
         for required in (
-            "current computer Codex, Claude, and Hermes only",
+            "current computer Codex, Claude, Hermes, and the Mac mini local 2pow verified mirror",
             "Never deploy to another PC.",
             "clean confirmed source commit",
             "WAIT_COMMIT_CONFIRMATION",
