@@ -19,6 +19,83 @@ import build_politics_card_project as builder
 
 
 class BuilderRootBundleSeamTests(unittest.TestCase):
+    def test_remap_ids_rebases_portable_and_legacy_bundle_paths_to_target_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage = root / "staging" / "Project"
+            old_timeline = "11111111-1111-4111-8111-111111111111"
+            timeline = stage / "Timelines" / old_timeline
+            timeline.mkdir(parents=True)
+            legacy_root = "C:/Users/source/AppData/Local/CapCut/ARCHIVE_ROOT"
+            portable_root = "C:/__CAPCUT_ROOT_BUNDLE__"
+            document = {
+                "id": old_timeline,
+                "materials": {
+                    "videos": [
+                        {
+                            "id": "V",
+                            "path": legacy_root + "/Resources/media/main.png",
+                        }
+                    ]
+                },
+            }
+            (stage / "draft_content.json").write_text(
+                json.dumps(document), encoding="utf-8"
+            )
+            (stage / "draft_meta_info.json").write_text(
+                json.dumps(
+                    {
+                        "draft_fold_path": legacy_root,
+                        "draft_root_path": "C:/Users/source/AppData/Local/CapCut",
+                        "draft_cover": legacy_root + "/draft_cover.jpg",
+                        "attachment": {
+                            "asset_path": portable_root + "/Resources/media/main.png"
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (timeline / "template.json").write_text(
+                json.dumps(
+                    {"attachment": {"asset_path": portable_root + "/Resources/media/main.png"}}
+                ),
+                encoding="utf-8",
+            )
+            final_root = root / "target-profile" / "Project"
+
+            builder.remap_ids(stage, final_root, "Project", "ARCHIVE_ROOT")
+
+            target = final_root.as_posix()
+            remapped_document = json.loads(
+                (stage / "draft_content.json").read_text(encoding="utf-8")
+            )
+            remapped_meta = json.loads(
+                (stage / "draft_meta_info.json").read_text(encoding="utf-8")
+            )
+            new_timeline = next((stage / "Timelines").iterdir())
+            remapped_template = json.loads(
+                (new_timeline / "template.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                remapped_document["materials"]["videos"][0]["path"],
+                target + "/Resources/media/main.png",
+            )
+            self.assertEqual(remapped_meta["draft_fold_path"], target)
+            self.assertEqual(
+                remapped_meta["draft_cover"], target + "/draft_cover.jpg"
+            )
+            self.assertEqual(
+                remapped_meta["draft_root_path"], final_root.parent.as_posix()
+            )
+            self.assertEqual(
+                remapped_meta["attachment"]["asset_path"],
+                target + "/Resources/media/main.png",
+            )
+            self.assertEqual(
+                remapped_template["attachment"]["asset_path"],
+                target + "/Resources/media/main.png",
+            )
+
     def test_normalize_cards_allows_a_narration_image_cold_open(self):
         cards, total = builder.normalize_cards({
             "cta_like_subscribe": "ON",

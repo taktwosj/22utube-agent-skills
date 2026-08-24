@@ -10,7 +10,11 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from capcut_material_paths import enforce_material_paths
+from capcut_material_paths import (
+    CAPCUT_ROOT_BUNDLE_ROOT,
+    enforce_document_paths,
+    enforce_material_paths,
+)
 
 
 class CapcutMaterialPathTests(unittest.TestCase):
@@ -243,6 +247,46 @@ class CapcutMaterialPathTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(RuntimeError):
                     self.enforce(self.document({"path": value}), allowed_roots=allowed)
+
+    def test_full_document_rebases_verified_bundle_root_alias_across_profiles(self) -> None:
+        source_root = "C:/Users/source/AppData/Local/CapCut/ARCHIVE_ROOT"
+        target_root = Path("D:/Users/target/AppData/Local/CapCut/PROJECT")
+        document = {
+            "draft_meta_info": {
+                "draft_fold_path": source_root,
+                "attachment": {
+                    "asset_path": source_root + "/Resources/media/main.png"
+                },
+            },
+            "materials": {
+                "videos": [
+                    {
+                        "id": "V",
+                        "path": CAPCUT_ROOT_BUNDLE_ROOT + "/Resources/media/main.png",
+                    }
+                ]
+            },
+        }
+        original = copy.deepcopy(document)
+
+        result = enforce_document_paths(
+            document,
+            project_root=target_root,
+            rebase_legacy_resources=True,
+            root_aliases=("ARCHIVE_ROOT", CAPCUT_ROOT_BUNDLE_ROOT.rsplit("/", 1)[-1]),
+        )
+
+        target = target_root.as_posix()
+        self.assertEqual(result["draft_meta_info"]["draft_fold_path"], target)
+        self.assertEqual(
+            result["draft_meta_info"]["attachment"]["asset_path"],
+            target + "/Resources/media/main.png",
+        )
+        self.assertEqual(
+            result["materials"]["videos"][0]["path"],
+            target + "/Resources/media/main.png",
+        )
+        self.assertEqual(document, original)
 
 
 if __name__ == "__main__":

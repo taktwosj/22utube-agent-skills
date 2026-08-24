@@ -20,7 +20,10 @@ import zipfile
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from capcut_material_paths import enforce_material_paths
+from capcut_material_paths import (
+    CAPCUT_ROOT_BUNDLE_ROOT,
+    enforce_document_paths,
+)
 from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
 from root_bundle import ResolvedRoot, resolve_active_root
 from run_politics_assembly_preflight import verify_preflight_report
@@ -213,6 +216,14 @@ def remap_ids(stage: Path, final_root: Path, project_name: str, archive_root_nam
         if len(relative.parts) > 1 and relative.parts[0] == "Timelines" and relative.parts[1] == old_timeline:
             relative = Path("Timelines", new_timeline, *relative.parts[2:])
         value = rewrite_value(value, id_map, replacements)
+        value = enforce_document_paths(
+            value,
+            project_root=final_root,
+            rebase_legacy_resources=True,
+            allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
+            root_aliases=(archive_root_name, CAPCUT_ROOT_BUNDLE_ROOT),
+            rewrite_key_paths={"draft_root_path": final_root.parent.as_posix()},
+        )
         if isinstance(value, dict) and value.get("draft_name") == stage.name:
             value["draft_name"] = project_name
         json_write(stage / relative, value)
@@ -911,13 +922,22 @@ def validate_build(
     hashes = {sha256(path) for path in mirrors}
     if len(hashes) != 1:
         raise RuntimeError("PROJECT_MIRROR_MISMATCH")
+    path_root = path_reference or root
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {".json", ".tmp"}:
+            continue
+        try:
+            value = json_load(path)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        enforce_document_paths(
+            value,
+            project_root=path_root,
+            rebase_legacy_resources=False,
+            allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
+            expected_key_paths={"draft_root_path": path_root.parent.as_posix()},
+        )
     document = json_load(root / "draft_content.json")
-    enforce_material_paths(
-        document,
-        project_root=path_reference or root,
-        rebase_legacy_resources=False,
-        allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
-    )
     if int(document["duration"]) != total:
         raise RuntimeError("PROJECT_DURATION_INVALID")
     valid_ids = {item.get("id") for group in document.get("materials", {}).values() if isinstance(group, list) for item in group if isinstance(item, dict)}
