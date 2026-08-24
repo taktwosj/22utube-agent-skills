@@ -28,13 +28,15 @@ cue 포함 검사에 걸린다).
 
 ## 조립 유형 5가지
 
+이 표는 사람이 읽는 설명입니다. 실행 정본은 `scripts/assembly_type_matrix.py`이며 builder와 validator는 같은 정의를 import한다. 새 유형이 기존 A9/A10/STATE 역할과 `audio_policy_matrix.py`의 기존 오디오 경로만 조합한다면 정본에 행 하나와 계약 테스트만 추가한다. 새 물리 트랙, 새 오디오 처리, 새 CapCut 배치가 필요하면 matrix 행 추가가 아니라 공용 엔진 변경이다.
+
 | # | execution_strategy | 음성 | 자막 | production_mode × audio_policy |
 |---|---|---|---|---|
 | 1 화면+상황자막 (TTT형) | `caption_only` | 없음 (원본 무음) | STATE_LASER만; A9/A9_TEXT/A10/A10_TEXT/A11 empty | URAKKAI × `CAPTION_ONLY_MUTE_SOURCE` |
 | 2 전체 TTS 설명형 | `full_tts` | A9 전체, 원본 무음 | A9_TEXT ↔ A9 verbatim | URAKKAI × `TTS_ONLY_MUTE_SOURCE` |
 | 3 원본 화자발언형 | `original_audio_caption` | A10 원본 육성, A9 없음 | A10_TEXT_WHITE/YELLOW (+필요 시 STATE_LASER) | 하위 경로 4개 (아래) |
-| 4 TTS 도입+화자 본문형 | `tts_intro_original_body` | A9 도입 2~4초 + A10 본문 | 각 자막을 해당 음성에 페어링 | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` |
-| 5 나레이션+화자 혼합형 | `narration_plus_speaker` | A9 연결 + A10 증거·감정 | A9_TEXT + A10_TEXT | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED`, overlap=`source_audio[].mode=duck` |
+| 4 TTS 도입+화자 본문형 | `tts_intro_original_body` | A9 도입 2~4초 + A10 본문 | 각 자막을 해당 음성에 페어링 | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` 또는 `A9_TTS_PLUS_A10_SOURCE_CLIP` |
+| 5 나레이션+화자 혼합형 | `narration_plus_speaker` | A9 연결 + A10 증거·감정 | A9_TEXT + A10_TEXT | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` 또는 `A9_TTS_PLUS_A10_SOURCE_CLIP`; overlap=`source_audio[].mode=duck` |
 
 공통: T1/T2 항상, SCREEN_WHITE/SCREEN_EFFECT 전체 구간 템플릿 1개씩, STATE_GLITCH/SOURCE_CREDIT 예약, A12 항상 `비움`, VIDEO 항상 음소거(소리는 A9/A10 트랙 담당).
 
@@ -100,6 +102,14 @@ A9 cue가 Vxx의 일부만 덮는 것은 양쪽 다 미지원이라 manifest 작
 | A10 | 없음 | 없음 | 값 | 값 | 값(duck) |
 
 원본표는 유형 판정 전이므로 항상 15행 전부 기록한다.
+
+## 얇은 production profile
+
+반복 제작 프리셋은 `schemas/production_profile.schema.json`의 selector 여섯 개만 소유한다: `schema_version`, `profile_id`, `assembly_type`, `template_profile`, `production_mode`, `audio_policy`. `scripts/production_profile.py`가 조립 전략, 오디오 소스, 트랙 레이아웃, 필수·선택·비움 역할을 공용 matrix에서 파생한다. profile에 이 파생값이나 템플릿 좌표를 다시 적지 않는다.
+
+`presets/politics-ttt-shorts/profile.json`은 Type 1·TTT·무음·`shrt_black_top_v1` 선택값만 갖는 예시다. 정치롱폼의 논지·대본·카드 잠금은 119 경계에 남고, 파생 쇼츠의 원본표 이후 제작만 001이 소유한다. 실제 출처 채널명은 회차 데이터이므로 프리셋에 고정하지 않는다.
+
+`scripts/build_episode_locks.py --profile <path>`는 URAKKAI 잠금 생성 경로다. SOURCE_ORDER 계열 등 비-URAKKAI 경로는 기존 owner 경로를 유지한다. profile 해석이 가능하다는 사실만으로 모든 제작 모드를 이 generator가 소유하는 것은 아니다.
 
 ## SOURCE_CLIP A10 아티팩트 체인 (유형 3-①·④)
 

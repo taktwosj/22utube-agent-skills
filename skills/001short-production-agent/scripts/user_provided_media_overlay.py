@@ -8,12 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from capcut_model import iter_materials
+from track_template_matrix import CANONICAL_TRACKS
 
 
 SCHEMA_VERSION = "001short-user-provided-media-overlay-v1"
 LAYOUT_SCHEMA_VERSION = "001short-user-provided-media-overlay-layout-v1"
 MANUAL_STATUS = "WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT"
-BASE_TRACK_COUNT = 15
+BASE_TRACK_COUNT = len(CANONICAL_TRACKS)
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 
 

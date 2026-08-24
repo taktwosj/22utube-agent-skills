@@ -13,7 +13,12 @@ import user_provided_media_overlay
 import validate_original_source_evidence
 
 from common import times_match, meaningful_text_length
-from track_contract import HUMAN_GRID_ROWS
+from track_template_matrix import (
+    HUMAN_GRID_ROWS,
+    LINE_LIMITS,
+    TEMPLATE_PROFILE,
+    track_template_profile,
+)
 
 
 # Human-facing table rows, top-down; single-sourced from the physical track
@@ -33,12 +38,6 @@ HEADER_PATTERNS = {
 }
 EMPTY_MARKERS = {"", "-", "–", "—"}
 DECLARED_EMPTY_VALUES = {"없음", "비움"}
-LINE_LIMITS = {
-    ("original", "A9_TEXT"): (2, 15),
-    ("urakkai", "A9_TEXT"): (2, 10),
-    ("original", "STATE_LASER"): (2, 15),
-    ("urakkai", "STATE_LASER"): (2, 15),
-}
 PLACEHOLDER_TOKEN = re.compile(
     r"(?:^|[\s_:/-])(?:placeholder|todo|tbd|tbc|n/a)(?:$|[\s_:/-])",
     re.IGNORECASE,
@@ -262,7 +261,13 @@ def validate_grid(
     kind: str,
     *,
     require_source_transcript: bool = False,
+    template_profile: str = TEMPLATE_PROFILE,
 ) -> tuple[Grid | None, list[dict]]:
+    template = track_template_profile(template_profile)
+    line_limits = {
+        key: (budget.max_lines, budget.max_chars)
+        for key, budget in template.grid_line_budgets.items()
+    }
     errors: list[dict] = []
     if kind not in HEADER_LABELS:
         raise ValueError(f"GRID_KIND_INVALID:{kind}")
@@ -406,7 +411,7 @@ def validate_grid(
                         value=stripped,
                     )
                 )
-            line_limit = LINE_LIMITS.get((kind, role))
+            line_limit = line_limits.get((kind, role))
             if kind == "urakkai" and role == "A9_TEXT":
                 a9_values = values_by_role.get("A9", ())
                 a9_present = (
@@ -533,6 +538,7 @@ def validate_original(
     original_path: Path,
     *,
     state_path: Path | None = None,
+    template_profile: str = TEMPLATE_PROFILE,
 ) -> tuple[Grid | None, list[dict], dict]:
     context = validate_original_source_evidence.resolve_contract_context(
         original_path,
@@ -542,6 +548,7 @@ def validate_original(
         original_path,
         "original",
         require_source_transcript=bool(context.get("required")),
+        template_profile=template_profile,
     )
     errors.extend(_validate_source_evidence(original, context))
     return original, errors, context
@@ -552,12 +559,16 @@ def validate_grids(
     urakkai_path: Path,
     *,
     state_path: Path | None = None,
+    template_profile: str = TEMPLATE_PROFILE,
 ) -> dict:
     original, original_errors, _context = validate_original(
         original_path,
         state_path=state_path,
+        template_profile=template_profile,
     )
-    urakkai, urakkai_errors = validate_grid(urakkai_path, "urakkai")
+    urakkai, urakkai_errors = validate_grid(
+        urakkai_path, "urakkai", template_profile=template_profile
+    )
     errors = original_errors + urakkai_errors
     return {
         "status": "FAIL" if errors else "PASS",
@@ -869,16 +880,22 @@ def main() -> int:
     parser.add_argument("--urakkai", type=Path)
     parser.add_argument("--original-only", action="store_true")
     parser.add_argument("--emit-report", action="store_true")
+    parser.add_argument("--template-profile", default=TEMPLATE_PROFILE)
     args = parser.parse_args()
 
     if args.original_only:
-        _grid, errors, _context = validate_original(args.original.resolve())
+        _grid, errors, _context = validate_original(
+            args.original.resolve(), template_profile=args.template_profile
+        )
         payload = {"status": "FAIL" if errors else "PASS", "errors": errors}
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 1 if errors else 0
     if args.urakkai is None:
         parser.error("--urakkai is required unless --original-only is set")
-    validation = validate_grids(args.original.resolve(), args.urakkai.resolve())
+    validation = validate_grids(
+        args.original.resolve(), args.urakkai.resolve(),
+        template_profile=args.template_profile,
+    )
     if validation["status"] != "PASS":
         print(
             json.dumps(

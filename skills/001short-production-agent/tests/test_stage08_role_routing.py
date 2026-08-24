@@ -16,6 +16,8 @@ import build_episode_capcut as builder
 import validate_build_inputs as build_inputs
 import validate_capcut_project as readback
 import validate_design_lock
+import validate_executable_protocol
+from common import range_within
 from track_contract import TRACK_LAYOUT
 
 
@@ -84,6 +86,51 @@ def project_payload():
 
 
 class Stage08RoleRoutingTest(unittest.TestCase):
+    @staticmethod
+    def _speaker_caption_plan(target_range_us):
+        fixture = Path(__file__).resolve().parent / "fixtures" / "urakkai_reordered.pass.json"
+        plan = json.loads(fixture.read_text(encoding="utf-8"))
+        plan["timeline"][0]["placements"].append({
+            "anchor": "A10_TEXT",
+            "operation": "replace_text_preserve_style",
+            "text": "speaker caption",
+            "target_range_us": target_range_us,
+        })
+        return plan
+
+    def test_range_within_rejects_invalid_and_outside_ranges(self):
+        cases = [
+            ([0, 100], [0, 100], True),
+            ([10, 90], [0, 100], True),
+            ([-34_000, 50], [0, 100], True),
+            ([50, 34_100], [0, 100], True),
+            ([-34_001, 50], [0, 100], False),
+            ([50, 34_101], [0, 100], False),
+            ([90, 10], [0, 100], False),
+            ([10, 10], [0, 100], False),
+            ([0.0, 50], [0, 100], False),
+            ([False, 50], [0, 100], False),
+            ([0], [0, 100], False),
+            ("0,50", [0, 100], False),
+        ]
+        for inner, outer, expected in cases:
+            with self.subTest(inner=inner, outer=outer):
+                self.assertIs(range_within(inner, outer), expected)
+
+    def test_speaker_caption_may_use_a_subrange_inside_its_v_beat(self):
+        plan = self._speaker_caption_plan([100_000, 400_000])
+        errors = validate_executable_protocol.validate_production_plan(
+            plan, validate_executable_protocol.load_protocol()
+        )
+        self.assertNotIn("TIMELINE_TARGET_RANGE_MISMATCH:0:A10_TEXT", errors)
+
+    def test_speaker_caption_outside_its_v_beat_is_rejected(self):
+        plan = self._speaker_caption_plan([100_000, 6_000_000])
+        errors = validate_executable_protocol.validate_production_plan(
+            plan, validate_executable_protocol.load_protocol()
+        )
+        self.assertIn("TIMELINE_TARGET_RANGE_MISMATCH:0:A10_TEXT", errors)
+
     def _normalize_source_credit_fixture(self, source_credit=None):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -205,6 +252,14 @@ class Stage08RoleRoutingTest(unittest.TestCase):
         }
         self.assertEqual(readback.validate_v2_role_routing(model, contract), [])
 
+        contract["root_template_profile"] = "shrt_white_base_v3"
+        contract["approved_role_text"]["SOURCE_CREDIT"] = "출처 : 실제 채널"
+        mismatch_codes = {
+            row["code"] for row in readback.validate_v2_role_routing(model, contract)
+        }
+        self.assertIn("TRACK_LAYOUT_TEMPLATE_PROFILE_MISMATCH", mismatch_codes)
+        self.assertIn("SOURCE_CREDIT_V3_REQUIRED", mismatch_codes)
+
     def test_build_contract_schema_keeps_source_credit_optional_and_nonempty(self):
         schema = json.loads(readback.BUILD_SCHEMA.read_text(encoding="utf-8"))
         role_schema = schema["properties"]["approved_role_text"]
@@ -221,14 +276,11 @@ class Stage08RoleRoutingTest(unittest.TestCase):
         self.assertTrue(readback.validate_schema({
             "T1": "title", "T2": "subtitle", "SOURCE_CREDIT": "",
         }, role_schema))
-        self.assertEqual(
-            schema["properties"]["track_layout_version"]["enum"],
-            ["shrt_white_base_v2_15", "shrt_white_base_v3_15"],
-        )
-        self.assertEqual(
-            schema["properties"]["root_template_profile"]["enum"],
-            ["shrt_white_base_v2", "shrt_white_base_v3"],
-        )
+        for property_name in ("track_layout_version", "root_template_profile"):
+            profile_selector = schema["properties"][property_name]
+            self.assertNotIn("enum", profile_selector)
+            self.assertEqual(profile_selector["type"], "string")
+            self.assertEqual(profile_selector["minLength"], 1)
 
     def test_builder_binds_v2_and_v3_profiles_to_their_layout_ids(self):
         expected = {

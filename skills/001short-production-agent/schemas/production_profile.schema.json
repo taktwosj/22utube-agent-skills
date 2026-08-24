@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "001short production profile selectors",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "profile_id",
+    "assembly_type",
+    "template_profile",
+    "production_mode",
+    "audio_policy"
+  ],
+  "properties": {
+    "schema_version": {"const": "001short-production-profile-v1"},
+    "profile_id": {"type": "string", "minLength": 1},
+    "assembly_type": {"type": "string", "minLength": 1},
+    "template_profile": {"type": "string", "minLength": 1},
+    "production_mode": {"type": "string", "minLength": 1},
+    "audio_policy": {"type": "string", "minLength": 1}
+  },
+  "additionalProperties": false
+}

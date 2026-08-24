@@ -24,6 +24,60 @@ def digest(path: Path) -> str:
 
 
 class RevisionedReassemblyConfigTest(unittest.TestCase):
+    def test_revision_state_rebinds_current_episode_artifacts(self):
+        with tempfile.TemporaryDirectory() as td:
+            episode = (Path(td) / "episode").resolve()
+            canonical_state = episode / "90_workflow" / "state.json"
+            artifacts = {
+                "approved_timeline": episode / "20_script" / "approved_timeline.json",
+                "build_manifest": episode / "50_capcut_project" / "build_manifest.json",
+                "design_lock_evidence": episode / "20_script" / "design_lock_evidence.json",
+                "audio_lock": episode / "30_audio_srt" / "audio_lock.json",
+                "caption_lock": episode / "30_audio_srt" / "caption_lock.json",
+                "production_plan": episode / "20_script" / "production_plan.json",
+                "production_plan_validation_receipt": episode / "90_workflow" / "production_plan_validation.json",
+            }
+            for index, path in enumerate(artifacts.values()):
+                write_json(path, {"revision_fixture": index})
+            original_grid = episode / "20_script" / "original-capcut-grid.md"
+            urakkai_grid = episode / "20_script" / "urakkai-capcut-grid.md"
+            original_grid.write_text("original", encoding="utf-8")
+            urakkai_grid.write_text("urakkai", encoding="utf-8")
+            state = {
+                "episode_id": "EP",
+                "current_stage": "09",
+                "status": "CAPCUT_STATIC_VALIDATED",
+                "project_name": "episode_v16",
+                "original_grid_sha256": "0" * 64,
+                "urakkai_grid_sha256": "0" * 64,
+            }
+            for name, path in artifacts.items():
+                state[f"{name}_path"] = str(path.relative_to(episode))
+                state[f"{name}_sha256"] = "0" * 64
+            write_json(canonical_state, state)
+            canonical_before = digest(canonical_state)
+            config = {
+                "episode_id": "EP",
+                "episode_root": str(episode),
+                "state_path": str(canonical_state),
+                "work_root": str(episode / "50_capcut_project" / "build_work"),
+                "project_name": "episode",
+                "approved_timeline_path": str(artifacts["approved_timeline"]),
+                "build_manifest_path": str(artifacts["build_manifest"]),
+                "design_lock_evidence_path": str(artifacts["design_lock_evidence"]),
+                "revision_id": "v17",
+            }
+
+            builder.prepare_revision_config(config)
+            revision_state, _ = builder.prepare_revision_state_payload(config)
+
+            for name, path in artifacts.items():
+                self.assertEqual(Path(revision_state[f"{name}_path"]), path)
+                self.assertEqual(revision_state[f"{name}_sha256"], digest(path))
+            self.assertEqual(revision_state["original_grid_sha256"], digest(original_grid))
+            self.assertEqual(revision_state["urakkai_grid_sha256"], digest(urakkai_grid))
+            self.assertEqual(digest(canonical_state), canonical_before)
+
     def test_revision_labels_create_isolated_state_and_output_paths(self):
         with tempfile.TemporaryDirectory() as td:
             episode = (Path(td) / "episode").resolve()

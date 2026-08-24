@@ -95,7 +95,7 @@ Before publishing or deploying a schema/validator change:
 
 1. Read one recent real `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` plan.
 2. Read one recent real `URAKKAI` plan.
-3. Verify the schema and validator against the actual keys: `schema_version`, `root_profile`, `project_name`, `production_mode`, `total_duration_us`, `order_signature`, `timeline[].segment_key`, `timeline[].target_range_us`, `timeline[].placements`, and `cleared_anchors` where applicable.
+3. Verify the schema and validator against the actual keys: `schema_version`, `root_profile`, `project_name`, `production_mode`, `total_duration_us`, `order_signature`, `timeline[].segment_key`, `timeline[].target_range_us`, `timeline[].placements`, and `cleared_anchors` where applicable. New generated plans also carry `assembly_type` and `execution_strategy`; a preset-driven plan additionally carries the exact selector-only `production_profile`. Legacy plans without these additive fields remain valid.
 4. Require new urakkai plans to carry enough original-order evidence to prove that `order_signature` is a real reorder.
 5. Keep any legacy adapter separate from the canonical schema; do not let normalization hide a missing structural-evidence field.
 

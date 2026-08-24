@@ -122,7 +122,7 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def _generate(self) -> dict:
+    def _generate(self, profile_path: Path | None = None) -> dict:
         return generator.generate(
             episode_root=self.root,
             capcut_root=Path(self._tmp.name) / "capcut",
@@ -131,6 +131,7 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             root_profile="test_profile",
             root_contract_path="contract.json",
             work_root=Path(self._tmp.name) / "work",
+            profile_path=profile_path,
         )
 
     def _make_caption_only(self) -> None:
@@ -343,6 +344,59 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
         }
         self.assertEqual(volumes, {"V01": [0], "V02": [1]})
 
+    def test_type_five_uses_the_same_shared_mixed_audio_engine(self) -> None:
+        self._make_tts_intro_original_body()
+        plan_path = self.root / "20_script" / "v_plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["type"] = "5"
+        plan["execution_strategy"] = "narration_plus_speaker"
+        _write_json(plan_path, plan)
+        timeline_path = self.root / "20_script" / "approved_timeline.json"
+        timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+        timeline["execution_strategy"] = "narration_plus_speaker"
+        _write_json(timeline_path, timeline)
+
+        with self.assertRaisesRegex(ValueError, "ASSEMBLY_TYPE_A9_BODY_REQUIRED"):
+            self._generate()
+
+        intro, body = self.v_rows
+        plan["cues"] = [[
+            "V02", "A9_V02", "연결 문장", body[3] - body[2],
+            body[2], body[3], "V02_fit.wav",
+        ]]
+        _write_json(plan_path, plan)
+        for segment in timeline["segments"]:
+            if segment["role"] in {"A9", "A9_TEXT"}:
+                suffix = "_TEXT" if segment["role"] == "A9_TEXT" else ""
+                segment["segment_id"] = f"A9_V02{suffix}"
+                segment["start"] = body[2]
+                segment["duration"] = body[3] - body[2]
+                segment["text"] = "연결 문장"
+                segment["cue_id"] = "A9_V02"
+            elif segment["role"] == "A10":
+                segment["volume"] = 0 if segment["start"] == body[2] else 1
+            elif segment["role"] == "A10_TEXT":
+                segment["segment_id"] = "A10_V01_TEXT"
+                segment["start"] = intro[2]
+                segment["duration"] = intro[3] - intro[2]
+                segment["cue_id"] = "A10_V01"
+        _write_json(timeline_path, timeline)
+
+        self.assertEqual(self._generate()["status"], "PASS")
+        production_plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(production_plan["assembly_type"], "5")
+        self.assertEqual(production_plan["execution_strategy"], "narration_plus_speaker")
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                production_plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
     def test_type_four_production_plan_passes_the_protocol_gate(self) -> None:
         """The mixed A9/A10 rules live in this gate, not in the builder alone."""
         self._make_tts_intro_original_body()
@@ -552,6 +606,63 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
         config = json.loads((self.root / "50_capcut_project" / "build_config.json").read_text(encoding="utf-8"))
         self.assertNotIn("tts_cues", config)
 
+    def test_profile_selectors_drive_the_same_shared_lock_generator(self) -> None:
+        self._make_caption_only()
+        profile = Path(self._tmp.name) / "caption-only-profile.json"
+        selector = {
+            "schema_version": "001short-production-profile-v1",
+            "profile_id": "fixture-caption-only",
+            "assembly_type": "1",
+            "template_profile": "shrt_white_base_v3",
+            "production_mode": "URAKKAI",
+            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE",
+        }
+        _write_json(profile, selector)
+
+        self.assertEqual(self._generate(profile)["status"], "PASS")
+        production_plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        build_config = json.loads(
+            (self.root / "50_capcut_project" / "build_config.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(production_plan["assembly_type"], "1")
+        self.assertEqual(production_plan["production_profile"], selector)
+        self.assertEqual(build_config["production_profile"], selector)
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                production_plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_v_plan_and_timeline_assembly_contract_must_match_before_writes(self) -> None:
+        timeline_path = self.root / "20_script" / "approved_timeline.json"
+        original = json.loads(timeline_path.read_text(encoding="utf-8"))
+        mismatches = {
+            "production_mode": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY",
+            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE",
+            "execution_strategy": "caption_only",
+        }
+        for field, value in mismatches.items():
+            with self.subTest(field=field):
+                timeline = dict(original)
+                timeline[field] = value
+                _write_json(timeline_path, timeline)
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"V_PLAN_TIMELINE_CONTRACT_MISMATCH:{field}",
+                ):
+                    self._generate()
+                self.assertFalse(
+                    (self.root / "50_capcut_project" / "build_manifest.json").exists()
+                )
+        _write_json(timeline_path, original)
+
     def test_a_state_caption_never_claims_speech_authority(self) -> None:
         """A STATE caption has no matching audio; labelling it SPEECH_AUDIO would lie."""
         self._make_caption_only()
@@ -575,6 +686,29 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
         self._generate()
         plan = json.loads((self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
         self.assertEqual(plan["root_profile"], "test_profile")
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_legacy_type_two_alias_passes_the_generated_protocol_gate(self) -> None:
+        v_plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(v_plan_path.read_text(encoding="utf-8"))
+        v_plan["execution_strategy"] = "tts_only"
+        _write_json(v_plan_path, v_plan)
+        timeline_path = self.root / "20_script" / "approved_timeline.json"
+        timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+        timeline["execution_strategy"] = "tts_only"
+        _write_json(timeline_path, timeline)
+
+        self._generate()
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("production_profile", plan)
+        self.assertEqual(plan["execution_strategy"], "tts_only")
         self.assertEqual(
             validate_executable_protocol.validate_production_plan(
                 plan, validate_executable_protocol.load_protocol()

@@ -23,7 +23,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from audio_policy_matrix import A10_POLICIES, SOURCE_CLIP_A10_POLICIES  # noqa: E402
+from assembly_type_matrix import (  # noqa: E402
+    ALWAYS_CLEARED as ASSEMBLY_ALWAYS_CLEARED,
+    LEGACY_EXECUTION_STRATEGY_ALIASES,
+    assembly_type_definition,
+    validate_assembly_placement_rules,
+)
 from common import read_json, sha256_file, write_json  # noqa: E402
+from production_profile import (  # noqa: E402
+    ResolvedProductionProfile,
+    audio_source_for_route,
+    resolve_production_profile,
+)
 from schema_runtime import validate_schema  # noqa: E402
 
 SCHEMAS = Path(__file__).resolve().parents[1] / "schemas"
@@ -35,22 +46,80 @@ CAPTION_LOCK_SCHEMA_VERSION = "001short-caption-lock-v2"
 CAPTION_TIMING_SCHEMA_VERSION = "001short-caption-timing-evidence-v2"
 
 CAPTION_ROLES = ("A9_TEXT", "A10_TEXT", "STATE")
-CLEARED_BY_TYPE = {
-    # Type 1 is caption-only: no voice of any kind, so both audio axes clear.
-    "1": ["A9", "A9_TEXT", "A10", "A10_TEXT"],
-    "2": ["A10", "A10_TEXT", "STATE", "STATE_LASER"],
-    # Type 3 keeps the original speaker audio and its captions, and writes no
-    # TTS at all, so only the A9 pair clears.  STATE stays available.
-    "3": ["A9", "A9_TEXT"],
-    # Types 4 and 5 carry BOTH voices - a new TTS on A9 and the original
-    # speaker on A10 - per the per-type row summary in
-    # references/type-assembly-matrix.md, so neither audio axis clears.
-    "4": [],
-    "5": [],
-}
 # A STATE caption has no matching audio, so it cannot claim speech authority.
 CAPTION_AUTHORITY = {"STATE": "STATE"}
-ALWAYS_CLEARED = ["A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH"]
+# Compatibility view for callers/tests that historically appended a list.
+ALWAYS_CLEARED = list(ASSEMBLY_ALWAYS_CLEARED)
+
+
+def resolve_v_plan_type(
+    plan: dict,
+    production_profile: ResolvedProductionProfile | None = None,
+):
+    definition = assembly_type_definition(plan.get("type"))
+    production_mode = plan.get("production_mode", "URAKKAI")
+    if production_profile is not None:
+        selector = production_profile.selector
+        if (
+            selector["assembly_type"] != definition.type_id
+            or selector["production_mode"] != production_mode
+            or selector["audio_policy"] != plan.get("audio_policy")
+        ):
+            raise ValueError("V_PLAN_PRODUCTION_PROFILE_MISMATCH")
+    strategy = plan.get("execution_strategy")
+    if strategy != definition.execution_strategy:
+        if strategy not in LEGACY_EXECUTION_STRATEGY_ALIASES.get(definition.type_id, ()):
+            raise ValueError("V_PLAN_EXECUTION_STRATEGY_MISMATCH")
+        if production_profile is not None:
+            raise ValueError("V_PLAN_PRODUCTION_PROFILE_MISMATCH")
+    route = (production_mode, plan.get("audio_policy"))
+    if route not in definition.allowed_mode_policies:
+        raise ValueError("V_PLAN_ASSEMBLY_AUDIO_ROUTE_MISMATCH")
+    if production_profile is not None:
+        if production_profile.execution_strategy != definition.execution_strategy:
+            raise ValueError("V_PLAN_PRODUCTION_PROFILE_MISMATCH")
+    return definition
+
+
+def validate_timeline_type_contract(plan: dict, timeline: dict) -> None:
+    expected = {
+        "production_mode": plan.get("production_mode", "URAKKAI"),
+        "audio_policy": plan.get("audio_policy"),
+        "execution_strategy": plan.get("execution_strategy"),
+    }
+    actual = {
+        "production_mode": timeline.get("production_mode", "URAKKAI"),
+        "audio_policy": timeline.get("audio_policy"),
+        "execution_strategy": timeline.get("execution_strategy"),
+    }
+    for field, expected_value in expected.items():
+        if actual[field] != expected_value:
+            raise ValueError(f"V_PLAN_TIMELINE_CONTRACT_MISMATCH:{field}")
+
+
+def validate_timeline_placement_contract(definition, timeline: dict) -> None:
+    role_ranges: dict[str, list[tuple[int, int]]] = {}
+    for segment in timeline.get("segments", []):
+        role = segment.get("role")
+        start = segment.get("start")
+        duration = segment.get("duration")
+        if (
+            not isinstance(role, str)
+            or not isinstance(start, int)
+            or isinstance(start, bool)
+            or not isinstance(duration, int)
+            or isinstance(duration, bool)
+            or duration <= 0
+        ):
+            raise ValueError(
+                f"APPROVED_TIMELINE_RANGE_INVALID:{segment.get('segment_id')}"
+            )
+        role_ranges.setdefault(role, []).append((start, start + duration))
+    errors = validate_assembly_placement_rules(
+        definition, role_ranges, role_ranges.get("VIDEO", [])
+    )
+    if errors:
+        raise ValueError(errors[0])
 
 
 def source_credit_text(plan: dict) -> str | None:
@@ -232,9 +301,11 @@ def build_manifest(
         "schema_version": BUILD_MANIFEST_SCHEMA_VERSION,
         "episode_id": episode_id,
         "visual_asset_mode": "CLEAN_VISUAL_READY",
-        "production_mode": "URAKKAI",
+        "production_mode": plan.get("production_mode", "URAKKAI"),
         "audio_policy": plan["audio_policy"],
-        "audio_source": "GENERATED_TTS" if plan["type"] == "2" else plan.get("audio_source", "SILENCE"),
+        "audio_source": audio_source_for_route(
+            plan.get("production_mode", "URAKKAI"), plan["audio_policy"]
+        ),
         "source": {
             "path": str(episode_root / "00_input" / "source.mp4"),
             "sha256": source_sha,
@@ -272,6 +343,7 @@ def build_manifest(
 def build_production_plan(
     episode_id: str, episode_root: Path, plan: dict, timeline: dict, identity: dict,
     manifest: dict, root_profile: str, original_order: list[str],
+    production_profile: ResolvedProductionProfile | None = None,
 ) -> dict:
     audio_source = manifest["audio_source"]
     v_rows = plan["V"]
@@ -356,7 +428,12 @@ def build_production_plan(
         "production_mode": "URAKKAI",
         "audio_policy": plan["audio_policy"],
         "audio_source": audio_source,
+        "assembly_type": plan["type"],
         "execution_strategy": plan["execution_strategy"],
+        **(
+            {"production_profile": dict(production_profile.selector)}
+            if production_profile is not None else {}
+        ),
         "visual_asset_mode": "CLEAN_VISUAL_READY",
         "total_duration_us": plan["DUR"],
         # URAKKAI_STRUCTURE_UNCHANGED and the fake-split guard both compare the
@@ -369,8 +446,8 @@ def build_production_plan(
         "final_order": [row[1] for row in v_rows],
         "timeline": rows,
         "cleared_anchors": (
-            ALWAYS_CLEARED
-            + CLEARED_BY_TYPE[plan["type"]]
+            list(ALWAYS_CLEARED)
+            + list(assembly_type_definition(plan["type"]).cleared_roles)
             + ([] if source_credit_text(plan) is not None else ["SOURCE_CREDIT"])
         ),
         "audio_bindings": {
@@ -471,6 +548,7 @@ def build_captions(episode_id: str, episode_root: Path, plan: dict, timeline: di
 def build_config(
     episode_id: str, episode_root: Path, plan: dict, timeline: dict,
     capcut_root: Path, work_root: Path, workspace_root: Path, root_profile: str, root_contract_path: str,
+    production_profile: ResolvedProductionProfile | None = None,
 ) -> dict:
     cues = [cue for cue in plan.get("cues", []) if cue[1] != "NOFIT"]
     a9 = {row["cue_id"]: row for row in timeline["segments"] if row["role"] == "A9"}
@@ -509,6 +587,10 @@ def build_config(
         "workspace_root": str(workspace_root),
         "root_profile": root_profile,
         "root_contract_path": root_contract_path,
+        **(
+            {"production_profile": dict(production_profile.selector)}
+            if production_profile is not None else {}
+        ),
     }
     if cues:
         config["tts_cues"] = [
@@ -522,11 +604,21 @@ def build_config(
 def generate(
     episode_root: Path, capcut_root: Path, workspace_root: Path,
     template_zip: Path, root_profile: str, root_contract_path: str, work_root: Path,
+    profile_path: Path | None = None,
 ) -> dict:
     episode_root = episode_root.resolve()
     episode_id = episode_root.name
     plan = read_json(episode_root / "20_script" / "v_plan.json")
+    production_profile = (
+        resolve_production_profile(read_json(Path(profile_path).resolve()))
+        if profile_path is not None else None
+    )
+    assembly_type = resolve_v_plan_type(plan, production_profile)
+    if plan.get("production_mode", "URAKKAI") != "URAKKAI":
+        raise ValueError("EPISODE_LOCKS_PRODUCTION_MODE_UNSUPPORTED")
     timeline = read_json(episode_root / "20_script" / "approved_timeline.json")
+    validate_timeline_type_contract(plan, timeline)
+    validate_timeline_placement_contract(assembly_type, timeline)
     identity = read_json(episode_root / "00_input" / "source_identity.json")
     vmake_receipt = episode_root / "40_assets_used" / "vmake_final_download_evidence.json"
     if not vmake_receipt.is_file():
@@ -541,7 +633,7 @@ def generate(
 
     production_plan = build_production_plan(
         episode_id, episode_root, plan, timeline, identity, manifest, root_profile,
-        original_order,
+        original_order, production_profile,
     )
     errors = validate_schema(
         production_plan, read_json(SCHEMAS / "executable_production_plan.schema.json")
@@ -569,6 +661,7 @@ def generate(
     config = build_config(
         episode_id, episode_root, plan, timeline,
         capcut_root, work_root, workspace_root, root_profile, root_contract_path,
+        production_profile,
     )
     write_json(episode_root / "50_capcut_project" / "build_config.json", config)
 
@@ -592,6 +685,7 @@ def main() -> int:
     parser.add_argument("--template-zip", type=Path, required=True)
     parser.add_argument("--work-root", type=Path, required=True)
     parser.add_argument("--root-profile", required=True)
+    parser.add_argument("--profile", type=Path)
     parser.add_argument(
         "--root-contract-path",
         default="00_asset_tools/templates/capcut/shrt_white_base_v2/shorts_capcut_root_contract_v2.json",
@@ -600,6 +694,7 @@ def main() -> int:
     payload = generate(
         args.episode_root, args.capcut_root, args.workspace_root,
         args.template_zip, args.root_profile, args.root_contract_path, args.work_root,
+        args.profile,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0

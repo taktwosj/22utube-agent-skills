@@ -5,7 +5,7 @@ import argparse
 import copy
 import hashlib
 import json
-from common import FRAME_TOLERANCE_US, ranges_match
+from common import FRAME_TOLERANCE_US, range_within, ranges_match
 import re
 import subprocess
 import sys
@@ -21,6 +21,13 @@ from audio_policy_matrix import (
     URAKKAI_AUDIO_POLICIES,
 )
 from track_contract import CANONICAL_TRACKS, TEMPLATE_PROFILE, TRACK_LAYOUT
+from assembly_type_matrix import (
+    ALWAYS_CLEARED,
+    LEGACY_EXECUTION_STRATEGY_ALIASES,
+    assembly_type_definition,
+    validate_assembly_placement_rules,
+)
+from production_profile import resolve_production_profile
 from schema_runtime import validate_schema
 import user_provided_media_overlay
 
@@ -834,11 +841,22 @@ def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
                 anchor == "A9_TEXT"
                 and placement.get("target_range_us") in user_audio_ranges.values()
             )
+            # One speaker caption per V column meant one line per beat, so a beat
+            # holding an exchange lost every line but one.  A speaker caption may
+            # now carry its own range as long as that range stays inside the beat
+            # it belongs to; the SRT is a single stream, so the caption lock still
+            # rejects any two that overlap.
+            speaker_caption = (
+                anchor == "A10_TEXT"
+                and row_range is not None
+                and range_within(placement.get("target_range_us"), row_range)
+            )
             if (
                 row_range is not None
                 and not ranges_match(placement.get("target_range_us"), row_range)
                 and not user_audio_placement
                 and not user_audio_caption
+                and not speaker_caption
             ):
                 errors.append(f"TIMELINE_TARGET_RANGE_MISMATCH:{row_index}:{anchor}")
             tracks.setdefault(anchor, []).append(placement)
@@ -900,6 +918,26 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     if mode not in modes:
         return ["PRODUCTION_MODE_INVALID"]
 
+    profile_payload = plan.get("production_profile")
+    if profile_payload is not None:
+        try:
+            production_profile = resolve_production_profile(profile_payload)
+        except ValueError as exc:
+            errors.append(str(exc))
+        else:
+            if (
+                production_profile.selector["production_mode"] != mode
+                or production_profile.selector["assembly_type"]
+                != plan.get("assembly_type")
+                or production_profile.selector["audio_policy"] != plan.get("audio_policy")
+                or production_profile.execution_strategy != plan.get("execution_strategy")
+                or production_profile.audio_source != plan.get("audio_source")
+                or not set(production_profile.cleared_roles).issubset(
+                    set(plan.get("cleared_anchors", []))
+                )
+            ):
+                errors.append("PRODUCTION_PROFILE_PLAN_MISMATCH")
+
     duration = plan.get("total_duration_us")
     if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
         errors.append("PRODUCTION_DURATION_INVALID")
@@ -934,6 +972,50 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
     tts = _segments(tracks, "A9")
+    assembly_type_id = plan.get("assembly_type")
+    if assembly_type_id is not None:
+        try:
+            assembly_type = assembly_type_definition(assembly_type_id)
+        except ValueError as exc:
+            errors.append(str(exc))
+        else:
+            strategy = plan.get("execution_strategy")
+            legacy_strategy = (
+                profile_payload is None
+                and strategy in LEGACY_EXECUTION_STRATEGY_ALIASES.get(
+                    assembly_type.type_id, ()
+                )
+            )
+            if strategy != assembly_type.execution_strategy and not legacy_strategy:
+                errors.append("ASSEMBLY_TYPE_EXECUTION_STRATEGY_MISMATCH")
+            if (mode, plan.get("audio_policy")) not in assembly_type.allowed_mode_policies:
+                errors.append("ASSEMBLY_TYPE_AUDIO_ROUTE_MISMATCH")
+            declared_cleared = set(plan.get("cleared_anchors", []))
+            expected_cleared = set(ALWAYS_CLEARED) | set(assembly_type.cleared_roles)
+            for role in sorted(expected_cleared - declared_cleared):
+                errors.append(f"ASSEMBLY_TYPE_CLEAR_ANCHOR_MISSING:{role}")
+            for role in sorted(assembly_type.required_roles):
+                if not _segments(tracks, role):
+                    errors.append(f"ASSEMBLY_TYPE_REQUIRED_ROLE_MISSING:{role}")
+            for role in sorted(expected_cleared):
+                if _segments(tracks, role):
+                    errors.append(f"ASSEMBLY_TYPE_CLEARED_ROLE_POPULATED:{role}")
+            role_ranges = {
+                role: [
+                    tuple(segment["target_range_us"])
+                    for segment in _segments(tracks, role)
+                    if (
+                        isinstance(segment.get("target_range_us"), list)
+                        and len(segment["target_range_us"]) == 2
+                    )
+                ]
+                for role in tracks
+            }
+            errors.extend(validate_assembly_placement_rules(
+                assembly_type,
+                role_ranges,
+                role_ranges.get("VIDEO", []),
+            ))
     if _segments(tracks, "A12"):
         errors.append("A12_RESERVED_EMPTY")
 

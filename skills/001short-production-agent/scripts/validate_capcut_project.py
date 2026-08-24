@@ -35,7 +35,8 @@ from track_contract import (
     STATE_TRACK_BY_EFFECT,
     TEMPLATE_PROFILE_BY_TRACK_LAYOUT,
     TRACK_INDEX,
-    V3_TRACK_LAYOUT,
+    profile_supports_role,
+    track_template_profile,
 )
 
 
@@ -76,12 +77,17 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
     if len(model.tracks) != len(logical_role_by_track) + len(declared_extensions):
         return [_error("V2_TRACK_LAYOUT_MISMATCH", observed=len(model.tracks))]
     errors: list[dict] = []
-    expected_template_profile = TEMPLATE_PROFILE_BY_TRACK_LAYOUT[layout]
-    if (
-        contract.get("root_template_profile") is not None
-        and contract.get("root_template_profile") != expected_template_profile
-    ):
+    default_template_profile = TEMPLATE_PROFILE_BY_TRACK_LAYOUT[layout]
+    declared_template_profile = contract.get("root_template_profile")
+    template_profile = declared_template_profile or default_template_profile
+    try:
+        template = track_template_profile(template_profile)
+    except ValueError:
+        template = track_template_profile(default_template_profile)
         errors.append(_error("TRACK_LAYOUT_TEMPLATE_PROFILE_MISMATCH"))
+    if template.track_layout != layout:
+        errors.append(_error("TRACK_LAYOUT_TEMPLATE_PROFILE_MISMATCH"))
+        template = track_template_profile(default_template_profile)
     materials = {
         row.get("id"): row for row in iter_materials(model.materials)
         if isinstance(row.get("id"), str)
@@ -96,10 +102,11 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
     timeline_total = max(video_ends, default=0)
     role_text = contract.get("approved_role_text", {})
     source_credit_declared = "SOURCE_CREDIT" in role_text
-    if source_credit_declared and layout != V3_TRACK_LAYOUT:
+    source_credit_supported = profile_supports_role(template.name, "SOURCE_CREDIT")
+    if source_credit_declared and not source_credit_supported:
         errors.append(_error("SOURCE_CREDIT_V3_REQUIRED"))
-    full_span_roles = ["T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT"]
-    if layout == V3_TRACK_LAYOUT and source_credit_declared:
+    full_span_roles = list(template.full_span_roles)
+    if source_credit_supported and source_credit_declared:
         full_span_roles.append("SOURCE_CREDIT")
     for role in full_span_roles:
         index = TRACK_INDEX[role]
@@ -107,7 +114,7 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
         timerange = _range(segments[0]) if len(segments) == 1 else None
         if timeline_total <= 0 or timerange is None or timerange[:2] != (0, timeline_total):
             errors.append(_error("FULL_SPAN_ANCHOR_MISMATCH", role=role))
-    if layout == V3_TRACK_LAYOUT and not source_credit_declared:
+    if source_credit_supported and not source_credit_declared:
         if model.tracks[TRACK_INDEX["SOURCE_CREDIT"]].get("segments", []):
             errors.append(_error("SOURCE_CREDIT_UNDECLARED_PRESENT"))
     for segment in _segments(model):
@@ -121,7 +128,7 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
                 role=segment.get("role"), track_index=index,
             ))
     authority_roles = ["T1", "T2"]
-    if layout == V3_TRACK_LAYOUT and source_credit_declared:
+    if source_credit_supported and source_credit_declared:
         authority_roles.append("SOURCE_CREDIT")
     for role in authority_roles:
         index = TRACK_INDEX[role]
@@ -1141,7 +1148,12 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
         handoff_path = Path(evidence["handoff_path"]).resolve()
         source_identity_path = Path(evidence["source_identity_path"]).resolve()
         timeline_path = Path(evidence["timeline_path"]).resolve()
-        verified = validate_handoff(handoff_path, source_identity_path, timeline_path)
+        verified = validate_handoff(
+            handoff_path,
+            source_identity_path,
+            timeline_path,
+            template_profile=contract["root_template_profile"],
+        )
     except (OSError, ValueError, TypeError, KeyError):
         return [_error("DESIGN_LOCK_EVIDENCE_INVALID")], None
     if verified.get("status") != "PASS":
