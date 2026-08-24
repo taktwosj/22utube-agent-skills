@@ -980,12 +980,28 @@ def validate_build(
 def register_project(meta_path: Path, source_name: str, project_name: str, project_root: Path, duration: int) -> bytes:
     original = meta_path.read_bytes()
     meta = json.loads(original.decode("utf-8"))
-    source = next((item for item in meta.get("all_draft_store", []) if item.get("draft_name") == source_name), None)
-    if source is None or any(item.get("draft_name") == project_name for item in meta.get("all_draft_store", [])):
+    stores = meta.get("all_draft_store", [])
+    if any(item.get("draft_name") == project_name for item in stores):
         raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+    source = next((item for item in stores if item.get("draft_name") == source_name), None)
+    if source is None:
+        project_meta_path = project_root / "draft_meta_info.json"
+        if not project_meta_path.is_file():
+            raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+        project_meta = json_load(project_meta_path)
+        if not isinstance(project_meta, dict):
+            raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+        source = {
+            key: value
+            for key, value in project_meta.items()
+            if value is None or isinstance(value, (bool, int, float, str))
+        }
+        timeline_size = source.pop("draft_timeline_materials_size_", None)
+        if timeline_size is not None:
+            source["draft_timeline_materials_size"] = timeline_size
     entry = copy.deepcopy(source)
     root_posix = str(project_root).replace("\\", "/")
-    entry.update({"draft_name": project_name, "draft_id": uid(), "draft_fold_path": root_posix, "draft_json_file": root_posix + "/draft_content.json", "draft_cover": root_posix + "/draft_cover.jpg", "draft_root_path": str(project_root.parent).replace("\\", "/"), "tm_duration": duration, "draft_cloud_sync": False, "draft_cloud_template_id": ""})
+    entry.update({"draft_name": project_name, "draft_id": uid(), "draft_fold_path": root_posix, "draft_json_file": root_posix + "/draft_content.json", "draft_cover": root_posix + "/draft_cover.jpg", "draft_root_path": str(project_root.parent).replace("\\", "/"), "tm_duration": duration, "draft_cloud_sync": False, "draft_cloud_template_id": "", "streaming_edit_draft_ready": True})
     meta["all_draft_store"].append(entry)
     json_write(meta_path, meta)
     return original

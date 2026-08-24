@@ -553,6 +553,67 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         )
         self.assertTrue(report["root_bundle"]["contract_path"].startswith("00_asset_tools/"))
 
+    def test_register_project_uses_project_metadata_when_archive_root_is_not_registered(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            meta_path = root / "root_meta_info.json"
+            original_meta = {
+                "all_draft_store": [
+                    {
+                        "draft_name": "unrelated-project",
+                        "draft_id": "existing-id",
+                    }
+                ]
+            }
+            meta_path.write_text(json.dumps(original_meta), encoding="utf-8")
+            original_bytes = meta_path.read_bytes()
+            project_root = root / "final-project"
+            project_root.mkdir()
+            (project_root / "draft_meta_info.json").write_text(
+                json.dumps(
+                    {
+                        "draft_name": "archive-root",
+                        "draft_id": "archive-id",
+                        "draft_fold_path": "C:/source/archive-root",
+                        "draft_root_path": "C:/source",
+                        "draft_cover": "C:/source/archive-root/draft_cover.jpg",
+                        "draft_timeline_materials_size_": 123,
+                        "draft_materials": [{"type": 0}],
+                        "tm_duration": 180_000_000,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            returned = builder.register_project(
+                meta_path,
+                "archive-root",
+                "final-project",
+                project_root,
+                1_221_350_000,
+            )
+
+            self.assertEqual(returned, original_bytes)
+            updated = json.loads(meta_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(updated["all_draft_store"]), 2)
+            self.assertFalse(
+                any(item.get("draft_name") == "archive-root" for item in updated["all_draft_store"])
+            )
+            entry = updated["all_draft_store"][-1]
+            project_posix = project_root.as_posix()
+            self.assertEqual(entry["draft_name"], "final-project")
+            self.assertNotEqual(entry["draft_id"], "archive-id")
+            self.assertEqual(entry["draft_fold_path"], project_posix)
+            self.assertEqual(entry["draft_json_file"], project_posix + "/draft_content.json")
+            self.assertEqual(entry["draft_cover"], project_posix + "/draft_cover.jpg")
+            self.assertEqual(entry["draft_root_path"], project_root.parent.as_posix())
+            self.assertEqual(entry["draft_timeline_materials_size"], 123)
+            self.assertNotIn("draft_timeline_materials_size_", entry)
+            self.assertNotIn("draft_materials", entry)
+            self.assertEqual(entry["tm_duration"], 1_221_350_000)
+            self.assertFalse(entry["draft_cloud_sync"])
+            self.assertTrue(entry["streaming_edit_draft_ready"])
+
     def test_builder_stops_before_extract_when_root_bundle_resolution_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
