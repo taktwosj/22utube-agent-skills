@@ -49,7 +49,7 @@ For newly requested A9 TTS, read `<factory-root>/00_asset_tools/TYPECAST_TTS_RUN
 - `PAPERCLIP_DISABLED`: Do not request, register, create, validate, wait on, or report Paperclip.
 - VMake: run the official API SDK (`videoscreenclear`) at intake, nonblocking; the browser DOM route and URL submission are fallbacks. Signed result URLs are never printed or stored ([contract](references/vmake-dom-clean-video-automation.md)).
 - 투군: `https://chatgpt.com/g/g-p-69bec5d5e6d481918a435189a9a3e2a7-tugun/project`. Attach an open 투군 tab when the runtime can list one; otherwise open this project and start a new chat ([procedure](references/production-orchestrator.md#투군-live-tab-procedure)).
-- Stage 04의 승인 권위는 사용자다. CapCut visual approval, render, and upload are user-manual-only; stop at `WAIT_USER_CAPCUT_CHECK`.
+- Stage 04의 승인 권위는 사용자다. 정상 제작은 `WAIT_USER_CAPCUT_CHECK`에서 멈춘다. `USER_CAPCUT_CHECK_PASS`와 `APPROVE_CAPCUT_EXPORT` 뒤에만 [MCP export](references/capcut-export-telegram-handoff.md)를 쓰며 Stage09·upload를 승인하지 않는다.
 
 ## New Session Handoff Bootstrap
 

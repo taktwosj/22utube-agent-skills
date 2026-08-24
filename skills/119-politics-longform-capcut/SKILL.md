@@ -206,7 +206,7 @@ scripts/render_democratic_blue_card.py
 - ASR cue가 편집 컷을 정하지 않는다. 실제 컷에서 자막을 split 또는 clamp한다.
 - 목표 길이·원본/나레이션 비율은 사용자 절대 LOCK이 아니면 `[EST]`다.
 - 실제 source와 narration duration을 사용한다.
-- 업로드·썸네일·렌더는 사용자 명시 요청이 있는 별도 단계다.
+- 업로드·썸네일·렌더는 사용자 명시 요청이 있는 별도 단계다. 정상 조립은 항상 `WAIT_USER_CAPCUT_CHECK`에서 멈춘다. 사용자가 화면 확인 완료와 MP4 export를 각각 명시한 `2pow 22factory MCP` export job만 [capcut-assembly.md](references/capcut-assembly.md#승인-후-mcp-export)의 제한된 후속 절차를 사용할 수 있다.
 
 ## 실패와 재개
 
@@ -249,4 +249,4 @@ VISUAL_GATE
 
 `MEDIA_RELINK=PASS`, `MEDIA_RESOLUTION=PASS`, `VISUAL_GATE=PASS`가 모두 있어야 CapCut 제작 완료다. 정적 JSON 검사나 GRID는 실제 화면 승인 증거가 아니다. `MP4`와 `UPLOAD`는 실행하지 않았으면 `NOT RUN`이다.
 
-자동화의 사용자 전달 경계는 `PROJECT_BUILD=PASS` 뒤다. 프로젝트를 자동으로 열지 않고 `프로젝트 파일명`, `프로젝트 전체 경로`, `미디어 폴더 전체 경로`를 보고한 뒤 `WAIT_USER_CAPCUT_CHECK`로 멈춘다. 이 시점의 `MEDIA_RELINK`, `MEDIA_RESOLUTION`, `VISUAL_GATE`는 `NOT RUN — USER MANUAL`이며 CapCut 제작 완료라고 부르지 않는다.
+정상 조립 자동화의 사용자 전달 경계는 `PROJECT_BUILD=PASS` 뒤다. 프로젝트를 자동으로 열지 않고 `프로젝트 파일명`, `프로젝트 전체 경로`, `미디어 폴더 전체 경로`를 보고한 뒤 `WAIT_USER_CAPCUT_CHECK`로 멈춘다. 이 시점의 `MEDIA_RELINK`, `MEDIA_RESOLUTION`, `VISUAL_GATE`는 `NOT RUN — USER MANUAL`이며 CapCut 제작 완료라고 부르지 않는다. 별도 승인 후 MCP export는 이 정지 경계를 지우지 않고, 사용자 확인 뒤 새 job으로만 시작한다.
