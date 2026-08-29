@@ -1,0 +1,98 @@
+name: branch hygiene
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+jobs:
+  delete-merged-head:
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the merged head branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ref = context.payload.pull_request.head.ref
+            const sameRepo = context.payload.pull_request.head.repo.full_name
+              === context.payload.repository.full_name
+            const keep = /^(main|backup\/|archive\/)/.test(ref)
+            if (!sameRepo) return core.info(`fork head, nothing to delete: ${ref}`)
+            if (keep) return core.info(`kept by policy: ${ref}`)
+            try {
+              await github.rest.git.deleteRef({ ...context.repo, ref: `heads/${ref}` })
+              core.info(`deleted ${ref}`)
+            } catch (e) {
+              if (e.status === 422) return core.info(`already gone: ${ref}`)
+              throw e
+            }
+
+  report-stale:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report branches that no longer belong to anything
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const STALE_DAYS = 45
+            const cutoff = Date.now() - STALE_DAYS * 864e5
+
+            const prs = await github.paginate(github.rest.pulls.list,
+              { ...context.repo, state: 'open', per_page: 100 })
+            const claimed = new Set(prs.map(p => p.head.ref))
+
+            const branches = await github.paginate(github.rest.repos.listBranches,
+              { ...context.repo, per_page: 100 })
+
+            const stale = []
+            for (const b of branches) {
+              if (/^(main|backup\/|archive\/)/.test(b.name)) continue
+              if (claimed.has(b.name)) continue
+              const { data: commit } = await github.rest.repos.getCommit(
+                { ...context.repo, ref: b.commit.sha })
+              const when = commit.commit.committer.date
+              if (Date.parse(when) < cutoff) stale.push({ name: b.name, sha: b.commit.sha, when })
+            }
+
+            const title = 'Stale branches with no open pull request'
+            const issues = await github.paginate(github.rest.issues.listForRepo,
+              { ...context.repo, state: 'open', per_page: 100 })
+            const existing = issues.find(i => i.title === title && !i.pull_request)
+
+            if (stale.length === 0) {
+              if (existing) {
+                await github.rest.issues.update(
+                  { ...context.repo, issue_number: existing.number, state: 'closed' })
+              }
+              return core.info('no stale branches')
+            }
+
+            stale.sort((a, b) => a.when.localeCompare(b.when))
+            const body = [
+              `${stale.length} branches have no open pull request and no commit in ${STALE_DAYS} days.`,
+              '',
+              'Delete the ones that are done. The SHA restores any of them:',
+              '`git push origin <sha>:refs/heads/<name>`',
+              '',
+              '| branch | last commit | sha |',
+              '|---|---|---|',
+              ...stale.map(s => `| \`${s.name}\` | ${s.when.slice(0, 10)} | \`${s.sha}\` |`),
+              '',
+              'Branches under `backup/` and `archive/` are never listed here.',
+            ].join('\n')
+
+            if (existing) {
+              await github.rest.issues.update(
+                { ...context.repo, issue_number: existing.number, body })
+            } else {
+              await github.rest.issues.create({ ...context.repo, title, body })
+            }
