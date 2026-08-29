@@ -91,7 +91,7 @@ def capture_presentation_contract(
     lower_texts: set[str] | None = None
     if cards is not None:
         source_texts = {
-            f"출처 {str(card.get('source_channel', '')).strip()}\n{str(card.get('source_date', '')).strip()}"
+            f"출처 {str(card.get('source_display_label', '')).strip()}"
             for card in cards
             if card.get("card_type") == "SOURCE_VIDEO"
         }
@@ -872,10 +872,10 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             if chapter_label and not covered_by_chapter_state:
                 clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
             if kind == "SOURCE_VIDEO":
-                channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
-                if not channel or not date:
+                source_display_label = str(card.get("source_display_label", "")).strip()
+                if not source_display_label:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
-                clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
+                clone_text(document, text_source, source_segment, source_track, f"출처 {source_display_label}", start, duration)
         elif kind == "NARRATION_IMAGE":
             if record is None:
                 raise RuntimeError(f"IMAGE_REQUIRED:{card['card_id']}")

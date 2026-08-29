@@ -243,6 +243,8 @@ def validate_card(card: dict[str, Any]) -> None:
     if target_start < 0 or target_duration <= 0:
         raise RuntimeError(f"CARD_TIMELINE_EVIDENCE_INVALID:{card_id}")
     if kind == "SOURCE_VIDEO":
+        if not str(card.get("source_display_label", "")).strip():
+            raise RuntimeError(f"SOURCE_DISPLAY_LABEL_REQUIRED:{card_id}")
         require_file_sha(card, "source_file", "source_sha256", "SOURCE_ASSET_EVIDENCE_INVALID")
         try:
             source_duration = int(card.get("source_duration_us", 0))

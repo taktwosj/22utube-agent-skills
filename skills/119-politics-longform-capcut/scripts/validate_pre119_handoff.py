@@ -113,6 +113,17 @@ def parse_assembly_only_seed(script_path: Path) -> dict[str, Any]:
             raise ValueError(f"CARD_ID_DUPLICATE:{card_id}")
         card["card_id"] = card_id
         card["card_type"] = card_type
+        if card_type != "INTRO":
+            chapter_title = card.get("chapter_title")
+            chapter_label = card.get("chapter_label")
+            if not isinstance(chapter_title, str) or not chapter_title.strip():
+                raise ValueError(f"CARD_{position}_CHAPTER_TITLE_REQUIRED:{card_id}")
+            if not isinstance(chapter_label, str) or not chapter_label.strip():
+                raise ValueError(f"CARD_{position}_CHAPTER_LABEL_REQUIRED:{card_id}")
+            card["chapter_title"] = chapter_title.strip()
+            card["chapter_label"] = chapter_label.strip()
+            if card["chapter_label"] != card["chapter_title"]:
+                raise ValueError(f"CARD_{position}_CHAPTER_LABEL_MISMATCH:{card_id}")
         card_order.append(card_id)
     return {"policy": policy, "card_order": card_order, "cards": cards}
 

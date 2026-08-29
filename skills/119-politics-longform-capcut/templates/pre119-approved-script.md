@@ -38,7 +38,8 @@
 
 ## 화면 슬롯
 
-- 상단 챕터 제목: 모든 본문 카드의 `chapter_label`. `chapter_title`과 같은 승인 문구를 쓴다.
+- 상단 챕터 제목: `INTRO` 외 모든 카드의 `chapter_label`. `chapter_title`과 비어 있지 않은 동일 승인 문구를 쓴다.
+- 화면 출처: `SOURCE_VIDEO`의 `source_display_label`만 쓴다. 예: `뉴스공장` → 화면 `출처 뉴스공장`. 긴 원본명·날짜는 화면 문구에 쓰지 않는다.
 - 원본 영상 자막: `SOURCE_VIDEO + lower_mode=SRT` → `SOURCE_TTS`.
 - 나레이션 TTS 자막: `NARRATION_VIDEO|NARRATION_IMAGE + lower_mode=SRT` → `NARRATION_TTS`.
 - 논거·의견 2줄: `lower_mode=COMMENTARY_2LINE`과 `lower_line1`, `lower_line2`.
@@ -82,6 +83,7 @@ card_type: SOURCE_VIDEO
 chapter_label: 오프닝
 chapter_title: 오프닝
 chapter_hook: <이 발화가 가장 센 이유>
+source_display_label: <짧은 화면 출처명>
 source_id: <승인 source id>
 source_range_policy: CANDIDATE_WAIT_A
 source_in_candidate: <HH:MM:SS.mmm>
@@ -131,9 +133,10 @@ next_card: C01_SOURCE
 order: 7
 card_id: C01_SOURCE
 card_type: SOURCE_VIDEO
-chapter_label: <상단에 계속 노출할 챕터 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <이 구간의 핵심 질문>
+source_display_label: <짧은 화면 출처명>
 source_id: <승인 source id>
 source_range_policy: CANDIDATE_WAIT_A
 source_in_candidate: <HH:MM:SS.mmm>
@@ -157,8 +160,8 @@ next_card: C02_NARRATION
 order: 8
 card_id: C02_NARRATION
 card_type: NARRATION_VIDEO
-chapter_label: <상단에 계속 노출할 챕터 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <나레이션이 설명할 논거>
 source_id: <배경 영상 source id>
 source_range_policy: CANDIDATE_WAIT_A
@@ -183,9 +186,10 @@ next_card: C03_COMMENTARY
 order: 9
 card_id: C03_COMMENTARY
 card_type: SOURCE_VIDEO
-chapter_label: <상단에 계속 노출할 챕터 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <이 구간의 논거>
+source_display_label: <짧은 화면 출처명>
 source_id: <승인 source id>
 source_range_policy: CANDIDATE_WAIT_A
 source_in_candidate: <HH:MM:SS.mmm>
@@ -209,8 +213,8 @@ next_card: C04_CHAPTER
 order: 10
 card_id: C04_CHAPTER
 card_type: CHAPTER_CARD
-chapter_label: <다음 챕터 상단 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <HTML 카드 중앙 핵심 문구>
 source_id: N/A
 source_range_policy: N/A

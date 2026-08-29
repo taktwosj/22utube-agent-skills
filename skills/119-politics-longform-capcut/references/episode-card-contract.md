@@ -39,7 +39,8 @@ ENDING
 - 다음 카드 start는 이전 카드 end와 정확히 같다.
 - 빈 시간·추정 패딩을 만들지 않는다.
 - 무음 `CHAPTER_CARD`는 3,000,000us이고 lower mode는 `NONE`이다.
-- `SOURCE_VIDEO`는 source identity, channel/date, source range를 가진다.
+- `INTRO` 외 모든 카드는 비어 있지 않고 `chapter_title`과 동일한 `chapter_label`을 가진다. builder는 이를 해당 챕터 종료까지 상단에 표시한다.
+- `SOURCE_VIDEO`는 source identity, channel/date, source range와 비어 있지 않은 `source_display_label`을 가진다. 화면 출처는 `출처 {source_display_label}` 한 줄뿐이며 channel/date는 provenance metadata다.
 - 전체 duration은 마지막 카드 end와 같다.
 - 모든 카드는 한 primary video lane에서 선언 순서대로 이어진다.
 - 챕터 사이 이미지와 나레이션이 모두 OFF이면 SOURCE_VIDEO를 직접 연결한다.

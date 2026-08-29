@@ -177,6 +177,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
             [{
                 "card_id": "C027", "card_type": "SOURCE_VIDEO", "chapter_label": "결론의 기준",
                 "target_start_us": start, "target_duration_us": duration,
+                "source_display_label": "뉴스공장",
                 "source_channel": "겸손은힘들다 뉴스공장", "source_date": "2026.08.13", "lower_mode": "NONE",
             }],
             start + duration,
@@ -189,6 +190,30 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         chapter_segment = chapter_track["segments"][0]
         self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
         self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
+
+    def test_source_display_label_is_the_only_on_screen_source_credit(self):
+        start, duration = 0, 4_000_000
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(),
+            [{
+                "card_id": "C001", "card_type": "SOURCE_VIDEO", "chapter_label": "챕터 1",
+                "target_start_us": start, "target_duration_us": duration,
+                "source_display_label": "뉴스공장",
+                "source_channel": "YouTube · 길고 불필요한 인터뷰 원본명",
+                "source_date": "2026.08.29", "lower_mode": "NONE",
+            }],
+            duration,
+            {"C001": self.source_record()},
+            "source-display-label",
+        )
+
+        source_texts = [
+            builder.text_of(material)
+            for material in built["materials"]["texts"]
+            if builder.text_of(material).startswith("출처 ")
+        ]
+
+        self.assertEqual(source_texts, ["출처 뉴스공장"])
 
     def test_narration_video_and_image_emit_the_same_upper_chapter_title(self):
         for card_type in ("NARRATION_VIDEO", "NARRATION_IMAGE"):
@@ -263,6 +288,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
                 "chapter_label": source_label,
                 "target_start_us": 3_000_000,
                 "target_duration_us": 7_000_000,
+                "source_display_label": "channel",
                 "source_channel": "channel",
                 "source_date": "2026.08.14",
                 "lower_mode": "NONE",

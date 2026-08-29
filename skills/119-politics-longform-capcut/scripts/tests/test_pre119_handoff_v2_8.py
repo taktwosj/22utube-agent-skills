@@ -29,6 +29,8 @@ class Pre119HandoffV28Tests(unittest.TestCase):
                 "[CARD]\n"
                 "card_id=C001\n"
                 "card_type=NARRATION_IMAGE\n"
+                "chapter_label=Chapter 1\n"
+                "chapter_title=Chapter 1\n"
                 "lower_mode=COMMENTARY_2LINE\n"
                 "cta_like_subscribe=OFF\n"
                 "next_card=END\n",

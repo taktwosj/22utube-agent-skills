@@ -43,8 +43,10 @@ class Pre119CardCompilerTests(unittest.TestCase):
         card: dict[str, object] = {
             "card_id": card_id,
             "card_type": "SOURCE_VIDEO",
+            "chapter_label": f"Chapter {card_id[1:]}",
             "chapter_title": f"Chapter {card_id[1:]}",
             "chapter_hook": "What changed?",
+            "source_display_label": "fixture-channel",
             "source_id": f"S{card_id[1:]}_LOCK",
             "source_policy_candidates": [f"S{card_id[1:]}_LOCK"],
             "source_identity_ref": f"S{card_id[1:]}_LOCK",
@@ -214,6 +216,16 @@ class Pre119CardCompilerTests(unittest.TestCase):
         self.assertRegex(compiled["assembly_only_seed_sha256"], r"^[0-9A-F]{64}$")
         self.assertEqual(compiled["cards"][0]["visual_text"], "Approved screen text")
         self.assertEqual([card["card_type"] for card in compiled["cards"]], ["SOURCE_VIDEO"])
+
+    def test_source_display_label_is_required_for_screen_credit(self) -> None:
+        self.write_validation(seed_card_overrides={"source_display_label": ""})
+        self.write_evidence([self.source_card(source_display_label="")])
+
+        result = self.run_compiler()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("SOURCE_DISPLAY_LABEL_REQUIRED:C001", result.stderr)
+        self.assertFalse(self.output.exists())
 
     def test_handoff_narration_activation_requires_lane_b_pass(self) -> None:
         self.write_validation(between_narration="YES")
