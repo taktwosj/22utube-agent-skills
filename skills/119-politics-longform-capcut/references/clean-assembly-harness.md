@@ -12,7 +12,7 @@
 조립 전에 `50_capcut_project/assembly_contract.json`을 만든다. 이 파일은 다음
 항목의 유일한 기준이다.
 
-- `root_template`: `jungchilong_base_v4_hook10_lower2`, 역할 `TEMPLATE_ONLY`
+- `root_template`: `V8_MANUAL_OVERLAY_65`, 역할 `TEMPLATE_ONLY`
 - `production_inputs`: 실제 사용할 영상·이미지·오디오·자막, 역할 `PRODUCTION`
 - `reference_inputs`: 배치·구조 참고용 자료, 역할 `REFERENCE_ONLY`
 - `expected_timeline_order`: 사용자 승인 순서
@@ -20,6 +20,61 @@
 - `allowed_visible_text`: 화면에 나타날 수 있는 모든 텍스트
 - 각 요소의 track role, 시작·종료, 위치, 크기, source/date/chapter 관계
 - 입력 파일의 절대경로 또는 휴대 가능한 경로와 SHA-256
+
+## V8 수동 레이아웃 근본
+
+V8 근본은 파일명이나 테스트 미디어 이름으로 판별하지 않는다. 아래 12개 레이어의
+역할·geometry·문구 슬롯을 함께 고정한다. 번호는 CapCut 화면에서 위에서 아래로
+쌓이는 순서다.
+
+| 레이어 | JSON track | 역할 | 실제 기준 |
+|---:|---:|---|---|
+| 1 | 10 | CHAPTER | `__CHAPTER__`, 중심 `(960,90)`, font 7, fixed width `504.2707`, 한 줄 |
+| 2 | 9 | SOURCE | `출처 __SOURCE__`, 중심 `(960,165)`, font 5, fixed width `334.8208`, 한 줄 |
+| 3 | 8 | TTS | `TTS`, 중심 `(960,990)`, font 8, fixed width `679.2648`, 노랑+검정 stroke `0.08`, 한 줄 |
+| 4 | 7 | SRT | `SRT`, 중심 `(960,990)`, font 8, fixed width `679.2648`, 노랑+검정 stroke `0.08`, 한 줄 |
+| 5 | 6 | CTA | `구독은 큰 힘이 됩니다.` + `댓글로 의견 부탁드려요!`, 중심 약 `(1688,839)`, scale `0.9`, 고정 2줄 |
+| 6 | 5 | FOCUS FRONT | 투명 1920×1080, 중심 `(960,540)`, scale `1.0` |
+| 7 | 4 | CARD IMAGE | 입력 1920×1080, 중심 `(960,540)`, scale `0.65`, 화면 `x=336,y=189,1248×702` |
+| 8 | 3 | BOTTOM RAIL | `785.8748×70.1742`, 중심 약 `(960,986)`, alpha `0.5`, border `4 #CCCCCC` |
+| 9 | 2 | TOP RAIL | `785.8748×71.7401`, 중심 약 `(929,96)`, alpha `0.5`, border `4 #CCCCCC` |
+| 10 | 1 | FOCUS BACK | 투명 1920×1080, 중심 `(960,540)`, scale `1.0` |
+| 11 | 0 | SOURCE VIDEO | 1920×1080, 중심 `(960,540)`, scale `1.0`, 원본 소리 포함 |
+| 12 | 11 | NARRATION AUDIO | 나레이션 WAV, volume `1.0`, 화면 레이어 없음 |
+
+CHAPTER와 SOURCE는 한 줄 슬롯이며 근본 JSON에는 글자 수 제한이 없다. TTS와 SRT는
+각각 한 줄 슬롯이며 실제 cue는 공백 제외 15자 이하로 제한한다. 긴 자막과 승인된
+논평 2문장은 같은 트랙에서 시간상 연속 cue로 나눈다.
+
+- 1·2·3·5는 `STATIC_OVERLAY`이며 프로젝트 전체 길이로 자동 연장된다.
+- 0·4·11의 기존 media는 geometry·audio 설정을 읽기 위한 `TEMPLATE_ONLY`다.
+  새 프로젝트의 active material이나 timeline에는 남지 않는다.
+- root의 외부 path는 clone 안 `Resources`로 포터블화한다. output JSON에는 root·cache·
+  테스트 빌드 절대경로가 남으면 fail이다.
+- `.bak`는 CapCut을 연 뒤 생성될 수 있다. build 직전 clone에는 포함하지 않으며,
+  CapCut을 열기 전 output 검사에서 발견되면 fail이다.
+
+```powershell
+python -B scripts/build_politics_v8_project.py `
+  --cards <episode_cards.json> `
+  --root-project <validated V8_MANUAL_OVERLAY_65 root> `
+  --capcut-root <CapCut draft root> `
+  --media-dir <new portable media dir> `
+  --report <build report>
+```
+
+## 신규 이미지카드 문구
+
+신규 `CHAPTER_CARD`·`NARRATION_IMAGE`의 카드 제작 입력은 아래 두 필드로 고정한다.
+
+```text
+hook_terms: 정확히 3개
+body_lines: 화면 문장 정확히 3줄
+```
+
+후킹 단어와 본문은 서로 다른 정보층이다. 후킹 단어를 문장처럼 늘리거나,
+본문을 두 줄 또는 네 줄로 늘리지 않는다. 이 규칙은 새 카드 제작 입력에만 적용하며,
+이미 승인·렌더된 기존 회차 자산을 소급 수정하지 않는다.
 
 역할의 의미는 다음과 같다.
 
@@ -71,7 +126,7 @@ material 참조, 화면 텍스트 집합, JSON 미러, 역할별 시간과 geome
 구조 오염이 확인되면 상태는
 `STRUCTURAL_CONTAMINATION_REQUIRES_CLEAN_REBUILD`다. 실패한 대상 빌드를
 부분 패치하지 않는다. 그 빌드만 폐기하고 고정 근본
-`jungchilong_base_v4_hook10_lower2`에서 새 대상 프로젝트를 다시 만든다. 근본
+검증된 `V8_MANUAL_OVERLAY_65` 근본에서 새 대상 프로젝트를 다시 만든다. 근본
 아카이브와 로컬 근본 자체는 삭제하거나 수정하지 않는다.
 
 ## Evidence

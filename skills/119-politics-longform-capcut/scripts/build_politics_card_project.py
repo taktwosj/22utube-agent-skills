@@ -27,6 +27,12 @@ from capcut_material_paths import (
 from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
 from root_bundle import ResolvedRoot, resolve_active_root
 from run_politics_assembly_preflight import verify_preflight_report
+from inset_card_layout import (
+    CAPCUT_CLIP_GEOMETRY,
+    IMAGE_FRAME as INSET_CARD_FRAME,
+    INSET_CARD_STYLE_PROFILE,
+    SUPPORTED_RASTER_SIZES,
+)
 
 
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
@@ -91,7 +97,7 @@ def capture_presentation_contract(
     lower_texts: set[str] | None = None
     if cards is not None:
         source_texts = {
-            f"출처 {str(card.get('source_channel', '')).strip()}\n{str(card.get('source_date', '')).strip()}"
+            f"출처 {str(card.get('source_display_label', '')).strip()}"
             for card in cards
             if card.get("card_type") == "SOURCE_VIDEO"
         }
@@ -475,6 +481,39 @@ def clone_text(
     target_track["segments"].append(segment)
 
 
+def clone_sequential_single_line_text(
+    document: dict[str, Any],
+    template_material: dict[str, Any],
+    template_segment: dict[str, Any],
+    target_track: dict[str, Any],
+    value: str,
+    target_start: int,
+    target_duration: int,
+) -> None:
+    lines = [line.strip() for line in value.replace("\r\n", "\n").split("\n") if line.strip()]
+    if not lines:
+        raise RuntimeError("LOWER_TEXT_REQUIRED")
+    cursor = target_start
+    for index, line in enumerate(lines):
+        end = target_start + target_duration if index == len(lines) - 1 else target_start + round(target_duration * (index + 1) / len(lines))
+        clone_text(document, template_material, template_segment, target_track, line, cursor, end - cursor)
+        cursor = end
+
+
+def inset_card_clip_geometry(card: dict[str, Any], record: dict[str, Any]) -> dict[str, Any] | None:
+    if card.get("style_profile") != INSET_CARD_STYLE_PROFILE:
+        return None
+    if card.get("card_type") not in {"CHAPTER_CARD", "NARRATION_IMAGE"}:
+        raise RuntimeError(f"INSET_CARD_TYPE_INVALID:{card.get('card_id', '?')}")
+    raster_size = (int(record["width"]), int(record["height"]))
+    if raster_size not in SUPPORTED_RASTER_SIZES:
+        raise RuntimeError(f"INSET_CARD_DIMENSION_INVALID:{card.get('card_id', '?')}")
+    geometry = copy.deepcopy(CAPCUT_CLIP_GEOMETRY)
+    scale = INSET_CARD_FRAME["width"] / raster_size[0]
+    geometry["scale"] = {"x": scale, "y": scale}
+    return geometry
+
+
 def clone_media(
     document: dict[str, Any],
     template_material: dict[str, Any],
@@ -493,6 +532,7 @@ def clone_media(
     target_start: int,
     target_duration: int,
     has_audio: bool,
+    clip_geometry: dict[str, Any] | None = None,
 ) -> None:
     material = copy.deepcopy(template_material)
     material.update(
@@ -534,6 +574,8 @@ def clone_media(
             "last_nonzero_volume": 1.0 if has_audio else 0.0,
         }
     )
+    if clip_geometry is not None:
+        segment["clip"] = copy.deepcopy(clip_geometry)
     document["materials"]["videos"].append(material)
     if target_track is not None:
         target_track["segments"].append(segment)
@@ -852,7 +894,7 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
         if kind == "CHAPTER_CARD":
             if record is None:
                 raise RuntimeError(f"CHAPTER_IMAGE_REQUIRED:{card['card_id']}")
-            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False, clip_geometry=inset_card_clip_geometry(card, record))
             if card_index in chapter_states:
                 chapter_label, chapter_end = chapter_states[card_index]
                 clone_text(
@@ -872,14 +914,14 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             if chapter_label and not covered_by_chapter_state:
                 clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
             if kind == "SOURCE_VIDEO":
-                channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
-                if not channel or not date:
+                source_display_label = str(card.get("source_display_label", "")).strip()
+                if not source_display_label:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
-                clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
+                clone_text(document, text_source, source_segment, source_track, f"출처 {source_display_label}", start, duration)
         elif kind == "NARRATION_IMAGE":
             if record is None:
                 raise RuntimeError(f"IMAGE_REQUIRED:{card['card_id']}")
-            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False, clip_geometry=inset_card_clip_geometry(card, record))
             if chapter_label and not covered_by_chapter_state:
                 clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
         elif kind in {"TEXT_EXPLAINER", "ENDING"}:
@@ -893,7 +935,7 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             for cue_start, cue_end, cue_text in _srt_cues(Path(card[srt_field])):
                 clone_text(document, text_lower, lower_segment, lower_track, cue_text, cue_start, cue_end - cue_start)
         elif lower_mode == "VIDEO100_EXPLAINER":
-            clone_text(document, text_lower, lower_segment, lower_track, str(card["lower_text"]), start, duration)
+            clone_sequential_single_line_text(document, text_lower, lower_segment, lower_track, str(card["lower_text"]), start, duration)
 
     trim_all_tracks_to_duration(document, total)
     for index, track in enumerate(document["tracks"]):

@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import struct
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from typing import Any
 import generate_user_final_assembly_grid as grid
 import validate_politics_caption_layout as caption
 import validate_srt_text_fidelity as fidelity
+from inset_card_layout import INSET_CARD_STYLE_PROFILE, SUPPORTED_RASTER_SIZES
 
 SCHEMA = "politics-longform-assembly-preflight.v1"
 INPUT_FIELDS = (
@@ -76,15 +78,64 @@ def portable_grid_reference(cards_path: Path, grid_path: Path) -> str:
     return relative.as_posix()
 
 
+def png_size(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        raise RuntimeError("INSET_CARD_PNG_REQUIRED")
+    return struct.unpack(">II", data[16:24])
+
+
+def validate_overlay_contract(document: dict[str, Any], cards_path: Path) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    for card in document.get("cards", []):
+        if not isinstance(card, dict):
+            continue
+        card_id = str(card.get("card_id", "?"))
+        card_type = str(card.get("card_type", ""))
+        if card_type != "INTRO":
+            chapter_title = str(card.get("chapter_title", "")).strip()
+            chapter_label = str(card.get("chapter_label", "")).strip()
+            if not chapter_title:
+                findings.append({"code": "CHAPTER_TITLE_REQUIRED", "card_id": card_id})
+            if not chapter_label:
+                findings.append({"code": "CHAPTER_LABEL_REQUIRED", "card_id": card_id})
+            elif chapter_title and chapter_label != chapter_title:
+                findings.append({"code": "CHAPTER_LABEL_MISMATCH", "card_id": card_id})
+        if card_type == "SOURCE_VIDEO" and not str(card.get("source_display_label", "")).strip():
+            findings.append({"code": "SOURCE_DISPLAY_LABEL_REQUIRED", "card_id": card_id})
+        if card.get("style_profile") == INSET_CARD_STYLE_PROFILE:
+            if card_type not in {"CHAPTER_CARD", "NARRATION_IMAGE"}:
+                findings.append({"code": "INSET_CARD_TYPE_INVALID", "card_id": card_id})
+                continue
+            image_file = card.get("image_file")
+            if not isinstance(image_file, str) or not image_file.strip():
+                findings.append({"code": "INSET_CARD_IMAGE_REQUIRED", "card_id": card_id})
+                continue
+            image_path = resolve(image_file, cards_path)
+            if not image_path.is_file():
+                findings.append({"code": "INSET_CARD_IMAGE_MISSING", "card_id": card_id})
+                continue
+            try:
+                dimensions = png_size(image_path)
+            except RuntimeError as error:
+                findings.append({"code": str(error), "card_id": card_id})
+                continue
+            if dimensions not in SUPPORTED_RASTER_SIZES:
+                findings.append({"code": "INSET_CARD_DIMENSION_INVALID", "card_id": card_id})
+    return findings
+
+
 def run_preflight(cards_path: Path, report_path: Path, grid_path: Path) -> dict[str, Any]:
     document = json.loads(cards_path.read_text(encoding="utf-8"))
     if document.get("execution_mode") != "ASSEMBLY_ONLY":
         raise RuntimeError("ASSEMBLY_ONLY_EXECUTION_MODE_REQUIRED")
     caption_findings = caption.validate_cards(cards_path)
     fidelity_findings = fidelity.validate_cards(cards_path)
+    overlay_findings = validate_overlay_contract(document, cards_path)
     findings = [
         *({"gate": "CAPTION_LAYOUT", **row} for row in caption_findings),
         *({"gate": "SRT_TEXT_FIDELITY", **row} for row in fidelity_findings),
+        *({"gate": "OVERLAY_CONTRACT", **row} for row in overlay_findings),
     ]
     rows = input_files(document, cards_path)
     grid_relative = portable_grid_reference(cards_path, grid_path)
@@ -110,6 +161,7 @@ def run_preflight(cards_path: Path, report_path: Path, grid_path: Path) -> dict[
         "inputs": rows,
         "caption_layout": "PASS",
         "srt_text_fidelity": "PASS",
+        "overlay_contract": "PASS",
         "grid": {"relative_path": grid_relative, "sha256": sha256(grid_path)},
         "findings": [],
     }
@@ -125,6 +177,8 @@ def verify_preflight_report(cards_path: Path, report_path: Path) -> dict[str, An
         raise RuntimeError("ASSEMBLY_PREFLIGHT_PASS_REQUIRED")
     if report.get("cards_file") != cards_path.name or report.get("cards_sha256") != sha256(cards_path):
         raise RuntimeError("ASSEMBLY_PREFLIGHT_CARDS_SHA_MISMATCH")
+    if report.get("overlay_contract") != "PASS":
+        raise RuntimeError("ASSEMBLY_PREFLIGHT_OVERLAY_CONTRACT_REQUIRED")
     document = json.loads(cards_path.read_text(encoding="utf-8"))
     current_inputs = input_files(document, cards_path)
     if report.get("inputs") != current_inputs:

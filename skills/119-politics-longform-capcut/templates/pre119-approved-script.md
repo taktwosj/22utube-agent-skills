@@ -38,11 +38,12 @@
 
 ## 화면 슬롯
 
-- 상단 챕터 제목: 모든 본문 카드의 `chapter_label`. `chapter_title`과 같은 승인 문구를 쓴다.
+- 상단 챕터 제목: `INTRO` 외 모든 카드의 `chapter_label`. `chapter_title`과 비어 있지 않은 동일 승인 문구를 쓴다.
+- 화면 출처: `SOURCE_VIDEO`의 `source_display_label`만 쓴다. 예: `뉴스공장` → 화면 `출처 뉴스공장`. 긴 원본명·날짜는 화면 문구에 쓰지 않는다.
 - 원본 영상 자막: `SOURCE_VIDEO + lower_mode=SRT` → `SOURCE_TTS`.
 - 나레이션 TTS 자막: `NARRATION_VIDEO|NARRATION_IMAGE + lower_mode=SRT` → `NARRATION_TTS`.
-- 논거·의견 2줄: `lower_mode=COMMENTARY_2LINE`과 `lower_line1`, `lower_line2`.
-- HTML 챕터 이미지: `CHAPTER_CARD`, `style_profile=DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`, `lower_mode=NONE`.
+- 논거·의견 2문장: `lower_mode=COMMENTARY_2LINE`과 `lower_line1`, `lower_line2`; 각 문장은 공백 제외 15자 이하이며 화면에는 시간상 순차 한 줄로 표시한다.
+- HTML 챕터 이미지: 근본 프로젝트의 inset-frame을 쓸 때 `CHAPTER_CARD`, `style_profile=DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode=NONE`; 구형 전체화면 루트만 V1을 쓴다.
 - 하단 슬롯은 같은 시간에 한 종류만 사용한다.
 
 ## 세로 시간순 승인 대본
@@ -52,9 +53,9 @@
 - 원음: `<실제 화자 발언 또는 없음>`
 - 나레이션: `<승인 문장 또는 없음>`
 - 상단 챕터 제목: `<chapter_label>`
-- 하단: `<원본 SRT | 나레이션 TTS | 논거·의견 2줄 | 없음>`
+- 하단: `<원본 SRT | 나레이션 TTS | 순차 논거·의견 2문장 | 없음>`
 - 논거·의견 1줄: `<문구 또는 없음>`
-- 논거·의견 2줄: `<문구 또는 없음>`
+- 순차 논거·의견 2문장: `<문구 또는 없음>`
 - 다음 카드: `<card_id | END>`
 
 위 블록을 실제 카드 순서대로 반복한다. 한 줄에는 한 beat만 쓴다.
@@ -82,6 +83,7 @@ card_type: SOURCE_VIDEO
 chapter_label: 오프닝
 chapter_title: 오프닝
 chapter_hook: <이 발화가 가장 센 이유>
+source_display_label: <짧은 화면 출처명>
 source_id: <승인 source id>
 source_range_policy: CANDIDATE_WAIT_A
 source_in_candidate: <HH:MM:SS.mmm>
@@ -131,9 +133,10 @@ next_card: C01_SOURCE
 order: 7
 card_id: C01_SOURCE
 card_type: SOURCE_VIDEO
-chapter_label: <상단에 계속 노출할 챕터 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <이 구간의 핵심 질문>
+source_display_label: <짧은 화면 출처명>
 source_id: <승인 source id>
 source_range_policy: CANDIDATE_WAIT_A
 source_in_candidate: <HH:MM:SS.mmm>
@@ -157,8 +160,8 @@ next_card: C02_NARRATION
 order: 8
 card_id: C02_NARRATION
 card_type: NARRATION_VIDEO
-chapter_label: <상단에 계속 노출할 챕터 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <나레이션이 설명할 논거>
 source_id: <배경 영상 source id>
 source_range_policy: CANDIDATE_WAIT_A
@@ -183,9 +186,10 @@ next_card: C03_COMMENTARY
 order: 9
 card_id: C03_COMMENTARY
 card_type: SOURCE_VIDEO
-chapter_label: <상단에 계속 노출할 챕터 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <이 구간의 논거>
+source_display_label: <짧은 화면 출처명>
 source_id: <승인 source id>
 source_range_policy: CANDIDATE_WAIT_A
 source_in_candidate: <HH:MM:SS.mmm>
@@ -209,8 +213,8 @@ next_card: C04_CHAPTER
 order: 10
 card_id: C04_CHAPTER
 card_type: CHAPTER_CARD
-chapter_label: <다음 챕터 상단 제목>
-chapter_title: <chapter_label과 같은 승인 문구>
+chapter_label: <챕터 제목>
+chapter_title: <챕터 제목>
 chapter_hook: <HTML 카드 중앙 핵심 문구>
 source_id: N/A
 source_range_policy: N/A

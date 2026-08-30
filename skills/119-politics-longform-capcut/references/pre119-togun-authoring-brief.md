@@ -149,8 +149,8 @@ next_card: C00_HOOK_02
 | `visual_role` | `PRIMARY_SOURCE` 등 해당 카드 역할 |
 | `source_audio` `narration_audio` `cta_like_subscribe` | `ON` `OFF` |
 
-`CHAPTER_CARD` 는 `style_profile: DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`, `lower_mode: NONE`.
-`COMMENTARY_2LINE` 을 쓰면 `lower_line1` `lower_line2` 를 채운다. 각 줄 21자 이하.
+inset-frame 근본 프로젝트에서는 `CHAPTER_CARD`에 `style_profile: DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode: NONE`을 쓴다. 구형 전체화면 루트만 V1을 쓴다.
+`COMMENTARY_2LINE` 을 쓰면 `lower_line1` `lower_line2` 를 채운다. 각 문장은 공백 제외 15자 이하이며 화면에는 시간상 순차 한 줄로 표시된다.
 
 ### B. 시드 블록 **밖**에 쓸 것
 
@@ -159,11 +159,11 @@ next_card: C00_HOOK_02
 | card_type | 써야 할 것 |
 | --- | --- |
 | `SOURCE_VIDEO` | 구간 SRT 원문 그대로(한 글자도 고치지 마라) + 화자 이름·직책 + video_id + SRT 행번호 범위 |
-| `CHAPTER_CARD` | 화면 문구. 정확히 2줄, 한 줄 20자 목표, 21자 초과 금지 |
+| `CHAPTER_CARD` | 이미지 레이어 화면 문구. 정확히 2줄, 각 줄 공백 제외 15자 이하 |
 | `NARRATION_VIDEO` | 나레이션 원고. 아라비아 숫자 금지(3 → 세, 2026년 → 이천이십육년). 한 줄에 한 문장. 축약·의역 금지 |
 
 `한 줄에 한 문장` 은 나레이션 원고에만 적용된다. `CHAPTER_CARD` 문구와
-`lower_line1`·`lower_line2` 는 화면 표시 규칙이 우선이라 2줄 21자 이하를 지킨다.
+`lower_line1`·`lower_line2` 는 한 줄 트랙에 시간상 순차 표시되므로 각각 공백 제외 15자 이하를 지킨다.
 
 회차 CTA 는 `ON` 또는 `OFF` 하나로 통일한다. 카드마다 다르면 조립이 중단된다.
 
@@ -283,7 +283,7 @@ SRT cue 끝을 컷 경계로 쓰지 마라. 말이 잘린다.
 4. 시드 블록 안에 `key: value` 와 `[CARD]` `[/CARD]` 외의 줄이 없다
 5. `card_id` 중복이 없고 `next_card` 가 끊긴 데가 없다
 6. 모든 `card_id` 가 `source_packet.md` 에 있다
-7. `CHAPTER_CARD`·논평이 전부 2줄, 21자 이하다
+7. `CHAPTER_CARD` 문구는 승인 형식을 지키고, 논평 2문장은 각각 공백 제외 15자 이하이며 순차 한 줄 표시다
 8. 나레이션에 아라비아 숫자가 없다
 9. 훅 5개 중 3개 이상이 `shorts_plan.md` 에 있다
 10. `quote` 가 SRT 원문과 한 글자도 다르지 않다

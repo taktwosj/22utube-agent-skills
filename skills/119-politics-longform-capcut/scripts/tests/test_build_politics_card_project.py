@@ -112,6 +112,30 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         self.assertEqual(total, 1_000_000)
         self.assertEqual(cards[0]["card_type"], "NARRATION_IMAGE")
 
+    def test_commentary_input_lines_become_sequential_single_line_segments(self):
+        template = {
+            "id": "TEXT_TEMPLATE",
+            "content": json.dumps({"text": "TTS", "styles": [{"range": [0, 3]}]}),
+        }
+        segment = {
+            "id": "SEGMENT_TEMPLATE",
+            "material_id": template["id"],
+            "target_timerange": {"start": 0, "duration": 4_000_000},
+        }
+        document = {"materials": {"texts": []}}
+        track = {"segments": []}
+
+        builder.clone_sequential_single_line_text(
+            document, template, segment, track, "첫 문장\n둘째 문장", 0, 4_000_000
+        )
+
+        values = {item["id"]: builder.text_of(item) for item in document["materials"]["texts"]}
+        self.assertEqual([values[item["material_id"]] for item in track["segments"]], ["첫 문장", "둘째 문장"])
+        self.assertEqual(
+            [item["target_timerange"] for item in track["segments"]],
+            [{"start": 0, "duration": 2_000_000}, {"start": 2_000_000, "duration": 2_000_000}],
+        )
+
     def minimal_document_for_chapter_titles(self) -> dict:
         def text(material_id: str, value: str) -> dict:
             return {
@@ -177,6 +201,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
             [{
                 "card_id": "C027", "card_type": "SOURCE_VIDEO", "chapter_label": "결론의 기준",
                 "target_start_us": start, "target_duration_us": duration,
+                "source_display_label": "뉴스공장",
                 "source_channel": "겸손은힘들다 뉴스공장", "source_date": "2026.08.13", "lower_mode": "NONE",
             }],
             start + duration,
@@ -189,6 +214,30 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         chapter_segment = chapter_track["segments"][0]
         self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
         self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
+
+    def test_source_display_label_is_the_only_on_screen_source_credit(self):
+        start, duration = 0, 4_000_000
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(),
+            [{
+                "card_id": "C001", "card_type": "SOURCE_VIDEO", "chapter_label": "챕터 1",
+                "target_start_us": start, "target_duration_us": duration,
+                "source_display_label": "뉴스공장",
+                "source_channel": "YouTube · 길고 불필요한 인터뷰 원본명",
+                "source_date": "2026.08.29", "lower_mode": "NONE",
+            }],
+            duration,
+            {"C001": self.source_record()},
+            "source-display-label",
+        )
+
+        source_texts = [
+            builder.text_of(material)
+            for material in built["materials"]["texts"]
+            if builder.text_of(material).startswith("출처 ")
+        ]
+
+        self.assertEqual(source_texts, ["출처 뉴스공장"])
 
     def test_narration_video_and_image_emit_the_same_upper_chapter_title(self):
         for card_type in ("NARRATION_VIDEO", "NARRATION_IMAGE"):
@@ -231,6 +280,55 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
                     {"start": 0, "duration": duration},
                 )
 
+    def test_inset_image_card_uses_the_manual_v8_root_geometry(self):
+        duration = 4_000_000
+        for width, height, scale in ((1920, 1080, 0.65),):
+            with self.subTest(width=width, height=height):
+                record = self.source_record()
+                record.update({
+                    "filename": f"V001_{width}.png",
+                    "width": width,
+                    "height": height,
+                    "duration_us": duration,
+                    "source_duration": duration,
+                    "has_audio": False,
+                    "narration_audio": {
+                        "filename": "narration.wav",
+                        "duration_us": duration,
+                        "offline_path": "C:/relink/narration.wav",
+                        "source_start": 0,
+                        "source_duration": duration,
+                    },
+                })
+                built = builder.build_document(
+                    self.minimal_document_for_chapter_titles(),
+                    [{
+                        "card_id": "C001",
+                        "card_type": "NARRATION_IMAGE",
+                        "style_profile": "DEMOCRATIC_BLUE_INSET_CARD_V2",
+                        "chapter_label": "비판은 했습니다",
+                        "target_start_us": 0,
+                        "target_duration_us": duration,
+                        "lower_mode": "NONE",
+                    }],
+                    duration,
+                    {"C001": record},
+                    "inset-image-layout",
+                )
+                image = next(
+                    material for material in built["materials"]["videos"]
+                    if material.get("material_name") == f"V001_{width}.png"
+                )
+                image_segment = next(
+                    segment for track in built["tracks"] for segment in track.get("segments", [])
+                    if segment.get("material_id") == image["id"]
+                )
+                self.assertEqual(
+                    image_segment["clip"].get("transform"),
+                    {"x": 0.0, "y": 0.0},
+                )
+                self.assertEqual(image_segment["clip"].get("scale"), {"x": scale, "y": scale})
+
     def chapter_states(self, cards: list[dict], media: dict[str, dict]) -> list[tuple[str, dict]]:
         total = max(card["target_start_us"] + card["target_duration_us"] for card in cards)
         built = builder.build_document(
@@ -263,6 +361,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
                 "chapter_label": source_label,
                 "target_start_us": 3_000_000,
                 "target_duration_us": 7_000_000,
+                "source_display_label": "channel",
                 "source_channel": "channel",
                 "source_date": "2026.08.14",
                 "lower_mode": "NONE",

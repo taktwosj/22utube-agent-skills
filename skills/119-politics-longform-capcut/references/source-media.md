@@ -13,7 +13,7 @@ ASSEMBLY_ONLY에서 동일 source identity·media SHA·transcript SHA·검증된
 5. 다운로드와 컷 직후 `ffprobe`로 stream과 길이를 확인한다.
 6. 원본 bytes로 SHA-256을 계산한다.
 7. 실제 cut에서 source caption을 split 또는 clamp한다.
-8. 표시용 SRT를 평균 15자/줄, 최대 2줄로 정리한다.
+8. 표시용 SRT를 공백 제외 15자 이하의 한 줄 cue로 정리한다.
 9. raw cut transcript와 display SRT의 텍스트 보존을 `validate_srt_text_fidelity.py`로 확인한다.
 
 ASR cue 경계는 컷 지점을 정하지 않는다.
@@ -22,12 +22,12 @@ ASR cue 경계는 컷 지점을 정하지 않는다.
 
 ```text
 TARGET_CHARS_PER_LINE = 15
-MAX_LINES             = 2
-TARGET_CHARS_PER_CUE  = 30
-HARD_MAX_LINE_CHARS   = 18
+MAX_LINES             = 1
+TARGET_CHARS_PER_CUE  = 15
+HARD_MAX_LINE_CHARS   = 15
 ```
 
-원본 발화 텍스트를 축약·의역·자연화하지 않는다. 30자를 넘으면 문장부호·어절·호흡 경계에서 다음 cue로 나누고 source cut 경계는 바꾸지 않는다.
+원본 발화 텍스트를 축약·의역·자연화하지 않는다. 공백 제외 15자를 넘으면 문장부호·어절·호흡 경계에서 다음 한 줄 cue로 나누고 source cut 경계는 바꾸지 않는다.
 
 허용 display transform:
 
