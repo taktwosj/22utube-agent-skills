@@ -19,7 +19,7 @@ class CaptionLayoutV2Tests(unittest.TestCase):
             root = Path(temporary)
             srt = root / "source.srt"
             srt.write_text(
-                "1\n00:00:00,000 --> 00:00:02,000\n정책 방향은 같았다\n",
+                "1\n00:00:00,000 --> 00:00:02,000\n정책 방향은 같았지만\n시행 준비는 충분했나\n",
                 encoding="utf-8",
             )
             cards = root / "cards.json"

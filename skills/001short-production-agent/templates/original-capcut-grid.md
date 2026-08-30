@@ -30,7 +30,7 @@ TTS나레이션 없음
 | A10_TEXT_WHITE | 미확인 | 미확인 |
 | STATE_LASER | 미확인 | 미확인 |
 | STATE_GLITCH | 비움 | 비움 |
-| SOURCE_CREDIT | 비움 | 비움 |
+| STATE_FLICKER | 비움 | 비움 |
 | SCREEN_WHITE | 템플릿 유지 | 템플릿 유지 |
 | SCREEN_EFFECT | W Flash | W Flash |
 | VIDEO | 미확인 | 미확인 |

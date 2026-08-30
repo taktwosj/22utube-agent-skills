@@ -20,7 +20,6 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import build_episode_capcut as builder
-from track_template_matrix import CANONICAL_TRACK_TYPES, V2_LAYOUT_CONTRACT_ROLES
 import validate_design_lock
 
 
@@ -46,7 +45,7 @@ def install_valid_grids(episode: Path, *, mixed: bool = False) -> None:
         ("A10_TEXT_WHITE", "hello", "비움"),
         ("STATE_LASER", "비움", "비움"),
         ("STATE_GLITCH", "비움", "비움"),
-        ("SOURCE_CREDIT", "비움", "비움"),
+        ("STATE_FLICKER", "비움", "비움"),
         ("SCREEN_WHITE", "템플릿 유지", "템플릿 유지"),
         ("SCREEN_EFFECT", "W Flash", "W Flash"),
         ("VIDEO", "장면2", "장면1"),
@@ -246,11 +245,7 @@ def template_archive(root: Path) -> tuple[Path, Path, Path]:
             "target_timerange": {"start": 0, "duration": 2_000_000},
             "source_timerange": {"start": 0, "duration": 2_000_000},
         }]
-        tracks.append({
-            "id": f"track-{index}",
-            "type": CANONICAL_TRACK_TYPES[index],
-            "segments": segments,
-        })
+        tracks.append({"id": f"track-{index}", "segments": segments})
     content = {
         "id": "timeline-template", "main_timeline_id": "timeline-template",
         "duration": 2_000_000, "tracks": tracks, "materials": {"items": materials},
@@ -269,32 +264,11 @@ def template_archive(root: Path) -> tuple[Path, Path, Path]:
                 zipped.write(path, Path("template") / path.relative_to(template))
     manifest = root / "root_manifest.json"
     write(manifest, {"sha256": sha(archive), "template_profile": "shrt_white_base_v2"})
-    layout = root / "root_layout.json"
-    write(layout, {
-        "contract_version": "1.0.0",
-        "template_profile": "shrt_white_base_v2",
-        "archive_sha256": sha(archive),
-        "tracks": [
-            {
-                "index": index,
-                "track_id": track["id"],
-                "type": track["type"],
-                "role": V2_LAYOUT_CONTRACT_ROLES[index],
-                "identity": {
-                    "archive_sha256": sha(archive),
-                    "track_id": track["id"],
-                    "type": track["type"],
-                },
-            }
-            for index, track in enumerate(tracks)
-        ],
-    })
     contract = root / "root_contract.json"
     write(contract, {
         "schema_version": "shorts-capcut-root-contract-v1", "workspace_relative": True,
         "assembly_mode": "clean_staging_copy", "profiles": {"home_windows": {
             "archive_relative_path": archive.name, "manifest_relative_path": manifest.name,
-            "layout_contract_relative_path": layout.name,
             "archive_sha256": sha(archive), "template_profile": "shrt_white_base_v2",
         }},
     })
@@ -540,33 +514,12 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                     target_zip.writestr(info, data)
             bad_root_manifest = root / "root_14_manifest.json"
             write(bad_root_manifest, {"sha256": sha(bad_archive), "template_profile": "shrt_white_base_v2"})
-            bad_layout = root / "root_14_layout.json"
-            write(bad_layout, {
-                "contract_version": "1.0.0",
-                "template_profile": "shrt_white_base_v2",
-                "archive_sha256": sha(bad_archive),
-                "tracks": [
-                    {
-                        "index": index,
-                        "track_id": f"track-{index}",
-                        "type": CANONICAL_TRACK_TYPES[index],
-                        "role": V2_LAYOUT_CONTRACT_ROLES[index],
-                        "identity": {
-                            "archive_sha256": sha(bad_archive),
-                            "track_id": f"track-{index}",
-                            "type": CANONICAL_TRACK_TYPES[index],
-                        },
-                    }
-                    for index in range(14)
-                ],
-            })
             bad_root_contract = root / "root_14_contract.json"
             write(bad_root_contract, {
                 "schema_version": "shorts-capcut-root-contract-v1", "workspace_relative": True,
                 "assembly_mode": "clean_staging_copy", "profiles": {"bad_windows": {
                     "archive_relative_path": bad_archive.name,
                     "manifest_relative_path": bad_root_manifest.name,
-                    "layout_contract_relative_path": bad_layout.name,
                     "archive_sha256": sha(bad_archive), "template_profile": "shrt_white_base_v2",
                 }},
             })
@@ -581,9 +534,7 @@ class PublicBuilderProvisionalTest(unittest.TestCase):
                 "root_contract_path": bad_root_contract.name, "template_zip": str(bad_archive),
                 "build_manifest_path": str(bad_track_manifest),
             }
-            with self.assertRaisesRegex(
-                ValueError, "ROOT_CONTRACT_LAYOUT_TRACK_COUNT_MISMATCH"
-            ):
+            with self.assertRaisesRegex(RuntimeError, "PINNED_TRACK_LAYOUT_INVALID"):
                 builder.build_episode(bad_track_revision)
             self.assertFalse((episode / "90_workflow" / "revisions" / "v5").exists())
             self.assertFalse((root / "capcut" / "project_v5").exists())

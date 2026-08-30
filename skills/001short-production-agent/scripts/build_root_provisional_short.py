@@ -283,9 +283,7 @@ def build(args: argparse.Namespace) -> dict:
     working = staging / "working"
     registry_backup = evidence / "root_meta_info.before.json"
     try:
-        source_root = build_episode_capcut._extract_template(
-            Path(contract["archive"]), authority, contract["template_profile"]
-        )
+        source_root = build_episode_capcut._extract_template(Path(contract["archive"]), authority)
         source_hashes = clone_and_sync.hash_project_core(source_root)
         cloned = clone_and_sync.clone_project(source_root, working)
         if cloned["status"] != "PASS":
@@ -298,7 +296,6 @@ def build(args: argparse.Namespace) -> dict:
             "T1": args.title1, "T2": args.title2,
             "state_cues": [], "approved_timeline_path": str(approved_path), "audio_role": "A10",
             "audio_policy": audio_policy, "tts_cues": tts_cues,
-            "_resolved_root_contract": contract,
             "segment_ids": {
                 "SCREEN_EFFECT": "SCREEN_EFFECT_FIXED", "SCREEN_WHITE": "SCREEN_WHITE_FIXED", "T2": "T2_FIXED", "T1": "T1_FIXED",
                 "A9": [f"A9_{cue['cue_id']}" for cue in tts_cues],

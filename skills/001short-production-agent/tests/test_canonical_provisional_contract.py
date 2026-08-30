@@ -40,7 +40,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         self.assertEqual(tuple(builder.ROLE_BY_TRACK), CANONICAL_TRACKS)
         self.assertEqual(len(LOGICAL_ROLE_BY_TRACK), len(CANONICAL_TRACKS))
 
-    def test_root_contract_must_be_workspace_relative_and_versioned(self):
+    def test_root_contract_must_be_workspace_relative_and_v2(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             with self.assertRaisesRegex(ValueError, "ROOT_CONTRACT_PATH_MUST_BE_WORKSPACE_RELATIVE"):
@@ -52,7 +52,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
                 "profile": "home_windows", "template_profile": "shrt_white_base_v1",
                 "archive_sha256": "0" * 64, "archive": str(root / "root.zip"),
             }):
-                with self.assertRaisesRegex(ValueError, "ROOT_CONTRACT_TEMPLATE_PROFILE_REQUIRED"):
+                with self.assertRaisesRegex(ValueError, "ROOT_CONTRACT_V2_PROFILE_REQUIRED"):
                     builder._bind_portable_root_contract({
                         "root_contract_path": "root_contract.json",
                         "workspace_root": str(root), "root_profile": "home_windows",
@@ -70,10 +70,10 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
             documents = list(builder._documents(root))
             self.assertEqual([path for path, _ in documents], [root_content, direct])
 
-    def test_protocol_has_one_v3_stage07_and_a12_empty_contract(self):
+    def test_protocol_has_one_v2_stage07_and_a12_empty_contract(self):
         protocol = json.loads((SKILL / "protocol.json").read_text(encoding="utf-8"))
         stage07 = next(row for row in protocol["stages"] if row["id"] == "07")
-        self.assertEqual(protocol["track_layout"], "shrt_white_base_v3_15")
+        self.assertEqual(protocol["track_layout"], "shrt_white_base_v2_15")
         self.assertEqual(stage07["produces"], [
             "30_audio_srt/audio_lock.json",
             "30_audio_srt/caption_lock.json",
@@ -217,7 +217,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         timeline = {"segments": [{
             "segment_id": "ST", "role": "STATE", "start": 0, "duration": 1_000_000,
             "text": "현재 상황", "content_type": "STATE", "caption_role": "STATE",
-            "state_effect": "FLICKER" + "_RAVE",
+            "state_effect": "FLICKER_RAVE",
         }]}
         codes = {row["code"] for row in validate_design_lock.validate_role_contract(timeline)}
         self.assertIn("STATE_EFFECT_LASER_ONLY", codes)
@@ -227,7 +227,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         for schema_name in ("approved_timeline.schema.json", "build_contract.schema.json"):
             schema_text = (SKILL / "schemas" / schema_name).read_text(encoding="utf-8")
             self.assertIn('"enum": ["LASER_CUT"]', schema_text)
-            self.assertNotIn('"FLICKER' + '_RAVE"', schema_text)
+            self.assertNotIn('"FLICKER_RAVE"', schema_text)
             self.assertNotIn('"GLITCH_SHAKE"', schema_text)
 
     def test_no_state_episode_is_legal(self):
@@ -516,7 +516,7 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         tracks[9]["segments"] = [{"id": "T2", "role": "T2", "material_id": "m-t2", "target_timerange": timerange}]
         tracks[10]["segments"] = [{"id": "T1", "role": "T1", "material_id": "m-t1", "target_timerange": timerange}]
         tracks[6]["segments"] = [{"id": "SP", "role": "A10_TEXT", "material_id": "m-speaker", "target_timerange": timerange}]
-        tracks[5]["segments"] = [{"id": "ST", "role": "STATE", "material_id": "m-state", "target_timerange": timerange}]
+        tracks[3]["segments"] = [{"id": "ST", "role": "STATE", "material_id": "m-state", "target_timerange": timerange}]
         model = SimpleNamespace(tracks=tracks, materials=materials)
         contract = {
             "track_layout_version": TRACK_LAYOUT,

@@ -58,28 +58,6 @@ DOM overflow 없음
 
 HTML 자체를 CapCut에 넣지 않는다. PNG는 무음 챕터 전환이면 `CHAPTER_CARD`, 승인 나레이션과 함께 쓰면 `NARRATION_IMAGE`의 실제 조립 자산으로 사용한다. 외부 이미지 검색·AI 이미지 생성·다중 시안을 기본 실행하지 않는다.
 
-## DEMOCRATIC_BLUE_INSET_CARD_V2
-
-이 profile은 16:9 전체 배경이 아니라 **근본 프로젝트 위에 올리는 이미지 레이어**다.
-
-```text
-templates/democratic_blue_inset_card_v2.html
-templates/democratic_blue_inset_card_v2.css
-scripts/inset_card_layout.py
-scripts/render_democratic_blue_card.py
-```
-
-입력 JSON에는 다음을 추가한다.
-
-```json
-{
-  "style_profile": "DEMOCRATIC_BLUE_INSET_CARD_V2",
-  "raster_size": "1920x1080"
-}
-```
-
-`raster_size`는 `1920x1080`만 허용한다. CapCut에서 수동 V8 근본과 같은 `scale=0.65`, 화면 `x=336, y=189, width=1248, height=702` 프레임에 놓인다. `y=891~1080`은 하단 자막 영역이다. 이미지 안에 출처·상단 챕터·하단 자막을 포함하지 않는다.
-
 ## 화면 안전영역
 
-하단 자막 슬롯은 공백 제외 15자 이하 한 줄이다. 기술 PASS는 최종 `VISUAL_GATE`를 대체하지 않는다.
+하단 자막 슬롯을 쓰는 카드는 하단 30%에 핵심 문구·도형·인물·로고를 두지 않는다. 기술 PASS는 최종 `VISUAL_GATE`를 대체하지 않는다.

@@ -17,13 +17,6 @@ name, or caller-supplied hash cannot select a root; handoff text is continuity c
 Resolve every stored path relative to `WORKSPACE_ROOT`; reject absolute paths and paths that escape
 it.
 
-Archive JSON/TMP stores root-internal path fields under the portable
-`C:/__CAPCUT_ROOT_BUNDLE__/` token and `draft_root_path` under
-`C:/__CAPCUT_DRAFT_ROOT_BUNDLE__/`. Candidate preparation keeps the local CapCut project bound to
-its real local draft path, writes only the archive copy with the tokens, and binds the manifest to
-that archive copy. After verified extraction, the builder remaps the tokens and the verified legacy
-archive-root name to the new local project and CapCut draft roots before validation.
-
 ## Status meanings
 
 ```text

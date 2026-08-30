@@ -24,12 +24,9 @@
       "enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"]
     },
     "audio_policy": {
-      "enum": ["SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "A9_TTS_PLUS_A10_SOURCE_CLIP", "CAPTION_ONLY_MUTE_SOURCE"]
+      "enum": ["SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE"]
     },
     "audio_source": {"enum": ["SOURCE_CLIP", "SOURCE_VOCAL_STEM", "REASSEMBLED_VOCAL_STEM", "GENERATED_TTS", "SILENCE"]},
-    "assembly_type": {"type": "string", "minLength": 1},
-    "execution_strategy": {"type": "string", "minLength": 1},
-    "production_profile": {"type": "object"},
     "visual_asset_mode": {
       "enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"]
     },

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render Democratic Blue HTML cards into their declared image-card layer."""
+"""Render DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1 HTML/CSS into a 1920x1080 PNG."""
 
 from __future__ import annotations
 
@@ -16,12 +16,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from inset_card_layout import INSET_CARD_STYLE_PROFILE, inset_card_profile
-
-
-V1_STYLE_PROFILE = "DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1"
-SKILL_ROOT = Path(__file__).resolve().parents[1]
-
 MAX_TEXT = {
     "top_label": 32,
     "headline_line1": 28,
@@ -31,35 +25,6 @@ MAX_TEXT = {
     "block_main": 24,
     "block_sub": 42,
 }
-
-
-def resolve_style_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    style_profile = str(payload.get("style_profile", V1_STYLE_PROFILE)).strip() or V1_STYLE_PROFILE
-    if style_profile == V1_STYLE_PROFILE:
-        return {
-            "style_profile": V1_STYLE_PROFILE,
-            "output_size": (1920, 1080),
-            "render_size": (1920, 1080),
-            "safe_area_top": 756,
-            "template": SKILL_ROOT / "templates/democratic_blue_center_info_card_v1.html",
-            "css": SKILL_ROOT / "templates/democratic_blue_center_info_card_v1.css",
-        }
-    if style_profile == INSET_CARD_STYLE_PROFILE:
-        profile = inset_card_profile()
-        raster_size = str(payload.get("raster_size", "1920x1080")).strip()
-        raster_sizes = {"1920x1080": (1920, 1080)}
-        if raster_size not in raster_sizes:
-            raise RuntimeError("INSET_CARD_RASTER_SIZE_INVALID")
-        profile["output_size"] = raster_sizes[raster_size]
-        profile.update(
-            {
-                "safe_area_top": 720,
-                "template": SKILL_ROOT / "templates/democratic_blue_inset_card_v2.html",
-                "css": SKILL_ROOT / "templates/democratic_blue_inset_card_v2.css",
-            }
-        )
-        return profile
-    raise RuntimeError("STYLE_PROFILE_INVALID")
 
 
 def sha256(path: Path) -> str:
@@ -208,9 +173,7 @@ def geometry_from_dom(dom: str) -> dict[str, Any]:
     return geometry
 
 
-def validate_geometry(
-    geometry: dict[str, Any], *, expected_size: tuple[int, int] = (1920, 1080), safe_area_top: int = 756
-) -> None:
+def validate_geometry(geometry: dict[str, Any]) -> None:
     try:
         canvas = geometry["canvas"]
         main_shell = geometry["mainShell"]
@@ -221,13 +184,11 @@ def validate_geometry(
         padding_bottom = float(main_shell["padding"]["bottom"])
         minimum_gap = float(geometry["minimumGapPx"])
         actual_gap = float(geometry["info_grid_footer_gap_px"])
-        declared_safe_area_top = float(geometry["safeAreaTop"])
+        safe_area_top = float(geometry["safeAreaTop"])
         final_bottom = max(float(block["rect"]["bottom"]) for block in blocks)
     except (KeyError, TypeError, ValueError) as error:
         raise RuntimeError("HTML_CARD_GEOMETRY_INVALID:DOM_GEOMETRY_INCOMPLETE") from error
     failures: list[str] = []
-    if declared_safe_area_top != float(safe_area_top):
-        failures.append("SAFE_AREA_TOP_INVALID")
     if not float(footer_rect["bottom"]) <= float(main_rect["bottom"]) - padding_bottom:
         failures.append("FOOTER_OUTSIDE_RESERVED_MAIN_SHELL")
     if not actual_gap + 0.5 >= minimum_gap:
@@ -246,8 +207,6 @@ def validate_geometry(
     if not footer["text"] or not footer_visibility["visible"] or int(footer["scrollWidth"]) > int(footer["clientWidth"]):
         failures.append("FOOTER_TEXT_NOT_VISIBLE")
     core_rects = [main_rect, footer_rect, *(block["rect"] for block in blocks)]
-    if (int(canvas.get("width", -1)), int(canvas.get("height", -1))) != expected_size:
-        failures.append("CANVAS_DIMENSION_INVALID")
     for rect in core_rects:
         if not (float(rect["left"]) >= 0 and float(rect["top"]) >= 0 and float(rect["right"]) <= float(canvas["width"]) and float(rect["bottom"]) <= float(canvas["height"])):
             failures.append("CORE_OUTSIDE_CANVAS")
@@ -264,17 +223,14 @@ def render_card(
     payload_path: Path,
     output_path: Path,
     *,
-    template_path: Path | None = None,
-    css_path: Path | None = None,
+    template_path: Path,
+    css_path: Path,
     browser_path: Path | None = None,
     manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     payload = json.loads(payload_path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise RuntimeError("VISUAL_PAYLOAD_OBJECT_REQUIRED")
-    profile = resolve_style_profile(payload)
-    template_path = template_path or profile["template"]
-    css_path = css_path or profile["css"]
     document = build_html(payload, template_path, css_path)
     browser = find_browser(browser_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -286,7 +242,7 @@ def render_card(
         try:
             screenshot = subprocess.run(
                 [
-                    *base_args, "--hide-scrollbars", "--window-size=" + ",".join(map(str, profile["render_size"])),
+                    *base_args, "--hide-scrollbars", "--window-size=1920,1080",
                     f"--screenshot={output_path.resolve()}", uri,
                 ],
                 capture_output=True, text=True, check=False, timeout=45,
@@ -308,44 +264,23 @@ def render_card(
             raise RuntimeError("HTML_CARD_DOM_CHECK_FAILED")
         geometry = geometry_from_dom(dump.stdout)
         try:
-            validate_geometry(
-                geometry,
-                expected_size=profile["render_size"],
-                safe_area_top=int(profile["safe_area_top"]),
-            )
+            validate_geometry(geometry)
         except RuntimeError:
             raise
-    if profile["output_size"] != profile["render_size"]:
-        temporary_output = output_path.with_suffix(".render.png")
-        output_path.replace(temporary_output)
-        resized = subprocess.run(
-            ["ffmpeg", "-y", "-v", "error", "-i", str(temporary_output), "-vf", "scale=" + ":".join(map(str, profile["output_size"])), str(output_path)],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=45,
-        )
-        temporary_output.unlink(missing_ok=True)
-        if resized.returncode != 0 or not output_path.is_file():
-            raise RuntimeError("HTML_CARD_RESIZE_FAILED")
     width, height = png_size(output_path)
-    if (width, height) != profile["output_size"]:
+    if (width, height) != (1920, 1080):
         output_path.unlink(missing_ok=True)
         raise RuntimeError("HTML_CARD_DIMENSION_INVALID")
     report = {
-        "schema": "democratic-blue-center-info-card.v2",
+        "schema": "democratic-blue-center-info-card.v1",
         "status": "PASS",
         "visual_id": payload["visual_id"],
-        "style_profile": profile["style_profile"],
+        "style_profile": "DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1",
         "output": str(output_path),
         "sha256": sha256(output_path),
         "width": width,
         "height": height,
-        "layout": {
-            key: profile[key]
-            for key in ("canvas", "image_frame", "caption_safe_area")
-            if key in profile
-        },
+        "lower_safe_area_px": 324,
         "browser": browser.name,
         "geometry": geometry,
     }
@@ -359,8 +294,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--template", type=Path)
-    parser.add_argument("--css", type=Path)
+    parser.add_argument("--template", type=Path, default=Path(__file__).resolve().parents[1] / "templates/democratic_blue_center_info_card_v1.html")
+    parser.add_argument("--css", type=Path, default=Path(__file__).resolve().parents[1] / "templates/democratic_blue_center_info_card_v1.css")
     parser.add_argument("--browser", type=Path)
     parser.add_argument("--manifest", type=Path)
     args = parser.parse_args()

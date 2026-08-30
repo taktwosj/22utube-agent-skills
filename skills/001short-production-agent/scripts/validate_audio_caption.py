@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from audio_policy_matrix import ACCEPTED_MODE_TUPLES, SOURCE_CLIP_A10_POLICIES
+from audio_policy_matrix import ACCEPTED_MODE_TUPLES
 from common import FRAME_TOLERANCE_US, ranges_match, times_match, read_json, resolved_declared_path, result, sha256_file
 from schema_runtime import validate_schema
 
@@ -544,7 +544,6 @@ def validate_audio_caption(
             "A10_RETAINED_SYNC": {"A10"},
             "A10_REASSEMBLED_SYNC": {"A10"},
             "A9_TTS_PLUS_A10_REASSEMBLED": {"A9", "A10"},
-            "A9_TTS_PLUS_A10_SOURCE_CLIP": {"A9", "A10"},
             "TTS_ONLY_MUTE_SOURCE": {"A9"},
             "CAPTION_ONLY_MUTE_SOURCE": set(),
         }.get(audio_lock.get("audio_policy"))
@@ -558,7 +557,7 @@ def validate_audio_caption(
     if audio_lock["audio_source"] == "SOURCE_CLIP" and not (
         audio_lock.get("schema_version") == "001short-audio-lock-v4"
         and audio_lock.get("production_mode") in {"SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "URAKKAI"}
-        and audio_lock.get("audio_policy") in SOURCE_CLIP_A10_POLICIES
+        and audio_lock.get("audio_policy") == "SOURCE_ORDER_CLEAN_AUDIO"
     ):
         errors.append({"code": "AUDIO_CAPTION_RAW_SOURCE_AUDIO_FORBIDDEN"})
 

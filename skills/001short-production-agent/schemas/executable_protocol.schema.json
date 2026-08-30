@@ -189,12 +189,6 @@
         },
         "session_handoff": {
           "const": "schemas/conversation_handoff.schema.json"
-        },
-        "source_intake_receipt": {
-          "const": "schemas/source_intake_receipt.schema.json"
-        },
-        "vocal_stem_manifest": {
-          "const": "schemas/vocal_stem_manifest.schema.json"
         }
       },
       "additionalProperties": false
@@ -266,7 +260,7 @@
               "uniqueItems": true,
               "minItems": 3,
               "items": {
-                "enum": ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE", "SOURCE_ORDER_CLEAN_AUDIO", "A9_TTS_PLUS_A10_SOURCE_CLIP"]
+                "enum": ["A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE"]
               }
             }
           },
@@ -355,7 +349,7 @@
         "session_handoff_owner_must_remain_001",
         "old_episode_access_requires_explicit_resume",
         "state_advance_after_validator_pass_only",
-        "vmake_api_first",
+        "vmake_dom_first",
         "vmake_submit_after_source_identity",
         "vmake_candidate_integrity_only",
         "vmake_visual_quality_authority_user",
@@ -628,7 +622,7 @@
       "required": [
         "required_fields",
         "source_required_fields",
-        "cloud_sync_row_required_fields",
+        "cloud_row_required_fields",
         "public_upload_done_values",
         "public_upload_approval_field"
       ],
@@ -643,7 +637,7 @@
           "type": "array",
           "minItems": 2
         },
-        "cloud_sync_row_required_fields": {
+        "cloud_row_required_fields": {
           "type": "array",
           "prefixItems": [
             {
