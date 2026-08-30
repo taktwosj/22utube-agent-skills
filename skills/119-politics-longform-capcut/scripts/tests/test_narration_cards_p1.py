@@ -141,6 +141,8 @@ class NarrationCardFixture(unittest.TestCase):
         narration = {
             "card_id": "C002",
             "card_type": card_type,
+            "chapter_title": "기술 검증",
+            "chapter_label": "기술 검증",
             "target_start_us": 5 * MICROS,
             "target_duration_us": narration_duration_us,
             "narration_audio_file": str(self.narration_wav),
@@ -178,7 +180,9 @@ class NarrationCardFixture(unittest.TestCase):
                     "card_id": "C003", "card_type": "SOURCE_VIDEO", "target_start_us": 5 * MICROS + narration_duration_us,
                     "target_duration_us": source_duration, "source_file": str(self.source), "source_sha256": self.hashes["source"],
                     "source_start_us": 0, "source_duration_us": source_duration, "source_identity_ref": "TECH_SOURCE",
-                    "source_channel": "TECHNICAL", "source_date": "2026.08.08", "original_audio_mode": "embedded", "lower_mode": "NONE",
+                    "source_channel": "TECHNICAL", "source_date": "2026.08.08", "source_display_label": "TECHNICAL",
+                    "chapter_title": "기술 검증", "chapter_label": "기술 검증",
+                    "original_audio_mode": "embedded", "lower_mode": "NONE",
                 },
             ],
         }
@@ -357,7 +361,9 @@ class NarrationCardFixture(unittest.TestCase):
                 "source_file": str(self.source), "source_sha256": self.hashes["source"],
                 "source_start_us": index * 2 * MICROS, "source_duration_us": 2 * MICROS,
                 "source_identity_ref": f"TECH_SOURCE_{index}", "source_channel": "TECHNICAL",
-                "source_date": "2026.08.08", "original_audio_mode": "embedded", "lower_mode": "NONE",
+                "source_date": "2026.08.08", "source_display_label": "TECHNICAL",
+                "chapter_title": "기술 검증", "chapter_label": "기술 검증",
+                "original_audio_mode": "embedded", "lower_mode": "NONE",
             })
         normalized, total = builder.normalize_cards({"cards": cards})
         with tempfile.TemporaryDirectory() as temporary:

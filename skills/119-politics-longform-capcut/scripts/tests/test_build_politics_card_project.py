@@ -19,6 +19,83 @@ import build_politics_card_project as builder
 
 
 class BuilderRootBundleSeamTests(unittest.TestCase):
+    def test_remap_ids_rebases_portable_and_legacy_bundle_paths_to_target_profile(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stage = root / "staging" / "Project"
+            old_timeline = "11111111-1111-4111-8111-111111111111"
+            timeline = stage / "Timelines" / old_timeline
+            timeline.mkdir(parents=True)
+            legacy_root = "C:/Users/source/AppData/Local/CapCut/ARCHIVE_ROOT"
+            portable_root = "C:/__CAPCUT_ROOT_BUNDLE__"
+            document = {
+                "id": old_timeline,
+                "materials": {
+                    "videos": [
+                        {
+                            "id": "V",
+                            "path": legacy_root + "/Resources/media/main.png",
+                        }
+                    ]
+                },
+            }
+            (stage / "draft_content.json").write_text(
+                json.dumps(document), encoding="utf-8"
+            )
+            (stage / "draft_meta_info.json").write_text(
+                json.dumps(
+                    {
+                        "draft_fold_path": legacy_root,
+                        "draft_root_path": "C:/Users/source/AppData/Local/CapCut",
+                        "draft_cover": legacy_root + "/draft_cover.jpg",
+                        "attachment": {
+                            "asset_path": portable_root + "/Resources/media/main.png"
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (timeline / "template.json").write_text(
+                json.dumps(
+                    {"attachment": {"asset_path": portable_root + "/Resources/media/main.png"}}
+                ),
+                encoding="utf-8",
+            )
+            final_root = root / "target-profile" / "Project"
+
+            builder.remap_ids(stage, final_root, "Project", "ARCHIVE_ROOT")
+
+            target = final_root.as_posix()
+            remapped_document = json.loads(
+                (stage / "draft_content.json").read_text(encoding="utf-8")
+            )
+            remapped_meta = json.loads(
+                (stage / "draft_meta_info.json").read_text(encoding="utf-8")
+            )
+            new_timeline = next((stage / "Timelines").iterdir())
+            remapped_template = json.loads(
+                (new_timeline / "template.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                remapped_document["materials"]["videos"][0]["path"],
+                target + "/Resources/media/main.png",
+            )
+            self.assertEqual(remapped_meta["draft_fold_path"], target)
+            self.assertEqual(
+                remapped_meta["draft_cover"], target + "/draft_cover.jpg"
+            )
+            self.assertEqual(
+                remapped_meta["draft_root_path"], final_root.parent.as_posix()
+            )
+            self.assertEqual(
+                remapped_meta["attachment"]["asset_path"],
+                target + "/Resources/media/main.png",
+            )
+            self.assertEqual(
+                remapped_template["attachment"]["asset_path"],
+                target + "/Resources/media/main.png",
+            )
+
     def test_normalize_cards_allows_a_narration_image_cold_open(self):
         cards, total = builder.normalize_cards({
             "cta_like_subscribe": "ON",
@@ -34,6 +111,30 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
 
         self.assertEqual(total, 1_000_000)
         self.assertEqual(cards[0]["card_type"], "NARRATION_IMAGE")
+
+    def test_commentary_input_lines_become_sequential_single_line_segments(self):
+        template = {
+            "id": "TEXT_TEMPLATE",
+            "content": json.dumps({"text": "TTS", "styles": [{"range": [0, 3]}]}),
+        }
+        segment = {
+            "id": "SEGMENT_TEMPLATE",
+            "material_id": template["id"],
+            "target_timerange": {"start": 0, "duration": 4_000_000},
+        }
+        document = {"materials": {"texts": []}}
+        track = {"segments": []}
+
+        builder.clone_sequential_single_line_text(
+            document, template, segment, track, "첫 문장\n둘째 문장", 0, 4_000_000
+        )
+
+        values = {item["id"]: builder.text_of(item) for item in document["materials"]["texts"]}
+        self.assertEqual([values[item["material_id"]] for item in track["segments"]], ["첫 문장", "둘째 문장"])
+        self.assertEqual(
+            [item["target_timerange"] for item in track["segments"]],
+            [{"start": 0, "duration": 2_000_000}, {"start": 2_000_000, "duration": 2_000_000}],
+        )
 
     def minimal_document_for_chapter_titles(self) -> dict:
         def text(material_id: str, value: str) -> dict:
@@ -100,6 +201,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
             [{
                 "card_id": "C027", "card_type": "SOURCE_VIDEO", "chapter_label": "결론의 기준",
                 "target_start_us": start, "target_duration_us": duration,
+                "source_display_label": "뉴스공장",
                 "source_channel": "겸손은힘들다 뉴스공장", "source_date": "2026.08.13", "lower_mode": "NONE",
             }],
             start + duration,
@@ -112,6 +214,30 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
         chapter_segment = chapter_track["segments"][0]
         self.assertEqual(text_by_id[chapter_segment["material_id"]], "결론의 기준")
         self.assertEqual(chapter_segment["target_timerange"], {"start": start, "duration": duration})
+
+    def test_source_display_label_is_the_only_on_screen_source_credit(self):
+        start, duration = 0, 4_000_000
+        built = builder.build_document(
+            self.minimal_document_for_chapter_titles(),
+            [{
+                "card_id": "C001", "card_type": "SOURCE_VIDEO", "chapter_label": "챕터 1",
+                "target_start_us": start, "target_duration_us": duration,
+                "source_display_label": "뉴스공장",
+                "source_channel": "YouTube · 길고 불필요한 인터뷰 원본명",
+                "source_date": "2026.08.29", "lower_mode": "NONE",
+            }],
+            duration,
+            {"C001": self.source_record()},
+            "source-display-label",
+        )
+
+        source_texts = [
+            builder.text_of(material)
+            for material in built["materials"]["texts"]
+            if builder.text_of(material).startswith("출처 ")
+        ]
+
+        self.assertEqual(source_texts, ["출처 뉴스공장"])
 
     def test_narration_video_and_image_emit_the_same_upper_chapter_title(self):
         for card_type in ("NARRATION_VIDEO", "NARRATION_IMAGE"):
@@ -154,6 +280,55 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
                     {"start": 0, "duration": duration},
                 )
 
+    def test_inset_image_card_uses_the_manual_v8_root_geometry(self):
+        duration = 4_000_000
+        for width, height, scale in ((1920, 1080, 0.65),):
+            with self.subTest(width=width, height=height):
+                record = self.source_record()
+                record.update({
+                    "filename": f"V001_{width}.png",
+                    "width": width,
+                    "height": height,
+                    "duration_us": duration,
+                    "source_duration": duration,
+                    "has_audio": False,
+                    "narration_audio": {
+                        "filename": "narration.wav",
+                        "duration_us": duration,
+                        "offline_path": "C:/relink/narration.wav",
+                        "source_start": 0,
+                        "source_duration": duration,
+                    },
+                })
+                built = builder.build_document(
+                    self.minimal_document_for_chapter_titles(),
+                    [{
+                        "card_id": "C001",
+                        "card_type": "NARRATION_IMAGE",
+                        "style_profile": "DEMOCRATIC_BLUE_INSET_CARD_V2",
+                        "chapter_label": "비판은 했습니다",
+                        "target_start_us": 0,
+                        "target_duration_us": duration,
+                        "lower_mode": "NONE",
+                    }],
+                    duration,
+                    {"C001": record},
+                    "inset-image-layout",
+                )
+                image = next(
+                    material for material in built["materials"]["videos"]
+                    if material.get("material_name") == f"V001_{width}.png"
+                )
+                image_segment = next(
+                    segment for track in built["tracks"] for segment in track.get("segments", [])
+                    if segment.get("material_id") == image["id"]
+                )
+                self.assertEqual(
+                    image_segment["clip"].get("transform"),
+                    {"x": 0.0, "y": 0.0},
+                )
+                self.assertEqual(image_segment["clip"].get("scale"), {"x": scale, "y": scale})
+
     def chapter_states(self, cards: list[dict], media: dict[str, dict]) -> list[tuple[str, dict]]:
         total = max(card["target_start_us"] + card["target_duration_us"] for card in cards)
         built = builder.build_document(
@@ -186,6 +361,7 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
                 "chapter_label": source_label,
                 "target_start_us": 3_000_000,
                 "target_duration_us": 7_000_000,
+                "source_display_label": "channel",
                 "source_channel": "channel",
                 "source_date": "2026.08.14",
                 "lower_mode": "NONE",
@@ -475,6 +651,67 @@ class BuilderRootBundleSeamTests(unittest.TestCase):
             ]
         )
         self.assertTrue(report["root_bundle"]["contract_path"].startswith("00_asset_tools/"))
+
+    def test_register_project_uses_project_metadata_when_archive_root_is_not_registered(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            meta_path = root / "root_meta_info.json"
+            original_meta = {
+                "all_draft_store": [
+                    {
+                        "draft_name": "unrelated-project",
+                        "draft_id": "existing-id",
+                    }
+                ]
+            }
+            meta_path.write_text(json.dumps(original_meta), encoding="utf-8")
+            original_bytes = meta_path.read_bytes()
+            project_root = root / "final-project"
+            project_root.mkdir()
+            (project_root / "draft_meta_info.json").write_text(
+                json.dumps(
+                    {
+                        "draft_name": "archive-root",
+                        "draft_id": "archive-id",
+                        "draft_fold_path": "C:/source/archive-root",
+                        "draft_root_path": "C:/source",
+                        "draft_cover": "C:/source/archive-root/draft_cover.jpg",
+                        "draft_timeline_materials_size_": 123,
+                        "draft_materials": [{"type": 0}],
+                        "tm_duration": 180_000_000,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            returned = builder.register_project(
+                meta_path,
+                "archive-root",
+                "final-project",
+                project_root,
+                1_221_350_000,
+            )
+
+            self.assertEqual(returned, original_bytes)
+            updated = json.loads(meta_path.read_text(encoding="utf-8"))
+            self.assertEqual(len(updated["all_draft_store"]), 2)
+            self.assertFalse(
+                any(item.get("draft_name") == "archive-root" for item in updated["all_draft_store"])
+            )
+            entry = updated["all_draft_store"][-1]
+            project_posix = project_root.as_posix()
+            self.assertEqual(entry["draft_name"], "final-project")
+            self.assertNotEqual(entry["draft_id"], "archive-id")
+            self.assertEqual(entry["draft_fold_path"], project_posix)
+            self.assertEqual(entry["draft_json_file"], project_posix + "/draft_content.json")
+            self.assertEqual(entry["draft_cover"], project_posix + "/draft_cover.jpg")
+            self.assertEqual(entry["draft_root_path"], project_root.parent.as_posix())
+            self.assertEqual(entry["draft_timeline_materials_size"], 123)
+            self.assertNotIn("draft_timeline_materials_size_", entry)
+            self.assertNotIn("draft_materials", entry)
+            self.assertEqual(entry["tm_duration"], 1_221_350_000)
+            self.assertFalse(entry["draft_cloud_sync"])
+            self.assertTrue(entry["streaming_edit_draft_ready"])
 
     def test_builder_stops_before_extract_when_root_bundle_resolution_fails(self):
         with tempfile.TemporaryDirectory() as temporary:

@@ -20,10 +20,19 @@ import zipfile
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from capcut_material_paths import enforce_material_paths
+from capcut_material_paths import (
+    CAPCUT_ROOT_BUNDLE_ROOT,
+    enforce_document_paths,
+)
 from promote_capcut_root import JUNK_RE, MICROS, collect_uuids, json_load, json_write, rewrite_value, set_material_text, sha256
 from root_bundle import ResolvedRoot, resolve_active_root
 from run_politics_assembly_preflight import verify_preflight_report
+from inset_card_layout import (
+    CAPCUT_CLIP_GEOMETRY,
+    IMAGE_FRAME as INSET_CARD_FRAME,
+    INSET_CARD_STYLE_PROFILE,
+    SUPPORTED_RASTER_SIZES,
+)
 
 
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
@@ -88,7 +97,7 @@ def capture_presentation_contract(
     lower_texts: set[str] | None = None
     if cards is not None:
         source_texts = {
-            f"출처 {str(card.get('source_channel', '')).strip()}\n{str(card.get('source_date', '')).strip()}"
+            f"출처 {str(card.get('source_display_label', '')).strip()}"
             for card in cards
             if card.get("card_type") == "SOURCE_VIDEO"
         }
@@ -213,6 +222,14 @@ def remap_ids(stage: Path, final_root: Path, project_name: str, archive_root_nam
         if len(relative.parts) > 1 and relative.parts[0] == "Timelines" and relative.parts[1] == old_timeline:
             relative = Path("Timelines", new_timeline, *relative.parts[2:])
         value = rewrite_value(value, id_map, replacements)
+        value = enforce_document_paths(
+            value,
+            project_root=final_root,
+            rebase_legacy_resources=True,
+            allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
+            root_aliases=(archive_root_name, CAPCUT_ROOT_BUNDLE_ROOT),
+            rewrite_key_paths={"draft_root_path": final_root.parent.as_posix()},
+        )
         if isinstance(value, dict) and value.get("draft_name") == stage.name:
             value["draft_name"] = project_name
         json_write(stage / relative, value)
@@ -464,6 +481,39 @@ def clone_text(
     target_track["segments"].append(segment)
 
 
+def clone_sequential_single_line_text(
+    document: dict[str, Any],
+    template_material: dict[str, Any],
+    template_segment: dict[str, Any],
+    target_track: dict[str, Any],
+    value: str,
+    target_start: int,
+    target_duration: int,
+) -> None:
+    lines = [line.strip() for line in value.replace("\r\n", "\n").split("\n") if line.strip()]
+    if not lines:
+        raise RuntimeError("LOWER_TEXT_REQUIRED")
+    cursor = target_start
+    for index, line in enumerate(lines):
+        end = target_start + target_duration if index == len(lines) - 1 else target_start + round(target_duration * (index + 1) / len(lines))
+        clone_text(document, template_material, template_segment, target_track, line, cursor, end - cursor)
+        cursor = end
+
+
+def inset_card_clip_geometry(card: dict[str, Any], record: dict[str, Any]) -> dict[str, Any] | None:
+    if card.get("style_profile") != INSET_CARD_STYLE_PROFILE:
+        return None
+    if card.get("card_type") not in {"CHAPTER_CARD", "NARRATION_IMAGE"}:
+        raise RuntimeError(f"INSET_CARD_TYPE_INVALID:{card.get('card_id', '?')}")
+    raster_size = (int(record["width"]), int(record["height"]))
+    if raster_size not in SUPPORTED_RASTER_SIZES:
+        raise RuntimeError(f"INSET_CARD_DIMENSION_INVALID:{card.get('card_id', '?')}")
+    geometry = copy.deepcopy(CAPCUT_CLIP_GEOMETRY)
+    scale = INSET_CARD_FRAME["width"] / raster_size[0]
+    geometry["scale"] = {"x": scale, "y": scale}
+    return geometry
+
+
 def clone_media(
     document: dict[str, Any],
     template_material: dict[str, Any],
@@ -482,6 +532,7 @@ def clone_media(
     target_start: int,
     target_duration: int,
     has_audio: bool,
+    clip_geometry: dict[str, Any] | None = None,
 ) -> None:
     material = copy.deepcopy(template_material)
     material.update(
@@ -523,6 +574,8 @@ def clone_media(
             "last_nonzero_volume": 1.0 if has_audio else 0.0,
         }
     )
+    if clip_geometry is not None:
+        segment["clip"] = copy.deepcopy(clip_geometry)
     document["materials"]["videos"].append(material)
     if target_track is not None:
         target_track["segments"].append(segment)
@@ -841,7 +894,7 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
         if kind == "CHAPTER_CARD":
             if record is None:
                 raise RuntimeError(f"CHAPTER_IMAGE_REQUIRED:{card['card_id']}")
-            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False, clip_geometry=inset_card_clip_geometry(card, record))
             if card_index in chapter_states:
                 chapter_label, chapter_end = chapter_states[card_index]
                 clone_text(
@@ -861,14 +914,14 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             if chapter_label and not covered_by_chapter_state:
                 clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
             if kind == "SOURCE_VIDEO":
-                channel, date = str(card.get("source_channel", "")).strip(), str(card.get("source_date", "")).strip()
-                if not channel or not date:
+                source_display_label = str(card.get("source_display_label", "")).strip()
+                if not source_display_label:
                     raise RuntimeError(f"SOURCE_LABEL_REQUIRED:{card['card_id']}")
-                clone_text(document, text_source, source_segment, source_track, f"출처 {channel}\n{date}", start, duration)
+                clone_text(document, text_source, source_segment, source_track, f"출처 {source_display_label}", start, duration)
         elif kind == "NARRATION_IMAGE":
             if record is None:
                 raise RuntimeError(f"IMAGE_REQUIRED:{card['card_id']}")
-            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+            clone_media(document, photo_video, photo_segment, None, target_track=intro_video_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False, clip_geometry=inset_card_clip_geometry(card, record))
             if chapter_label and not covered_by_chapter_state:
                 clone_text(document, text_chapter, chapter_segment, chapter_track, chapter_label, start, duration)
         elif kind in {"TEXT_EXPLAINER", "ENDING"}:
@@ -882,7 +935,7 @@ def build_document(document: dict[str, Any], cards: list[dict[str, Any]], total:
             for cue_start, cue_end, cue_text in _srt_cues(Path(card[srt_field])):
                 clone_text(document, text_lower, lower_segment, lower_track, cue_text, cue_start, cue_end - cue_start)
         elif lower_mode == "VIDEO100_EXPLAINER":
-            clone_text(document, text_lower, lower_segment, lower_track, str(card["lower_text"]), start, duration)
+            clone_sequential_single_line_text(document, text_lower, lower_segment, lower_track, str(card["lower_text"]), start, duration)
 
     trim_all_tracks_to_duration(document, total)
     for index, track in enumerate(document["tracks"]):
@@ -911,13 +964,22 @@ def validate_build(
     hashes = {sha256(path) for path in mirrors}
     if len(hashes) != 1:
         raise RuntimeError("PROJECT_MIRROR_MISMATCH")
+    path_root = path_reference or root
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in {".json", ".tmp"}:
+            continue
+        try:
+            value = json_load(path)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        enforce_document_paths(
+            value,
+            project_root=path_root,
+            rebase_legacy_resources=False,
+            allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
+            expected_key_paths={"draft_root_path": path_root.parent.as_posix()},
+        )
     document = json_load(root / "draft_content.json")
-    enforce_material_paths(
-        document,
-        project_root=path_reference or root,
-        rebase_legacy_resources=False,
-        allowed_roots=("C:/__CAPCUT_RELINK_REQUIRED__",),
-    )
     if int(document["duration"]) != total:
         raise RuntimeError("PROJECT_DURATION_INVALID")
     valid_ids = {item.get("id") for group in document.get("materials", {}).values() if isinstance(group, list) for item in group if isinstance(item, dict)}
@@ -960,12 +1022,28 @@ def validate_build(
 def register_project(meta_path: Path, source_name: str, project_name: str, project_root: Path, duration: int) -> bytes:
     original = meta_path.read_bytes()
     meta = json.loads(original.decode("utf-8"))
-    source = next((item for item in meta.get("all_draft_store", []) if item.get("draft_name") == source_name), None)
-    if source is None or any(item.get("draft_name") == project_name for item in meta.get("all_draft_store", [])):
+    stores = meta.get("all_draft_store", [])
+    if any(item.get("draft_name") == project_name for item in stores):
         raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+    source = next((item for item in stores if item.get("draft_name") == source_name), None)
+    if source is None:
+        project_meta_path = project_root / "draft_meta_info.json"
+        if not project_meta_path.is_file():
+            raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+        project_meta = json_load(project_meta_path)
+        if not isinstance(project_meta, dict):
+            raise RuntimeError("ROOT_META_REGISTRATION_INVALID")
+        source = {
+            key: value
+            for key, value in project_meta.items()
+            if value is None or isinstance(value, (bool, int, float, str))
+        }
+        timeline_size = source.pop("draft_timeline_materials_size_", None)
+        if timeline_size is not None:
+            source["draft_timeline_materials_size"] = timeline_size
     entry = copy.deepcopy(source)
     root_posix = str(project_root).replace("\\", "/")
-    entry.update({"draft_name": project_name, "draft_id": uid(), "draft_fold_path": root_posix, "draft_json_file": root_posix + "/draft_content.json", "draft_cover": root_posix + "/draft_cover.jpg", "draft_root_path": str(project_root.parent).replace("\\", "/"), "tm_duration": duration, "draft_cloud_sync": False, "draft_cloud_template_id": ""})
+    entry.update({"draft_name": project_name, "draft_id": uid(), "draft_fold_path": root_posix, "draft_json_file": root_posix + "/draft_content.json", "draft_cover": root_posix + "/draft_cover.jpg", "draft_root_path": str(project_root.parent).replace("\\", "/"), "tm_duration": duration, "draft_cloud_sync": False, "draft_cloud_template_id": "", "streaming_edit_draft_ready": True})
     meta["all_draft_store"].append(entry)
     json_write(meta_path, meta)
     return original

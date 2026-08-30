@@ -32,7 +32,7 @@ class PoliticsCleanAssemblyHarnessContractTests(unittest.TestCase):
             "사용자 화면",
             "부분 패치하지 않는다",
             "계약 파일을 다시 읽는다",
-            "jungchilong_base_v4_hook10_lower2",
+            "V8_MANUAL_OVERLAY_65",
         ):
             self.assertIn(token, text)
         self.assertNotIn("root_project: shrt white", text)

@@ -43,6 +43,7 @@ cta_like_subscribe=ON
 [CARD]
 card_id=C001
 card_type=SOURCE_VIDEO
+chapter_label=Chapter 1
 chapter_title=Chapter 1
 chapter_hook=What changed?
 source_id=S01_LOCK
@@ -67,6 +68,18 @@ next_card=END
             "route": "TOGUN_PRE119_TO_119_DIRECT",
             "editorial_owner": "TOGUN_PRE119",
             "source_state": "PRE119_SOURCE_CANDIDATE",
+            "publication_report": {
+                "title": "Fixture title",
+                "content": {
+                    "simple_summary": "Fixture summary",
+                    "timeline": [{"at": "00:00", "label": "Fixture opening"}],
+                    "sources": [{"label": "Fixture source", "url": None}],
+                },
+                "thumbnail": {
+                    "words": ["책임", "패배", "함께"],
+                    "sentences": ["Primary fixture", "Second fixture", "Third fixture"],
+                },
+            },
             "episode_id": "PL_20260809_PRE119",
             "project_name": "PL_20260809_PRE119_capcut_v1",
             "central_question": "What changed?",
@@ -111,13 +124,55 @@ next_card=END
 
         self.assertEqual(
             [card["card_type"] for card in seed["cards"]],
-            ["SOURCE_VIDEO", "NARRATION_VIDEO", "SOURCE_VIDEO", "CHAPTER_CARD"],
+            [
+                "SOURCE_VIDEO",
+                "CHAPTER_CARD",
+                "SOURCE_VIDEO",
+                "NARRATION_VIDEO",
+                "SOURCE_VIDEO",
+                "CHAPTER_CARD",
+            ],
         )
         self.assertEqual(
             [card["lower_mode"] for card in seed["cards"]],
-            ["SRT", "SRT", "COMMENTARY_2LINE", "NONE"],
+            ["SRT", "NONE", "SRT", "SRT", "COMMENTARY_2LINE", "NONE"],
         )
         self.assertTrue(all(str(card.get("chapter_label", "")).strip() for card in seed["cards"]))
+
+    def test_approved_script_template_opens_with_montage_hook(self) -> None:
+        seed = pre119_validator.parse_assembly_only_seed(APPROVED_SCRIPT_TEMPLATE)
+        cards = seed["cards"]
+
+        hook = cards[0]
+        self.assertEqual(hook["card_type"], "SOURCE_VIDEO")
+        self.assertTrue(str(hook["card_id"]).startswith("C00_HOOK"))
+        self.assertEqual(hook["chapter_label"], "오프닝")
+        self.assertEqual(hook["lower_mode"], "SRT")
+        self.assertEqual(hook["source_audio"], "ON")
+        self.assertEqual(hook["narration_audio"], "OFF")
+
+        cta = cards[1]
+        self.assertEqual(cta["card_id"], "C00_HOOK_CTA")
+        self.assertEqual(cta["card_type"], "CHAPTER_CARD")
+        self.assertEqual(cta["chapter_label"], "오프닝")
+        self.assertEqual(cta["lower_mode"], "NONE")
+        self.assertEqual(cta["next_card"], cards[2]["card_id"])
+
+        body_labels = {card["chapter_label"] for card in cards[2:]}
+        self.assertNotIn("오프닝", body_labels)
+
+    def test_montage_contract_is_documented_for_the_authoring_gpt(self) -> None:
+        template = APPROVED_SCRIPT_TEMPLATE.read_text(encoding="utf-8")
+        self.assertIn("## 오프닝 몽타주", template)
+        self.assertIn("시간 순서가 아니라 세기 순서로 배치한다", template)
+
+        review = (
+            APPROVED_SCRIPT_TEMPLATE.parent.parent
+            / "references"
+            / "chatgpt_politics_longform_review_contract.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("첫 45초가 본편 최강 발화 몽타주로 구성돼 있는지", review)
+        self.assertIn("후킹이 적대 진영 비판에 머물러 결론이 예측되는지", review)
 
     def test_strong_marker_locks_pre119_before_direct_script_fallback(self) -> None:
         self.write_valid_packet()
@@ -174,6 +229,45 @@ next_card=END
         self.assertEqual(report["assembly_only_seed"]["card_order"], ["C001"])
         self.assertRegex(report["assembly_only_seed_sha256"], r"^[0-9A-F]{64}$")
         self.assertFalse((self.package / "50_capcut_project" / "episode_cards.json").exists())
+
+    def test_body_card_without_chapter_label_is_rejected_before_assembly(self) -> None:
+        digest = self.write_valid_packet()
+        script_path = self.package / "20_script" / "119_final_script.md"
+        script_path.write_text(
+            script_path.read_text(encoding="utf-8").replace(
+                "chapter_label=Chapter 1\n", "chapter_label=\n"
+            ),
+            encoding="utf-8",
+        )
+        digest = hashlib.sha256(script_path.read_bytes()).hexdigest().upper()
+        handoff_path = self.package / "20_script" / "pre119_handoff.json"
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff["script_lock"]["current_final_script_sha256"] = digest
+        handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+
+        result = self.run_validator(
+            approved_sha=digest,
+            evidence="user_message:chapter-label-required",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        report = self.read_report()
+        self.assertEqual(report["status"], "FAIL_PRE119_ASSEMBLY_SEED_INVALID")
+        self.assertEqual(report["seed_error"], "CARD_1_CHAPTER_LABEL_REQUIRED:C001")
+
+    def test_publication_thumbnail_words_require_exactly_three_short_words(self) -> None:
+        digest = self.write_valid_packet()
+        handoff_path = self.package / "20_script" / "pre119_handoff.json"
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff["publication_report"]["thumbnail"]["words"] = ["너무긴단어입니다", "패배", "함께"]
+        handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+
+        result = self.run_validator(approved_sha=digest, evidence="user_message:approved")
+
+        self.assertNotEqual(result.returncode, 0)
+        report = self.read_report()
+        self.assertEqual(report["status"], "FAIL_PRE119_PUBLICATION_REPORT_INVALID")
+        self.assertEqual(report["publication_report_error"], "THUMBNAIL_WORD_MAX_5_REQUIRED:1")
 
     def test_approved_script_without_assembly_only_seed_is_blocked(self) -> None:
         digest = self.write_valid_packet(include_seed=False)

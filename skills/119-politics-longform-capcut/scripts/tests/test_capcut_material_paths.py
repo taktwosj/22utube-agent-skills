@@ -10,7 +10,11 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from capcut_material_paths import enforce_material_paths
+from capcut_material_paths import (
+    CAPCUT_ROOT_BUNDLE_ROOT,
+    enforce_document_paths,
+    enforce_material_paths,
+)
 
 
 class CapcutMaterialPathTests(unittest.TestCase):
@@ -25,17 +29,20 @@ class CapcutMaterialPathTests(unittest.TestCase):
     def test_skill_contract_makes_installed_copies_immutable(self) -> None:
         skill = (SCRIPTS.parent / "SKILL.md").read_text(encoding="utf-8")
         for installed_path in (
-            r"C:\Users\arajun\.codex\skills\119-politics-longform-capcut",
-            r"C:\Users\arajun\.claude\skills\119-politics-longform-capcut",
-            r"C:\Users\arajun\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut",
+            r"%USERPROFILE%\.codex\skills\119-politics-longform-capcut",
+            r"%USERPROFILE%\.claude\skills\119-politics-longform-capcut",
+            r"%USERPROFILE%\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut",
         ):
             with self.subTest(installed_path=installed_path):
                 self.assertIn(f"`{installed_path}`", skill)
         self.assertIn("직접 create·edit·copy·delete·relink하지 않는다", skill)
-        self.assertIn(
-            r"Git 정본 `C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다",
-            skill,
-        )
+        # 정본은 저장소로 지정한다. 특정 PC 절대경로를 정본이라고 부르면
+        # 그 경로에 스킬이 없는 순간 다른 에이전트가 길을 잃는다.
+        self.assertIn("Git 정본 저장소 `taktwosj/22utube-agent-skills`", skill)
+        self.assertIn("공유 정본은 원격 `main`이다", skill)
+        self.assertIn("로컬 작업 경로는 고정하지 않는다", skill)
+        self.assertIn("브랜치에만 있고 `main`에 없는 변경은 아직 공유 정본이 아니다", skill)
+        self.assertNotIn(r"Git 정본 `%USERPROFILE%gent-skills", skill)
         self.assertIn("공식 release `publish → activate → verify`", skill)
         self.assertIn("첫 불일치에서 중단하고 문제·증거·영향·안전 rollback point를 보고", skill)
         for choice in (
@@ -240,6 +247,46 @@ class CapcutMaterialPathTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(RuntimeError):
                     self.enforce(self.document({"path": value}), allowed_roots=allowed)
+
+    def test_full_document_rebases_verified_bundle_root_alias_across_profiles(self) -> None:
+        source_root = "C:/Users/source/AppData/Local/CapCut/ARCHIVE_ROOT"
+        target_root = Path("D:/Users/target/AppData/Local/CapCut/PROJECT")
+        document = {
+            "draft_meta_info": {
+                "draft_fold_path": source_root,
+                "attachment": {
+                    "asset_path": source_root + "/Resources/media/main.png"
+                },
+            },
+            "materials": {
+                "videos": [
+                    {
+                        "id": "V",
+                        "path": CAPCUT_ROOT_BUNDLE_ROOT + "/Resources/media/main.png",
+                    }
+                ]
+            },
+        }
+        original = copy.deepcopy(document)
+
+        result = enforce_document_paths(
+            document,
+            project_root=target_root,
+            rebase_legacy_resources=True,
+            root_aliases=("ARCHIVE_ROOT", CAPCUT_ROOT_BUNDLE_ROOT.rsplit("/", 1)[-1]),
+        )
+
+        target = target_root.as_posix()
+        self.assertEqual(result["draft_meta_info"]["draft_fold_path"], target)
+        self.assertEqual(
+            result["draft_meta_info"]["attachment"]["asset_path"],
+            target + "/Resources/media/main.png",
+        )
+        self.assertEqual(
+            result["materials"]["videos"][0]["path"],
+            target + "/Resources/media/main.png",
+        )
+        self.assertEqual(document, original)
 
 
 if __name__ == "__main__":
