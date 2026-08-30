@@ -14,7 +14,10 @@ from typing import Any
 _DRIVE_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:/")
 _DRIVE_RELATIVE_RE = re.compile(r"^[A-Za-z]:(?:$|[^/])")
 _WRAPPER_KEYS = {"content", "metadata"}
+_EXACT_PATH_KEYS = {"draft_cover"}
 _MAX_WRAPPER_DECODE_DEPTH = 2
+CAPCUT_ROOT_BUNDLE_ROOT = "C:/__CAPCUT_ROOT_BUNDLE__"
+CAPCUT_DRAFT_ROOT_BUNDLE_ROOT = "C:/__CAPCUT_DRAFT_ROOT_BUNDLE__"
 
 
 def _error(code: str, location: str, original: Any) -> RuntimeError:
@@ -22,7 +25,11 @@ def _error(code: str, location: str, original: Any) -> RuntimeError:
 
 
 def _is_path_key(key: Any) -> bool:
-    return isinstance(key, str) and not key.endswith("_on_path") and (key == "path" or key.endswith("_path"))
+    return (
+        isinstance(key, str)
+        and not key.endswith("_on_path")
+        and (key == "path" or key.endswith("_path") or key in _EXACT_PATH_KEYS)
+    )
 
 
 def _parts(value: str) -> list[str]:
@@ -79,6 +86,23 @@ def _legacy_resources_suffix(value: str) -> list[str] | None:
     return suffix or None
 
 
+def _root_alias_suffix(value: str, root_aliases: Sequence[str]) -> list[str] | None:
+    if not _is_absolute(value):
+        return None
+    aliases = {
+        parts[-1].casefold()
+        for alias in root_aliases
+        if (parts := _parts(alias))
+    }
+    if not aliases:
+        return None
+    parts = _parts(value)
+    matches = [index for index, part in enumerate(parts) if part.casefold() in aliases]
+    if not matches:
+        return None
+    return parts[matches[-1] + 1 :]
+
+
 def _enforce_path_value(
     value: Any,
     *,
@@ -87,6 +111,7 @@ def _enforce_path_value(
     rebase_legacy_resources: bool,
     exact_rewrites: Mapping[str, str],
     allowed_roots: Sequence[str],
+    root_aliases: Sequence[str],
 ) -> Any:
     original = value
     rewritten_to_project = False
@@ -104,12 +129,17 @@ def _enforce_path_value(
         rewritten_to_project = True
         _validate_lexical_path(value, location, original)
 
-    suffix = _legacy_resources_suffix(value) if rebase_legacy_resources else None
+    alias_suffix = _root_alias_suffix(value, root_aliases)
+    if alias_suffix is not None:
+        value = (project_root / Path(*alias_suffix)).as_posix() if alias_suffix else project_root.as_posix()
+        rewritten_to_project = True
+
+    suffix = _legacy_resources_suffix(value) if rebase_legacy_resources and not rewritten_to_project else None
     if suffix is not None:
         value = (project_root / "Resources" / Path(*suffix)).as_posix()
         rewritten_to_project = True
 
-    if rewritten_to_project and project_root.is_dir() and not Path(value).is_file():
+    if rewritten_to_project and project_root.is_dir() and not Path(value).exists():
         raise _error("TARGET_MISSING", location, original)
 
     if not _is_absolute(value):
@@ -162,6 +192,9 @@ def _walk(
     rebase_legacy_resources: bool,
     exact_rewrites: Mapping[str, str],
     allowed_roots: Sequence[str],
+    root_aliases: Sequence[str],
+    rewrite_key_paths: Mapping[str, str],
+    expected_key_paths: Mapping[str, str],
 ) -> tuple[Any, bool]:
     if isinstance(value, dict):
         changed = False
@@ -169,6 +202,23 @@ def _walk(
         for key, item in value.items():
             child_location = f"{location}.{key}"
             if _is_path_key(key):
+                if key in rewrite_key_paths:
+                    replacement = rewrite_key_paths[key]
+                    if not isinstance(replacement, str) or not _is_absolute(replacement):
+                        raise _error("FOREIGN", child_location, replacement)
+                    _validate_lexical_path(replacement, child_location, replacement)
+                    result[key] = replacement
+                    changed = changed or replacement != item
+                    continue
+                if key in expected_key_paths:
+                    expected = expected_key_paths[key]
+                    if not isinstance(item, str) or not isinstance(expected, str):
+                        raise _error("EXPECTED", child_location, item)
+                    _validate_lexical_path(item, child_location, item)
+                    if not _is_absolute(expected) or _normalized_windows(item) != _normalized_windows(expected):
+                        raise _error("EXPECTED", child_location, item)
+                    result[key] = item
+                    continue
                 rewritten = _enforce_path_value(
                     item,
                     location=child_location,
@@ -176,6 +226,7 @@ def _walk(
                     rebase_legacy_resources=rebase_legacy_resources,
                     exact_rewrites=exact_rewrites,
                     allowed_roots=allowed_roots,
+                    root_aliases=root_aliases,
                 )
                 result[key] = rewritten
                 changed = changed or rewritten != item
@@ -190,6 +241,9 @@ def _walk(
                     rebase_legacy_resources=rebase_legacy_resources,
                     exact_rewrites=exact_rewrites,
                     allowed_roots=allowed_roots,
+                    root_aliases=root_aliases,
+                    rewrite_key_paths=rewrite_key_paths,
+                    expected_key_paths=expected_key_paths,
                 )
                 result[key] = _encode_container(rewritten, layers) if inner_changed else item
                 changed = changed or inner_changed
@@ -202,6 +256,9 @@ def _walk(
                 rebase_legacy_resources=rebase_legacy_resources,
                 exact_rewrites=exact_rewrites,
                 allowed_roots=allowed_roots,
+                root_aliases=root_aliases,
+                rewrite_key_paths=rewrite_key_paths,
+                expected_key_paths=expected_key_paths,
             )
             result[key] = rewritten
             changed = changed or inner_changed
@@ -218,6 +275,9 @@ def _walk(
                 rebase_legacy_resources=rebase_legacy_resources,
                 exact_rewrites=exact_rewrites,
                 allowed_roots=allowed_roots,
+                root_aliases=root_aliases,
+                rewrite_key_paths=rewrite_key_paths,
+                expected_key_paths=expected_key_paths,
             )
             result.append(rewritten)
             changed = changed or inner_changed
@@ -232,6 +292,9 @@ def enforce_material_paths(
     rebase_legacy_resources: bool,
     exact_rewrites: Mapping[str, str] = {},
     allowed_roots: Sequence[str] = (),
+    root_aliases: Sequence[str] = (),
+    rewrite_key_paths: Mapping[str, str] = {},
+    expected_key_paths: Mapping[str, str] = {},
 ) -> dict:
     """Return an enforced copy of *document*, walking only its materials tree."""
     result = copy.deepcopy(document)
@@ -246,6 +309,37 @@ def enforce_material_paths(
         rebase_legacy_resources=rebase_legacy_resources,
         exact_rewrites=exact_rewrites,
         allowed_roots=allowed_roots,
+        root_aliases=root_aliases,
+        rewrite_key_paths=rewrite_key_paths,
+        expected_key_paths=expected_key_paths,
     )
     result["materials"] = rewritten
     return result
+
+
+def enforce_document_paths(
+    document: dict,
+    *,
+    project_root: Path,
+    rebase_legacy_resources: bool,
+    exact_rewrites: Mapping[str, str] = {},
+    allowed_roots: Sequence[str] = (),
+    root_aliases: Sequence[str] = (),
+    rewrite_key_paths: Mapping[str, str] = {},
+    expected_key_paths: Mapping[str, str] = {},
+) -> dict:
+    """Return an enforced copy of every recognized path field in *document*."""
+    result = copy.deepcopy(document)
+    rewritten, _ = _walk(
+        result,
+        location="$",
+        wrapper_depth=0,
+        project_root=Path(project_root),
+        rebase_legacy_resources=rebase_legacy_resources,
+        exact_rewrites=exact_rewrites,
+        allowed_roots=allowed_roots,
+        root_aliases=root_aliases,
+        rewrite_key_paths=rewrite_key_paths,
+        expected_key_paths=expected_key_paths,
+    )
+    return rewritten
