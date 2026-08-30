@@ -292,6 +292,9 @@ def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[
     plan = validation.get("validated_plan")
     if not isinstance(plan, dict):
         raise RuntimeError("WAIT_PRE119_VALIDATED_PLAN_REQUIRED")
+    publication_report = plan.get("publication_report")
+    if not isinstance(publication_report, dict):
+        raise RuntimeError("WAIT_PRE119_PUBLICATION_REPORT_REQUIRED")
     seed, seed_sha = validated_assembly_seed(validation, plan)
     if evidence.get("status") != "PASS":
         raise RuntimeError("WAIT_PRE119_ASSET_EVIDENCE_PASS_REQUIRED")
@@ -314,6 +317,7 @@ def compile_cards(validation: dict[str, Any], evidence: dict[str, Any]) -> dict[
         "execution_mode": "ASSEMBLY_ONLY",
         "episode_id": plan["episode_id"],
         "project_name": plan["project_name"],
+        "publication_report": publication_report,
         "cta_like_subscribe": cta_policy,
         "canvas": {"width": 1920, "height": 1080, "fps": 30},
         "pre119_validation_sha256": validation.get("handoff_sha256", "TEST_FIXTURE"),

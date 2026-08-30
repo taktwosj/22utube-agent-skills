@@ -81,6 +81,18 @@ class Pre119CardCompilerTests(unittest.TestCase):
             "between_image": "NO",
             "between_narration": "NO",
             "lower_mode": "NONE",
+            "publication_report": {
+                "title": "Fixture title",
+                "content": {
+                    "simple_summary": "Fixture summary",
+                    "timeline": [{"at": "00:00", "label": "Fixture opening"}],
+                    "sources": [{"label": "Fixture source", "url": None}],
+                },
+                "thumbnail": {
+                    "words": ["책임", "패배", "함께"],
+                    "sentences": ["Primary fixture", "Second fixture", "Third fixture"],
+                },
+            },
         }
         plan.update(plan_overrides)
         if seed_cards is None:
@@ -214,6 +226,7 @@ class Pre119CardCompilerTests(unittest.TestCase):
         self.assertEqual(compiled["schema"], "politics-longform-episode-cards.v1")
         self.assertEqual(compiled["episode_id"], "PL_20260809_PRE119")
         self.assertRegex(compiled["assembly_only_seed_sha256"], r"^[0-9A-F]{64}$")
+        self.assertEqual(compiled["publication_report"]["thumbnail"]["words"], ["책임", "패배", "함께"])
         self.assertEqual(compiled["cards"][0]["visual_text"], "Approved screen text")
         self.assertEqual([card["card_type"] for card in compiled["cards"]], ["SOURCE_VIDEO"])
 

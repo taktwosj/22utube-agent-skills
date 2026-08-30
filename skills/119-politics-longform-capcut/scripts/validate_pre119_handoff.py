@@ -191,6 +191,74 @@ def _unsafe_path_fields(value: Any, prefix: str = "") -> list[str]:
     return unsafe
 
 
+def _required_text(value: Any, code: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(code)
+    return value.strip()
+
+
+def validate_publication_report(value: Any) -> dict[str, Any]:
+    """Validate editorial metadata that 119 copies into the delivery report."""
+    if not isinstance(value, dict):
+        raise ValueError("PUBLICATION_REPORT_REQUIRED")
+    title = _required_text(value.get("title"), "PUBLICATION_TITLE_REQUIRED")
+    content = value.get("content")
+    if not isinstance(content, dict):
+        raise ValueError("PUBLICATION_CONTENT_REQUIRED")
+    summary = _required_text(content.get("simple_summary"), "PUBLICATION_SIMPLE_SUMMARY_REQUIRED")
+
+    timeline_raw = content.get("timeline")
+    if not isinstance(timeline_raw, list) or not timeline_raw:
+        raise ValueError("PUBLICATION_TIMELINE_REQUIRED")
+    timeline: list[dict[str, str]] = []
+    for index, item in enumerate(timeline_raw, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"PUBLICATION_TIMELINE_ITEM_INVALID:{index}")
+        at = _required_text(item.get("at"), f"PUBLICATION_TIMELINE_AT_REQUIRED:{index}")
+        label = _required_text(item.get("label"), f"PUBLICATION_TIMELINE_LABEL_REQUIRED:{index}")
+        if re.fullmatch(r"(?:\d{2}:)?[0-5]\d:[0-5]\d", at) is None:
+            raise ValueError(f"PUBLICATION_TIMELINE_AT_INVALID:{index}")
+        timeline.append({"at": at, "label": label})
+
+    sources_raw = content.get("sources")
+    if not isinstance(sources_raw, list) or not sources_raw:
+        raise ValueError("PUBLICATION_SOURCES_REQUIRED")
+    sources: list[dict[str, str | None]] = []
+    for index, item in enumerate(sources_raw, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"PUBLICATION_SOURCE_ITEM_INVALID:{index}")
+        label = _required_text(item.get("label"), f"PUBLICATION_SOURCE_LABEL_REQUIRED:{index}")
+        url = item.get("url")
+        if url is not None and not isinstance(url, str):
+            raise ValueError(f"PUBLICATION_SOURCE_URL_INVALID:{index}")
+        sources.append({"label": label, "url": url.strip() if isinstance(url, str) and url.strip() else None})
+
+    thumbnail = value.get("thumbnail")
+    if not isinstance(thumbnail, dict):
+        raise ValueError("THUMBNAIL_COPY_REQUIRED")
+    words_raw = thumbnail.get("words")
+    if not isinstance(words_raw, list) or len(words_raw) != 3:
+        raise ValueError("THUMBNAIL_WORDS_EXACTLY_3_REQUIRED")
+    words: list[str] = []
+    for index, word in enumerate(words_raw, start=1):
+        text = _required_text(word, f"THUMBNAIL_WORD_REQUIRED:{index}")
+        if any(character.isspace() for character in text) or len(text) > 5:
+            raise ValueError(f"THUMBNAIL_WORD_MAX_5_REQUIRED:{index}")
+        words.append(text)
+    sentences_raw = thumbnail.get("sentences")
+    if not isinstance(sentences_raw, list) or len(sentences_raw) != 3:
+        raise ValueError("THUMBNAIL_SENTENCES_EXACTLY_3_REQUIRED")
+    sentences = [
+        _required_text(sentence, f"THUMBNAIL_SENTENCE_REQUIRED:{index}")
+        for index, sentence in enumerate(sentences_raw, start=1)
+    ]
+    return {
+        "title": title,
+        "content": {"simple_summary": summary, "timeline": timeline, "sources": sources},
+        "thumbnail": {"words": words, "sentences": sentences},
+    }
+
+
 def blocked_report(status: str, markers: list[str], **extra: Any) -> dict[str, Any]:
     return {
         "schema": "politics-pre119-handoff-validation.v1",
@@ -320,6 +388,13 @@ def main() -> int:
         write_report(package_root, blocked_report("FAIL_PRE119_CTA_POLICY", markers))
         return 2
     required["cta_like_subscribe"] = str(required["cta_like_subscribe"]).strip().upper()
+    try:
+        required["publication_report"] = validate_publication_report(handoff.get("publication_report"))
+    except ValueError as error:
+        detail = str(error)
+        status = "WAIT_PRE119_PUBLICATION_REPORT_REQUIRED" if detail == "PUBLICATION_REPORT_REQUIRED" else "FAIL_PRE119_PUBLICATION_REPORT_INVALID"
+        write_report(package_root, blocked_report(status, markers, publication_report_error=detail))
+        return 2
 
     seed_policy = assembly_seed["policy"]
     policy_mismatches = [

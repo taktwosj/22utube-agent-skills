@@ -42,8 +42,8 @@
 - 화면 출처: `SOURCE_VIDEO`의 `source_display_label`만 쓴다. 예: `뉴스공장` → 화면 `출처 뉴스공장`. 긴 원본명·날짜는 화면 문구에 쓰지 않는다.
 - 원본 영상 자막: `SOURCE_VIDEO + lower_mode=SRT` → `SOURCE_TTS`.
 - 나레이션 TTS 자막: `NARRATION_VIDEO|NARRATION_IMAGE + lower_mode=SRT` → `NARRATION_TTS`.
-- 논거·의견 2줄: `lower_mode=COMMENTARY_2LINE`과 `lower_line1`, `lower_line2`.
-- HTML 챕터 이미지: `CHAPTER_CARD`, `style_profile=DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`, `lower_mode=NONE`.
+- 논거·의견 2문장: `lower_mode=COMMENTARY_2LINE`과 `lower_line1`, `lower_line2`; 각 문장은 공백 제외 15자 이하이며 화면에는 시간상 순차 한 줄로 표시한다.
+- HTML 챕터 이미지: 근본 프로젝트의 inset-frame을 쓸 때 `CHAPTER_CARD`, `style_profile=DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode=NONE`; 구형 전체화면 루트만 V1을 쓴다.
 - 하단 슬롯은 같은 시간에 한 종류만 사용한다.
 
 ## 세로 시간순 승인 대본
@@ -53,9 +53,9 @@
 - 원음: `<실제 화자 발언 또는 없음>`
 - 나레이션: `<승인 문장 또는 없음>`
 - 상단 챕터 제목: `<chapter_label>`
-- 하단: `<원본 SRT | 나레이션 TTS | 논거·의견 2줄 | 없음>`
+- 하단: `<원본 SRT | 나레이션 TTS | 순차 논거·의견 2문장 | 없음>`
 - 논거·의견 1줄: `<문구 또는 없음>`
-- 논거·의견 2줄: `<문구 또는 없음>`
+- 순차 논거·의견 2문장: `<문구 또는 없음>`
 - 다음 카드: `<card_id | END>`
 
 위 블록을 실제 카드 순서대로 반복한다. 한 줄에는 한 beat만 쓴다.

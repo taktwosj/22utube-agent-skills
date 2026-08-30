@@ -11,10 +11,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-TARGET_CHARS_PER_LINE = 20
-MAX_LINES = 2
-TARGET_CHARS_PER_CUE = 40
-HARD_MAX_LINE_CHARS = 21
+TARGET_CHARS_PER_LINE = 15
+MAX_LINES = 1
+TARGET_CHARS_PER_CUE = 15
+HARD_MAX_LINE_CHARS = 15
 LOWER_MODES = {"SOURCE_TTS", "NARRATION_TTS", "VIDEO100_EXPLAINER", "NONE"}
 LEGACY_LOWER_MODE_ALIASES = {
     "SRT": "SRT",
@@ -30,7 +30,7 @@ WORK_NOTE_PATTERNS = (
 
 
 def display_length(line: str) -> int:
-    return len(line.strip())
+    return len(re.sub(r"\s+", "", line))
 
 
 def caption_rows(text: str) -> list[str]:
@@ -50,13 +50,16 @@ def validate_caption(text: str, *, label: str, exact_two_lines: bool = False) ->
         findings.append({"code": "CAPTION_EMPTY_LINE", "label": label})
     if not lines:
         return [{"code": "CAPTION_TEXT_EMPTY", "label": label}]
+    if exact_two_lines:
+        if len(lines) != 2:
+            return [{"code": "COMMENTARY_REQUIRES_EXACTLY_2_LINES", "label": label, "actual": len(lines)}]
+        findings: list[dict[str, Any]] = []
+        for index, line in enumerate(lines, start=1):
+            findings.extend(validate_caption(line, label=f"{label}:sequence={index}"))
+        return findings
     if len(lines) > MAX_LINES:
         findings.append(
             {"code": "CAPTION_MAX_LINES_EXCEEDED", "label": label, "actual": len(lines), "max": MAX_LINES}
-        )
-    if exact_two_lines and len(lines) != 2:
-        findings.append(
-            {"code": "COMMENTARY_REQUIRES_EXACTLY_2_LINES", "label": label, "actual": len(lines)}
         )
     lengths = [display_length(line) for line in lines]
     if lengths and max(lengths) > HARD_MAX_LINE_CHARS:

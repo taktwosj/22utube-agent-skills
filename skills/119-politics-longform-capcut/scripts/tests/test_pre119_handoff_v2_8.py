@@ -52,6 +52,18 @@ class Pre119HandoffV28Tests(unittest.TestCase):
                 "between_narration": "YES",
                 "lower_mode": "MIXED",
                 "cta_like_subscribe": "OFF",
+                "publication_report": {
+                    "title": "Fixture title",
+                    "content": {
+                        "simple_summary": "Fixture summary",
+                        "timeline": [{"at": "00:00", "label": "Opening"}],
+                        "sources": [{"label": "Fixture source", "url": None}],
+                    },
+                    "thumbnail": {
+                        "words": ["책임", "패배", "함께"],
+                        "sentences": ["Strongest", "Second", "Third"],
+                    },
+                },
                 "script_lock": {"current_final_script_sha256": digest},
             }
             handoff_path = package / "20_script" / "pre119_handoff.json"

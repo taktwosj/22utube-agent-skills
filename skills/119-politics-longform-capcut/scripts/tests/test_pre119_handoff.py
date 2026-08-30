@@ -68,6 +68,18 @@ next_card=END
             "route": "TOGUN_PRE119_TO_119_DIRECT",
             "editorial_owner": "TOGUN_PRE119",
             "source_state": "PRE119_SOURCE_CANDIDATE",
+            "publication_report": {
+                "title": "Fixture title",
+                "content": {
+                    "simple_summary": "Fixture summary",
+                    "timeline": [{"at": "00:00", "label": "Fixture opening"}],
+                    "sources": [{"label": "Fixture source", "url": None}],
+                },
+                "thumbnail": {
+                    "words": ["책임", "패배", "함께"],
+                    "sentences": ["Primary fixture", "Second fixture", "Third fixture"],
+                },
+            },
             "episode_id": "PL_20260809_PRE119",
             "project_name": "PL_20260809_PRE119_capcut_v1",
             "central_question": "What changed?",
@@ -242,6 +254,20 @@ next_card=END
         report = self.read_report()
         self.assertEqual(report["status"], "FAIL_PRE119_ASSEMBLY_SEED_INVALID")
         self.assertEqual(report["seed_error"], "CARD_1_CHAPTER_LABEL_REQUIRED:C001")
+
+    def test_publication_thumbnail_words_require_exactly_three_short_words(self) -> None:
+        digest = self.write_valid_packet()
+        handoff_path = self.package / "20_script" / "pre119_handoff.json"
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff["publication_report"]["thumbnail"]["words"] = ["너무긴단어입니다", "패배", "함께"]
+        handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+
+        result = self.run_validator(approved_sha=digest, evidence="user_message:approved")
+
+        self.assertNotEqual(result.returncode, 0)
+        report = self.read_report()
+        self.assertEqual(report["status"], "FAIL_PRE119_PUBLICATION_REPORT_INVALID")
+        self.assertEqual(report["publication_report_error"], "THUMBNAIL_WORD_MAX_5_REQUIRED:1")
 
     def test_approved_script_without_assembly_only_seed_is_blocked(self) -> None:
         digest = self.write_valid_packet(include_seed=False)
