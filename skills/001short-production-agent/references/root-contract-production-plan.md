@@ -67,7 +67,7 @@ A CapCut root archive can contain heterogeneous `draft_content.json` documents:
 - active timeline mirror
 - subdrafts/compound clips with unrelated layouts
 
-**Legacy v1 12-track note:** in the Windows `shrt white` root bundled at commit `cd41d74`, root and active timeline had 12 tracks, while five subdraft documents each had one unrelated track. That layout is historical evidence only, not the current production contract. The current `shrt_white_base_v3_15` root has 15 physical tracks; `shrt_white_base_v2_15` remains valid only for episodes without `SOURCE_CREDIT`. Unrelated subdrafts still must be classified by contracted anchor presence instead of a global track-count rule.
+**Legacy v1 12-track note:** in the Windows `shrt white` root bundled at commit `cd41d74`, root and active timeline had 12 tracks, while five subdraft documents each had one unrelated track. That layout is historical evidence only, not the current production contract. The current `shrt_white_base_v2_15` root has 15 physical tracks; unrelated subdrafts still must be classified by contracted anchor presence instead of a global track-count rule.
 
 Classify documents by contracted anchor presence:
 

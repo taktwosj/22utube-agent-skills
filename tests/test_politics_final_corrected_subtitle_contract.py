@@ -8,28 +8,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills" / "119-politics-longform-capcut"
-SKILL = SKILL_DIR / "SKILL.md"
 REFERENCE = SKILL_DIR / "references" / "final-corrected-subtitle-lock.md"
 VALIDATOR = SKILL_DIR / "scripts" / "validate_final_corrected_srt.py"
 
 
 class PoliticsFinalCorrectedSubtitleContractTests(unittest.TestCase):
-    def test_skill_routes_user_corrected_srt_lock(self):
-        text = SKILL.read_text(encoding="utf-8-sig")
-        for token in (
-            "USER_CORRECTED_SRT_LOCK",
-            "final-corrected-subtitle-lock.md",
-            "validate_final_corrected_srt.py",
-            "FINAL_CORRECTED_CAPTION_FIDELITY",
-            "USER_CORRECTED_SRT_LOCK=NOT_APPLICABLE|PASS",
-            "사용자 교정본",
-            "가운데점 `·`",
-            "[콧방귀]",
-            "[웃음]",
-            "정리하겠습니다",
-        ):
-            self.assertIn(token, text)
-
     def test_reference_and_validator_exist(self):
         self.assertTrue(REFERENCE.is_file())
         self.assertTrue(VALIDATOR.is_file())

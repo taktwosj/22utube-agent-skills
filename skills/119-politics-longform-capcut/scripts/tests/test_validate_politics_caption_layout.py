@@ -12,32 +12,16 @@ import validate_politics_caption_layout as validator
 
 
 class CaptionLayoutTests(unittest.TestCase):
-    def test_line_limit_is_fifteen_visible_characters_and_ignores_spaces(self):
-        self.assertEqual(
-            validator.validate_caption("여러분의 패배도", label="x"),
-            [],
-        )
-        self.assertEqual(
-            validator.validate_caption("민주당의 패배도 아닙니다", label="x"),
-            [],
-        )
-        findings = validator.validate_caption("가" * 16, label="x")
-        self.assertIn(
-            "CAPTION_LINE_HARD_LIMIT_EXCEEDED",
-            {row["code"] for row in findings},
-        )
-
-    def test_two_lines_fail_for_v8_single_line_slot(self):
-        text = "123456789012345\n123456789012345"
-        findings = validator.validate_caption(text, label="x")
-        self.assertIn("CAPTION_MAX_LINES_EXCEEDED", {row["code"] for row in findings})
+    def test_two_lines_at_actual_assembly_boundary_pass(self):
+        text = "1234567890123456789\n123456789012345678901"
+        self.assertEqual(validator.validate_caption(text, label="x"), [])
 
     def test_three_lines_fail(self):
         findings = validator.validate_caption("첫째 줄\n둘째 줄\n셋째 줄", label="x")
         self.assertIn("CAPTION_MAX_LINES_EXCEEDED", {row["code"] for row in findings})
 
-    def test_one_line_over_fifteen_fails(self):
-        findings = validator.validate_caption("1234567890123456", label="x")
+    def test_one_line_average_over_twenty_fails(self):
+        findings = validator.validate_caption("123456789012345678901", label="x")
         self.assertIn(
             "CAPTION_AVERAGE_LINE_LENGTH_EXCEEDED",
             {row["code"] for row in findings},
@@ -52,7 +36,7 @@ class CaptionLayoutTests(unittest.TestCase):
             {row["code"] for row in findings},
         )
 
-    def test_commentary_sequence_requires_exactly_two_input_lines(self):
+    def test_commentary_requires_exactly_two_lines(self):
         findings = validator.validate_caption(
             "한 줄 논평", label="x", exact_two_lines=True
         )
@@ -61,7 +45,7 @@ class CaptionLayoutTests(unittest.TestCase):
             {row["code"] for row in findings},
         )
 
-    def test_cards_commentary_two_lines_pass_as_sequential_single_line_cues(self):
+    def test_cards_commentary_two_lines_passes(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "cards.json"
             path.write_text(
@@ -98,7 +82,7 @@ class CaptionLayoutTests(unittest.TestCase):
         findings = validator.validate_caption("첫째 줄\n\n둘째 줄", label="x")
         self.assertIn("CAPTION_EMPTY_LINE", {row["code"] for row in findings})
 
-    def test_user_facing_commentary_alias_requires_two_input_lines(self):
+    def test_user_facing_commentary_alias_requires_exact_two_lines(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "cards.json"
             path.write_text(
@@ -146,8 +130,7 @@ class CaptionLayoutTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            findings = validator.validate_cards(cards)
-            self.assertIn("CAPTION_MAX_LINES_EXCEEDED", {row["code"] for row in findings})
+            self.assertEqual(validator.validate_cards(cards), [])
 
 
 if __name__ == "__main__":

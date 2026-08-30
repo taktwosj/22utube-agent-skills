@@ -13,7 +13,7 @@ SCRIPTS = SKILL / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT, V2_TRACK_LAYOUT
+from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 
 
 def load_root_builder():
@@ -33,9 +33,8 @@ class RootProvisionalShortV2OutputTest(unittest.TestCase):
         self.assertIs(helper.DEV_ONLY, True)
         self.assertNotIn("build_root_provisional_short.py", json.dumps(tools))
 
-    def test_canonical_root_contract_is_v3_15_with_v2_preserved(self):
-        self.assertEqual(TRACK_LAYOUT, "shrt_white_base_v3_15")
-        self.assertEqual(V2_TRACK_LAYOUT, "shrt_white_base_v2_15")
+    def test_canonical_root_contract_is_v2_15_with_a12_reserved_empty(self):
+        self.assertEqual(TRACK_LAYOUT, "shrt_white_base_v2_15")
         self.assertEqual(len(CANONICAL_TRACKS), 15)
         self.assertEqual(CANONICAL_TRACKS[-1], "A12_RESERVED_EMPTY")
 

@@ -5,7 +5,6 @@ import argparse
 import copy
 import hashlib
 import json
-from common import FRAME_TOLERANCE_US, range_within, ranges_match
 import re
 import subprocess
 import sys
@@ -16,18 +15,8 @@ SCRIPT_ROOT = Path(__file__).resolve().parent
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from audio_policy_matrix import (
-    A10_POLICIES, LEGACY_V1_URAKKAI_POLICY_REWRITES, MIXED_A9_A10_POLICIES,
-    URAKKAI_AUDIO_POLICIES,
-)
-from track_contract import CANONICAL_TRACKS, TEMPLATE_PROFILE, TRACK_LAYOUT
-from assembly_type_matrix import (
-    ALWAYS_CLEARED,
-    LEGACY_EXECUTION_STRATEGY_ALIASES,
-    assembly_type_definition,
-    validate_assembly_placement_rules,
-)
-from production_profile import resolve_production_profile
+from common import FRAME_TOLERANCE_US, ranges_match
+from track_contract import CANONICAL_TRACKS, TRACK_LAYOUT
 from schema_runtime import validate_schema
 import user_provided_media_overlay
 
@@ -41,20 +30,16 @@ ALLOWED_URAKKAI_AUDIO_POLICIES = [
     "A9_TTS_PLUS_A10_REASSEMBLED",
     "CAPTION_ONLY_MUTE_SOURCE",
     "SOURCE_ORDER_CLEAN_AUDIO",
-    "A9_TTS_PLUS_A10_SOURCE_CLIP",
 ]
-# The URAKKAI policies that keep A10.  Listing them by hand meant a new A10
-# policy could miss this set and silently lose the VIDEO-to-A10 count and range
-# checks below, so derive it from the canonical table instead.
-A10_AUDIO_POLICIES = frozenset(URAKKAI_AUDIO_POLICIES) & A10_POLICIES
+A10_AUDIO_POLICIES = {"A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_REASSEMBLED", "SOURCE_ORDER_CLEAN_AUDIO"}
 EXPECTED_SOURCE_AUTHORITY_LINE = (
-    r"Source authority: `%USERPROFILE%\agent-skills\skills\001short-production-agent`"
+    r"Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`"
 )
-EXPECTED_SOURCE_REPOSITORY_LINE = r"Worktree source repository: `%USERPROFILE%\agent-skills`"
+EXPECTED_SOURCE_REPOSITORY_LINE = r"Worktree source repository: `C:\Users\arajun\agent-skills`"
 EXPECTED_RUNTIME_ENTRYPOINT_LINES = {
-    "Codex": r"Codex: %USERPROFILE%\.codex\skills\001short-production-agent",
-    "Claude": r"Claude: %USERPROFILE%\.claude\skills\001short-production-agent",
-    "Hermes": r"Hermes: %USERPROFILE%\AppData\Local\hermes\skills\22utube\001short-production-agent",
+    "Codex": r"Codex: C:\Users\arajun\.codex\skills\001short-production-agent",
+    "Claude": r"Claude: C:\Users\arajun\.claude\skills\001short-production-agent",
+    "Hermes": r"Hermes: C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent",
 }
 EXPECTED_ESCALATION_OPTION_LINES = [
     "1. 별도 승인 — 이번 작업만",
@@ -62,7 +47,7 @@ EXPECTED_ESCALATION_OPTION_LINES = [
     "3. 스킬 수정하기 — 스킬 수정 폴더에서",
 ]
 EXPECTED_RELEASE_RECIPE_LINES = [
-    r"1. Isolated worktree derived from `%USERPROFILE%\agent-skills`",
+    r"1. Isolated worktree derived from `C:\Users\arajun\agent-skills`",
     "2. Tests",
     "3. Independent review",
     "4. Approved revision on GitHub `main`",
@@ -211,7 +196,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
     expected_grid_text_contract = {
         "target_a9_text_scope": "new_urakkai_a9_tts_only",
         "target_a9_text_max_lines": 2,
-        "target_a9_text_max_chars_per_line": 10,
+        "target_a9_text_max_chars_per_line": 15,
         "original_a9_text_max_lines": 2,
         "original_a9_text_max_chars_per_line": 15,
         "state_laser_max_lines": 2,
@@ -419,7 +404,7 @@ def validate_protocol_document(protocol: Dict[str, Any]) -> List[str]:
         "session_handoff_owner_must_remain_001",
         "old_episode_access_requires_explicit_resume",
         "state_advance_after_validator_pass_only",
-        "vmake_api_first",
+        "vmake_dom_first",
         "vmake_submit_after_source_identity",
         "vmake_candidate_integrity_only",
         "vmake_visual_quality_authority_user",
@@ -733,7 +718,7 @@ def validate_skill_contract(skill_root: Path, protocol: Dict[str, Any]) -> List[
                 errors.append("PROTOCOL_TOOLS_PRODUCTION_TRACKS_MISMATCH")
             if tools.get("root_profiles") != ["home_windows", "macmini"]:
                 errors.append("PROTOCOL_TOOLS_ROOT_PROFILES_MISMATCH")
-            if tools.get("template_profile") != TEMPLATE_PROFILE:
+            if tools.get("template_profile") != "shrt_white_base_v2":
                 errors.append("PROTOCOL_TOOLS_TEMPLATE_PROFILE_MISMATCH")
         except Exception:
             pass
@@ -841,22 +826,11 @@ def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
                 anchor == "A9_TEXT"
                 and placement.get("target_range_us") in user_audio_ranges.values()
             )
-            # One speaker caption per V column meant one line per beat, so a beat
-            # holding an exchange lost every line but one.  A speaker caption may
-            # now carry its own range as long as that range stays inside the beat
-            # it belongs to; the SRT is a single stream, so the caption lock still
-            # rejects any two that overlap.
-            speaker_caption = (
-                anchor == "A10_TEXT"
-                and row_range is not None
-                and range_within(placement.get("target_range_us"), row_range)
-            )
             if (
                 row_range is not None
                 and not ranges_match(placement.get("target_range_us"), row_range)
                 and not user_audio_placement
                 and not user_audio_caption
-                and not speaker_caption
             ):
                 errors.append(f"TIMELINE_TARGET_RANGE_MISMATCH:{row_index}:{anchor}")
             tracks.setdefault(anchor, []).append(placement)
@@ -900,9 +874,10 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
             return ["PRODUCTION_PLAN_V1_CURRENT_FIELDS_FORBIDDEN"]
         plan = copy.deepcopy(plan)
         if plan.get("production_mode") == "URAKKAI":
-            plan["audio_policy"] = LEGACY_V1_URAKKAI_POLICY_REWRITES.get(
-                plan.get("audio_policy"), plan.get("audio_policy")
-            )
+            plan["audio_policy"] = {
+                "A10_RETAINED_SYNC": "A10_REASSEMBLED_SYNC",
+                "A9_TTS_PLUS_A10_RETAINED": "A9_TTS_PLUS_A10_REASSEMBLED",
+            }.get(plan.get("audio_policy"), plan.get("audio_policy"))
             plan["audio_source"] = "GENERATED_TTS" if plan.get("audio_policy") == "TTS_ONLY_MUTE_SOURCE" else "REASSEMBLED_VOCAL_STEM"
         else:
             plan["audio_policy"] = "SOURCE_ORDER_CLEAN_AUDIO"
@@ -917,26 +892,6 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     modes = protocol.get("production_modes", {})
     if mode not in modes:
         return ["PRODUCTION_MODE_INVALID"]
-
-    profile_payload = plan.get("production_profile")
-    if profile_payload is not None:
-        try:
-            production_profile = resolve_production_profile(profile_payload)
-        except ValueError as exc:
-            errors.append(str(exc))
-        else:
-            if (
-                production_profile.selector["production_mode"] != mode
-                or production_profile.selector["assembly_type"]
-                != plan.get("assembly_type")
-                or production_profile.selector["audio_policy"] != plan.get("audio_policy")
-                or production_profile.execution_strategy != plan.get("execution_strategy")
-                or production_profile.audio_source != plan.get("audio_source")
-                or not set(production_profile.cleared_roles).issubset(
-                    set(plan.get("cleared_anchors", []))
-                )
-            ):
-                errors.append("PRODUCTION_PROFILE_PLAN_MISMATCH")
 
     duration = plan.get("total_duration_us")
     if not isinstance(duration, int) or isinstance(duration, bool) or duration <= 0:
@@ -972,50 +927,6 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     video = _segments(tracks, "VIDEO")
     audio = _segments(tracks, "A10")
     tts = _segments(tracks, "A9")
-    assembly_type_id = plan.get("assembly_type")
-    if assembly_type_id is not None:
-        try:
-            assembly_type = assembly_type_definition(assembly_type_id)
-        except ValueError as exc:
-            errors.append(str(exc))
-        else:
-            strategy = plan.get("execution_strategy")
-            legacy_strategy = (
-                profile_payload is None
-                and strategy in LEGACY_EXECUTION_STRATEGY_ALIASES.get(
-                    assembly_type.type_id, ()
-                )
-            )
-            if strategy != assembly_type.execution_strategy and not legacy_strategy:
-                errors.append("ASSEMBLY_TYPE_EXECUTION_STRATEGY_MISMATCH")
-            if (mode, plan.get("audio_policy")) not in assembly_type.allowed_mode_policies:
-                errors.append("ASSEMBLY_TYPE_AUDIO_ROUTE_MISMATCH")
-            declared_cleared = set(plan.get("cleared_anchors", []))
-            expected_cleared = set(ALWAYS_CLEARED) | set(assembly_type.cleared_roles)
-            for role in sorted(expected_cleared - declared_cleared):
-                errors.append(f"ASSEMBLY_TYPE_CLEAR_ANCHOR_MISSING:{role}")
-            for role in sorted(assembly_type.required_roles):
-                if not _segments(tracks, role):
-                    errors.append(f"ASSEMBLY_TYPE_REQUIRED_ROLE_MISSING:{role}")
-            for role in sorted(expected_cleared):
-                if _segments(tracks, role):
-                    errors.append(f"ASSEMBLY_TYPE_CLEARED_ROLE_POPULATED:{role}")
-            role_ranges = {
-                role: [
-                    tuple(segment["target_range_us"])
-                    for segment in _segments(tracks, role)
-                    if (
-                        isinstance(segment.get("target_range_us"), list)
-                        and len(segment["target_range_us"]) == 2
-                    )
-                ]
-                for role in tracks
-            }
-            errors.extend(validate_assembly_placement_rules(
-                assembly_type,
-                role_ranges,
-                role_ranges.get("VIDEO", []),
-            ))
     if _segments(tracks, "A12"):
         errors.append("A12_RESERVED_EMPTY")
 
@@ -1092,9 +1003,9 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
                 if len(matches) != 1 or matches[0].get("source_range_us") != segment.get("source_range_us"):
                     errors.append("URAKKAI_AUDIO_VIDEO_MAPPING_MISMATCH")
                     break
-            if audio_policy in MIXED_A9_A10_POLICIES and not tts:
+            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED" and not tts:
                 errors.append("URAKKAI_MIXED_A9_REQUIRED")
-            if audio_policy in MIXED_A9_A10_POLICIES:
+            if audio_policy == "A9_TTS_PLUS_A10_REASSEMBLED":
                 if _segments(tracks, "A11"):
                     errors.append("URAKKAI_MIXED_A11_FORBIDDEN")
                 for retained in audio:

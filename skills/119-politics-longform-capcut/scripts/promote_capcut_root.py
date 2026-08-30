@@ -23,11 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from capcut_material_paths import (
-    CAPCUT_DRAFT_ROOT_BUNDLE_ROOT,
-    CAPCUT_ROOT_BUNDLE_ROOT,
-    enforce_document_paths,
-)
+from capcut_material_paths import enforce_material_paths
 from root_bundle import (
     DEFAULT_ACTIVE_POINTER,
     ResolvedRoot,
@@ -249,13 +245,7 @@ def material_ids(document: dict[str, Any]) -> set[str]:
     return result
 
 
-def validate_root(
-    root: Path,
-    content_start_us: int,
-    *,
-    path_reference: Path | None = None,
-    draft_root_reference: Path | None = None,
-) -> dict[str, Any]:
+def validate_root(root: Path, content_start_us: int, *, path_reference: Path | None = None) -> dict[str, Any]:
     banned = [
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
@@ -277,23 +267,12 @@ def validate_root(
     if len(set(mirror_hashes)) != 1:
         raise RuntimeError("JSON_MIRROR_MISMATCH")
 
-    path_root = path_reference or root
-    for path in root.rglob("*"):
-        if not path.is_file() or path.suffix.lower() not in {".json", ".tmp"}:
-            continue
-        try:
-            value = json_load(path)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            continue
-        enforce_document_paths(
-            value,
-            project_root=path_root,
-            rebase_legacy_resources=False,
-            expected_key_paths={
-                "draft_root_path": (draft_root_reference or path_root.parent).as_posix()
-            },
-        )
     document = json_load(root / "draft_content.json")
+    enforce_material_paths(
+        document,
+        project_root=path_reference or root,
+        rebase_legacy_resources=False,
+    )
     duration_us = int(document["duration"])
     text_by_id = {item.get("id"): item for item in document["materials"].get("texts", [])}
     ids = material_ids(document)
@@ -655,39 +634,25 @@ def prepare_candidate(
             source_path: posix(stage / Path(target_path).relative_to(paths["root"]))
             for source_path, target_path in replacements.items()
         }
-        source_to_stage = {
-            source.as_posix(): stage.as_posix(),
-            str(source): str(stage),
-        }
-        stage_to_root = {
-            stage.as_posix(): paths["root"].as_posix(),
-            str(stage): str(paths["root"]),
-        }
         for old_path, value in parsed.items():
             relative = old_path.relative_to(stage)
             if len(relative.parts) >= 2 and relative.parts[:2] == ("Timelines", old_timeline_id):
                 relative = Path("Timelines", new_timeline_id, *relative.parts[2:])
             destination = stage / relative
-            value = rewrite_value(value, id_map, source_to_stage)
-            value = enforce_document_paths(
-                value,
-                project_root=stage,
-                rebase_legacy_resources=True,
-                exact_rewrites=stage_replacements,
-                root_aliases=(source.name,),
-                rewrite_key_paths={"draft_root_path": stage.parent.as_posix()},
-            )
-            value = rewrite_value(value, {}, stage_to_root)
-            value = enforce_document_paths(
-                value,
-                project_root=paths["root"],
-                rebase_legacy_resources=True,
-                exact_rewrites=replacements,
-                root_aliases=(stage.name,),
-                rewrite_key_paths={
-                    "draft_root_path": paths["root"].parent.as_posix()
-                },
-            )
+            if isinstance(value, dict) and "materials" in value:
+                enforce_material_paths(
+                    value,
+                    project_root=stage,
+                    rebase_legacy_resources=True,
+                    exact_rewrites=stage_replacements,
+                )
+                value = enforce_material_paths(
+                    value,
+                    project_root=paths["root"],
+                    rebase_legacy_resources=True,
+                    exact_rewrites=replacements,
+                )
+            value = rewrite_value(value, id_map, {})
             if isinstance(value, dict) and "tracks" in value and len(value.get("materials", {}).get("videos", [])) >= 2:
                 value["name"] = paths["root"].name
                 normalize_content(value, duration_us=duration_us, content_start_us=content_start_us)
@@ -707,34 +672,7 @@ def prepare_candidate(
             duration_us,
         )
 
-        with tempfile.TemporaryDirectory(prefix="capcut-root-portable-") as portable_temporary:
-            portable_root = Path(portable_temporary) / paths["root"].name
-            shutil.copytree(paths["root"], portable_root)
-            for path in portable_root.rglob("*"):
-                if not path.is_file() or path.suffix.lower() not in {".json", ".tmp"}:
-                    continue
-                try:
-                    value = json_load(path)
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    continue
-                value = enforce_document_paths(
-                    value,
-                    project_root=Path(CAPCUT_ROOT_BUNDLE_ROOT),
-                    rebase_legacy_resources=True,
-                    root_aliases=(paths["root"].name, CAPCUT_ROOT_BUNDLE_ROOT),
-                    rewrite_key_paths={
-                        "draft_root_path": CAPCUT_DRAFT_ROOT_BUNDLE_ROOT
-                    },
-                )
-                json_write(path, value)
-            static = validate_root(
-                portable_root,
-                content_start_us,
-                path_reference=Path(CAPCUT_ROOT_BUNDLE_ROOT),
-                draft_root_reference=Path(CAPCUT_DRAFT_ROOT_BUNDLE_ROOT),
-            )
-            archive_root(portable_root, paths["archive"])
-            portable_files = file_records(portable_root)
+        archive_root(paths["root"], paths["archive"])
         published.append(paths["archive"])
         manifest = {
             "status": "PASS_ARCHIVE_INTEGRITY",
@@ -758,7 +696,7 @@ def prepare_candidate(
                 ],
             },
             "static_validation": static,
-            "files": portable_files,
+            "files": file_records(paths["root"]),
         }
         json_write(paths["manifest"], manifest)
         published.append(paths["manifest"])

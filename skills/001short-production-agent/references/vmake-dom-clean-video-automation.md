@@ -4,49 +4,11 @@
 
 Use this reference whenever the operator says `VMAKE`, `VMAKE 클린영상`, `클린영상 뽑기`, `자막 제거 영상`, or asks to turn a source Short into a clean visual asset.
 
-Two routes exist. **The official API SDK is the default; the DOM automation in the rest of this file is the fallback** for when credentials are missing or the API rejects the job. Within the DOM route, prefer deterministic DOM/CDP operations over screen coordinates.
-
-## API route (default)
-
-Verified 2026-08-23 on the Windows PC. Faster and immune to the web app's single-tab session lock (`Vmake: active_in_other_tab`), which leaves the editor stuck on a spinner and blocks the DOM route entirely.
-
-| item | value |
-|---|---|
-| entry point | `https://vmake.ai/developers` — `Api Key` tab issues keys, `Doc` tab holds the SDK zip URL |
-| SDK (Windows) | `C:\Users\arajun\.local\share\vmake_sdk\` — `sdk\cli.py` plus `.venv` |
-| SDK (macOS) | `~/.local/share/vmake_sdk/` — same layout |
-| credentials | `MT_AK` / `MT_SK` in `~/.openclaw/.env` (Windows: `C:\Users\arajun\.openclaw\.env`); `core/client.py` reads these env names |
-| dependencies | `requests`, `alibabacloud_oss_v2` |
-| clean task | `videoscreenclear` (= the UI's "Smart"); `Smart pro` is Pro-plan only and hits a paywall |
-
-Auth probe first — it consumes no credit, lists the tasks the account may run, and is the
-credential preflight.  If it fails, the credentials are missing or the plan does not cover the
-task: take the DOM fallback instead of retrying.
-
-```text
-cli.py list-tasks
-```
-
-`cli.py run-task` prints its whole result to stdout, and that result carries `output_urls[0]`,
-a signed URL.  **Never run it with stdout attached to the transcript.**  Redirect the result to
-a local file, then fetch from that file, so the URL only ever exists on disk:
-
-```text
-cli.py run-task --task videoscreenclear --input <source.mp4> --params '{"parameter":{"rsp_media_type":"url"}}' > <scratch>/vmake_result.json
-python -c "import json,sys,urllib.request; u=json.load(open(sys.argv[1],encoding='utf-8'))['output_urls'][0]; urllib.request.urlretrieve(u, sys.argv[2])" <scratch>/vmake_result.json <episode>/40_assets_used/clean_source.mp4
-```
-
-Delete `vmake_result.json` once the fetch succeeds.  Record only the local path, SHA-256,
-duration, and resolution — never the URL, and never in a receipt.  A 7 s source completes in
-well under a minute; roughly two minutes for 25 s.
-
-The operator issues and stores the keys. Never read, echo, or copy plaintext `MT_AK`/`MT_SK` values, and never move them between machines on the operator's behalf.
-
-Record `vmake_route=VMAKE_API_SDK` in state. Everything downstream is unchanged: the candidate receipt, the duration gate (≤ 1.0 s difference), resolution as a recorded value only, and the no-agent-visual-QA rule all apply exactly as in the DOM route.
+This is browser UI automation, not a VMake API integration. Prefer deterministic DOM/CDP operations over screen coordinates.
 
 ## Fast production rule
 
-Submit the verified source to VMake immediately at episode intake through the API route above; the Aside upload is the first fallback and URL submission the second, in that order. Then continue source analysis, blueprint, and urakkai while the job runs. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
+Upload the verified source to VMake through Aside immediately at episode intake, and fall back to URL submission only when the upload route is unavailable. Then continue source analysis, blueprint, and urakkai while the page processes. The producer may spend at most three minutes establishing the DOM upload/poll job; after that, poll current DOM state only and do not sit at the page or re-upload. If the clean result is still pending when CapCut is near and at least ten minutes remain, make a fast review draft from the original visual and later replace VIDEO with the verified clean asset. This is a review-speed exception, never permission to promote an unverified clean file.
 
 ## Scope routing
 

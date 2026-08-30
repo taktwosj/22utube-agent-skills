@@ -25,19 +25,9 @@ from common import inspect_write_target, manifest_sha256, read_json, result, sha
 from schema_runtime import validate_schema
 from validate_design_lock import validate_handoff
 from validate_audio_caption import validate_audio_caption
-from validate_build_inputs import CONTRACT_ONLY_ROLES, validate_build_inputs
+from validate_build_inputs import validate_build_inputs
 import user_provided_media_overlay
-from track_contract import (
-    A10_TEXT_TRACK_BY_COLOR,
-    A12_INDEX,
-    LOGICAL_ROLE_BY_LAYOUT,
-    LOGICAL_ROLE_BY_TRACK,
-    STATE_TRACK_BY_EFFECT,
-    TEMPLATE_PROFILE_BY_TRACK_LAYOUT,
-    TRACK_INDEX,
-    profile_supports_role,
-    track_template_profile,
-)
+from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, LOGICAL_ROLE_BY_TRACK, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -65,29 +55,16 @@ def _segments(model) -> list[dict]:
 
 
 def validate_v2_role_routing(model, contract: dict) -> list[dict]:
-    layout = contract.get("track_layout_version")
-    logical_role_by_track = LOGICAL_ROLE_BY_LAYOUT.get(layout)
-    if logical_role_by_track is None:
+    if contract.get("track_layout_version") != TRACK_LAYOUT:
         return [_error("V2_TRACK_LAYOUT_REQUIRED")]
     declared_extensions, extension_errors = user_provided_media_overlay.declared_track_layout_extension(
         contract.get("track_layout_extension")
     )
     if extension_errors:
         return extension_errors
-    if len(model.tracks) != len(logical_role_by_track) + len(declared_extensions):
+    if len(model.tracks) != len(LOGICAL_ROLE_BY_TRACK) + len(declared_extensions):
         return [_error("V2_TRACK_LAYOUT_MISMATCH", observed=len(model.tracks))]
     errors: list[dict] = []
-    default_template_profile = TEMPLATE_PROFILE_BY_TRACK_LAYOUT[layout]
-    declared_template_profile = contract.get("root_template_profile")
-    template_profile = declared_template_profile or default_template_profile
-    try:
-        template = track_template_profile(template_profile)
-    except ValueError:
-        template = track_template_profile(default_template_profile)
-        errors.append(_error("TRACK_LAYOUT_TEMPLATE_PROFILE_MISMATCH"))
-    if template.track_layout != layout:
-        errors.append(_error("TRACK_LAYOUT_TEMPLATE_PROFILE_MISMATCH"))
-        template = track_template_profile(default_template_profile)
     materials = {
         row.get("id"): row for row in iter_materials(model.materials)
         if isinstance(row.get("id"), str)
@@ -100,37 +77,24 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
         if row.get("role") == "VIDEO" and isinstance(row.get("end"), int)
     ]
     timeline_total = max(video_ends, default=0)
-    role_text = contract.get("approved_role_text", {})
-    source_credit_declared = "SOURCE_CREDIT" in role_text
-    source_credit_supported = profile_supports_role(template.name, "SOURCE_CREDIT")
-    if source_credit_declared and not source_credit_supported:
-        errors.append(_error("SOURCE_CREDIT_V3_REQUIRED"))
-    full_span_roles = list(template.full_span_roles)
-    if source_credit_supported and source_credit_declared:
-        full_span_roles.append("SOURCE_CREDIT")
-    for role in full_span_roles:
+    for role in ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT"):
         index = TRACK_INDEX[role]
         segments = model.tracks[index].get("segments", [])
         timerange = _range(segments[0]) if len(segments) == 1 else None
         if timeline_total <= 0 or timerange is None or timerange[:2] != (0, timeline_total):
             errors.append(_error("FULL_SPAN_ANCHOR_MISMATCH", role=role))
-    if source_credit_supported and not source_credit_declared:
-        if model.tracks[TRACK_INDEX["SOURCE_CREDIT"]].get("segments", []):
-            errors.append(_error("SOURCE_CREDIT_UNDECLARED_PRESENT"))
     for segment in _segments(model):
         index = segment["_actual_track_index"]
-        if index >= len(logical_role_by_track):
+        if index >= len(LOGICAL_ROLE_BY_TRACK):
             continue
-        expected = logical_role_by_track[index]
+        expected = LOGICAL_ROLE_BY_TRACK[index]
         if index == A12_INDEX or segment.get("role") != expected:
             errors.append(_error(
                 "V2_ROLE_TRACK_MISMATCH", segment_id=segment.get("id"),
                 role=segment.get("role"), track_index=index,
             ))
-    authority_roles = ["T1", "T2"]
-    if source_credit_supported and source_credit_declared:
-        authority_roles.append("SOURCE_CREDIT")
-    for role in authority_roles:
+    role_text = contract.get("approved_role_text", {})
+    for role in ("T1", "T2"):
         index = TRACK_INDEX[role]
         segments = model.tracks[index].get("segments", [])
         material = materials.get(segments[0].get("material_id")) if len(segments) == 1 else None
@@ -1148,12 +1112,7 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
         handoff_path = Path(evidence["handoff_path"]).resolve()
         source_identity_path = Path(evidence["source_identity_path"]).resolve()
         timeline_path = Path(evidence["timeline_path"]).resolve()
-        verified = validate_handoff(
-            handoff_path,
-            source_identity_path,
-            timeline_path,
-            template_profile=contract["root_template_profile"],
-        )
+        verified = validate_handoff(handoff_path, source_identity_path, timeline_path)
     except (OSError, ValueError, TypeError, KeyError):
         return [_error("DESIGN_LOCK_EVIDENCE_INVALID")], None
     if verified.get("status") != "PASS":
@@ -1178,23 +1137,10 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
     approved_rows = sorted(
         approved_timeline.get("segments", []), key=lambda row: (row.get("start", 0), row.get("segment_id", ""))
     )
-    # The credit lane is declared in v_plan, so the builder injects it into the
-    # contract and the approved timeline never carries it.  It is excluded here
-    # for the same reason it is excluded in validate_build_inputs.
-    contract_only_ids = {
-        row.get("segment_id") for row in contract.get("timeline", [])
-        if row.get("role") in CONTRACT_ONLY_ROLES
-    }
-    contract_rows = [
-        row for row in contract.get("timeline", [])
-        if row.get("role") not in CONTRACT_ONLY_ROLES
-    ]
-    contract_order = [
-        segment_id for segment_id in contract.get("approved_actual_order") or []
-        if segment_id not in contract_only_ids
-    ]
+    contract_rows = contract.get("timeline", [])
     if (
-        [row.get("segment_id") for row in approved_rows] != contract_order
+        [row.get("segment_id") for row in approved_rows]
+        != contract.get("approved_actual_order")
         or len(approved_rows) != len(contract_rows)
         or any(
             any(approved.get(field) != planned.get(field) for field in ("segment_id", "role", "start", "duration"))

@@ -27,17 +27,11 @@ description: Use only when a political-longform request explicitly contains CapC
 
 다음 설치 경로의 파일은 직접 create·edit·copy·delete·relink하지 않는다.
 
-- `%USERPROFILE%\.codex\skills\119-politics-longform-capcut`
-- `%USERPROFILE%\.claude\skills\119-politics-longform-capcut`
-- `%USERPROFILE%\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut`
+- `C:\Users\arajun\.codex\skills\119-politics-longform-capcut`
+- `C:\Users\arajun\.claude\skills\119-politics-longform-capcut`
+- `C:\Users\arajun\AppData\Local\hermes\skills\22utube\119-politics-longform-capcut`
 
-119 스킬 변경은 Git 정본 저장소 `taktwosj/22utube-agent-skills`의 `skills/119-politics-longform-capcut`에서만 수행한다. 공유 정본은 원격 `main`이다.
-
-로컬 작업 경로는 고정하지 않는다. 그 저장소의 깨끗한 worktree면 어디든 된다. 특정 PC나 특정 절대경로를 정본이라고 부르지 않는다. 어떤 경로가 정본인지 확인할 때는 `git remote -v`로 저장소를 확인하고 `git log`로 해당 커밋이 `main`에 있는지 본다.
-
-변경은 commit하고 `main`에 반영한 뒤, 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
-
-브랜치에만 있고 `main`에 없는 변경은 아직 공유 정본이 아니다. 설치본이나 `main`을 읽고 최신이라고 단정하지 마라. 둘 다 마지막 release 시점의 상태이며 그 사이의 브랜치 작업은 보이지 않는다.
+119 스킬 변경은 Git 정본 `C:\Users\arajun\agent-skills\skills\119-politics-longform-capcut`에서만 수행한다. 변경을 commit한 뒤 동일한 source commit에서 공식 release `publish → activate → verify`를 실행한다.
 
 ## 생산 중 계약 충돌
 
@@ -84,8 +78,8 @@ CARD_TYPE
 챕터 제목·훅
 나레이션 대사
 HTML/CSS 설명카드 문구
-하단 SRT | 순차 논평 2문장 | NONE
-논평 입력 2줄(화면에는 한 번에 한 줄)
+하단 SRT | COMMENTARY_2LINE | NONE
+논평 2줄
 CTA 정책
 WHY_THIS_SEGMENT
 ```
@@ -152,8 +146,6 @@ build 후 active draft 직접 수술
 
 A–D는 다른 작업의 state·산출물·CapCut draft·`episode_cards.json`을 수정하지 않는다. 모두 준비된 뒤 join owner 한 명만 실제 산출물을 `episode_cards.json`으로 합친다. 이 파일이 유일한 조립 Source of Truth다.
 
-현재 조립 기준은 사용자 수동 `V8_MANUAL_OVERLAY_65` 근본이다. [clean-assembly-harness.md](references/clean-assembly-harness.md)를 먼저 읽고 `build_politics_v8_project.py`로 clean build한다. 기존 active v7 builder로 자동 후퇴하지 않는다. 파일명·테스트 미디어 이름이 아니라 12개 고정 트랙의 역할·geometry·문구 슬롯과 경로 경계를 계약으로 사용한다.
-
 ## 전체 하단 자막 화면 계약
 
 적용 대상:
@@ -167,30 +159,28 @@ VIDEO100_EXPLAINER
 잠금값:
 
 ```text
-TARGET_CHARS_PER_LINE = 15
-MAX_LINES             = 1
-TARGET_CHARS_PER_CUE  = 15
-HARD_MAX_LINE_CHARS   = 15
+TARGET_CHARS_PER_LINE = 20
+MAX_LINES             = 2
+TARGET_CHARS_PER_CUE  = 40
+HARD_MAX_LINE_CHARS   = 21
 ```
 
-- `TARGET_CHARS_PER_LINE`도 `15`다. 한 cue는 공백 제외 15자 이하 한 줄만 표시한다.
-- 공백은 세지 않고 문장부호는 센다.
-- 한 cue 전체와 한 줄 hard max가 모두 15자를 넘으면 FAIL이다.
+- 평균 한 줄 20자를 목표로 하고 화면에는 최대 2줄만 표시한다.
+- 줄 앞뒤 공백을 제외하고 내부 공백·문장부호를 포함해 센다.
+- 두 줄 전체 40자, 한 줄 hard max 21자를 넘으면 FAIL이다.
 - 긴 문장은 글자 크기로 축소하지 않고 시간상 연속 cue로 분할한다.
 - 원본 SRT·직접인용·승인 나레이션 문장은 축약·의역하지 않는다.
-- `COMMENTARY_2LINE` 입력은 승인 문장 2개를 뜻하며 builder가 같은 한 줄 트랙에 시간상 순차 배치한다. 두 문장을 동시에 2줄로 표시하지 않는다.
+- `VIDEO100_EXPLAINER`는 정확히 2줄이어야 한다.
 - 3줄, 빈 줄, 작업 메모형 문구는 FAIL이다.
 - SRT와 `VIDEO100_EXPLAINER`를 같은 시간대에 함께 표시하지 않는다.
 
 ## 민주블루 HTML 카드
 
-`DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`과 `DEMOCRATIC_BLUE_INSET_CARD_V2`는 문서 규칙이 아니라 실제 템플릿·렌더러를 사용한다. V2는 근본 프로젝트의 배경·띠 위에 얹는 이미지 레이어다. 출력 래스터는 `1920×1080`만 허용하며, builder가 수동 근본과 같은 `scale=0.65`, 화면 `x=336, y=189, 1248×702` 프레임으로 배치한다.
+`DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`은 문서 규칙이 아니라 실제 템플릿·렌더러를 사용한다.
 
 ```text
 templates/democratic_blue_center_info_card_v1.html
 templates/democratic_blue_center_info_card_v1.css
-templates/democratic_blue_inset_card_v2.html
-templates/democratic_blue_inset_card_v2.css
 scripts/render_democratic_blue_card.py
 ```
 
@@ -210,7 +200,7 @@ scripts/render_democratic_blue_card.py
 - ASR cue가 편집 컷을 정하지 않는다. 실제 컷에서 자막을 split 또는 clamp한다.
 - 목표 길이·원본/나레이션 비율은 사용자 절대 LOCK이 아니면 `[EST]`다.
 - 실제 source와 narration duration을 사용한다.
-- 업로드·썸네일·렌더는 사용자 명시 요청이 있는 별도 단계다. 정상 조립은 항상 `WAIT_USER_CAPCUT_CHECK`에서 멈춘다. 사용자가 화면 확인 완료와 MP4 export를 각각 명시한 `2pow 22factory MCP` export job만 [capcut-assembly.md](references/capcut-assembly.md#승인-후-mcp-export)의 제한된 후속 절차를 사용할 수 있다.
+- 업로드·썸네일·렌더는 사용자 명시 요청이 있는 별도 단계다.
 
 ## 실패와 재개
 
@@ -253,4 +243,4 @@ VISUAL_GATE
 
 `MEDIA_RELINK=PASS`, `MEDIA_RESOLUTION=PASS`, `VISUAL_GATE=PASS`가 모두 있어야 CapCut 제작 완료다. 정적 JSON 검사나 GRID는 실제 화면 승인 증거가 아니다. `MP4`와 `UPLOAD`는 실행하지 않았으면 `NOT RUN`이다.
 
-정상 조립 자동화의 사용자 전달 경계는 `PROJECT_BUILD=PASS` 뒤다. 프로젝트를 자동으로 열지 않고 `프로젝트 파일명`, `프로젝트 전체 경로`, `미디어 폴더 전체 경로`를 보고한 뒤 `WAIT_USER_CAPCUT_CHECK`로 멈춘다. 이 시점의 `MEDIA_RELINK`, `MEDIA_RESOLUTION`, `VISUAL_GATE`는 `NOT RUN — USER MANUAL`이며 CapCut 제작 완료라고 부르지 않는다. 별도 승인 후 MCP export는 이 정지 경계를 지우지 않고, 사용자 확인 뒤 새 job으로만 시작한다.
+자동화의 사용자 전달 경계는 `PROJECT_BUILD=PASS` 뒤다. 프로젝트를 자동으로 열지 않고 `프로젝트 파일명`, `프로젝트 전체 경로`, `미디어 폴더 전체 경로`를 보고한 뒤 `WAIT_USER_CAPCUT_CHECK`로 멈춘다. 이 시점의 `MEDIA_RELINK`, `MEDIA_RESOLUTION`, `VISUAL_GATE`는 `NOT RUN — USER MANUAL`이며 CapCut 제작 완료라고 부르지 않는다.

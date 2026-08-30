@@ -17,12 +17,12 @@ SCHEMA = SKILL / "schemas" / "executable_protocol.schema.json"
 PLAN_SCHEMA = SKILL / "schemas" / "executable_production_plan.schema.json"
 COMPLETION_SCHEMA = SKILL / "schemas" / "completion_report.schema.json"
 VALIDATOR = SKILL / "scripts" / "validate_executable_protocol.py"
-SOURCE_AUTHORITY = r"%USERPROFILE%\agent-skills\skills\001short-production-agent"
-SOURCE_REPOSITORY = r"%USERPROFILE%\agent-skills"
+SOURCE_AUTHORITY = r"C:\Users\arajun\agent-skills\skills\001short-production-agent"
+SOURCE_REPOSITORY = r"C:\Users\arajun\agent-skills"
 RUNTIME_ENTRYPOINTS = {
-    "Codex": r"%USERPROFILE%\.codex\skills\001short-production-agent",
-    "Claude": r"%USERPROFILE%\.claude\skills\001short-production-agent",
-    "Hermes": r"%USERPROFILE%\AppData\Local\hermes\skills\22utube\001short-production-agent",
+    "Codex": r"C:\Users\arajun\.codex\skills\001short-production-agent",
+    "Claude": r"C:\Users\arajun\.claude\skills\001short-production-agent",
+    "Hermes": r"C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent",
 }
 
 
@@ -697,62 +697,6 @@ class ExecutableProtocolContractTest(unittest.TestCase):
 
         self.assertEqual(module.validate_production_plan(caption_only, protocol), [])
 
-        typed = json.loads(json.dumps(caption_only))
-        typed["assembly_type"] = "1"
-        typed["execution_strategy"] = "caption_only"
-        typed["cleared_anchors"] = [
-            "A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH",
-            "A9", "A9_TEXT", "A10", "A10_TEXT",
-        ]
-        self.assertEqual(module.validate_production_plan(typed, protocol), [])
-
-        profiled = json.loads(json.dumps(typed))
-        profiled["production_profile"] = {
-            "schema_version": "001short-production-profile-v1",
-            "profile_id": "fixture-caption-only",
-            "assembly_type": "1",
-            "template_profile": "shrt_white_base_v3",
-            "production_mode": "URAKKAI",
-            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE",
-        }
-        self.assertEqual(module.validate_production_plan(profiled, protocol), [])
-
-        profile_drift = json.loads(json.dumps(profiled))
-        profile_drift["assembly_type"] = "5"
-        self.assertIn(
-            "PRODUCTION_PROFILE_PLAN_MISMATCH",
-            module.validate_production_plan(profile_drift, protocol),
-        )
-
-        wrong_strategy = json.loads(json.dumps(typed))
-        wrong_strategy["execution_strategy"] = "full_tts"
-        self.assertIn(
-            "ASSEMBLY_TYPE_EXECUTION_STRATEGY_MISMATCH",
-            module.validate_production_plan(wrong_strategy, protocol),
-        )
-
-        required_missing = json.loads(json.dumps(typed))
-        for row in required_missing["timeline"]:
-            row["placements"] = [
-                placement for placement in row["placements"]
-                if placement["anchor"] != "STATE"
-            ]
-        self.assertIn(
-            "ASSEMBLY_TYPE_REQUIRED_ROLE_MISSING:STATE",
-            module.validate_production_plan(required_missing, protocol),
-        )
-
-        cleared_populated = json.loads(json.dumps(typed))
-        cleared_populated["timeline"][0]["placements"].append({
-            "anchor": "A9", "operation": "clone_template_segment",
-            "asset_key": "tts_01", "target_range_us": [0, 1_000_000],
-            "volume": 1,
-        })
-        self.assertIn(
-            "ASSEMBLY_TYPE_CLEARED_ROLE_POPULATED:A9",
-            module.validate_production_plan(cleared_populated, protocol),
-        )
-
     def test_urakkai_mixed_policy_accepts_retained_a10_and_generated_a9(self):
         module = load_validator()
         protocol = module.load_protocol(PROTOCOL)
@@ -778,93 +722,6 @@ class ExecutableProtocolContractTest(unittest.TestCase):
         mixed["timeline"][0]["placements"][1]["volume"] = 0
 
         self.assertEqual(module.validate_production_plan(mixed, protocol), [])
-        speaker_exchange = copy.deepcopy(mixed)
-        speaker_exchange["timeline"][0]["placements"] = [
-            placement
-            for placement in speaker_exchange["timeline"][0]["placements"]
-            if placement["anchor"] != "A10_TEXT"
-        ] + [
-            {
-                "anchor": "A10_TEXT", "operation": "replace_text_preserve_style",
-                "target_range_us": [0, 500_000], "text": "speaker one",
-            },
-            {
-                "anchor": "A10_TEXT", "operation": "replace_text_preserve_style",
-                "target_range_us": [500_000, 1_000_000], "text": "speaker two",
-            },
-        ]
-        self.assertEqual(
-            module.validate_production_plan(speaker_exchange, protocol), []
-        )
-
-        speaker_outside_beat = copy.deepcopy(speaker_exchange)
-        speaker_outside_beat["timeline"][0]["placements"][-1]["target_range_us"] = [
-            500_000, 1_100_000,
-        ]
-        self.assertTrue(any(
-            error.endswith(":A10_TEXT")
-            and error.startswith("TIMELINE_TARGET_RANGE_MISMATCH:")
-            for error in module.validate_production_plan(speaker_outside_beat, protocol)
-        ))
-        typed_mixed = copy.deepcopy(mixed)
-        typed_mixed["assembly_type"] = "4"
-        typed_mixed["execution_strategy"] = "tts_intro_original_body"
-        typed_mixed["cleared_anchors"] = [
-            "A11", "A12", "A12_RESERVED_EMPTY", "STATE_GLITCH",
-        ]
-        typed_mixed["timeline"][0]["placements"] = [
-            placement for placement in typed_mixed["timeline"][0]["placements"]
-            if placement["anchor"] != "A10_TEXT"
-        ]
-        typed_mixed["timeline"][1]["placements"].append({
-            "anchor": "A10_TEXT", "operation": "replace_text_preserve_style",
-            "target_range_us": [1_000_000, 2_000_000], "text": "speaker body",
-        })
-        self.assertEqual(module.validate_production_plan(typed_mixed, protocol), [])
-
-        type_five_intro_only = copy.deepcopy(typed_mixed)
-        type_five_intro_only["assembly_type"] = "5"
-        type_five_intro_only["execution_strategy"] = "narration_plus_speaker"
-        self.assertIn(
-            "ASSEMBLY_TYPE_A9_BODY_REQUIRED",
-            module.validate_production_plan(type_five_intro_only, protocol),
-        )
-
-        type_five_body = copy.deepcopy(type_five_intro_only)
-        type_five_body["timeline"][1]["placements"].extend([
-            {
-                "anchor": "A9", "operation": "clone_template_segment",
-                "asset_key": "tts_02", "source_range_us": [0, 1_000_000],
-                "target_range_us": [1_000_000, 2_000_000], "volume": 1,
-            },
-            {
-                "anchor": "A9_TEXT", "operation": "replace_text_preserve_style",
-                "target_range_us": [1_000_000, 2_000_000], "text": "body narration",
-            },
-        ])
-        type_five_body["timeline"][1]["placements"][1]["volume"] = 0
-        self.assertEqual(
-            module.validate_production_plan(type_five_body, protocol), []
-        )
-
-        body_as_type_four = copy.deepcopy(type_five_body)
-        body_as_type_four["assembly_type"] = "4"
-        body_as_type_four["execution_strategy"] = "tts_intro_original_body"
-        self.assertIn(
-            "ASSEMBLY_TYPE_A9_INTRO_ONLY",
-            module.validate_production_plan(body_as_type_four, protocol),
-        )
-
-        missing_speaker_caption = copy.deepcopy(typed_mixed)
-        for row in missing_speaker_caption["timeline"]:
-            row["placements"] = [
-                placement for placement in row["placements"]
-                if placement["anchor"] != "A10_TEXT"
-            ]
-        self.assertIn(
-            "ASSEMBLY_TYPE_REQUIRED_ROLE_MISSING:A10_TEXT",
-            module.validate_production_plan(missing_speaker_caption, protocol),
-        )
         plan_schema = json.loads(PLAN_SCHEMA.read_text(encoding="utf-8"))
         self.assertIn(
             "A9_TTS_PLUS_A10_REASSEMBLED",
@@ -977,7 +834,6 @@ class ExecutableProtocolContractTest(unittest.TestCase):
                 "A9_TTS_PLUS_A10_REASSEMBLED",
                 "CAPTION_ONLY_MUTE_SOURCE",
                 "SOURCE_ORDER_CLEAN_AUDIO",
-                "A9_TTS_PLUS_A10_SOURCE_CLIP",
             ],
         )
         self.assertIs(clean_only.get("explicit_exception_to_multi_cut_gate"), True)

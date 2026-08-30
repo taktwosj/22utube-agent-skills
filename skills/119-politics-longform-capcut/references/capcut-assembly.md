@@ -78,19 +78,6 @@ UPLOAD=NOT RUN
 
 사용자가 직접 CapCut을 열고 확인한다. 정적 build를 전체 CapCut 제작 완료로 승격하지 않는다.
 
-## 승인 후 MCP export
-
-정상 조립은 위 경계에서 끝난다. 이후 사용자가 `USER_CAPCUT_CHECK_PASS`와 `APPROVE_CAPCUT_EXPORT`를 각각 명시한 `2pow 22factory MCP` export job만 다음을 수행할 수 있다.
-
-1. build/readback과 일치하는 정확한 기존 프로젝트 하나를 연다. 이름만 비슷하거나 evidence가 없는 프로젝트는 거부한다.
-2. 프로젝트 내용을 수정하지 않고 입력 응답과 visual/readback 상태를 재확인한다. 비밀번호·결제·로그인·macOS 권한창·프로젝트 불일치·offline media가 보이면 중단한다.
-3. 회차의 새 `60_export/<episode_id>_<timestamp>.mp4`로 내보낸다. 기존 파일을 덮어쓰지 않는다.
-4. 완료 표시와 size/mtime 안정화를 확인한 뒤 ffprobe로 MP4 container, video stream, positive duration, width, height를 검증한다.
-5. `PROJECT_BUILD`, `USER_CAPCUT_CHECK`, `EXPORT`, `MP4_CREATED`, `MP4_VALIDATED`, `MCP_ARTIFACT_AVAILABLE`, `REMOTE_FILE_RETRIEVAL`, `UPLOAD`을 별도 상태로 기록한다.
-6. MCP의 `factory_artifact`가 episode-local 파일의 metadata와 `resource_link`를 반환하고, 원격 client가 같은 SHA의 실제 bytes를 읽어 다시 검사하기 전에는 파일 전달 완료라고 하지 않는다.
-
-이 export 승인은 draft 수정·삭제·업로드·게시 승인이 아니다. MCP/tunnel이 로컬 경로 문자열만 돌려준 상태는 `MCP_ARTIFACT_AVAILABLE=FAIL`이다.
-
 ## Build 이후 수정 금지
 
 BUILD 뒤 active draft에서 CTA·chapter·source label·lower text·card media·template·attachment·history metadata를 직접 수술하지 않는다.
@@ -122,12 +109,12 @@ python scripts/capture_politics_relink_readback.py `
 실제 화면에서 다음을 확인한다.
 
 ```text
-모든 하단 자막 한 번에 한 줄
-공백 제외 15자/줄 이하
-자동 줄바꿈 2줄 이상 없음
+모든 하단 자막 최대 2줄
+평균 15자/줄 기준
+자동 줄바꿈 3줄 없음
 글자 과도 축소 없음
 얼굴·핵심 정보 가림 없음
-V8 카드 이미지 화면 `x=336,y=189,1248×702`
+HTML 카드 하단 30% 안전
 SRT와 논평 동시 표시 없음
 CTA 승인값 일치
 작업 메모 노출 없음

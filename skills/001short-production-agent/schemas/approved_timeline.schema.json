@@ -8,7 +8,7 @@
     "episode_id": {"type": "string", "minLength": 1},
     "source_fingerprint": {"type": "string", "minLength": 1},
     "production_mode": {"enum": ["URAKKAI", "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED"]},
-    "audio_policy": {"enum": ["SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED", "A9_TTS_PLUS_A10_SOURCE_CLIP", "CAPTION_ONLY_MUTE_SOURCE"]},
+    "audio_policy": {"enum": ["SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE"]},
     "primary_speaker_id": {"type": "string", "minLength": 1},
     "segments": {
       "type": "array",

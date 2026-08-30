@@ -205,16 +205,3 @@ def ranges_match(a: object, b: object, tolerance: int = FRAME_TOLERANCE_US) -> b
     if len(a) != 2 or len(b) != 2:
         return False
     return all(times_match(x, y, tolerance) for x, y in zip(a, b))
-
-
-def range_within(inner: object, outer: object, tolerance: int = FRAME_TOLERANCE_US) -> bool:
-    """True when one [start, end] range sits inside another, frame tolerance aside."""
-    if not (isinstance(inner, (list, tuple)) and isinstance(outer, (list, tuple))):
-        return False
-    if len(inner) != 2 or len(outer) != 2:
-        return False
-    if not all(isinstance(value, int) and not isinstance(value, bool) for value in (*inner, *outer)):
-        return False
-    if inner[1] <= inner[0]:
-        return False
-    return inner[0] >= outer[0] - tolerance and inner[1] <= outer[1] + tolerance

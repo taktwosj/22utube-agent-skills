@@ -34,25 +34,10 @@ import validate_design_lock
 import validate_executable_protocol
 import resolve_shorts_capcut_root
 import user_provided_media_overlay
-from audio_policy_matrix import (  # noqa: F401
-    A10_POLICIES, MIXED_A9_A10_POLICIES, MODE_SOURCES_BY_POLICY,
-    SOURCE_CLIP_A10_POLICIES, STEM_POLICIES, TTS_POLICIES,
-)
+from audio_policy_matrix import MODE_SOURCES_BY_POLICY
 from capcut_io import iter_primary_draft_documents
 from common import FRAME_TOLERANCE_US, ranges_match, times_match, manifest_sha256, meaningful_text_length, read_json, resolved_declared_path, resolve_state_artifact
-from track_contract import (
-    A10_TEXT_TRACK_BY_COLOR,
-    A12_INDEX,
-    CANONICAL_TRACKS,
-    TEMPLATE_PROFILE,
-    STATE_TRACK_BY_EFFECT,
-    TRACK_INDEX,
-    TRACK_LAYOUT,
-    V2_TEMPLATE_PROFILE,
-    profile_supports_role,
-    track_template_profile,
-)
-from production_profile import resolve_production_profile
+from track_contract import A10_TEXT_TRACK_BY_COLOR, A12_INDEX, CANONICAL_TRACKS, STATE_TRACK_BY_EFFECT, TRACK_INDEX, TRACK_LAYOUT
 
 
 ROLE_BY_TRACK = list(CANONICAL_TRACKS)
@@ -62,11 +47,16 @@ ROLE_BY_TRACK = list(CANONICAL_TRACKS)
 AUDIO_POLICIES = frozenset({
     "SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC",
     "TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED", "CAPTION_ONLY_MUTE_SOURCE",
-    "A9_TTS_PLUS_A10_SOURCE_CLIP",
 })
+TTS_POLICIES = frozenset({"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
+A10_POLICIES = frozenset({"SOURCE_ORDER_CLEAN_AUDIO", "A10_RETAINED_SYNC", "A10_REASSEMBLED_SYNC", "A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"})
+STEM_POLICIES = A10_POLICIES - {"SOURCE_ORDER_CLEAN_AUDIO"}
 SOURCE_ORDER_PRODUCTION_MODES = frozenset({
     "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY", "SOURCE_ORDER_UNCHANGED_A10_RETAINED",
 })
+REQUIRED_TEMPLATE_SEED_ROLES = ("VIDEO", "A9", "A10")
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -87,12 +77,7 @@ def validate_grid_harness(config: dict, *, state_payload: dict | None = None) ->
     urakkai = episode / "20_script" / "urakkai-capcut-grid.md"
     # Revisions use derived state paths, but original analysis is always bound
     # to the canonical episode state resolved by the grid validator.
-    template_profile = config.get("_resolved_root_contract", {}).get(
-        "template_profile", TEMPLATE_PROFILE
-    )
-    validation = validate_capcut_grids.validate_grids(
-        original, urakkai, template_profile=template_profile
-    )
+    validation = validate_capcut_grids.validate_grids(original, urakkai)
     if validation["status"] != "PASS":
         first = validation["errors"][0]
         details = ":".join(
@@ -196,14 +181,10 @@ def validate_grid_harness(config: dict, *, state_payload: dict | None = None) ->
     ]
     if design_missing:
         raise ValueError(f"TABLE_DESIGN_LOCK_REQUIRED:{','.join(design_missing)}")
-    if "_resolved_root_contract" not in config:
-        _bind_portable_root_contract(config)
-    template_profile = config["_resolved_root_contract"]["template_profile"]
     design_result = validate_design_lock.validate_handoff(
         Path(config["design_handoff_path"]).resolve(),
         Path(config["source_identity_path"]).resolve(),
         artifact_paths["approved_timeline"],
-        template_profile=template_profile,
     )
     if design_result["status"] != "PASS":
         first_code = design_result["errors"][0]["code"] if design_result.get("errors") else "UNKNOWN"
@@ -246,9 +227,7 @@ def _ensure_media_tools() -> None:
     )
 
 
-def _extract_template(
-    template_zip: Path, destination: Path, template_profile: str = TEMPLATE_PROFILE,
-) -> Path:
+def _extract_template(template_zip: Path, destination: Path) -> Path:
     if not template_zip.is_file():
         raise FileNotFoundError(template_zip)
     destination.mkdir(parents=True, exist_ok=False)
@@ -261,27 +240,14 @@ def _extract_template(
     ]
     if len(candidates) != 1:
         raise RuntimeError(f"PINNED_TEMPLATE_ROOT_AMBIGUOUS:{len(candidates)}")
-    try:
-        white_resource = track_template_profile(template_profile).pinned_assets["SCREEN_WHITE"]
-    except (KeyError, ValueError) as exc:
-        raise RuntimeError("PINNED_TEMPLATE_PROFILE_INVALID") from exc
-    white = candidates[0] / "Resources/media" / white_resource
+    white = candidates[0] / "Resources/media/transparent_center_white_1080x1920.png"
     if not white.is_file():
         raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
     return candidates[0]
 
 
-def _validate_template_track_layout(
-    template_zip: Path, template_profile: str = V2_TEMPLATE_PROFILE,
-) -> None:
+def _validate_template_track_layout(template_zip: Path) -> None:
     """Preflight every primary draft in the pinned archive without writing files."""
-    try:
-        profile = track_template_profile(template_profile)
-    except ValueError as exc:
-        raise RuntimeError("PINNED_TEMPLATE_PROFILE_INVALID") from exc
-    if not profile.physical_tracks:
-        raise RuntimeError("PINNED_TEMPLATE_PROFILE_INVALID")
-    required_seed_roles = profile.required_seed_roles
     try:
         with zipfile.ZipFile(template_zip) as archive:
             root_candidates = []
@@ -314,7 +280,7 @@ def _validate_template_track_layout(
     for _name, payload in documents:
         tracks = payload.get("tracks") if isinstance(payload, dict) else None
         if (
-            not isinstance(tracks, list) or len(tracks) != len(profile.physical_tracks)
+            not isinstance(tracks, list) or len(tracks) != len(ROLE_BY_TRACK)
             or any(
                 not isinstance(track, dict)
                 or not isinstance(track.get("id"), str)
@@ -327,8 +293,8 @@ def _validate_template_track_layout(
             row.get("id"): row for row in _materials(payload.get("materials", {}))
             if isinstance(row, dict) and isinstance(row.get("id"), str)
         }
-        for role in required_seed_roles:
-            segments = tracks[profile.physical_tracks.index(role)]["segments"]
+        for role in REQUIRED_TEMPLATE_SEED_ROLES:
+            segments = tracks[TRACK_INDEX[role]]["segments"]
             if (
                 not segments or not isinstance(segments[0], dict)
                 or not isinstance(segments[0].get("id"), str)
@@ -407,42 +373,16 @@ def _bind_portable_root_contract(config: dict) -> dict | None:
     resolved = resolve_shorts_capcut_root.resolve_root_contract(
         workspace_root, profile, contract_path
     )
-    template_profile = resolved.get("template_profile")
-    try:
-        track_layout = track_template_profile(template_profile).track_layout
-    except ValueError as exc:
-        raise ValueError("ROOT_CONTRACT_TEMPLATE_PROFILE_REQUIRED") from exc
-    if not track_layout:
-        raise ValueError("ROOT_CONTRACT_TEMPLATE_PROFILE_REQUIRED")
-    raw_production_profile = config.get("production_profile")
-    if raw_production_profile is not None:
-        production_profile = resolve_production_profile(raw_production_profile)
-        if (
-            production_profile.selector["template_profile"] != template_profile
-            or production_profile.selector["production_mode"]
-            != config.get("production_mode")
-            or production_profile.selector["audio_policy"]
-            != config.get("audio_policy")
-        ):
-            raise ValueError("ROOT_CONTRACT_PRODUCTION_PROFILE_MISMATCH")
+    if resolved.get("template_profile") != "shrt_white_base_v2":
+        raise ValueError("ROOT_CONTRACT_V2_PROFILE_REQUIRED")
     declared = config.get("template_zip")
     if declared is not None and Path(str(declared)).resolve() != Path(resolved["archive"]):
         raise ValueError("ROOT_CONTRACT_TEMPLATE_MISMATCH")
     config["template_zip"] = resolved["archive"]
     config["_resolved_root_contract"] = {
         "profile": resolved["profile"],
-        "template_profile": template_profile,
-        "track_layout_version": track_layout,
+        "template_profile": resolved["template_profile"],
         "archive_sha256": resolved["archive_sha256"],
-        **(
-            {
-                "layout_contract": resolved["layout_contract"],
-                "layout_contract_version": resolved["layout_contract_version"],
-                "track_count": resolved["track_count"],
-            }
-            if "layout_contract" in resolved
-            else {}
-        ),
     }
     return resolved
 
@@ -537,13 +477,6 @@ def validate_state_cues(config: dict, timeline: dict) -> None:
         raise ValueError("STATE_CUES_TIMELINE_MISMATCH")
     previous_end = 0
     duration = config["duration_us"]
-    template_name = config.get("_resolved_root_contract", {}).get(
-        "template_profile", TEMPLATE_PROFILE,
-    )
-    try:
-        state_budget = track_template_profile(template_name).role_line_budgets["STATE"]
-    except (KeyError, ValueError) as exc:
-        raise ValueError("STATE_CUES_TEMPLATE_PROFILE_INVALID") from exc
     for index, (cue, row) in enumerate(zip(cues, state_rows), start=1):
         if (
             not isinstance(cue, dict)
@@ -554,14 +487,8 @@ def validate_state_cues(config: dict, timeline: dict) -> None:
             or cue["start_us"] < previous_end
             or cue["end_us"] <= cue["start_us"]
             or cue["end_us"] > duration
-            or (
-                state_budget.max_lines is not None
-                and len(cue["text"].splitlines()) > state_budget.max_lines
-            )
-            or any(
-                meaningful_text_length(line) > state_budget.max_chars
-                for line in cue["text"].splitlines()
-            )
+            or len(cue["text"].splitlines()) > 2
+            or any(meaningful_text_length(line) > 15 for line in cue["text"].splitlines())
             or cue.get("text") != row.get("text")
             or cue["start_us"] != row.get("start")
             or cue["end_us"] - cue["start_us"] != row.get("duration")
@@ -731,7 +658,6 @@ def prepare_revision_state_payload(config: dict) -> tuple[dict, dict] | None:
     if not isinstance(context, dict):
         return None
     revision_state = Path(config["state_path"]).resolve()
-    episode = Path(config["episode_root"]).resolve()
     if revision_state.exists():
         if not _revision_snapshot_path(config).is_file():
             raise RuntimeError("REVISION_CONFIG_SNAPSHOT_MISSING")
@@ -764,31 +690,6 @@ def prepare_revision_state_payload(config: dict) -> tuple[dict, dict] | None:
         path = Path(raw_path).resolve()
         state[f"{name}_path"] = str(path)
         state[f"{name}_sha256"] = _sha(path)
-    # Revisions intentionally rebuild from the current validated episode
-    # artifacts while preserving the canonical Stage 09 state.
-    for name in (
-        "approved_timeline",
-        "build_manifest",
-        "design_lock_evidence",
-        "audio_lock",
-        "caption_lock",
-        "production_plan",
-        "production_plan_validation_receipt",
-    ):
-        raw_path = state.get(f"{name}_path")
-        if not isinstance(raw_path, str) or not raw_path:
-            continue
-        path = resolve_state_artifact(revision_state, raw_path)
-        if path.is_file():
-            state[f"{name}_path"] = str(path)
-            state[f"{name}_sha256"] = _sha(path)
-    for field, relative in (
-        ("original_grid_sha256", "20_script/original-capcut-grid.md"),
-        ("urakkai_grid_sha256", "20_script/urakkai-capcut-grid.md"),
-    ):
-        path = episode / relative
-        if path.is_file():
-            state[field] = _sha(path)
     state.update({
         "episode_id": config["episode_id"],
         "revision_id": context["revision_id"],
@@ -862,20 +763,8 @@ def _validate_config(config: dict, *, revision_operation: str = "build") -> None
     duration = config["duration_us"]
     if not isinstance(duration, int) or duration <= 0:
         raise ValueError("DURATION_INVALID")
-    source_credit = config.get("SOURCE_CREDIT")
-    if source_credit is not None:
-        if not isinstance(source_credit, str) or not source_credit.strip():
-            raise ValueError("SOURCE_CREDIT_DECLARED_EMPTY")
-        if not profile_supports_role(
-            config["_resolved_root_contract"]["template_profile"], "SOURCE_CREDIT",
-        ):
-            raise ValueError("SOURCE_CREDIT_V3_REQUIRED")
     timeline = read_json(Path(config["approved_timeline_path"]).resolve())
-    role_errors = validate_design_lock.validate_role_contract(
-        timeline,
-        expected_duration=duration,
-        template_profile=config["_resolved_root_contract"]["template_profile"],
-    )
+    role_errors = validate_design_lock.validate_role_contract(timeline, expected_duration=duration)
     if role_errors:
         raise ValueError(f"APPROVED_TIMELINE_ROLE_CONTRACT:{role_errors}")
     if (
@@ -1268,7 +1157,7 @@ def _range_fully_covered(inner: list[int], outer: list[int]) -> bool:
 
 
 def _validate_mixed_audio_modes(config: dict, build_manifest: dict) -> None:
-    if config.get("audio_policy") not in MIXED_A9_A10_POLICIES:
+    if config.get("audio_policy") not in {"A9_TTS_PLUS_A10_RETAINED", "A9_TTS_PLUS_A10_REASSEMBLED"}:
         return
     narration_cues = config.get("tts_cues", [])
     user_audio_items = [
@@ -1360,25 +1249,20 @@ def _normalize_source(
         if audio_source is None:
             raise RuntimeError("SOURCE_AUDIO_REQUIRED")
         audio_suffix = audio_source.suffix.lower() or ".wav"
-        # A stem policy carries the externally separated Demucs vocals; a
-        # SOURCE_CLIP policy carries the raw source audio.  Keep that
-        # distinction visible in the portable asset name.
+        # This is the externally separated Demucs vocal stem, not the raw
+        # source audio.  Keep that distinction visible in the portable asset.
         audio_name = (
-            f"a10_vocal_stem{audio_suffix}"
-            if policy in STEM_POLICIES
-            else f"a10_source_clean_audio{audio_suffix}"
+            f"a10_source_clean_audio{audio_suffix}"
+            if policy == "SOURCE_ORDER_CLEAN_AUDIO"
+            else f"a10_vocal_stem{audio_suffix}"
         )
         shutil.copy2(audio_source, media / audio_name)
     draft_prefix = _draft_path_prefix(project)
-    template_name = config.get("_resolved_root_contract", {}).get(
-        "template_profile", TEMPLATE_PROFILE,
-    )
-    template = track_template_profile(template_name)
 
     root_rows: list[dict] = []
     for document_index, (path, payload) in enumerate(_documents(project)):
         tracks = payload["tracks"]
-        if len(tracks) != len(template.physical_tracks):
+        if len(tracks) != len(ROLE_BY_TRACK):
             raise RuntimeError("PINNED_TRACK_LAYOUT_INVALID")
         payload["duration"] = duration
         draft_config = payload.get("config")
@@ -1451,29 +1335,11 @@ def _normalize_source(
             ):
                 raise RuntimeError("USER_MEDIA_OVERLAY_TEMPLATE_MISSING")
 
-        # No track is added. Every generated lane is rebuilt from approved
-        # authority; clearing track 3 first prevents the v3 placeholder from
-        # leaking into episodes that declare no source credit.
-        for index in template.clear_track_indices:
-            tracks[index]["segments"] = []
-
-        source_credit = config.get("SOURCE_CREDIT")
-        if source_credit is not None:
-            if not profile_supports_role(template_name, "SOURCE_CREDIT"):
-                raise RuntimeError("SOURCE_CREDIT_V3_REQUIRED")
-            if not isinstance(source_credit, str) or not source_credit.strip():
-                raise ValueError("SOURCE_CREDIT_DECLARED_EMPTY")
-            index = TRACK_INDEX["SOURCE_CREDIT"]
-            seed = seed_segments.get(index)
-            material = material_map.get(seed.get("material_id")) if isinstance(seed, dict) else None
-            if material is None:
-                raise RuntimeError("SOURCE_CREDIT_TEMPLATE_MISSING")
-            segment = copy.deepcopy(seed)
-            segment["id"] = "SOURCE_CREDIT"
-            segment["role"] = "SOURCE_CREDIT"
-            segment["target_timerange"] = {"start": 0, "duration": duration}
-            _set_text(material, source_credit, "SOURCE_CREDIT")
-            tracks[index]["segments"] = [segment]
+        # Existing v2 lanes only: no track is added.  Every generated lane is
+        # rebuilt from the approved plan; A12 is always empty.
+        for index in range(3, 15):
+            if index not in (9, 10):
+                tracks[index]["segments"] = []
 
         base_video_segment = tracks[TRACK_INDEX["VIDEO"]]["segments"][0]
         video_material = material_map[base_video_segment["material_id"]]
@@ -1522,10 +1388,7 @@ def _normalize_source(
         # bind that copy explicitly before generic path scrubbing can blank it.
         white_segments = tracks[TRACK_INDEX["SCREEN_WHITE"]]["segments"]
         if white_segments:
-            try:
-                white_resource = template.pinned_assets["SCREEN_WHITE"]
-            except KeyError as exc:
-                raise RuntimeError("PINNED_WHITE_ASSET_MISSING") from exc
+            white_resource = "transparent_center_white_1080x1920.png"
             white_asset = media / white_resource
             if not white_asset.is_file():
                 raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
@@ -1846,10 +1709,7 @@ def _normalize_source(
     expected = sorted([
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in approved
-    ] + ([{
-        "segment_id": "SOURCE_CREDIT", "role": "SOURCE_CREDIT",
-        "start": 0, "duration": duration,
-    }] if config.get("SOURCE_CREDIT") is not None else []) + [
+    ] + [
         {
             "segment_id": item["segment_id"],
             "role": item["role"],
@@ -1930,14 +1790,7 @@ def _stage_prerequisites(
     design_evidence = Path(config["design_lock_evidence_path"]).resolve()
     if not all(path.is_file() for path in (source_identity, approved_timeline, handoff, design_evidence)):
         raise RuntimeError("STAGE05_AUTHORITY_MISSING")
-    lock = validate_design_lock.validate_handoff(
-        handoff,
-        source_identity,
-        approved_timeline,
-        template_profile=config.get("_resolved_root_contract", {}).get(
-            "template_profile", TEMPLATE_PROFILE
-        ),
-    )
+    lock = validate_design_lock.validate_handoff(handoff, source_identity, approved_timeline)
     if lock["status"] != "PASS":
         raise RuntimeError(f"STAGE05:{lock}")
     stored_evidence = json.loads(design_evidence.read_text(encoding="utf-8"))
@@ -2063,7 +1916,7 @@ def _stage_prerequisites(
     # already-guarded combination.
     is_urakkai_source_clip_trim = (
         audio_payload.get("production_mode") == "URAKKAI"
-        and audio_payload.get("audio_policy") in SOURCE_CLIP_A10_POLICIES
+        and audio_payload.get("audio_policy") == "SOURCE_ORDER_CLEAN_AUDIO"
         and audio_payload.get("audio_source") == "SOURCE_CLIP"
     )
     duration_matches = is_urakkai_source_clip_trim or (
@@ -2115,11 +1968,7 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
     evidence_root.mkdir(parents=True, exist_ok=True)
     work_root = Path(config["work_root"]).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
-    source = _extract_template(
-        Path(config["template_zip"]).resolve(),
-        work_root / "source_authority",
-        config.get("_resolved_root_contract", {}).get("template_profile", TEMPLATE_PROFILE),
-    )
+    source = _extract_template(Path(config["template_zip"]).resolve(), work_root / "source_authority")
     pre = prerequisites if prerequisites is not None else _stage_prerequisites(config, episode, [])
     source_manifest = clone_and_sync.hash_project_core(source)
     source_root_sha = manifest_sha256(source_manifest)
@@ -2202,7 +2051,7 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
     receipt_path = build_root / "build_inputs_receipt.json"
     contract = {
         "schema_version": "001short-build-contract-v1", "episode_id": config["episode_id"],
-        "track_layout_version": config["_resolved_root_contract"]["track_layout_version"],
+        "track_layout_version": TRACK_LAYOUT,
         "track_layout_extension": user_provided_media_overlay.build_track_layout_extension(
             config.get("user_provided_media_overlay", [])
         ),
@@ -2240,10 +2089,7 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
         "structure_snapshot_sha256": _sha(snapshot_path), "project_id": project_id,
         "draft_id": draft_id, "main_timeline_id": timeline_id,
         "required_asset_paths": sorted(required_assets), "approved_text": sorted(approved_text),
-        "approved_role_text": {
-            "T1": config["T1"], "T2": config["T2"],
-            **({"SOURCE_CREDIT": config["SOURCE_CREDIT"]} if "SOURCE_CREDIT" in config else {}),
-        },
+        "approved_role_text": {"T1": config["T1"], "T2": config["T2"]},
         "approved_segment_text": {
             row["segment_id"]: {
                 "role": row["role"], "start": row["start"], "duration": row["duration"],
@@ -2448,11 +2294,6 @@ def _replace_video_material_only(target: Path, clean_video: Path, duration_us: i
 
 def swap_provisional_video_only(config: dict) -> dict:
     if config.get("revision_id") is None:
-        if all(
-            isinstance(config.get(key), str) and config[key].strip()
-            for key in ("root_contract_path", "workspace_root", "root_profile")
-        ):
-            _bind_portable_root_contract(config)
         validate_grid_harness(config)
         _validate_config(config, revision_operation="swap")
     else:
@@ -2571,21 +2412,11 @@ def swap_provisional_video_only(config: dict) -> dict:
 def build_episode(config: dict) -> dict:
     _ensure_media_tools()
     if config.get("revision_id") is None:
-        if all(
-            isinstance(config.get(key), str) and config[key].strip()
-            for key in ("root_contract_path", "workspace_root", "root_profile")
-        ):
-            _bind_portable_root_contract(config)
         validate_grid_harness(config)
         _validate_config(config)
     else:
         _validate_config(config)
-    _validate_template_track_layout(
-        Path(config["template_zip"]).resolve(),
-        config.get("_resolved_root_contract", {}).get(
-            "template_profile", V2_TEMPLATE_PROFILE
-        ),
-    )
+    _validate_template_track_layout(Path(config["template_zip"]).resolve())
     prepared_revision = prepare_revision_state_payload(config)
     revision_state = prepared_revision[0] if prepared_revision is not None else None
     if prepared_revision is not None:

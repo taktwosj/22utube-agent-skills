@@ -4,7 +4,6 @@ import os
 import sys
 import tempfile
 import unittest
-import zipfile
 from pathlib import Path
 from unittest import mock
 
@@ -490,52 +489,6 @@ class PromoteCapcutRootTests(unittest.TestCase):
         self.assertEqual(evidence["post_open_validation"], "WAIT_CAPCUT_OPEN_CLOSE")
         self.assertFalse(evidence["episode_visual_gate_inherited"])
         self.assertFalse(candidate.active)
-
-    def test_prepare_archive_is_portable_while_local_candidate_keeps_local_paths(self):
-        source_root = self.fixture.source_root.as_posix()
-
-        def add_root_paths(document):
-            document["draft_meta_info"] = {
-                "draft_fold_path": source_root,
-                "draft_root_path": self.fixture.source_root.parent.as_posix(),
-                "draft_cover": source_root + "/draft_cover.jpg",
-                "attachment": {
-                    "asset_path": source_root + "/Resources/media/intro.mp4"
-                },
-            }
-
-        self.fixture.mutate_documents(add_root_paths)
-
-        candidate = self.prepare()
-
-        local = json.loads(
-            (candidate.capcut_project_path / "draft_content.json").read_text(encoding="utf-8")
-        )
-        local_root = candidate.capcut_project_path.as_posix()
-        self.assertEqual(local["draft_meta_info"]["draft_fold_path"], local_root)
-        self.assertEqual(
-            local["draft_meta_info"]["draft_cover"], local_root + "/draft_cover.jpg"
-        )
-        self.assertEqual(
-            local["draft_meta_info"]["draft_root_path"],
-            candidate.capcut_project_path.parent.as_posix(),
-        )
-        self.assertEqual(
-            local["draft_meta_info"]["attachment"]["asset_path"],
-            local_root + "/Resources/media/intro.mp4",
-        )
-
-        with zipfile.ZipFile(candidate.archive_path) as package:
-            payloads = [
-                package.read(entry).decode("utf-8")
-                for entry in package.namelist()
-                if Path(entry).suffix.lower() in {".json", ".tmp"}
-            ]
-        archive_text = "\n".join(payloads)
-        self.assertNotIn(source_root, archive_text)
-        self.assertNotIn(local_root, archive_text)
-        self.assertIn("C:/__CAPCUT_ROOT_BUNDLE__", archive_text)
-        self.assertIn("C:/__CAPCUT_DRAFT_ROOT_BUNDLE__", archive_text)
 
     def test_activate_rejects_visual_or_post_open_wait_for_v6(self):
         candidate = self.prepare()

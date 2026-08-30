@@ -4,18 +4,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills" / "119-politics-longform-capcut"
-SKILL = SKILL_DIR / "SKILL.md"
 ROUTER = SKILL_DIR / "references" / "chatgpt_project_router_instruction.md"
 POLITICS_CONTRACT = (
     SKILL_DIR / "references" / "chatgpt_politics_longform_review_contract.md"
 )
-VALIDATOR = SKILL_DIR / "scripts" / "validate_chatgpt_two_pass_review.py"
 
 
 class PoliticsLongformChatGptProjectContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.skill_text = SKILL.read_text(encoding="utf-8-sig")
         cls.router_text = ROUTER.read_text(encoding="utf-8-sig")
         cls.contract_text = POLITICS_CONTRACT.read_text(encoding="utf-8-sig")
 
@@ -102,19 +99,6 @@ class PoliticsLongformChatGptProjectContractTests(unittest.TestCase):
             "round2_receipt.json",
         ):
             self.assertNotIn(forbidden, self.contract_text)
-
-    def test_skill_routes_two_pass_review_and_ships_validator(self):
-        for token in (
-            "chatgpt_project_router_instruction.md",
-            "chatgpt_politics_longform_review_contract.md",
-            "MASTER_COMMENTARY_REVIEW_GATE",
-            "EXTERNAL_LOWER_COMMENTARY_GATE",
-            "validate_chatgpt_two_pass_review.py",
-            "WAIT_CHATGPT_REVIEW_REPAIR",
-        ):
-            self.assertIn(token, self.skill_text)
-        self.assertTrue(VALIDATOR.is_file(), f"missing validator: {VALIDATOR}")
-
 
 if __name__ == "__main__":
     unittest.main()

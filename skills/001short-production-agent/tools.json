@@ -3,7 +3,7 @@
   "capcut_root": "shrt white",
   "root_contract_required": true,
   "root_profiles": ["home_windows", "macmini"],
-  "template_profile": "shrt_white_base_v3",
+  "template_profile": "shrt_white_base_v2",
   "matrix": {"time_axis": "horizontal", "tool_axis": "vertical", "repeat": true, "coexist": true},
   "executable_protocol": {
     "file": "protocol.json",
@@ -112,8 +112,8 @@
       "A9_A10_audio": {"container": "WAV", "codec": "PCM_S16LE", "sample_rate": 48000, "channels": 1}
     },
     "track_mapping": {
-      "profile": "shrt_white_base_v3_15",
-      "required": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "SOURCE_CREDIT", "STATE_GLITCH", "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1", "A9", "A10", "A11", "A12_RESERVED_EMPTY"],
+      "profile": "shrt_white_base_v2_15",
+      "required": ["VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "STATE_FLICKER", "STATE_GLITCH", "STATE_LASER", "A10_TEXT_WHITE", "A10_TEXT_YELLOW", "A9_TEXT", "T2", "T1", "A9", "A10", "A11", "A12_RESERVED_EMPTY"],
       "missing": "WAIT_CAPCUT_TRACK_MAPPING",
       "new_tracks": "VERSIONED_USER_PROVIDED_MEDIA_OVERLAY_ONLY",
       "track_extension_policy": {
@@ -140,7 +140,7 @@
     {"id": "VIDEO", "role": "clean or provisional visual", "audio": "mute"},
     {"id": "SCREEN_EFFECT", "role": "screen effect seed"},
     {"id": "SCREEN_WHITE", "role": "white screen seed"},
-    {"id": "SOURCE_CREDIT", "role": "full-span source credit title lane"},
+    {"id": "STATE_FLICKER", "role": "reserved empty physical state lane"},
     {"id": "STATE_GLITCH", "role": "reserved empty physical state lane"},
     {"id": "STATE_LASER", "role": "laser state caption"},
     {"id": "A10_TEXT_WHITE", "role": "primary speaker caption"},

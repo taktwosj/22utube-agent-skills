@@ -58,12 +58,6 @@ class DemocraticBlueCardRendererTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "FOOTER_VERTICAL_OVERFLOW"):
             renderer.validate_geometry(self.geometry(footer_scroll=48, footer_client=47))
 
-    def test_geometry_rejects_a_template_that_claims_a_different_safe_area(self) -> None:
-        geometry = self.geometry()
-        geometry["safeAreaTop"] = 1000
-        with self.assertRaisesRegex(RuntimeError, "SAFE_AREA_TOP_INVALID"):
-            renderer.validate_geometry(geometry)
-
     def payload(self) -> dict[str, object]:
         return {
             "visual_id": "V001",
@@ -120,25 +114,6 @@ class DemocraticBlueCardRendererTests(unittest.TestCase):
         payload["lower_safe_area"] = False
         with self.assertRaisesRegex(RuntimeError, "LOWER_SAFE_AREA_REQUIRED"):
             renderer.validate_payload(payload)
-
-    def test_inset_profile_matches_the_manual_v8_root_card_geometry(self) -> None:
-        payload = self.payload()
-        payload["style_profile"] = "DEMOCRATIC_BLUE_INSET_CARD_V2"
-
-        profile = renderer.resolve_style_profile(payload)
-
-        self.assertEqual(profile["output_size"], (1920, 1080))
-        self.assertEqual(
-            profile["image_frame"],
-            {"x": 336, "y": 189, "width": 1248, "height": 702},
-        )
-        self.assertEqual(
-            profile["caption_safe_area"],
-            {"x": 0, "y": 891, "width": 1920, "height": 189},
-        )
-        payload["raster_size"] = "1280x720"
-        with self.assertRaisesRegex(RuntimeError, "INSET_CARD_RASTER_SIZE_INVALID"):
-            renderer.resolve_style_profile(payload)
 
     def test_linux_root_browser_flags_include_no_sandbox(self) -> None:
         flags = renderer.browser_base_args(

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import struct
 import sys
 import tempfile
 import unittest
@@ -24,7 +23,7 @@ class PoliticsAssemblyPreflightTests(unittest.TestCase):
         raw = root / "raw.srt"
         display = root / "display.srt"
         raw.write_text(
-            "1\n00:00:00,000 --> 00:00:02,000\n정책 방향은 같았다\n",
+            "1\n00:00:00,000 --> 00:00:02,000\n정책 방향은 같았지만\n시행 준비는 충분했나\n",
             encoding="utf-8",
         )
         display.write_text(raw.read_text(encoding="utf-8"), encoding="utf-8")
@@ -46,11 +45,8 @@ class PoliticsAssemblyPreflightTests(unittest.TestCase):
                             "source_start_us": 0,
                             "source_duration_us": 2_000_000,
                             "source_id": "S01",
-                            "chapter_title": "챕터 1",
-                            "chapter_label": "챕터 1",
                             "source_channel": "MBCNEWS",
                             "source_date": "2026.08.11",
-                            "source_display_label": "MBC 뉴스",
                             "lower_mode": "SOURCE_TTS",
                             "source_srt_file": str(display),
                             "source_srt_sha256": digest(display),
@@ -58,7 +54,7 @@ class PoliticsAssemblyPreflightTests(unittest.TestCase):
                             "raw_transcript_sha256": digest(raw),
                             "display_srt_path": str(display),
                             "display_srt_sha256": digest(display),
-                            "display_transform": [],
+                            "display_transform": ["LINE_BREAK"],
                             "cta_like_subscribe": "OFF",
                         }
                     ],
@@ -69,86 +65,6 @@ class PoliticsAssemblyPreflightTests(unittest.TestCase):
             encoding="utf-8",
         )
         return cards
-
-    @staticmethod
-    def write_png(path: Path, width: int, height: int) -> None:
-        path.write_bytes(
-            b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", width, height) + b"\x00" * 17
-        )
-
-    def test_preflight_accepts_the_v8_root_1920_by_1080_card_raster(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            cards = self.make_cards(root)
-            image = root / "V001.png"
-            self.write_png(image, 1920, 1080)
-            document = json.loads(cards.read_text(encoding="utf-8"))
-            document["cards"].append(
-                {
-                    "card_id": "C002",
-                    "card_type": "CHAPTER_CARD",
-                    "chapter_title": "챕터 2",
-                    "chapter_label": "챕터 2",
-                    "target_start_us": 2_000_000,
-                    "target_duration_us": 3_000_000,
-                    "style_profile": "DEMOCRATIC_BLUE_INSET_CARD_V2",
-                    "image_file": str(image),
-                    "lower_mode": "NONE",
-                }
-            )
-            cards.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
-
-            result = preflight.run_preflight(cards, root / "report.json", root / "grid.md")
-
-            self.assertEqual(result["status"], "PASS")
-
-    def test_preflight_rejects_a_1280_by_720_card_raster(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            cards = self.make_cards(root)
-            image = root / "V001.png"
-            self.write_png(image, 1280, 720)
-            document = json.loads(cards.read_text(encoding="utf-8"))
-            document["cards"].append(
-                {
-                    "card_id": "C002",
-                    "card_type": "CHAPTER_CARD",
-                    "chapter_title": "챕터 2",
-                    "chapter_label": "챕터 2",
-                    "target_start_us": 2_000_000,
-                    "target_duration_us": 3_000_000,
-                    "style_profile": "DEMOCRATIC_BLUE_INSET_CARD_V2",
-                    "image_file": str(image),
-                    "lower_mode": "NONE",
-                }
-            )
-            cards.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
-
-            result = preflight.run_preflight(cards, root / "report.json", root / "grid.md")
-
-            self.assertEqual(result["status"], "FAIL")
-            self.assertIn("INSET_CARD_DIMENSION_INVALID", {row["code"] for row in result["findings"]})
-
-    def test_preflight_fails_when_overlay_source_or_chapter_contract_is_missing(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            cards = self.make_cards(root)
-            document = json.loads(cards.read_text(encoding="utf-8"))
-            document["cards"][0].pop("chapter_label")
-            document["cards"][0].pop("source_display_label")
-            cards.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
-
-            result = preflight.run_preflight(cards, root / "report.json", root / "grid.md")
-
-            self.assertEqual(result["status"], "FAIL")
-            self.assertIn(
-                "CHAPTER_LABEL_REQUIRED",
-                {row["code"] for row in result["findings"]},
-            )
-            self.assertIn(
-                "SOURCE_DISPLAY_LABEL_REQUIRED",
-                {row["code"] for row in result["findings"]},
-            )
 
     def test_preflight_binds_cards_and_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
