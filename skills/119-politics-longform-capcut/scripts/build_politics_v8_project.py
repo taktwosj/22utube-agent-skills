@@ -385,6 +385,25 @@ def extend_v8_static_overlays(document: dict[str, Any], total: int) -> None:
         set_range(segments[0], 0, total)
 
 
+def public_media_records(media: dict[str, Any]) -> dict[str, Any]:
+    """Portable copy of the media map, in the shape the relink readback consumes."""
+    records = copy.deepcopy(media)
+    for record in records.values():
+        filename = record.get("filename", "media")
+        if "file" in record:
+            record["file"] = f"LOCAL_MEDIA_FILE/{filename}"
+        if record.get("offline_path"):
+            record["offline_path"] = f"CAPCUT_RELINK_PLACEHOLDER/{filename}"
+        narration = record.get("narration_audio")
+        if isinstance(narration, dict):
+            audio_filename = narration.get("filename", "audio")
+            if "file" in narration:
+                narration["file"] = f"LOCAL_MEDIA_FILE/{audio_filename}"
+            if narration.get("offline_path"):
+                narration["offline_path"] = f"CAPCUT_RELINK_PLACEHOLDER/{audio_filename}"
+    return records
+
+
 def delivery_report(cards_doc: dict[str, Any], project_name: str, project_path: Path, media_path: Path) -> dict[str, Any]:
     publication = cards_doc.get("publication_report")
     if not isinstance(publication, dict):
@@ -397,6 +416,10 @@ def delivery_report(cards_doc: dict[str, Any], project_name: str, project_path: 
         "project_name": project_name,
         "project_path": str(project_path),
         "media_path": str(media_path),
+        "media_dir": str(media_path),
+        "media_folder_to_select": "/".join(
+            ["LOCAL_MEDIA_FOLDER", media_path.parent.name, media_path.name]
+        ),
         "title": publication.get("title"),
         "content": {
             "simple_summary": content.get("simple_summary"),
@@ -552,6 +575,7 @@ def main() -> int:
             json_write(args.report, {
                 "status": "PROJECT_CREATED_WAIT_MEDIA_RELINK",
                 **delivery_report(cards_doc, project_name, final_root, args.media_dir),
+                "media": public_media_records(media),
                 "cards": len(cards),
                 "duration_us": total,
                 "root": str(args.root_project),
