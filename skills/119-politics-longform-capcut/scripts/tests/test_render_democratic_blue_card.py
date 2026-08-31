@@ -277,6 +277,8 @@ class DemocraticBlueCardRendererTests(unittest.TestCase):
                 [*renderer.browser_base_args(browser), "--dump-dom", html_path.resolve().as_uri()],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 check=False,
                 timeout=45,
             )
