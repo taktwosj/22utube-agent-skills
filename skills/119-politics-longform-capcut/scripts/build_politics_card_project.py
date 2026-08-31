@@ -105,7 +105,16 @@ def capture_presentation_contract(
         for card in cards:
             mode = card.get("lower_mode", "NONE")
             if mode == "VIDEO100_EXPLAINER":
-                lower_texts.add(str(card.get("lower_text", "")))
+                lower_text = str(card.get("lower_text", ""))
+                lower_texts.add(lower_text)
+                # The v7 root shows both approved sentences as one two-line
+                # segment; the V8 root shows them sequentially as one segment
+                # per line. Register the individual lines too, or the V8
+                # segments land outside the presentation contract and the
+                # relink readback reports them as unexpected_role_segments.
+                lower_texts.update(
+                    line for line in (part.strip() for part in lower_text.splitlines()) if line
+                )
             elif mode in {"SOURCE_TTS", "NARRATION_TTS"}:
                 field = "source_srt_file" if mode == "SOURCE_TTS" else "narration_srt_file"
                 lower_texts.update(cue_text for _, _, cue_text in _srt_cues(Path(card[field])))
