@@ -62,6 +62,10 @@ V8_TEXT_SPECS = {
     10: {"text": "__CHAPTER__", "font_size": 7.0, "fixed_width": 504.2707247336902, "alignment": 1, "line_spacing": 0.04, "scale": 1.0, "rotation": 0.0, "x": 0.0, "y": 0.8333333333333334, "fill": (1.0, 1.0, 1.0), "stroke": 0.06},
 }
 PATH_VALUE_KEYS = {"path", "source_path", "file_path", "res_path", "media_path"}
+# copy_card_media writes this placeholder for every relink-mode asset. The v7
+# builder allows it explicitly; the V8 tree check must allow the same token or it
+# rejects the paths its own media helper just produced.
+RELINK_PLACEHOLDER_ROOT = "C:/__CAPCUT_RELINK_REQUIRED__"
 
 
 def material_map(document: dict[str, Any], group: str) -> dict[str, dict[str, Any]]:
@@ -155,6 +159,12 @@ def _absolute_path(value: str) -> bool:
     return bool(re.match(r"^[A-Za-z]:[\\/]", value)) or value.startswith("/")
 
 
+def _relink_placeholder(value: str) -> bool:
+    normalized = value.replace("\\", "/").casefold()
+    root = RELINK_PLACEHOLDER_ROOT.casefold()
+    return normalized == root or normalized.startswith(root + "/")
+
+
 def _within(value: str, directory: Path) -> bool:
     normalized = value.replace("\\", "/").rstrip("/").casefold()
     parent = directory.as_posix().rstrip("/").casefold()
@@ -176,8 +186,11 @@ def root_artifact_hits(
                 key_normalized = str(key).casefold()
                 path = f"{location}.{key}"
                 if key_normalized in PATH_VALUE_KEYS and isinstance(item, str):
-                    if _absolute_path(item) and not _within(item, project_path) and not any(
-                        _within(item, allowed) for allowed in allowed_external
+                    if (
+                        _absolute_path(item)
+                        and not _relink_placeholder(item)
+                        and not _within(item, project_path)
+                        and not any(_within(item, allowed) for allowed in allowed_external)
                     ):
                         hits.append(f"{location}:{key}")
                 walk(item, path)
