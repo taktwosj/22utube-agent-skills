@@ -1,4 +1,5 @@
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -156,6 +157,56 @@ class V8RootHarnessTests(unittest.TestCase):
             self.assertGreater(len(cues), 1)
             self.assertTrue(all("\n" not in text for _, _, text in cues))
             self.assertTrue(all(prepare.visible_length(text) <= 15 for _, _, text in cues))
+
+    def test_v8_prepare_preserves_independent_chapter_label_and_falls_back_source_channel(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cards = root / "episode_cards.json"
+            output = root / "episode_cards_v8.json"
+            cards.write_text(
+                json.dumps(
+                    {
+                        "cards": [
+                            {
+                                "card_id": "C00_HOOK_01",
+                                "card_type": "SOURCE_VIDEO",
+                                "chapter_title": "본인이 만든 기준",
+                                "chapter_label": "오프닝",
+                                "source_channel": "뉴스공장",
+                                "source_display_label": "",
+                                "lower_mode": "NONE",
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    str(SCRIPTS / "prepare_politics_v8_rebuild_cards.py"),
+                    "--cards",
+                    str(cards),
+                    "--out",
+                    str(output),
+                    "--caption-dir",
+                    str(root / "captions"),
+                    "--project-name",
+                    "PL_TEST_V8",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            prepared = json.loads(output.read_text(encoding="utf-8"))["cards"][0]
+            self.assertEqual(prepared["chapter_title"], "본인이 만든 기준")
+            self.assertEqual(prepared["chapter_label"], "오프닝")
+            self.assertEqual(prepared["source_display_label"], "뉴스공장")
 
 
 if __name__ == "__main__":

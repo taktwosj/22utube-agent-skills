@@ -230,6 +230,31 @@ next_card=END
         self.assertRegex(report["assembly_only_seed_sha256"], r"^[0-9A-F]{64}$")
         self.assertFalse((self.package / "50_capcut_project" / "episode_cards.json").exists())
 
+    def test_approved_chapter_label_may_differ_from_editorial_title(self) -> None:
+        self.write_valid_packet()
+        script_path = self.package / "20_script" / "119_final_script.md"
+        script_path.write_text(
+            script_path.read_text(encoding="utf-8").replace(
+                "chapter_label=Chapter 1\n", "chapter_label=오프닝\n"
+            ),
+            encoding="utf-8",
+        )
+        digest = hashlib.sha256(script_path.read_bytes()).hexdigest().upper()
+        handoff_path = self.package / "20_script" / "pre119_handoff.json"
+        handoff = json.loads(handoff_path.read_text(encoding="utf-8"))
+        handoff["script_lock"]["current_final_script_sha256"] = digest
+        handoff_path.write_text(json.dumps(handoff), encoding="utf-8")
+
+        result = self.run_validator(
+            approved_sha=digest,
+            evidence="user_message:flexible-overlay-text",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        card = self.read_report()["assembly_only_seed"]["cards"][0]
+        self.assertEqual(card["chapter_title"], "Chapter 1")
+        self.assertEqual(card["chapter_label"], "오프닝")
+
     def test_body_card_without_chapter_label_is_rejected_before_assembly(self) -> None:
         digest = self.write_valid_packet()
         script_path = self.package / "20_script" / "119_final_script.md"

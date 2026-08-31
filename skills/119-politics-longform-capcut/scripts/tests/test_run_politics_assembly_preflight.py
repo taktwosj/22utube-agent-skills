@@ -150,6 +150,19 @@ class PoliticsAssemblyPreflightTests(unittest.TestCase):
                 {row["code"] for row in result["findings"]},
             )
 
+    def test_preflight_accepts_independent_approved_chapter_label(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cards = self.make_cards(root)
+            document = json.loads(cards.read_text(encoding="utf-8"))
+            document["cards"][0]["chapter_title"] = "본인이 만든 기준"
+            document["cards"][0]["chapter_label"] = "오프닝"
+            cards.write_text(json.dumps(document, ensure_ascii=False), encoding="utf-8")
+
+            result = preflight.run_preflight(cards, root / "report.json", root / "grid.md")
+
+            self.assertEqual(result["status"], "PASS", result["findings"])
+
     def test_preflight_binds_cards_and_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

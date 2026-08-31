@@ -38,12 +38,12 @@
 
 ## 화면 슬롯
 
-- 상단 챕터 제목: `INTRO` 외 모든 카드의 `chapter_label`. `chapter_title`과 비어 있지 않은 동일 승인 문구를 쓴다.
-- 화면 출처: `SOURCE_VIDEO`의 `source_display_label`만 쓴다. 예: `뉴스공장` → 화면 `출처 뉴스공장`. 긴 원본명·날짜는 화면 문구에 쓰지 않는다.
+- 상단 챕터 제목: `INTRO` 외 모든 카드의 `chapter_label`. 의미·논지용 `chapter_title`과 달라도 되며, 실제 화면에 넣을 승인 문구를 쓴다.
+- 화면 출처: `SOURCE_VIDEO`의 `source_display_label`을 쓴다. 비어 있으면 검증된 `source_channel`을 사용한다. 예: `뉴스공장` → 화면 `출처 뉴스공장`. 긴 원본명·날짜는 화면 문구에 쓰지 않는다.
 - 원본 영상 자막: `SOURCE_VIDEO + lower_mode=SRT` → `SOURCE_TTS`.
 - 나레이션 TTS 자막: `NARRATION_VIDEO|NARRATION_IMAGE + lower_mode=SRT` → `NARRATION_TTS`.
 - 논거·의견 2문장: `lower_mode=COMMENTARY_2LINE`과 `lower_line1`, `lower_line2`; 각 문장은 공백 제외 15자 이하이며 화면에는 시간상 순차 한 줄로 표시한다.
-- HTML 챕터 이미지: 근본 프로젝트의 inset-frame을 쓸 때 `CHAPTER_CARD`, `style_profile=DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode=NONE`; 구형 전체화면 루트만 V1을 쓴다.
+- HTML 챕터 이미지: 새 카드는 `CHAPTER_CARD`, `style_profile=DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode=NONE`을 쓴다. 한 카드에는 한 주제만 넣고, 주제가 둘 이상이면 시간상 연속 카드로 분리한다. 구형 전체화면 루트만 V1을 쓴다.
 - 하단 슬롯은 같은 시간에 한 종류만 사용한다.
 
 ## 세로 시간순 승인 대본
@@ -116,7 +116,7 @@ source_in_candidate:
 source_out_candidate:
 visual_asset_ref: WAIT_C
 visual_role: CHAPTER_TRANSITION
-style_profile: DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1
+style_profile: DEMOCRATIC_BLUE_INSET_CARD_V2
 narration_asset_ref: N/A
 narration_text:
 source_audio: OFF
@@ -222,7 +222,7 @@ source_in_candidate:
 source_out_candidate:
 visual_asset_ref: WAIT_C
 visual_role: CHAPTER_TRANSITION
-style_profile: DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1
+style_profile: DEMOCRATIC_BLUE_INSET_CARD_V2
 narration_asset_ref: N/A
 narration_text:
 source_audio: OFF

@@ -39,8 +39,8 @@ ENDING
 - 다음 카드 start는 이전 카드 end와 정확히 같다.
 - 빈 시간·추정 패딩을 만들지 않는다.
 - 무음 `CHAPTER_CARD`는 3,000,000us이고 lower mode는 `NONE`이다.
-- `INTRO` 외 모든 카드는 비어 있지 않고 `chapter_title`과 동일한 `chapter_label`을 가진다. builder는 이를 해당 챕터 종료까지 상단에 표시한다.
-- `SOURCE_VIDEO`는 source identity, channel/date, source range와 비어 있지 않은 `source_display_label`을 가진다. 화면 출처는 `출처 {source_display_label}` 한 줄뿐이며 channel/date는 provenance metadata다.
+- `INTRO` 외 모든 카드는 비어 있지 않은 `chapter_title`과 `chapter_label`을 가진다. `chapter_title`은 의미·논지, `chapter_label`은 실제 상단 오버레이 문구이며 서로 달라도 된다. builder는 `chapter_label`을 해당 챕터 종료까지 표시한다.
+- `SOURCE_VIDEO`는 source identity, channel/date, source range를 가진다. `source_display_label`은 짧은 화면 출처명이며, 비어 있으면 검증된 `source_channel`을 사용한다. 화면 출처는 `출처 {source_display_label}` 한 줄뿐이고 channel/date는 provenance metadata다.
 - 전체 duration은 마지막 카드 end와 같다.
 - 모든 카드는 한 primary video lane에서 선언 순서대로 이어진다.
 - 챕터 사이 이미지와 나레이션이 모두 OFF이면 SOURCE_VIDEO를 직접 연결한다.
@@ -48,6 +48,8 @@ ENDING
 ## Inset image-card layer
 
 `style_profile=DEMOCRATIC_BLUE_INSET_CARD_V2`인 `CHAPTER_CARD`·`NARRATION_IMAGE`는 근본 프로젝트의 배경·띠 위에 얹는 이미지 레이어다.
+
+V2는 새 카드의 기본 profile이며 `info_blocks`를 정확히 1개만 허용한다. 주제가 둘 이상이면 별도 이미지 카드로 나눠 시간상 연속 배치한다. 제목 60px, 항목명 30px, 핵심문구 68px, 보조문구 40px을 고정한다. V1은 구형 전체화면 프로젝트가 명시한 경우에만 허용한다.
 
 ```text
 canvas             1920×1080

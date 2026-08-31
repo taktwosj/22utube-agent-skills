@@ -121,12 +121,15 @@ def main() -> int:
         card_id = str(card["card_id"])
         title = str(card.get("chapter_title", "")).strip()
         label = str(card.get("chapter_label", "")).strip()
-        if not title or label != title:
+        if not title or not label:
             raise RuntimeError(f"APPROVED_CHAPTER_LABEL_REQUIRED:{card_id}")
         if card["card_type"] == "SOURCE_VIDEO":
             source_label = str(card.get("source_display_label", "")).strip()
             if not source_label:
+                source_label = str(card.get("source_channel", "")).strip()
+            if not source_label:
                 raise RuntimeError(f"SOURCE_DISPLAY_LABEL_REQUIRED:{card_id}")
+            card["source_display_label"] = source_label
         srt_field = "source_srt_file" if card.get("lower_mode") == "SOURCE_TTS" else "narration_srt_file"
         if card.get(srt_field):
             original = Path(card[srt_field])
