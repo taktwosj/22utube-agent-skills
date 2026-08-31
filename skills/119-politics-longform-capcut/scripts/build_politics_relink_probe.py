@@ -53,13 +53,13 @@ def set_range(segment: dict[str, Any], start: int, duration: int) -> None:
 
 
 def require_capcut_closed() -> None:
-    running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV", "/NH"], capture_output=True, text=True, check=False)
+    running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV", "/NH"], capture_output=True, text=True, errors="replace", check=False)
     if "CapCut.exe" in running.stdout:
         raise RuntimeError("CAPCUT_PROCESS_MUST_BE_CLOSED")
 
 
 def probe(path: Path) -> dict[str, int]:
-    result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height", "-of", "json", str(path)], capture_output=True, text=True, check=True)
+    result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height", "-of", "json", str(path)], capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
     data = json.loads(result.stdout)
     video = next((stream for stream in data["streams"] if stream.get("codec_type") == "video"), None)
     if video is None:

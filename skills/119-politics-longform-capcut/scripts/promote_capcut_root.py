@@ -375,7 +375,7 @@ def copy_required_resources(source_root: Path, stage: Path, ffmpeg: str, final_r
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     shutil.copy2(main_slot_source, main_slot_target)
     shutil.copy2(texture_source, texture_target)
@@ -448,7 +448,7 @@ def ensure_capcut_closed() -> None:
         ["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV", "/NH"],
         check=False,
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
     )
     if "CapCut.exe" in result.stdout:
         raise RuntimeError("CAPCUT_PROCESS_MUST_BE_CLOSED")

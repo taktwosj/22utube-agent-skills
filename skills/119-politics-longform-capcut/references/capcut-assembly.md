@@ -37,6 +37,32 @@ USER_FINAL_ASSEMBLY_GRID
 
 FAIL이면 build하지 않는다. 정상 PASS 결과를 다시 Codex에게 읽혀 같은 검사를 반복시키지 않는다.
 
+## 빌더 선택
+
+근본에 따라 빌더가 다르다. 섞으면 트랙 구조가 무너지고 출처 위치가 밀린다.
+
+```text
+v7 번들 근본     build_politics_card_project.py   --capcut-root
+V8 수동 근본     build_politics_v8_project.py     --root-project
+```
+
+`capcut_active_root_v1.json`이 가리키는 활성 포인터는 v7이다. V8은 승격된 번들이 아니라
+사용자가 직접 만든 프로젝트이며 `--root-project` 경로 override로만 쓴다. 포인터가 v7이라는
+사실만 보고 v7 빌더를 고르지 않는다. 회차가 어느 근본을 쓰는지 먼저 확인한다.
+
+카드 타입 지원 범위도 다르다.
+
+```text
+v7   INTRO 필수. 첫 카드 길이가 layout contract의 content_start_us와 같아야 한다
+V8   SOURCE_VIDEO · CHAPTER_CARD · NARRATION_IMAGE 만 허용. INTRO를 넣으면
+     V8_CARD_TYPE_UNSUPPORTED 로 막힌다. 카드 시작은 0초 기준이다
+```
+
+같은 회차를 두 빌더에 그대로 넣을 수 없다. 근본을 바꾸면 카드 목록과 시작 시각을 다시 잡는다.
+
+런타임 release 디렉터리 안의 스크립트를 실행할 때는 `PYTHONDONTWRITEBYTECODE=1`을 준다.
+`__pycache__`가 생기면 manifest와 어긋나 `skill_release.py activate`가 거부한다.
+
 ## Build
 
 ```powershell
