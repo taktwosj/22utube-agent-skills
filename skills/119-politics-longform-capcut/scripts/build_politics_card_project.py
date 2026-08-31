@@ -159,7 +159,7 @@ def require_capcut_closed() -> None:
         ["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV", "/NH"],
         check=False,
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
     )
     if "CapCut.exe" in tasklist.stdout:
         raise RuntimeError("CAPCUT_PROCESS_MUST_BE_CLOSED")
@@ -246,7 +246,7 @@ def probe_media(path: Path) -> dict[str, int | bool]:
         ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,width,height", "-of", "json", str(path)],
         check=True,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     data = json.loads(result.stdout)
     video = next((stream for stream in data.get("streams", []) if stream.get("codec_type") == "video"), None)
@@ -265,7 +265,7 @@ def probe_duration(path: Path) -> int:
         ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(path)],
         check=True,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     return round(float(json.loads(result.stdout)["format"]["duration"]) * MICROS)
 
@@ -389,7 +389,7 @@ def image_size(path: Path) -> tuple[int, int]:
         ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,width,height", "-of", "json", str(path)],
         check=True,
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     streams = json.loads(result.stdout).get("streams", [])
     video = next((stream for stream in streams if stream.get("codec_type") == "video"), None)

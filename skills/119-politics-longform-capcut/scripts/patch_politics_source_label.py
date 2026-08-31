@@ -16,7 +16,7 @@ def require_capcut_closed() -> None:
     running = subprocess.run(
         ["tasklist", "/FI", "IMAGENAME eq CapCut.exe", "/FO", "CSV", "/NH"],
         capture_output=True,
-        text=True,
+        text=True, errors="replace",
         check=False,
     )
     if "CapCut.exe" in running.stdout:
