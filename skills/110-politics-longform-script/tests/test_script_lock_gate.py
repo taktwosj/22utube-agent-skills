@@ -19,6 +19,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 SKILL = Path(__file__).resolve().parent.parent
@@ -57,6 +58,11 @@ class LockCase(unittest.TestCase):
         # 대본 SHA 는 실파일에서 온다. 세 증거는 기본으로 이걸 가리키고,
         # 어긋난 상황을 만들 때만 SHA_B 를 넘긴다.
         self.script_sha = digest(script)
+        # 최종 Humanize 영수증은 S2H 입력(pre_humanize)이 아니라 S5H의
+        # 최종 입력을 가리킨다. S4 승인본을 그대로 final로 복사한 경로다.
+        humanize_before = self.ep / "20_script" / "script_draft_v1.md"
+        humanize_before.write_bytes(script.read_bytes())
+        humanize_before_sha = digest(humanize_before)
         report_sha = report_sha or self.script_sha
         review_sha = review_sha or self.script_sha
         approval_sha = approval_sha or self.script_sha
@@ -86,6 +92,30 @@ class LockCase(unittest.TestCase):
                 "sha256": digest(source_review),
                 "status": "PASS_110_SOURCE_SRT_REVIEWED",
                 "review_receipt_sha256": digest(receipt),
+            },
+        }, ensure_ascii=False), encoding="utf-8")
+        humanize = self.ep / g.HUMANIZE_RELPATH
+        humanize.write_text(json.dumps({
+            "schema": g.HUMANIZE_SCHEMA,
+            "status": "PASS",
+            "episode_id": self.ep.name,
+            "before": {
+                "path": "20_script/script_draft_v1.md",
+                "sha256": humanize_before_sha,
+            },
+            "after": {
+                "path": f"20_script/{script_name}",
+                "sha256": self.script_sha,
+            },
+            "source_packet": {
+                "path": "20_script/source_packet_v1.json",
+                "sha256": digest(packet),
+            },
+            "upstream": g.HUMANIZE_UPSTREAM_PIN,
+            "total_violations": 0,
+            "checks": {
+                name: {"count": 0, "violations": []}
+                for name in g.HUMANIZE_REQUIRED_CHECKS
             },
         }, ensure_ascii=False), encoding="utf-8")
 
@@ -141,6 +171,9 @@ class LockCase(unittest.TestCase):
             "verification_report_path":
                 "90_reports/verification_report_v1.json",
             "verification_report_sha256": digest(report),
+            "humanize_korean_gate_path":
+                "90_reports/humanize_korean_gate_v1.json",
+            "humanize_korean_gate_sha256": digest(humanize),
             "user_approval_origin": approval_origin,
             "user_approval_event_id": approval_event,
             "claude_review_event_id": ref_review_event,
@@ -164,6 +197,20 @@ class TestHappyPath(LockCase):
     def test_all_evidence_same_sha_passes(self):
         self.write_all()
         self.assertEqual(self.run_gate(), [])
+
+    def test_written_lock_keeps_shared_schema_evidence_shape(self):
+        self.write_all()
+        with mock.patch.object(sys, "argv", [
+            "gate_script_lock.py", "--episode", str(self.ep), "--write",
+        ]):
+            self.assertEqual(g.main(), 0)
+        lock = json.loads((self.ep / "20_script" / "script_lock.json").read_text(
+            encoding="utf-8"))
+        schema = json.loads((SKILL / "references" / "script_lock.schema.json").read_text(
+            encoding="utf-8"))
+        self.assertEqual(set(lock["evidence"]),
+                         set(schema["properties"]["evidence"]["properties"]))
+        self.assertTrue((self.ep / "20_script" / "master_script_locked.md").is_file())
 
     def test_codex_cli_without_claude_failure_evidence_blocks(self):
         self.write_all(
@@ -192,6 +239,55 @@ class TestHappyPath(LockCase):
             review_name="claude_review_v1_codex_fallback.md",
         )
         self.assertEqual(self.run_gate(), [])
+
+
+class TestHumanizeEvidence(LockCase):
+    def _update_receipt_approval_hash(self, receipt):
+        approval = self.ep / "20_script" / "user_approval.json"
+        payload = json.loads(approval.read_text(encoding="utf-8"))
+        payload["humanize_korean_gate_sha256"] = digest(receipt)
+        approval.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    def test_missing_receipt_blocks_lock(self):
+        self.write_all()
+        (self.ep / g.HUMANIZE_RELPATH).unlink()
+        self.assertCode("WAIT_HUMANIZE_KOREAN")
+
+    def test_receipt_must_bind_approved_final_path_and_sha(self):
+        self.write_all()
+        receipt = self.ep / g.HUMANIZE_RELPATH
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["after"]["path"] = "20_script/script_draft_v1.md"
+        receipt.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        self._update_receipt_approval_hash(receipt)
+        self.assertCode("FAIL_HUMANIZE_FINAL_BINDING")
+
+    def test_pre_humanize_input_cannot_satisfy_final_binding(self):
+        self.write_all()
+        receipt = self.ep / g.HUMANIZE_RELPATH
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["before"]["path"] = "20_script/script_draft_pre_humanize_v1.md"
+        receipt.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        self._update_receipt_approval_hash(receipt)
+        self.assertCode("FAIL_HUMANIZE_FINAL_BINDING")
+
+    def test_non_pass_humanize_status_blocks_lock(self):
+        self.write_all()
+        receipt = self.ep / g.HUMANIZE_RELPATH
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["status"] = "WAIT_HUMANIZE_STYLE"
+        receipt.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        self._update_receipt_approval_hash(receipt)
+        self.assertCode("WAIT_HUMANIZE_KOREAN")
+
+    def test_humanize_report_check_shape_is_fail_closed(self):
+        self.write_all()
+        receipt = self.ep / g.HUMANIZE_RELPATH
+        payload = json.loads(receipt.read_text(encoding="utf-8"))
+        payload["total_violations"] = False
+        receipt.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        self._update_receipt_approval_hash(receipt)
+        self.assertCode("FAIL_HUMANIZE_REPORT_SHAPE")
 
 
 class TestMissingEvidence(LockCase):

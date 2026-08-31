@@ -125,13 +125,15 @@ S0  승인 채널 소스 탐색  최근 이슈·영상주소·자막 후보 보�
 S0T 회차 정치용어 선별  기사·제목 문맥 -> 최대 150개 용어팩
 S0R 원본 SRT 의미 검수  용어 경고 -> 사용자 ±3초 음성 확인 -> receipt
 S1  소스 패킷 생성      PASS_110_SOURCE_SRT_REVIEWED 자막 -> GPT 입력 묶음
-S2  GPT 초벌 대본       script_draft_v1.md
-S2R Retention Story Rewrite
-                         PROJECT_GPT/Hermes 내부 작가 패스. 전체 대본 재구성
-S3  기계 검증           verify_draft.py
+S2  GPT 초벌 대본       script_draft_pre_humanize_v1.md
+S2D DIRECT VOICE        PROJECT_GPT/Hermes 내부 작가 패스. 논지·문장 호흡 정렬
+S2R Retention Rewrite    PROJECT_GPT/Hermes 내부 작가 패스. 전체 대본 재구성
+S2H Humanize KR          필수 PRE-119 자연화 -> script_draft_v1.md + fidelity receipt
+S3  기계 검증           verify_draft.py. S2H PASS 대본만 입력
 S4  Claude 최초 전체 검수
                          호출 실패 때만 Codex CLI 읽기 전용 대체 검수
 S5  GPT/CODEX 수정      script_revised_v2.md + 변경 내역
+S5H Final Humanize KR    최종 대본 SHA 결합. 변경 뒤에는 반드시 재실행
 S6  같은 검수자 diff 검수
                          S4 실제 검수자가 변경분과 지적 반영을 확인
 S7  사용자 승인         user_approval.json
@@ -139,12 +141,13 @@ S8  잠금                gate_script_lock.py -> master_script_locked.md
 S9  111 인계            음성·시간축·SRT
 ```
 
-### S2R Retention Story Rewrite
+### S2D DIRECT VOICE + S2R Retention Story Rewrite
 
-S2R은 PROJECT_GPT/Hermes 내부 작가 패스다. 새 운영 시스템이 아니며
-새 승인 단계가 아니다. 별도 상태 파일이나 receipt를 만들지 않는다. 초벌을 부분 교정하는
-단계가 아니라 후킹, 정보 공개 순서, 챕터별 보상, 원본·나레이션 배치와
-지속시청 구조를 기준으로 전체 대본을 재구성하는 2차 집필이다.
+S2D와 S2R은 PROJECT_GPT/Hermes 내부 작가 패스다. 새 승인 단계가 아니다.
+별도 운영 시스템·상태 파일·receipt를 만들지 않는다. S2D는 사용자가 정한
+논지를 흔들지 않고 짧은 문장·한 문장 한 주장·직접적인 정치 나레이션으로 맞춘다.
+S2R은 그 초벌을 부분 교정하는 단계가 아니라 후킹, 정보 공개 순서, 챕터별 보상,
+원본·나레이션 배치와 지속시청 구조를 기준으로 전체 대본을 재구성하는 2차 집필이다.
 
 다음 조건이 전부 참일 때만 실행한다.
 
@@ -158,21 +161,46 @@ S2R은 PROJECT_GPT/Hermes 내부 작가 패스다. 새 운영 시스템이 아�
 멈춘다. 핵심 논지를 바꾸거나 source packet에 없는 새 사실이 필요하면 직접
 추가하지 말고 `WAIT_PROJECT_GPT_RULING`으로 복귀한다.
 
-S2R은 [Retention Story Editor](references/retention-story-editor.md)의 명령과
+S2D/S2R은 [Retention Story Editor](references/retention-story-editor.md)와
 현재 [draft-schema.md](references/draft-schema.md)를 그대로 사용한다. 새
-대본 schema를 만들지 않는다. S2R의 전체 수정 대본만
-`20_script/script_draft_v1.md`에 쓰고, 변경 내역과 blocker는 실행 보고에만
-둔다. 대본 파일은 `---`로 시작하며 보고 섹션을 포함하지 않는다. S2R 뒤에는
-이 파일을 대상으로 S3 기계 검증을 진행한다. S3가 실패하면 Claude 검수로
-진행하지 않는다.
+대본 schema를 만들지 않는다. S2D/S2R의 출력은
+`20_script/script_draft_pre_humanize_v1.md` 하나다. 변경 내역과 blocker는
+실행 보고에만 두고 대본 파일은 `---`로 시작하며 보고 섹션을 포함하지 않는다.
 
-10~20분 시사·뉴스형 정치롱폼이나 정치인 인물 서사는 S2R 전에 반드시
+10~20분 시사·뉴스형 정치롱폼이나 정치인 인물 서사는 S2D/S2R 전에 반드시
 [Political News Writing Framework](references/political-news-writing-framework.md)를
 읽고 구조와 문체를 적용한다. 구조 이름과 제작·검수 언어는 완성 대본에
 노출하지 않는다.
 
-S3에서 걸리면 S4로 가지 않는다. 양식 위반이면 `FAIL_DRAFT_FORMAT`,
-내용 위반이면 `WAIT_DRAFT_VERIFICATION`.
+### S2H Humanize KR — 필수 PRE-119 자연화
+
+S2H는 [Humanize KR v2.3.2 110 어댑터](references/humanize-korean-v2.3.2.md)를
+실제로 실행하는 필수 단계다. Humanize KR은 119 뒤가 아니라 110 안에서,
+S2D/S2R 직후·S3 직전에만 작동한다. 어댑터는 별도 관리 스킬·별도 runtime·별도
+manifest를 만들지 않는다.
+
+1. `script_draft_pre_humanize_v1.md`를 입력 원본으로 보존한다.
+2. `[나레이션]` 본문만 자연화하여 `20_script/script_draft_v1.md`를 쓴다.
+   frontmatter, CHAPTER 제목, `근거:`, `[원본]`과 직접 인용은 byte 수준으로 바꾸지 않는다.
+3. 반드시 다음을 실행한다.
+
+```bash
+py -3.14 scripts/verify_humanize_korean_gate.py \
+  --episode <에피소드 경로> \
+  --before 20_script/script_draft_pre_humanize_v1.md \
+  --after 20_script/script_draft_v1.md \
+  --write
+```
+
+4. `90_reports/humanize_korean_gate_v1.json`의 `UPSTREAM`, `FACT`, `QUOTE`, `NUMBER`, `NAME`, `DIRECT_VOICE`가 모두 0건이고 `status: PASS`일 때만 S3로 간다.
+   실패하면 `WAIT_HUMANIZE_UPSTREAM`, `WAIT_HUMANIZE_FIDELITY`,
+   `WAIT_HUMANIZE_STYLE`, `WAIT_HUMANIZE_OVEREDIT` 중 해당 상태로 멈춘다.
+5. S3가 실패하면 S4로 가지 않는다. 양식 위반이면 `FAIL_DRAFT_FORMAT`, 내용 위반이면
+   `WAIT_DRAFT_VERIFICATION`이다.
+
+Humanize KR은 사실을 새로 검증하거나 논지를 판정하는 도구가 아니다. source packet,
+S3, S4/S6 검수가 그 일을 한다. Humanize receipt는 원본↔자연화 사이에서
+사실·인용·수치·이름이 바뀌지 않았음을 SHA와 diff로 묶는 별도 증거다.
 
 ### S4 최초 전체 검수
 
@@ -225,6 +253,26 @@ deferred_tts: 0
 deferred_assembly: 0
 ```
 
+### S5H Final Humanize KR 재실행
+
+S5 뒤 대본 바이트가 하나라도 바뀌면 `script_revised_v2.md`를 before로 두고
+`master_script_final.md`를 after로 다시 자연화한 뒤 S3를 재실행한다. S6는 이
+post-Humanize 최종본을 검수한다. S5 변경이 없더라도 S4 승인 대본을
+`master_script_final.md`로 byte-identical 복사한 뒤, 그 최종 경로를 after로 하는
+Humanize gate를 다시 실행한다. 기존 receipt를 재사용하지 않는다.
+
+```bash
+py -3.14 scripts/verify_humanize_korean_gate.py \
+  --episode <에피소드 경로> \
+  --before 20_script/script_revised_v2.md \
+  --after 20_script/master_script_final.md \
+  --write
+```
+
+복사 경로에서는 `--before`만 S4 승인 `script_draft_v1.md`로 바꾼다. 이 최종 receipt의
+`after.path`와 SHA가 승인 대상 `master_script_final.md`와 같지 않으면 S8 잠금은
+통과하지 않는다.
+
 ### S6 재검수 비용 규칙
 
 S6은 S4 이후의 diff 검수다. S4의 최초 전체 검수를 대신하지 않는다. S4가 Claude면
@@ -234,14 +282,17 @@ S6 필수 조건:
 
 - S4 verdict가 `APPROVED`가 아닌 경우
 - S4 이후 대본 파일 SHA가 변경된 경우
+- S5H Humanize KR이 `script_revised_v2.md`를 자연화하여 최종 대본 SHA가 달라진 경우
 - Claude 중요 지적을 반영한 경우
 - 논지·챕터·직접인용·source 구간이 변경된 경우
 - 사용자가 재검수를 요청한 경우
 
-S6 생략 가능 조건은 다음 두 조건을 모두 만족할 때뿐이다.
+S6 생략 가능 조건은 다음 세 조건을 모두 만족할 때뿐이다.
 
 - S4 verdict가 `APPROVED`
 - S4 이후 대본 바이트 변경이 0
+- `humanize_korean_gate_v1.json`의 after SHA가 byte-identical
+  `master_script_final.md`를 가리키는 경우
 
 S6에서는 변경 내역과 S4 지적 목록을 우선 읽고, 바뀐 문맥을 이해하는 데
 필요한 범위까지 확인한다. 수정본에는 변경 내역이 필수다. 없으면 무엇이
@@ -253,22 +304,25 @@ S4 승인 대본을 `master_script_final.md`로 승격할 때는 byte-identical 
 새로 만들지 않고 기존 `master_script_final.md`, `user_approval.json`,
 `master_script_locked.md`, `script_lock.json` 계약을 유지한다.
 
-### S8 잠금 3요건
+### S8 잠금 4요건
 
-세 증거가 전부 있고, 넷이 같은 대본을 가리킬 때만 잠금이 나온다.
+네 증거가 전부 있고, 다섯 개의 대본 SHA가 같은 최종본을 가리킬 때만 잠금이 나온다.
 잠금 JSON의 기계 계약은
 [script_lock.schema.json](references/script_lock.schema.json) 하나를 사용하며,
 111의 동명 스키마 파일과 byte-identical이어야 한다.
 
 ```text
-verification_report_v*.json   기계 검증 0건
-claude_review_v*.md           Claude 또는 Codex CLI verdict: APPROVED
-user_approval.json            approved: true
-master_script_final.md        승인 대상 대본
+verification_report_v*.json          기계 검증 0건
+humanize_korean_gate_v1.json         Humanize KR FACT/QUOTE/NUMBER/NAME 0건
+claude_review_v*.md                  Claude 또는 Codex CLI verdict: APPROVED
+user_approval.json                   approved: true + 모든 evidence SHA 고정
+master_script_final.md               승인 대상 대본
 ```
 
-네 SHA-256이 하나가 아니면 `FAIL_STALE_REVIEW_SHA`다. 검수는 v1을 봤는데
-잠금이 v2를 가리키면 아무도 읽지 않은 문장이 확정 대본이 된다.
+`master_script_final.md`, `verification_report_v*.json`, `claude_review_v*.md`,
+`user_approval.json`, `humanize_korean_gate_v1.json`의 **대상 대본 SHA**는 하나여야 한다.
+Humanize receipt 파일 자체의 SHA는 `user_approval.json`이 별도로 고정한다. 검수는 v1을
+봤는데 잠금이 v2를 가리키면 아무도 읽지 않은 문장이 확정 대본이 된다.
 
 두 종류의 SHA를 혼동하지 않는다.
 
@@ -278,9 +332,12 @@ master_script_final.md        승인 대상 대본
   SHA다.
 
 S6 검수 문서 내부 `script_sha256`은 최종 대본 SHA와 일치해야 한다.
-`user_approval.json`은 별도로 최종 검수 문서 파일의 경로와 SHA를 고정한다.
-`claude_review_path`, `claude_review_sha256`, `claude_review_event_id`는 기존
-잠금 스키마 호환 필드이며 Codex CLI 대체 검수에서도 그대로 사용한다.
+`user_approval.json`은 별도로 최종 검수 문서와 Humanize gate 문서의 경로·SHA를
+고정한다. `claude_review_path`, `claude_review_sha256`, `claude_review_event_id`는
+기존 잠금 스키마 호환 필드이며 Codex CLI 대체 검수에서도 그대로 사용한다.
+`humanize_korean_gate_path`는 정확히
+`90_reports/humanize_korean_gate_v1.json`이고 `humanize_korean_gate_sha256`과 함께
+승인서에 있어야 한다.
 
 승인서가 경로를 직접 지목한다. 파일명으로 최신본을 고르지 않는다 — 자동
 선택이 있으면 승인받지 않은 `v99`를 나중에 떨어뜨려 잠금을 바꿔칠 수 있다.
@@ -412,20 +469,23 @@ SRT 화자 전환용 비발화 표식이므로 `[원본]` 문장에서 제거한
 10_analysis/source_term_candidates_v1.json S0R. 처음 본/저신뢰 표현 사용자 알림 큐
 90_reports/source_srt_quality_report_v1.json S0R. 경고·±3초 음성 구간·SHA 결합 상태
 90_reports/source_srt_review_receipt_v1.json S0R. 사용자 오디오 대조 및 PROJECT_GPT 기록
-20_script/script_draft_v1.md             S2/S2R. GPT 산출. 보고 섹션 없는 초벌 정본
+20_script/script_draft_pre_humanize_v1.md S2/S2D/S2R. Humanize 입력 원본
+20_script/script_draft_v1.md             S2H. Humanize KR PASS 뒤 S3 입력
+90_reports/humanize_korean_gate_v1.json  S2H/S5H. FACT/QUOTE/NUMBER/NAME diff receipt
 90_reports/verification_report_v1.json   S3. 기계 검증 결과
 20_script/claude_review_v1.md            S4. Claude 지적서
 20_script/claude_review_vN_codex_fallback.md  S4. Claude 호출 실패 시 Codex CLI 대체 지적서
 20_script/script_revised_v2.md           S5. 수정본 + 변경 내역
-20_script/master_script_final.md         S7. 사용자 승인 대상
+20_script/master_script_final.md         S5H/S7. 최종 Humanize receipt가 지목하는 승인 대상
 20_script/user_approval.json             S7. 승인. 경로와 SHA 를 직접 지목
 20_script/master_script_locked.md        S8. 게이트가 만든다
 20_script/script_lock.json               S8. 게이트가 만든다. 111 인계
 ```
 
-`script_lock.json`은 승인 대본·source packet·기계 검증 보고서·독립 검수서·
-사용자 승인서의 상대경로와 SHA-256을 고정한다. TTS 음색과 렌더 결정은 111·112의
-후속 잠금이며 110 대본 잠금에 넣지 않는다.
+`script_lock.json`은 승인 대본·source packet·기계 검증 보고서·독립 검수서·사용자
+승인서의 상대경로와 SHA-256을 고정한다. Humanize KR fidelity receipt는 이
+`user_approval.json` 안의 경로·SHA로 함께 결합되어야 한다. TTS 음색과 렌더 결정은
+111·112의 후속 잠금이며 110 대본 잠금에 넣지 않는다.
 
 ## 실패 상태
 
@@ -440,6 +500,14 @@ BLOCKED_TRANSCRIPT_MISMATCH
 BLOCKED_SOURCE_PACKET_NOT_BUILT
 FAIL_DRAFT_FORMAT
 WAIT_DRAFT_VERIFICATION
+WAIT_HUMANIZE_UPSTREAM
+WAIT_HUMANIZE_FIDELITY
+WAIT_HUMANIZE_STYLE
+WAIT_HUMANIZE_OVEREDIT
+WAIT_HUMANIZE_KOREAN
+FAIL_HUMANIZE_GATE_PATH
+FAIL_HUMANIZE_REPORT_SHAPE
+FAIL_HUMANIZE_FINAL_BINDING
 WAIT_CLAUDE_REVIEW
 WAIT_REVIEW_UNAVAILABLE
 WAIT_PROJECT_GPT_RULING
@@ -484,6 +552,8 @@ CapCut draft / project / material / text track / timeline / ZIP.
 경계 선언 3요건 실재
 KEEP_UNCHANGED 절대경로 2개 실재
 직접인용 불일치를 실제로 탐지하는가 (음성 픽스처)
+Humanize KR가 FACT/QUOTE/NUMBER/NAME 변경을 차단하는가
+Humanize receipt가 최종 승인 대본 경로·SHA를 직접 묶는가
 확정 서술 위반을 실제로 탐지하는가 (음성 픽스처)
 cue 범위 밖 참조를 탐지하는가 (음성 픽스처)
 ```

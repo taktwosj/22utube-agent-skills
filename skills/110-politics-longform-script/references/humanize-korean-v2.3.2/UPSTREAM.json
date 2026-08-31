@@ -1,0 +1,22 @@
+{
+  "schema": "110-humanize-korean-upstream-pin.v1",
+  "integration": "110-politics-longform-script pre-119 gate",
+  "upstream": {
+    "repository": "https://github.com/epoko77-ai/im-not-ai",
+    "tag": "v2.3.2",
+    "commit": "bad4ef0d1e15c7b4e09be0cb213c456d8b9a4258",
+    "license": "MIT"
+  },
+  "upstream_artifacts": [
+    {
+      "path": "codex/skills/humanize-korean/SKILL.md",
+      "sha256": "7a60c8240218ac7a3cb15f26f0824a682958cdc0475ba2d828c8375edc870569"
+    },
+    {
+      "path": "skills/humanize-korean/references/quick-rules.md",
+      "sha256": "258bd9f755fc04a5894f42e5e0a0dcf3c66ee7cf20854d91b4fbac0becf2c08e"
+    }
+  ],
+  "local_adapter": "../humanize-korean-v2.3.2.md",
+  "purpose": "Pinned behavioral adapter only; no upstream .git directory, runtime install, or second managed skill is created."
+}

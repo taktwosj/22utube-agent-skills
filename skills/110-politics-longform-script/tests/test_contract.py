@@ -18,6 +18,7 @@ sys.path.insert(0, str(SKILL / "scripts"))
 import verify_draft as vd                                    # noqa: E402
 import build_source_packet as bsp                            # noqa: E402
 import gate_script_lock as gsl                               # noqa: E402
+import verify_humanize_korean_gate as hkg                    # noqa: E402
 import draft_md as dm                                        # noqa: E402
 
 DOCS = [SKILL / "SKILL.md"] + sorted((SKILL / "references").glob("*.md"))
@@ -178,6 +179,32 @@ class TestRetentionStoryEditorContract(unittest.TestCase):
         self.assertIn("S2R Retention Story Rewrite", self.skill_text)
         self.assertIn("PROJECT_GPT/Hermes 내부 작가 패스", self.skill_text)
         self.assertIn("새 승인 단계가 아니다", self.skill_text)
+
+    def test_humanize_kr_is_internal_pre119_gate_not_second_skill(self):
+        adapter = SKILL / "references" / "humanize-korean-v2.3.2.md"
+        self.assertTrue(adapter.is_file(), "110 Humanize KR adapter가 없다")
+        self.assertEqual(hkg.verify_upstream_snapshot(), [])
+        required = (
+            "S2D DIRECT VOICE",
+            "S2H Humanize KR",
+            "S5H Final Humanize KR",
+            "script_draft_pre_humanize_v1.md",
+            "verify_humanize_korean_gate.py",
+            "`UPSTREAM`, `FACT`, `QUOTE`, `NUMBER`, `NAME`, `DIRECT_VOICE`",
+            "기존 receipt를 재사용하지 않는다",
+            "humanize_korean_gate_path",
+        )
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.skill_text)
+        self.assertEqual(
+            gsl.FIELD["humanize"],
+            ("humanize_korean_gate_path", "humanize_korean_gate_sha256"),
+        )
+        self.assertFalse(
+            (SKILL.parent / "humanize-korean").exists(),
+            "Humanize KR를 별도 관리 스킬로 추가하면 110 단일 경계가 깨진다",
+        )
 
     def test_political_news_framework_is_required_for_news_longform(self):
         self.assertTrue(
