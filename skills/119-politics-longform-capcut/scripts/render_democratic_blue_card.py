@@ -296,7 +296,8 @@ def render_card(
                     *base_args, "--hide-scrollbars", "--window-size=" + ",".join(map(str, profile["render_size"])),
                     f"--screenshot={output_path.resolve()}", uri,
                 ],
-                capture_output=True, text=True, check=False, timeout=45,
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, timeout=45,
             )
         except subprocess.TimeoutExpired as error:
             raise RuntimeError("HTML_CARD_RENDER_TIMEOUT") from error
@@ -305,7 +306,8 @@ def render_card(
         try:
             dump = subprocess.run(
                 [*base_args, "--dump-dom", uri],
-                capture_output=True, text=True, check=False, timeout=45,
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, timeout=45,
             )
         except subprocess.TimeoutExpired as error:
             output_path.unlink(missing_ok=True)
@@ -329,6 +331,8 @@ def render_card(
             ["ffmpeg", "-y", "-v", "error", "-i", str(temporary_output), "-vf", "scale=" + ":".join(map(str, profile["output_size"])), str(output_path)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             timeout=45,
         )
