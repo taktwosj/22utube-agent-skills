@@ -2,7 +2,7 @@
 
 강한 PRE-119 표식 하나 또는 보조 표식 두 개 이상이 있으면 `direct-script.md`보다 먼저 이 문서를 읽는다. PRE-119 route 잠금과 validation PASS는 별개다.
 
-최초 승인 대본은 `templates/pre119-approved-script.md`를 사용한다. `between_image`·`between_narration`과 카드 종류로 영상만, 영상+나레이션, 영상+나레이션+HTML 챕터 이미지를 구분한다. 모든 본문 카드의 `chapter_label`은 실제 상단 챕터 제목이며, 하단은 `SOURCE_VIDEO+SRT`, `NARRATION_*+SRT`, `COMMENTARY_2LINE`, `NONE` 중 하나다. `COMMENTARY_2LINE`은 승인 입력 문장 2개이며 화면에서는 한 줄 트랙에 시간상 순차 표시한다.
+최초 승인 대본은 `templates/pre119-approved-script.md`를 사용한다. `between_image`·`between_narration`과 카드 종류로 영상만, 영상+나레이션, 영상+나레이션+HTML 챕터 이미지를 구분한다. 모든 본문 카드의 `chapter_title`은 의미·논지를, `chapter_label`은 실제 상단 오버레이 문구를 기록하며 두 값은 서로 달라도 된다. 하단은 `SOURCE_VIDEO+SRT`, `NARRATION_*+SRT`, `COMMENTARY_2LINE`, `NONE` 중 하나다. `COMMENTARY_2LINE`은 승인 입력 문장 2개이며 화면에서는 한 줄 트랙에 시간상 순차 표시한다.
 
 `pre119_handoff.json`에는 제작 보고서용 `publication_report`를 함께 잠근다. 119는 제목·설명·타임라인·출처·썸네일 문구를 새로 쓰지 않고 이 값을 출력 보고서에 그대로 옮긴다.
 

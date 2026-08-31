@@ -149,7 +149,7 @@ next_card: C00_HOOK_02
 | `visual_role` | `PRIMARY_SOURCE` 등 해당 카드 역할 |
 | `source_audio` `narration_audio` `cta_like_subscribe` | `ON` `OFF` |
 
-inset-frame 근본 프로젝트에서는 `CHAPTER_CARD`에 `style_profile: DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode: NONE`을 쓴다. 구형 전체화면 루트만 V1을 쓴다.
+새 `CHAPTER_CARD`는 `style_profile: DEMOCRATIC_BLUE_INSET_CARD_V2`, `lower_mode: NONE`을 쓴다. 한 카드에는 한 주제·`info_block` 하나만 승인하고, 주제가 둘 이상이면 시간상 연속 카드로 분리한다. 구형 전체화면 루트만 V1을 쓴다.
 `COMMENTARY_2LINE` 을 쓰면 `lower_line1` `lower_line2` 를 채운다. 각 문장은 공백 제외 15자 이하이며 화면에는 시간상 순차 한 줄로 표시된다.
 
 ### B. 시드 블록 **밖**에 쓸 것

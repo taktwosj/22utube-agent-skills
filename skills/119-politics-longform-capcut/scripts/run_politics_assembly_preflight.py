@@ -99,8 +99,6 @@ def validate_overlay_contract(document: dict[str, Any], cards_path: Path) -> lis
                 findings.append({"code": "CHAPTER_TITLE_REQUIRED", "card_id": card_id})
             if not chapter_label:
                 findings.append({"code": "CHAPTER_LABEL_REQUIRED", "card_id": card_id})
-            elif chapter_title and chapter_label != chapter_title:
-                findings.append({"code": "CHAPTER_LABEL_MISMATCH", "card_id": card_id})
         if card_type == "SOURCE_VIDEO" and not str(card.get("source_display_label", "")).strip():
             findings.append({"code": "SOURCE_DISPLAY_LABEL_REQUIRED", "card_id": card_id})
         if card.get("style_profile") == INSET_CARD_STYLE_PROFILE:

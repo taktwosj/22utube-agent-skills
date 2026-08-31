@@ -67,6 +67,7 @@ class DemocraticBlueCardRendererTests(unittest.TestCase):
     def payload(self) -> dict[str, object]:
         return {
             "visual_id": "V001",
+            "style_profile": renderer.V1_STYLE_PROFILE,
             "top_label": "POLICY CHECK",
             "headline_line1": "정책 방향과 실제 집행",
             "headline_line2": "무엇이 달랐나",
@@ -139,6 +140,65 @@ class DemocraticBlueCardRendererTests(unittest.TestCase):
         payload["raster_size"] = "1280x720"
         with self.assertRaisesRegex(RuntimeError, "INSET_CARD_RASTER_SIZE_INVALID"):
             renderer.resolve_style_profile(payload)
+
+    def test_missing_style_profile_defaults_to_v8_inset_focus(self) -> None:
+        payload = self.payload()
+        payload.pop("style_profile", None)
+
+        profile = renderer.resolve_style_profile(payload)
+
+        self.assertEqual(profile["style_profile"], "DEMOCRATIC_BLUE_INSET_CARD_V2")
+
+    def test_inset_focus_requires_exactly_one_info_block(self) -> None:
+        payload = self.payload()
+        payload["style_profile"] = "DEMOCRATIC_BLUE_INSET_CARD_V2"
+        payload["info_blocks"] = payload["info_blocks"][:1]
+
+        renderer.validate_payload(payload)
+
+        payload["info_blocks"].append(
+            {"label": "추가", "main": "두 번째 주제", "sub": "별도 카드로 나눠야 합니다"}
+        )
+        with self.assertRaisesRegex(RuntimeError, "INSET_FOCUS_INFO_BLOCK_COUNT_INVALID"):
+            renderer.validate_payload(payload)
+
+    def test_inset_focus_css_locks_approved_large_type(self) -> None:
+        css = (SCRIPTS.parent / "templates" / "democratic_blue_inset_card_v2.css").read_text(
+            encoding="utf-8"
+        )
+
+        for declaration in (
+            ".headline { margin:0; font-size:60px;",
+            ".info-label { font-size:30px;",
+            ".info-main { font-size:68px;",
+            ".info-sub { margin-top:14px; font-size:40px;",
+        ):
+            self.assertIn(declaration, css)
+        self.assertNotIn(".info-block:nth-child(2)", css)
+
+    def test_inset_focus_renders_one_large_topic_without_collisions(self) -> None:
+        payload = self.payload()
+        payload["style_profile"] = "DEMOCRATIC_BLUE_INSET_CARD_V2"
+        payload["info_blocks"] = payload["info_blocks"][:1]
+        browser = renderer.find_browser()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            payload_path = root / "focus.json"
+            output_path = root / "focus.png"
+            payload_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+            report = renderer.render_card(
+                payload_path,
+                output_path,
+                browser_path=browser,
+            )
+
+        self.assertEqual(report["style_profile"], "DEMOCRATIC_BLUE_INSET_CARD_V2")
+        self.assertEqual((report["width"], report["height"]), (1920, 1080))
+        self.assertTrue(report["geometry"]["valid"], report["geometry"])
+        self.assertEqual(len(report["geometry"]["blocks"]), 1)
+        self.assertFalse(report["geometry"]["collisions"]["blockToFooter"])
 
     def test_linux_root_browser_flags_include_no_sandbox(self) -> None:
         flags = renderer.browser_base_args(

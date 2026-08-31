@@ -230,9 +230,21 @@ class Pre119CardCompilerTests(unittest.TestCase):
         self.assertEqual(compiled["cards"][0]["visual_text"], "Approved screen text")
         self.assertEqual([card["card_type"] for card in compiled["cards"]], ["SOURCE_VIDEO"])
 
-    def test_source_display_label_is_required_for_screen_credit(self) -> None:
+    def test_missing_source_display_label_falls_back_to_verified_channel(self) -> None:
         self.write_validation(seed_card_overrides={"source_display_label": ""})
         self.write_evidence([self.source_card(source_display_label="")])
+
+        result = self.run_compiler()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        compiled = json.loads(self.output.read_text(encoding="utf-8"))
+        self.assertEqual(compiled["cards"][0]["source_display_label"], "fixture-channel")
+
+    def test_source_credit_requires_display_label_or_verified_channel(self) -> None:
+        self.write_validation(seed_card_overrides={"source_display_label": ""})
+        card = self.source_card(source_display_label="")
+        card["source_channel"] = ""
+        self.write_evidence([card])
 
         result = self.run_compiler()
 

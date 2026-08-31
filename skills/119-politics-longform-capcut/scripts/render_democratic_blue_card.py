@@ -34,7 +34,7 @@ MAX_TEXT = {
 
 
 def resolve_style_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    style_profile = str(payload.get("style_profile", V1_STYLE_PROFILE)).strip() or V1_STYLE_PROFILE
+    style_profile = str(payload.get("style_profile", INSET_CARD_STYLE_PROFILE)).strip() or INSET_CARD_STYLE_PROFILE
     if style_profile == V1_STYLE_PROFILE:
         return {
             "style_profile": V1_STYLE_PROFILE,
@@ -87,7 +87,14 @@ def validate_payload(payload: dict[str, Any]) -> None:
     if payload.get("lower_safe_area") is not True:
         raise RuntimeError("LOWER_SAFE_AREA_REQUIRED")
     blocks = payload.get("info_blocks")
-    if not isinstance(blocks, list) or not 2 <= len(blocks) <= 4:
+    style_profile = resolve_style_profile(payload)["style_profile"]
+    if style_profile == INSET_CARD_STYLE_PROFILE and (
+        not isinstance(blocks, list) or len(blocks) != 1
+    ):
+        raise RuntimeError("INSET_FOCUS_INFO_BLOCK_COUNT_INVALID")
+    if style_profile == V1_STYLE_PROFILE and (
+        not isinstance(blocks, list) or not 2 <= len(blocks) <= 4
+    ):
         raise RuntimeError("INFO_BLOCK_COUNT_INVALID")
     for index, block in enumerate(blocks):
         if not isinstance(block, dict):

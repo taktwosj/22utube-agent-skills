@@ -105,6 +105,12 @@ target start/duration
 
 동일 identity·SHA·duration의 실제 PASS 산출물이 있으면 다시 조사·검증·생성하지 않는다.
 
+화면용 문구는 승인 콘텐츠 안에서 독립 편집값으로 다룬다.
+
+- `chapter_title`은 챕터의 의미·논지를 기록하고, `chapter_label`은 실제 상단 오버레이 문구다. 둘은 모두 비어 있지 않아야 하지만 서로 달라도 된다.
+- `source_display_label`은 짧은 화면 출처명이다. 비어 있으면 검증된 `source_channel`을 사용하며, 출처의 정체성을 바꾸는 별칭은 허용하지 않는다.
+- 이 유연성은 화면용 축약·후킹·배치 문구에만 적용한다. 승인 대본, 직접인용, 나레이션, 카드 순서와 사실관계는 그대로 잠근다.
+
 허용 흐름:
 
 ```text
@@ -184,7 +190,7 @@ HARD_MAX_LINE_CHARS   = 15
 
 ## 민주블루 HTML 카드
 
-`DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`과 `DEMOCRATIC_BLUE_INSET_CARD_V2`는 문서 규칙이 아니라 실제 템플릿·렌더러를 사용한다. V2는 근본 프로젝트의 배경·띠 위에 얹는 이미지 레이어다. 출력 래스터는 `1920×1080`만 허용하며, builder가 수동 근본과 같은 `scale=0.65`, 화면 `x=336, y=189, 1248×702` 프레임으로 배치한다.
+`DEMOCRATIC_BLUE_INSET_CARD_V2`가 새 카드의 기본값이다. 한 카드에는 주제와 `info_block`을 정확히 하나만 넣고, 주제가 둘 이상이면 같은 화면의 좌우 칸으로 묶지 말고 시간상 연속 카드로 분리한다. V2는 제목 60px, 항목명 30px, 핵심문구 68px, 보조문구 40px을 고정하며 글자가 길다는 이유로 축소하지 않는다. `DEMOCRATIC_BLUE_CENTER_INFO_CARD_V1`은 구형 전체화면 프로젝트가 명시적으로 요구할 때만 사용한다. V2는 근본 프로젝트의 배경·띠 위에 얹는 이미지 레이어이며, 출력 래스터는 `1920×1080`만 허용한다. builder는 수동 근본과 같은 `scale=0.65`, 화면 `x=336, y=189, 1248×702` 프레임으로 배치한다.
 
 ```text
 templates/democratic_blue_center_info_card_v1.html
