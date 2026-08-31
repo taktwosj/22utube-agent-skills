@@ -39,6 +39,20 @@ REVIEW_ORIGIN_TO_AUTHORITY = {
 }
 
 VERIFICATION_SCHEMA = "politics-longform-draft-verification.v1"
+HUMANIZE_SCHEMA = "politics-longform-humanize-korean-gate.v1"
+HUMANIZE_RELPATH = Path("90_reports") / "humanize_korean_gate_v1.json"
+HUMANIZE_FINAL_INPUT_RELPATHS = {
+    "20_script/script_draft_v1.md",
+    "20_script/script_revised_v2.md",
+}
+HUMANIZE_REQUIRED_CHECKS = (
+    "UPSTREAM", "FACT", "QUOTE", "NUMBER", "NAME", "DIRECT_VOICE")
+HUMANIZE_UPSTREAM_PIN = {
+    "repository": "https://github.com/epoko77-ai/im-not-ai",
+    "tag": "v2.3.2",
+    "commit": "bad4ef0d1e15c7b4e09be0cb213c456d8b9a4258",
+    "license": "MIT",
+}
 # verify_draft.CHECKS 와 같아야 한다. 하나라도 빠진 보고서는 전량 검증이
 # 돌지 않았다는 뜻이다.
 REQUIRED_CHECKS = ("source_reference", "quote_fidelity", "quote_mode_marks",
@@ -60,6 +74,7 @@ FIELD = {
     "script": ("approved_script_path", "approved_script_sha256"),
     "review": ("claude_review_path", "claude_review_sha256"),
     "report": ("verification_report_path", "verification_report_sha256"),
+    "humanize": ("humanize_korean_gate_path", "humanize_korean_gate_sha256"),
 }
 
 
@@ -115,7 +130,7 @@ def collect(ep: Path):
     그게 곧 fallback 이고, fallback 이 있으면 경로 지목이 무의미해진다.
     """
     files = {"script": None, "report": None, "review": None,
-             "approval": None, "source_packet": None,
+             "humanize": None, "approval": None, "source_packet": None,
              "source_review": None}
     errors = []
 
@@ -245,6 +260,93 @@ def check_provenance(approval, files):
                             or failure.get("script_sha256")
                             != approval.get("approved_script_sha256")):
                         v.append("FAIL_REVIEW_FALLBACK_POLICY: failure evidence invalid")
+    return v
+
+
+def check_humanize_gate(approval, files, script_sha):
+    """Humanize KR receipt가 승인 대상 최종 대본을 실제로 묶는지 확인한다."""
+    v = []
+    path_field, sha_field = FIELD["humanize"]
+    rel = approval.get(path_field)
+    expected_receipt = HUMANIZE_RELPATH.as_posix()
+    if rel != expected_receipt:
+        v.append("FAIL_HUMANIZE_GATE_PATH: 승인서는 "
+                 f"{expected_receipt}만 지목해야 한다")
+    if not approval.get(sha_field):
+        v.append(f"WAIT_HUMANIZE_KOREAN: 승인서에 {sha_field} 없음")
+    if files["humanize"] is None:
+        v.append("WAIT_HUMANIZE_KOREAN: humanize_korean_gate_v1.json 없음")
+        return v
+
+    try:
+        receipt = json.loads(files["humanize"].read_text(encoding="utf-8"))
+    except Exception as exc:
+        return v + [f"WAIT_HUMANIZE_KOREAN: receipt unreadable: {exc}"]
+
+    if receipt.get("schema") != HUMANIZE_SCHEMA:
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: schema mismatch")
+    if receipt.get("episode_id") != files["approval"].parents[1].name:
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: episode_id mismatch")
+    if receipt.get("status") != "PASS":
+        v.append(f"WAIT_HUMANIZE_KOREAN: status={receipt.get('status')!r}")
+    if receipt.get("upstream") != HUMANIZE_UPSTREAM_PIN:
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: upstream pin mismatch")
+
+    total = receipt.get("total_violations")
+    if not isinstance(total, int) or isinstance(total, bool) or total != 0:
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: total_violations must be integer 0")
+    checks = receipt.get("checks")
+    if not isinstance(checks, dict) or set(checks) != set(HUMANIZE_REQUIRED_CHECKS):
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: check set mismatch")
+    else:
+        counted = 0
+        for name in HUMANIZE_REQUIRED_CHECKS:
+            check = checks[name]
+            if not isinstance(check, dict):
+                v.append(f"FAIL_HUMANIZE_REPORT_SHAPE: {name} not object")
+                continue
+            count = check.get("count")
+            violations = check.get("violations")
+            if (not isinstance(count, int) or isinstance(count, bool)
+                    or count < 0 or not isinstance(violations, list)
+                    or count != len(violations)):
+                v.append(f"FAIL_HUMANIZE_REPORT_SHAPE: {name} count/violations")
+                continue
+            counted += count
+            if count:
+                v.append(f"WAIT_HUMANIZE_KOREAN: {name} violations={count}")
+        if isinstance(total, int) and not isinstance(total, bool) and counted != total:
+            v.append("FAIL_HUMANIZE_REPORT_SHAPE: total/check count mismatch")
+
+    after = receipt.get("after")
+    if not isinstance(after, dict):
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: after missing")
+    else:
+        if after.get("path") != approval.get("approved_script_path"):
+            v.append("FAIL_HUMANIZE_FINAL_BINDING: after.path != approved_script_path")
+        if after.get("sha256") != script_sha:
+            v.append("FAIL_HUMANIZE_FINAL_BINDING: after.sha256 != final script SHA")
+    before = receipt.get("before")
+    if (not isinstance(before, dict)
+            or not SHA_RE.fullmatch(str(before.get("sha256") or ""))):
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: before SHA missing")
+    else:
+        before_rel = before.get("path")
+        if before_rel not in HUMANIZE_FINAL_INPUT_RELPATHS:
+            v.append("FAIL_HUMANIZE_FINAL_BINDING: before.path is not an approved final input")
+        else:
+            before_path = files["approval"].parents[1] / before_rel
+            if (not before_path.is_file()
+                    or sha256_of(before_path) != before.get("sha256")):
+                v.append("FAIL_HUMANIZE_FINAL_BINDING: before SHA does not bind its file")
+    packet = receipt.get("source_packet")
+    if not isinstance(packet, dict):
+        v.append("FAIL_HUMANIZE_REPORT_SHAPE: source_packet missing")
+    elif files["source_packet"] is not None:
+        if packet.get("path") != SOURCE_PACKET_RELPATH.as_posix():
+            v.append("FAIL_HUMANIZE_FINAL_BINDING: source_packet path mismatch")
+        if packet.get("sha256") != sha256_of(files["source_packet"]):
+            v.append("FAIL_HUMANIZE_FINAL_BINDING: source_packet SHA mismatch")
     return v
 
 
@@ -402,6 +504,7 @@ def evaluate(files, path_errors=(), script_sha=None):
         if files[k] is not None and not shas.get(k):
             v.append(f"FAIL_STALE_REVIEW_SHA: {k} 에 script_sha256 이 없다")
 
+    v.extend(check_humanize_gate(approval, files, shas.get("script")))
     v.extend(check_pinned_hashes(approval, files))
     v.extend(check_provenance(approval, files))
     return v, shas
