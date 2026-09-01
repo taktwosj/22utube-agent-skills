@@ -2,14 +2,17 @@
 
 유형 선택부터 오디오 정책, 트랙 배치, 아티팩트 체인까지의 단일 조립설명서.
 
-## 나레이션은 전 구간을 채운다
+## 나레이션은 전 구간을 채운다 (2026-08-22 완화)
 
-생성 A9는 영상 길이 전체를 공백 없이 덮는다. 몇 개 컷에만 붙이고 사이를 비우는 배치는 거부된다.
-자막 cue는 V 세그먼트 하나 안에 완전히 담겨야 하므로(`validate_audio_caption`의 mapping 포함 검사)
-전 구간을 채우려면 **V 세그먼트마다 한 컷씩** 배치한다. 문장 길이는 구간 길이 × 약 7자/초로 잡고,
-생성 후 실측이 구간을 넘으면 문장을 줄여 다시 생성한다. 앞뒤 무음은 `apad`로 구간 길이에 정확히
-맞춘다. VIDEO·A9·A9_TEXT의 duration은 실측 오디오 길이가 아니라 **V 구간 범위**로 바인딩한다
-(실측값을 쓰면 µs 단위로 구간을 넘어 cue 포함 검사에 걸린다).
+생성 A9는 영상 길이 전체를 공백 없이 덮는 것이 원칙이나, 정확히 채워야 하는 강제는 아니다.
+**나레이션 총 길이는 영상 총 길이 − 3초까지 허용한다**(예: 영상 50초면 나레이션 47초 이상이면 PASS).
+자막 cue는 이제 V 세그먼트 하나에 강제로 갇히지 않고 **인접한 V 세그먼트 2개까지 걸쳐도 된다**
+(과거 "V 세그먼트마다 한 컷씩"이었던 제약을 완화). 우리가 풀어가는 스토리 흐름을 위해 너무 빡빡한
+컷당-1문장 배치 대신 조금 더 널널한 호흡을 허용한다. 문장 길이는 구간 길이 × 약 7자/초로 잡고,
+생성 후 실측이 (걸치는 경우) 두 구간 합산 길이를 넘으면 문장을 줄여 다시 생성한다. 앞뒤 무음은
+`apad`로 실제 배치 구간 길이에 맞춘다. VIDEO·A9·A9_TEXT의 duration은 실측 오디오 길이가 아니라
+**바인딩된 V 구간(또는 걸친 V 구간 합) 범위**로 바인딩한다(실측값을 쓰면 µs 단위로 구간을 넘어
+cue 포함 검사에 걸린다).
 
 마지막 V의 소스 끝은 원본 실측 길이를 넘을 수 없다(URAKKAI에서는 프레임 허용도 없다).
 원본이 41.14576초면 B/V 표의 끝을 41.145로 잡는다.
@@ -25,15 +28,17 @@
 
 ## 조립 유형 5가지
 
+이 표는 사람이 읽는 설명입니다. 실행 정본은 `scripts/assembly_type_matrix.py`이며 builder와 validator는 같은 정의를 import한다. 새 유형이 기존 A9/A10/STATE 역할과 `audio_policy_matrix.py`의 기존 오디오 경로만 조합한다면 정본에 행 하나와 계약 테스트만 추가한다. 새 물리 트랙, 새 오디오 처리, 새 CapCut 배치가 필요하면 matrix 행 추가가 아니라 공용 엔진 변경이다.
+
 | # | execution_strategy | 음성 | 자막 | production_mode × audio_policy |
 |---|---|---|---|---|
 | 1 화면+상황자막 (TTT형) | `caption_only` | 없음 (원본 무음) | STATE_LASER만; A9/A9_TEXT/A10/A10_TEXT/A11 empty | URAKKAI × `CAPTION_ONLY_MUTE_SOURCE` |
 | 2 전체 TTS 설명형 | `full_tts` | A9 전체, 원본 무음 | A9_TEXT ↔ A9 verbatim | URAKKAI × `TTS_ONLY_MUTE_SOURCE` |
 | 3 원본 화자발언형 | `original_audio_caption` | A10 원본 육성, A9 없음 | A10_TEXT_WHITE/YELLOW (+필요 시 STATE_LASER) | 하위 경로 4개 (아래) |
-| 4 TTS 도입+화자 본문형 | `tts_intro_original_body` | A9 도입 2~4초 + A10 본문 | 각 자막을 해당 음성에 페어링 | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` |
-| 5 나레이션+화자 혼합형 | `narration_plus_speaker` | A9 연결 + A10 증거·감정 | A9_TEXT + A10_TEXT | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED`, overlap=`source_audio[].mode=duck` |
+| 4 TTS 도입+화자 본문형 | `tts_intro_original_body` | A9 도입 2~4초 + A10 본문 | 각 자막을 해당 음성에 페어링 | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` 또는 `A9_TTS_PLUS_A10_SOURCE_CLIP` |
+| 5 나레이션+화자 혼합형 | `narration_plus_speaker` | A9 연결 + A10 증거·감정 | A9_TEXT + A10_TEXT | URAKKAI × `A9_TTS_PLUS_A10_REASSEMBLED` 또는 `A9_TTS_PLUS_A10_SOURCE_CLIP`; overlap=`source_audio[].mode=duck` |
 
-공통: T1/T2 항상, SCREEN_WHITE/SCREEN_EFFECT 전체 구간 템플릿 1개씩, STATE_GLITCH/STATE_FLICKER 예약, A12 항상 `비움`, VIDEO 항상 음소거(소리는 A9/A10 트랙 담당).
+공통: T1/T2 항상, SCREEN_WHITE/SCREEN_EFFECT 전체 구간 템플릿 1개씩, STATE_GLITCH/SOURCE_CREDIT 예약, A12 항상 `비움`, VIDEO 항상 음소거(소리는 A9/A10 트랙 담당).
 
 ## 자격 규칙 (재료 → 가능한 유형)
 
@@ -61,10 +66,30 @@
 |---|---|---|---|---|
 | ① 클린 원본순서 | 순서 변경 0, 컷 0 | `SOURCE_ORDER_UNCHANGED_CLEAN_ONLY` × `SOURCE_ORDER_CLEAN_AUDIO` | raw `SOURCE_CLIP` | 불필요 |
 | ② 화자 유지 원본순서 | 순서 유지, BGM 제거 | `SOURCE_ORDER_UNCHANGED_A10_RETAINED` × `A10_RETAINED_SYNC` | 전체 stem | 필요 |
-| ③ 화자 유지 우라까이 | V순서 재배열 | `URAKKAI` × `A10_REASSEMBLED_SYNC` | V순서 재조립 stem | 필요 |
-| ④ 순서보존 트림 | 일부 B만 제외, 순서 유지 | `URAKKAI` × `SOURCE_ORDER_CLEAN_AUDIO` + `audio_source=SOURCE_CLIP`, `urakkai.production_type="TRIM_ONLY_NO_REORDER"` | 원본에서 V구간대로 직접 컷 | 불필요 |
+| ③ 화자 유지 우라까이 | BGM을 빼야 함 | `URAKKAI` × `A10_REASSEMBLED_SYNC` | V순서 재조립 stem | 필요 |
+| ④ 원음 그대로 우라까이 | BGM을 그대로 둠 | `URAKKAI` × `SOURCE_ORDER_CLEAN_AUDIO` + `audio_source=SOURCE_CLIP` | 원본에서 V구간대로 직접 컷 | 불필요 |
 
-④ 안전장치: 사용 구간은 검증된 원본 Bxx의 부분집합, `final_order`는 `original_order`의 순서 보존 부분열, 각 A10 세그먼트 구간 = 짝 VIDEO 구간 완전 일치. 위반 시 기존 가드가 그대로 차단한다.
+**③과 ④를 가르는 것은 순서가 아니라 A10에 넣을 재료다.** ③은 Demucs로 분리한 보컬 stem,
+④는 원본 오디오 그대로다 — 그래서 ④에는 BGM이 남는다. 다만 이건 재료 선택의 결과일 뿐이고,
+BGM이 실제로 빠졌는지 검사하는 코드는 없다. stem 품질은 사용자가 CapCut에서 확인한다.
+④는 V순서 재배열과 순서보존 트림을 모두 할 수 있다.
+각 A10 세그먼트가 짝 VIDEO의 원본 구간을 그대로 들고 오므로 재배열해도 stem이 필요 없다.
+`capcut_source_range_us`에 실제 원본 구간을 명시하면 CapCut이 원본에서 그 지점을 찾아 재생한다.
+
+유형 4·5처럼 새 TTS 나레이션을 얹으면서도 stem을 만들고 싶지 않으면
+`URAKKAI` × `A9_TTS_PLUS_A10_SOURCE_CLIP` + `audio_source=SOURCE_CLIP`을 쓴다.
+A10은 A9가 덮는 Vxx에서 `duck`, 나머지에서 `on`이며 이 판정은 빌더가 자동으로 한다.
+A9 cue가 Vxx의 일부만 덮는 것은 양쪽 다 미지원이라 manifest 작성 시점에 거부된다.
+
+순서보존 트림(일부 B만 제외하고 순서 유지)을 할 때만 두 가지를 더 선언한다.
+
+- `v_plan.original_order` — 제외한 B까지 포함한 **원본 B 전체 목록**.
+  이걸 빼면 `original_order`가 살아남은 V행에서만 파생되어 `final_order`와 같아지고,
+  트림이 `URAKKAI_STRUCTURE_UNCHANGED`로 거부된다.
+- `v_plan.urakkai_production_type="TRIM_ONLY_NO_REORDER"` — `E_EFFECTIVE_CLIP`(가짜 분할) 면제용.
+
+안전장치: 사용 구간은 검증된 원본 Bxx의 부분집합, `final_order`는 `original_order`의 순서 보존 부분열,
+각 A10 세그먼트 구간 = 짝 VIDEO 구간 완전 일치. 위반 시 기존 가드가 그대로 차단한다.
 
 ## 유형별 15행 값 요약 (최종 표 기준)
 
@@ -77,6 +102,14 @@
 | A10 | 없음 | 없음 | 값 | 값 | 값(duck) |
 
 원본표는 유형 판정 전이므로 항상 15행 전부 기록한다.
+
+## 얇은 production profile
+
+반복 제작 프리셋은 `schemas/production_profile.schema.json`의 selector 여섯 개만 소유한다: `schema_version`, `profile_id`, `assembly_type`, `template_profile`, `production_mode`, `audio_policy`. `scripts/production_profile.py`가 조립 전략, 오디오 소스, 트랙 레이아웃, 필수·선택·비움 역할을 공용 matrix에서 파생한다. profile에 이 파생값이나 템플릿 좌표를 다시 적지 않는다.
+
+`presets/politics-ttt-shorts/profile.json`은 Type 1·TTT·무음·`shrt_black_top_v1` 선택값만 갖는 예시다. 정치롱폼의 논지·대본·카드 잠금은 119 경계에 남고, 파생 쇼츠의 원본표 이후 제작만 001이 소유한다. 실제 출처 채널명은 회차 데이터이므로 프리셋에 고정하지 않는다.
+
+`scripts/build_episode_locks.py --profile <path>`는 URAKKAI 잠금 생성 경로다. SOURCE_ORDER 계열 등 비-URAKKAI 경로는 기존 owner 경로를 유지한다. profile 해석이 가능하다는 사실만으로 모든 제작 모드를 이 generator가 소유하는 것은 아니다.
 
 ## SOURCE_CLIP A10 아티팩트 체인 (유형 3-①·④)
 
@@ -100,9 +133,23 @@
 유형 2는 나레이션이 영상 전체를 덮으므로 이 제약이 설계 단계에서 바로 걸린다.
 
 - **나레이션 문장 하나 = V 열 하나 안.** 문장이 두 열에 걸치게 쓰면 조립이 막힌다.
-- 짧은 V 열까지 전부 채우려 하지 마라. 문장이 토막나서 읽기 나빠진다.
-  **긴 열 위주로 절반 정도만 얹는 편이 호흡도 낫다.** (26열 중 14 cue가 실제로 잘 나왔다.)
-- cue가 열보다 짧아도 된다. 뒤에 공백이 남는 것이 정상이다. 열과 길이를 맞출 필요는 없다.
+- **열마다 cue 하나가 기본이다.** V 열이 26개면 cue도 26개가 기본이고, 짧은 열에는 짧은 문장을 넣는다.
+  다만 이건 강제가 아니다 — 맨 위 완화 규칙대로 **나레이션 총 길이가 영상 총 길이 − 3초 이상**이면
+  일부 열을 비워도 통과한다. 열이 1초 미만이라 억지 문장을 넣어야 하는 경우에만 비우고,
+  비운 이유를 우라까이표에 남긴다. 사용자가 명시적으로 "열마다 안 넣어도 된다"고 하면 그 지시가 우선이다.
+- cue 오디오가 열보다 조금 짧은 것은 정상이다 — 앞뒤 무음 0.2~0.35초가 그 여유다.
+  다만 `apad`로 열 길이에 정확히 맞춰 **A9 트랙에 구멍이 남지 않게** 한다.
+
+### A9_TEXT 한 줄 글자수
+
+우라까이 A9_TEXT는 **한 줄 10자, 최대 2줄**이다. 원본표 A9_TEXT와 STATE_LASER는 15자다.
+세 값 모두 `protocol.json`의 `grid_harness`에 있고 grid harness와 design lock이 같은 값을 강제한다.
+
+이 10자는 사용자가 정한 값이고, 앞서 쓰이던 15자는 템플릿에서 글자가 프레임을 벗어나기 직전으로
+실측한 값이다. **두 값은 근거가 다르다.** 10자 도입(`2441cdf`) 이전 회차 6편에는 11~16자 줄이
+11개 있는데, 이미 제작이 끝난 회차이므로 재검증 대상이 아니다. 과거 회차를 새 예산에 맞추려고
+승인된 대본을 고쳐 쓰지 않는다. 다만 16자 줄 2개는 옛 15자 예산도 넘으므로 실제로 프레임을
+벗어났을 수 있다 — 그 회차를 다시 열 일이 있으면 화면으로 확인한다.
 
 ### 문장 길이 잡는 법
 

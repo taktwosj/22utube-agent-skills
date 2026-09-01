@@ -55,7 +55,7 @@ def one_column_grid(kind: str, duration_us: int) -> str:
         if kind == "original"
         else f"| 레이어 \\ 목표 시간 | V01 0.0–{seconds:g} B01 |"
     )
-    roles = ("T1", "T2", "A9_TEXT", "A10_TEXT_YELLOW", "A10_TEXT_WHITE", "STATE_LASER", "STATE_GLITCH", "STATE_FLICKER", "SCREEN_WHITE", "SCREEN_EFFECT", "VIDEO", "A9", "A10", "A11", "A12_RESERVED_EMPTY")
+    roles = ("T1", "T2", "A9_TEXT", "A10_TEXT_YELLOW", "A10_TEXT_WHITE", "STATE_LASER", "STATE_GLITCH", "SOURCE_CREDIT", "SCREEN_WHITE", "SCREEN_EFFECT", "VIDEO", "A9", "A10", "A11", "A12_RESERVED_EMPTY")
     transcript = "" if kind != "original" else f"""## 원본 5분류 대본
 
 ### B01 0.0–{seconds:g}

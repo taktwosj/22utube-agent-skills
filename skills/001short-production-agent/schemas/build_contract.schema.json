@@ -16,7 +16,7 @@
   "properties": {
     "schema_version": {"type": "string", "const": "001short-build-contract-v1"},
     "episode_id": {"type": "string", "minLength": 1},
-    "track_layout_version": {"type": "string", "const": "shrt_white_base_v2_15"},
+    "track_layout_version": {"type": "string", "minLength": 1},
     "track_layout_extension": {
       "type": "object",
       "required": ["schema_version", "base_track_count", "items"],
@@ -72,7 +72,7 @@
     "root_contract_path": {"type": "string", "minLength": 1},
     "workspace_root": {"type": "string", "minLength": 1},
     "root_profile": {"type": "string", "minLength": 1},
-    "root_template_profile": {"type": "string", "const": "shrt_white_base_v2"},
+    "root_template_profile": {"type": "string", "minLength": 1},
     "visual_asset_mode": {"enum": ["CLEAN_VISUAL_READY", "SOURCE_VIDEO_PROVISIONAL", "USER_APPROVED_NONMATCHING_CLEAN_SOURCE"]},
     "video_asset_key": {"enum": ["clean_video", "source_video", "user_approved_clean_video"]},
     "video_input_path": {"type": "string", "minLength": 1},
@@ -109,7 +109,8 @@
       "required": ["T1", "T2"],
       "properties": {
         "T1": {"type": "string", "minLength": 1},
-        "T2": {"type": "string", "minLength": 1}
+        "T2": {"type": "string", "minLength": 1},
+        "SOURCE_CREDIT": {"type": "string", "minLength": 1}
       },
       "additionalProperties": false
     },

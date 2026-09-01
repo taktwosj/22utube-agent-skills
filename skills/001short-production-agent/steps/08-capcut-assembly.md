@@ -18,14 +18,15 @@
 ## 15트랙 조립
 
 - Stage 07 잠금 `30_audio_srt/audio_lock.json`, `30_audio_srt/caption_lock.json`, `30_audio_srt/final.srt`를 입력으로 사용한다.
-- `shrt_white_base_v2_15` 근본 템플릿만 사용한다.
+- `shrt_white_base_v3_15` 근본 템플릿을 사용한다. `shrt_white_base_v2_15`는 SOURCE_CREDIT 미선언 기존 회차 호환용으로만 유지한다.
 - VIDEO는 승인된 영상 파일을 배치하고 `config.video_mute=true`, segment volume 0으로 둔다.
 - T1/T2는 제목 두 줄이다.
 - A9/A9_TEXT는 실제 나레이션 파일이 있을 때만 배치한다.
 - A10/A10_TEXT는 원본 화자를 유지할 때만 배치한다.
 - A10은 검증된 외부 Demucs stem만 사용한다. `CapCut built-in vocal separation`은 사용하지 않는다.
 - 음성 없는 상황설명은 STATE_LASER에만 배치한다.
-- STATE_GLITCH, STATE_FLICKER, A12_RESERVED_EMPTY는 비운다. A11은 실제 효과음이 있을 때만 배치한다.
+- STATE_GLITCH, A12_RESERVED_EMPTY는 비운다. A11은 실제 효과음이 있을 때만 배치한다.
+- SOURCE_CREDIT은 T1·T2와 같은 전 구간 1칸이다. plan이 선언하면 배치하고, 선언이 없으면 비운다.
 - `CLEAN_VISUAL_READY`, `SOURCE_VIDEO_PROVISIONAL`, `USER_APPROVED_NONMATCHING_CLEAN_SOURCE`를 기존 계약대로 처리한다.
 - CapCut 또는 백그라운드 프로세스가 열려 있으면 draft를 변경하지 않는다.
 

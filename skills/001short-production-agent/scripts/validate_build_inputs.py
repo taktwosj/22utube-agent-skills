@@ -12,6 +12,13 @@ BUILD_SCHEMA = SKILL_ROOT / "schemas" / "build_contract.schema.json"
 TIMELINE_SCHEMA = SKILL_ROOT / "schemas" / "approved_timeline.schema.json"
 DESIGN_LOCK_SCHEMA = SKILL_ROOT / "schemas" / "design_lock_evidence.schema.json"
 
+# SOURCE_CREDIT is declared in v_plan and injected by the builder, so it appears
+# in the contract timeline but never in the approved timeline.  Comparing the two
+# sets without excluding it fails whichever way the credit row is placed: present
+# in the approved timeline it is counted twice against the draft, absent it is
+# reported as contract-only drift.
+CONTRACT_ONLY_ROLES = frozenset({"SOURCE_CREDIT"})
+
 
 def validate_build_inputs(
     caption_lock_path: Path,
@@ -97,14 +104,25 @@ def validate_build_inputs(
             errors.append({"code": "BUILD_INPUTS_SUBTITLE_TEXT_NOT_IN_SRT", "text": cue_text})
             break
     approved_rows = timeline.get("segments", [])
-    contract_rows = contract.get("timeline", [])
+    contract_only_ids = {
+        row.get("segment_id") for row in contract.get("timeline", [])
+        if row.get("role") in CONTRACT_ONLY_ROLES
+    }
+    contract_rows = [
+        row for row in contract.get("timeline", [])
+        if row.get("role") not in CONTRACT_ONLY_ROLES
+    ]
     approved_by_id = {row.get("segment_id"): row for row in approved_rows}
     contract_by_id = {row.get("segment_id"): row for row in contract_rows}
     locked_cue_ids = {row.get("cue_id") for row in caption.get("cues", [])}
     binding_cue_ids = {row.get("cue_id") for row in contract.get("caption_bindings", [])}
     if locked_cue_ids != binding_cue_ids or len(contract.get("caption_bindings", [])) != len(binding_cue_ids):
         errors.append({"code": "BUILD_INPUTS_CAPTION_BINDING_SET_MISMATCH"})
-    if set(approved_by_id) != set(contract.get("approved_actual_order", [])):
+    contract_order = [
+        segment_id for segment_id in contract.get("approved_actual_order", [])
+        if segment_id not in contract_only_ids
+    ]
+    if set(approved_by_id) != set(contract_order):
         errors.append({"code": "BUILD_INPUTS_TIMELINE_ORDER_MISMATCH"})
     if set(approved_by_id) != set(contract_by_id):
         errors.append({"code": "BUILD_INPUTS_TIMELINE_CONTENT_MISMATCH"})

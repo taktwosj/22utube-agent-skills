@@ -10,21 +10,21 @@ The same task-owner may submit the VMake job after source identity verification 
 
 ## Source authority and divergence gate
 
-Source authority: `C:\Users\arajun\agent-skills\skills\001short-production-agent`
+Source authority: `%USERPROFILE%\agent-skills\skills\001short-production-agent`
 
-Worktree source repository: `C:\Users\arajun\agent-skills`
+Worktree source repository: `%USERPROFILE%\agent-skills`
 
 Modify the skill only in an isolated Git worktree derived from that repository. The installed entrypoints and active runtime releases are immutable, read-only entrypoints:
 
 ```text
-Codex: C:\Users\arajun\.codex\skills\001short-production-agent
-Claude: C:\Users\arajun\.claude\skills\001short-production-agent
-Hermes: C:\Users\arajun\AppData\Local\hermes\skills\22utube\001short-production-agent
+Codex: %USERPROFILE%\.codex\skills\001short-production-agent
+Claude: %USERPROFILE%\.claude\skills\001short-production-agent
+Hermes: %USERPROFILE%\AppData\Local\hermes\skills\22utube\001short-production-agent
 ```
 
 Never edit those entrypoints or active runtime release contents. Release only in this order after the required user approvals:
 
-1. Isolated worktree derived from `C:\Users\arajun\agent-skills`
+1. Isolated worktree derived from `%USERPROFILE%\agent-skills`
 2. Tests
 3. Independent review
 4. Approved revision on GitHub `main`
@@ -67,11 +67,34 @@ After assembly, the first item in the result report is the exact CapCut 프로�
 
 ## 투군 live-tab procedure
 
-The original table is immutable authority for every `Bxx` source range, source facts and visible events, source speakers and utterances, source narration, and original audio availability/timing. 투군 GPT is an advisor, not an authority: it may suggest `Vxx` order, T1/T2, generated A9 narration, captions, effects, and audio treatment. Reject or repair any suggestion that invents facts, changes `Bxx` times, relabels source speech, exceeds available source ranges, or creates unexplained duplicate use. If one `Bxx` is reused, explicitly lock each reused subrange; original speech may be retained only once unless the user approves repetition.
+The original table is immutable authority for every `Bxx` source range, source facts and visible events, source speakers and utterances, source narration, and original audio availability/timing. 투군 GPT is an advisor, not an authority: it may suggest `Vxx` order, T1/T2, generated A9 narration, captions, effects, and audio treatment. Reject or repair any suggestion that invents facts, changes `Bxx` times, relabels source speech, exceeds available source ranges, or creates unexplained duplicate use. If one `Bxx` is reused, explicitly lock each reuse; original speech may be retained only once unless the user approves repetition.
+
+## Vxx is one whole Bxx
+
+A `Vxx` column takes exactly one `Bxx` and takes it whole. Three checks enforce this, none of which any other document states:
+
+- `scripts/validate_capcut_grids.py` — the urakkai header pattern accepts a single `B\d{2}`, and each clip's source range must match an original-table header range exactly (`issubset`), so a partial range fails.
+- `scripts/validate_prebuild.py` — `abs(source duration - target duration) > FRAME_TOLERANCE_US` is `E_VIDEO_RANGE`, so **speed changes are impossible**. A `Vxx` lasts exactly as long as its `Bxx`.
+- `scripts/validate_audio_caption.py` — caption timing recomputes each `Vxx` source range from the original-table header.
+
+Consequences to design around, not to discover at build time:
+
+- Final duration is tuned by **dropping `Bxx` values, never by trimming or retiming them**. A 0.8 s beat stays 0.8 s.
+- Slow motion, speed ramps, and freeze frames cannot be requested here. Treat any advisor suggestion of a playback speed as inapplicable.
+- **The `Bxx` count is the hard ceiling on the `Vxx` count.** A single-`Bxx` original table makes urakkai structurally impossible, because there is nothing to reorder. Split the original table on real change points before promising an urakkai.
+- Reusing a `Bxx` means two `Vxx` columns naming the same whole `Bxx`, not two different slices of it.
+
+투군 project entry point:
+
+```text
+https://chatgpt.com/g/g-p-69bec5d5e6d481918a435189a9a3e2a7-tugun/project
+```
+
+Open this project and start a new chat there whenever no 투군 tab can be attached. A browser runtime that exposes only its own tab group (Claude-in-Chrome) cannot list or attach the user's other tabs, so navigating to this URL is the normal path, not a fallback.
 
 The task owner operates the user's live 투군 GPT tab directly:
 
-1. List the open browser tabs and attach the matching 투군 tab.
+1. Attach the open 투군 tab when the runtime can list it; otherwise navigate to the project URL above.
 2. Read the current page state before writing.
 3. Paste the validated original-table prompt and submit it.
 4. Read the response and save it as `20_script/togun-recommendation.md` bound to the original-grid SHA256.
@@ -123,8 +146,10 @@ a rejection gate. This mode is not VMake evidence, is not
 The canonical base layout stays at 15 tracks. Only an evidence-bound
 `001short-user-provided-media-overlay-layout-v1` may append declared overlays
 after index 14; every undeclared extra track fails. Only `STATE_LASER` is
-routable for STATE cues (`LASER_CUT`); `STATE_FLICKER` and `STATE_GLITCH` stay
-physically present and empty. File/SHA/duration-bound overlapping user audio keeps
+routable for STATE cues (`LASER_CUT`); `STATE_GLITCH` stays physically present
+and empty. `SOURCE_CREDIT` is a full-span title lane like T1/T2: a plan that
+declares it places one segment over the whole timeline, and a plan that omits
+it leaves the track empty. File/SHA/duration-bound overlapping user audio keeps
 A10 on at volume 1.0 for manual volume adjustment and is never auto-ducked.
 Retained-speaker captions use the two
 `A10_TEXT_WHITE` and `A10_TEXT_YELLOW` lanes while A10 remains one audio stem.

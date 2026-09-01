@@ -11,6 +11,10 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 if str(SKILL_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
+import audio_policy_matrix  # noqa: E402
+import build_episode_capcut  # noqa: E402
+import validate_audio_caption  # noqa: E402
+import validate_design_lock  # noqa: E402
 import build_episode_locks as generator  # noqa: E402
 import validate_executable_protocol  # noqa: E402
 from schema_runtime import validate_schema  # noqa: E402
@@ -118,7 +122,7 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def _generate(self) -> dict:
+    def _generate(self, profile_path: Path | None = None) -> dict:
         return generator.generate(
             episode_root=self.root,
             capcut_root=Path(self._tmp.name) / "capcut",
@@ -127,6 +131,7 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             root_profile="test_profile",
             root_contract_path="contract.json",
             work_root=Path(self._tmp.name) / "work",
+            profile_path=profile_path,
         )
 
     def _make_caption_only(self) -> None:
@@ -159,6 +164,435 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             "segments": segments,
         })
 
+    def _make_original_audio_caption(self) -> None:
+        """Rewrite the fixture as a type 3 episode: the original speaker audio rides
+        A10 straight from the source, with its own captions on A10_TEXT and no TTS.
+        SOURCE_ORDER_CLEAN_AUDIO is the one A10 policy that needs no Demucs stem."""
+        source_sha = _sha(self.root / "00_input" / "source.mp4")
+        _write_json(self.root / "20_script" / "v_plan.json", {
+            "V": self.v_rows, "DUR": self.duration, "type": "3",
+            "audio_policy": "SOURCE_ORDER_CLEAN_AUDIO",
+            "execution_strategy": "original_audio_caption",
+            "audio_source": "SOURCE_CLIP", "T1": "제목 하나", "T2": "제목 둘", "cues": [],
+        })
+        segments = [
+            {"segment_id": row[0], "role": "VIDEO", "start": row[2], "duration": row[3] - row[2],
+             "source_ref": "abcdefghijk", "source_beat_id": row[1],
+             "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]],
+             "volume": 0, "timeline_order": index}
+            for index, row in enumerate(self.v_rows, start=1)
+        ]
+        for index, row in enumerate(self.v_rows, start=1):
+            segments.append({
+                "segment_id": f"A10_{row[0]}", "role": "A10", "start": row[2],
+                "duration": row[3] - row[2], "source_ref": "abcdefghijk",
+                "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]],
+                "volume": 1, "timeline_order": 50 + index,
+            })
+            # validate_design_lock rejects an A10_TEXT row without SPEAKER content,
+            # a caption_role, an assigned speaker and the colour that speaker maps
+            # to, so a fixture missing them would never survive a real build.
+            segments.append({
+                "segment_id": f"A10_{row[0]}_TEXT", "role": "A10_TEXT", "start": row[2],
+                "duration": row[3] - row[2], "source_ref": "abcdefghijk",
+                "text": "화자 하나" if row[0] == "V01" else "화자 둘",
+                "content_type": "SPEAKER", "caption_role": "A10_TEXT",
+                "speaker_id": "SPK_A", "color_role": "WHITE",
+                "cue_id": f"A10_{row[0]}", "timeline_order": 60 + index,
+            })
+        _write_json(self.root / "20_script" / "approved_timeline.json", {
+            "schema_version": "001short-approved-timeline-v2", "episode_id": self.root.name,
+            "source_fingerprint": source_sha, "production_mode": "URAKKAI",
+            "audio_policy": "SOURCE_ORDER_CLEAN_AUDIO",
+            "execution_strategy": "original_audio_caption",
+            "primary_speaker_id": "SPK_A",
+            "segments": segments,
+        })
+
+    def test_type_three_keeps_the_source_audio_lane_audible(self) -> None:
+        """Every source_audio row used to be hardcoded mute, so build_episode_capcut
+        emitted no A10 segment at all and type 3 rendered a silent draft."""
+        self._make_original_audio_caption()
+        self.assertEqual(self._generate()["status"], "PASS")
+        manifest = json.loads(
+            (self.root / "50_capcut_project" / "build_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual({row["mode"] for row in manifest["source_audio"]}, {"on"})
+        for row, v_row in zip(manifest["source_audio"], self.v_rows):
+            # SOURCE_CLIP plays the untouched source, so CapCut has to seek to the
+            # real original span rather than reusing the target range.
+            self.assertEqual(row["capcut_source_range_us"], [v_row[4], v_row[5]])
+
+    def test_type_three_emits_one_a10_placement_per_segment(self) -> None:
+        """The urakkai table declares A10 populated; without these placements the
+        grid harness fails TABLE_ROLE_DECLARED_POPULATED_ACTUAL_MISSING."""
+        self._make_original_audio_caption()
+        self._generate()
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        for anchor in ("A9", "A9_TEXT"):
+            self.assertIn(anchor, plan["cleared_anchors"])
+        for anchor in ("A10", "A10_TEXT"):
+            self.assertNotIn(anchor, plan["cleared_anchors"])
+        for row, v_row in zip(plan["timeline"], self.v_rows):
+            a10 = [item for item in row["placements"] if item["anchor"] == "A10"]
+            self.assertEqual(len(a10), 1)
+            self.assertEqual(a10[0]["source_range_us"], [v_row[4], v_row[5]])
+            self.assertEqual(a10[0]["target_range_us"], [v_row[2], v_row[3]])
+            self.assertEqual(a10[0]["volume"], 1)
+            captions = [item for item in row["placements"] if item["anchor"] == "A10_TEXT"]
+            self.assertEqual(len(captions), 1)
+            self.assertEqual(captions[0]["target_range_us"], [v_row[2], v_row[3]])
+            self.assertEqual(
+                captions[0]["text"], "화자 하나" if v_row[0] == "V01" else "화자 둘")
+
+    def test_type_three_production_plan_passes_the_protocol_gate(self) -> None:
+        """This is the gate that reported URAKKAI_VIDEO_AUDIO_COUNT_MISMATCH."""
+        self._make_original_audio_caption()
+        self._generate()
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def _make_tts_intro_original_body(self) -> None:
+        """Rewrite the fixture as a type 4 episode: a new A9 narration covers V01
+        while the retained speaker keeps V02.  A10 has to duck under A9 and come
+        back outside it, which is the pair of rules types 4 and 5 turn on."""
+        source_sha = _sha(self.root / "00_input" / "source.mp4")
+        intro, body = self.v_rows
+        _write_json(self.root / "20_script" / "v_plan.json", {
+            "V": self.v_rows, "DUR": self.duration, "type": "4",
+            "audio_policy": "A9_TTS_PLUS_A10_REASSEMBLED",
+            "execution_strategy": "tts_intro_original_body",
+            "audio_source": "REASSEMBLED_VOCAL_STEM", "T1": "제목 하나", "T2": "제목 둘",
+            # The cue spans the whole of V01: neither the protocol gate nor the
+            # builder supports an A9 that covers only part of a Vxx.
+            "cues": [["V01", "A9_V01", "도입 문장", intro[3] - intro[2],
+                      intro[2], intro[3], "V01_fit.wav"]],
+        })
+        segments = [
+            {"segment_id": row[0], "role": "VIDEO", "start": row[2], "duration": row[3] - row[2],
+             "source_ref": "abcdefghijk", "source_beat_id": row[1],
+             "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]],
+             "volume": 0, "timeline_order": index}
+            for index, row in enumerate(self.v_rows, start=1)
+        ]
+        for offset, (role, suffix) in enumerate((("A9", ""), ("A9_TEXT", "_TEXT"))):
+            segments.append({
+                "segment_id": f"A9_V01{suffix}", "role": role, "start": intro[2],
+                "duration": intro[3] - intro[2], "source_ref": "abcdefghijk",
+                "text": "도입 문장", "content_type": "TTS", "cue_id": "A9_V01",
+                "timeline_order": 10 + offset * 10,
+            })
+        for index, row in enumerate(self.v_rows, start=1):
+            segments.append({
+                "segment_id": f"A10_{row[0]}", "role": "A10", "start": row[2],
+                "duration": row[3] - row[2], "source_ref": "abcdefghijk",
+                "source_range_us": [row[4], row[5]], "target_range_us": [row[2], row[3]],
+                "volume": 0 if row[0] == intro[0] else 1, "timeline_order": 50 + index,
+            })
+        segments.append({
+            "segment_id": f"A10_{body[0]}_TEXT", "role": "A10_TEXT", "start": body[2],
+            "duration": body[3] - body[2], "source_ref": "abcdefghijk",
+            "text": "화자 둘", "content_type": "SPEAKER", "caption_role": "A10_TEXT",
+            "speaker_id": "SPK_A", "color_role": "WHITE",
+            "cue_id": f"A10_{body[0]}", "timeline_order": 62,
+        })
+        _write_json(self.root / "20_script" / "approved_timeline.json", {
+            "schema_version": "001short-approved-timeline-v2", "episode_id": self.root.name,
+            "source_fingerprint": source_sha, "production_mode": "URAKKAI",
+            "audio_policy": "A9_TTS_PLUS_A10_REASSEMBLED",
+            "execution_strategy": "tts_intro_original_body",
+            "primary_speaker_id": "SPK_A",
+            "segments": segments,
+        })
+
+    def test_type_four_ducks_a10_under_the_a9_narration(self) -> None:
+        """Marking every A10 lane "on" earns URAKKAI_MIXED_A10_NOT_MUTED_UNDER_A9,
+        which is what kept types 4 and 5 from building at all."""
+        self._make_tts_intro_original_body()
+        self.assertEqual(self._generate()["status"], "PASS")
+        manifest = json.loads(
+            (self.root / "50_capcut_project" / "build_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {row["clip_id"]: row["mode"] for row in manifest["source_audio"]},
+            {"V01": "duck", "V02": "on"},
+        )
+        # A reassembled stem is already in target order, so naming an original
+        # source range would send CapCut to the wrong place in the stem.
+        for row in manifest["source_audio"]:
+            self.assertNotIn("capcut_source_range_us", row)
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        # This fixture declares no SOURCE_CREDIT, so track 3 joins the cleared
+        # anchors and no placement is emitted for it.
+        self.assertEqual(
+            plan["cleared_anchors"], generator.ALWAYS_CLEARED + ["SOURCE_CREDIT"])
+        self.assertNotIn(
+            "SOURCE_CREDIT",
+            {item["anchor"] for row in plan["timeline"] for item in row["placements"]},
+        )
+        volumes = {
+            row["target_segment_id"]: [
+                item["volume"] for item in row["placements"] if item["anchor"] == "A10"
+            ]
+            for row in plan["timeline"]
+        }
+        self.assertEqual(volumes, {"V01": [0], "V02": [1]})
+
+    def test_type_five_uses_the_same_shared_mixed_audio_engine(self) -> None:
+        self._make_tts_intro_original_body()
+        plan_path = self.root / "20_script" / "v_plan.json"
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["type"] = "5"
+        plan["execution_strategy"] = "narration_plus_speaker"
+        _write_json(plan_path, plan)
+        timeline_path = self.root / "20_script" / "approved_timeline.json"
+        timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+        timeline["execution_strategy"] = "narration_plus_speaker"
+        _write_json(timeline_path, timeline)
+
+        with self.assertRaisesRegex(ValueError, "ASSEMBLY_TYPE_A9_BODY_REQUIRED"):
+            self._generate()
+
+        intro, body = self.v_rows
+        plan["cues"] = [[
+            "V02", "A9_V02", "연결 문장", body[3] - body[2],
+            body[2], body[3], "V02_fit.wav",
+        ]]
+        _write_json(plan_path, plan)
+        for segment in timeline["segments"]:
+            if segment["role"] in {"A9", "A9_TEXT"}:
+                suffix = "_TEXT" if segment["role"] == "A9_TEXT" else ""
+                segment["segment_id"] = f"A9_V02{suffix}"
+                segment["start"] = body[2]
+                segment["duration"] = body[3] - body[2]
+                segment["text"] = "연결 문장"
+                segment["cue_id"] = "A9_V02"
+            elif segment["role"] == "A10":
+                segment["volume"] = 0 if segment["start"] == body[2] else 1
+            elif segment["role"] == "A10_TEXT":
+                segment["segment_id"] = "A10_V01_TEXT"
+                segment["start"] = intro[2]
+                segment["duration"] = intro[3] - intro[2]
+                segment["cue_id"] = "A10_V01"
+        _write_json(timeline_path, timeline)
+
+        self.assertEqual(self._generate()["status"], "PASS")
+        production_plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(production_plan["assembly_type"], "5")
+        self.assertEqual(production_plan["execution_strategy"], "narration_plus_speaker")
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                production_plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_type_four_production_plan_passes_the_protocol_gate(self) -> None:
+        """The mixed A9/A10 rules live in this gate, not in the builder alone."""
+        self._make_tts_intro_original_body()
+        self._generate()
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_source_credit_declaration_reaches_plan_and_build_config(self) -> None:
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        v_plan["SOURCE_CREDIT"] = "출처 : 실제 채널"
+        _write_json(plan_path, v_plan)
+
+        self._generate()
+
+        production_plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8")
+        )
+        placements = [
+            item
+            for row in production_plan["timeline"]
+            for item in row["placements"]
+            if item["anchor"] == "SOURCE_CREDIT"
+        ]
+        self.assertEqual(len(placements), len(self.v_rows))
+        self.assertEqual({item["text"] for item in placements}, {"출처 : 실제 채널"})
+        self.assertNotIn("SOURCE_CREDIT", production_plan["cleared_anchors"])
+        build_config = json.loads(
+            (self.root / "50_capcut_project" / "build_config.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(build_config["SOURCE_CREDIT"], "출처 : 실제 채널")
+
+    def test_blank_source_credit_is_rejected(self) -> None:
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        v_plan["SOURCE_CREDIT"] = "   "
+        _write_json(plan_path, v_plan)
+
+        with self.assertRaisesRegex(ValueError, "SOURCE_CREDIT_DECLARED_EMPTY"):
+            self._generate()
+
+    def test_an_a9_cue_covering_part_of_a_segment_is_refused(self) -> None:
+        """Partial overlap is unsupported downstream; failing here keeps the build
+        from writing a PASS manifest it would have to walk back."""
+        self._make_tts_intro_original_body()
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        cue = v_plan["cues"][0]
+        cue[5] = cue[5] - 200_000
+        cue[3] = cue[5] - cue[4]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED", str(caught.exception))
+
+    def test_an_order_preserving_trim_reads_as_a_structural_edit(self) -> None:
+        """Dropping beats without reordering is a real URAKKAI edit.  original_order
+        used to be derived from the surviving V rows alone, so the excluded beats
+        vanished, final_order matched it exactly and every trim was rejected as
+        URAKKAI_STRUCTURE_UNCHANGED."""
+        self.v_rows = [
+            ["V01", "B01", 0, 1_400_000, 0, 1_400_000],
+            ["V02", "B03", 1_400_000, 3_000_000, 2_800_000, 4_400_000],
+        ]
+        self._make_original_audio_caption()
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        v_plan["original_order"] = ["B01", "B02", "B03"]
+        v_plan["urakkai_production_type"] = "TRIM_ONLY_NO_REORDER"
+        _write_json(plan_path, v_plan)
+        self._generate()
+
+        manifest = json.loads(
+            (self.root / "50_capcut_project" / "build_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest["urakkai"]["production_type"], "TRIM_ONLY_NO_REORDER")
+        self.assertFalse(manifest["urakkai"]["reorder_required"])
+
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["original_order"], ["B01", "B02", "B03"])
+        self.assertEqual(plan["final_order"], ["B01", "B03"])
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_a_mixed_narration_needs_no_demucs_stem(self) -> None:
+        """A9_TTS_PLUS_A10_SOURCE_CLIP is the same mixed A9/A10 shape as
+        A9_TTS_PLUS_A10_REASSEMBLED but plays the untouched source, so an operator
+        who does not want a Demucs stem still gets types 4 and 5."""
+        self._make_tts_intro_original_body()
+        for name in ("v_plan.json", "approved_timeline.json"):
+            path = self.root / "20_script" / name
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            payload["audio_policy"] = "A9_TTS_PLUS_A10_SOURCE_CLIP"
+            if "audio_source" in payload:
+                payload["audio_source"] = "SOURCE_CLIP"
+            _write_json(path, payload)
+        self.assertEqual(self._generate()["status"], "PASS")
+
+        manifest = json.loads(
+            (self.root / "50_capcut_project" / "build_manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {row["clip_id"]: row["mode"] for row in manifest["source_audio"]},
+            {"V01": "duck", "V02": "on"},
+        )
+        # SOURCE_CLIP means CapCut seeks inside the original media, so unlike a
+        # reassembled stem every row has to name its real source span.
+        for row, v_row in zip(manifest["source_audio"], self.v_rows):
+            self.assertEqual(row["capcut_source_range_us"], [v_row[4], v_row[5]])
+
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
+        self.assertEqual(plan["audio_source"], "SOURCE_CLIP")
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_the_new_mixed_policy_reaches_every_gate_that_names_policies(self) -> None:
+        """Each of these used to test for one policy name, so the new one slipped
+        past the duck rules, was rejected as raw source audio, and was measured
+        against the full source duration."""
+        policy = "A9_TTS_PLUS_A10_SOURCE_CLIP"
+        self.assertIn(
+            ("URAKKAI", policy, "SOURCE_CLIP"), audio_policy_matrix.ACCEPTED_MODE_TUPLES)
+        self.assertNotIn(policy, audio_policy_matrix.STEM_POLICIES)
+
+        # The builder skips its duck checks entirely for a policy it does not know.
+        self.assertIn(policy, build_episode_capcut.MIXED_A9_A10_POLICIES)
+        with self.assertRaises(RuntimeError) as caught:
+            build_episode_capcut._validate_mixed_audio_modes(
+                {
+                    "audio_policy": policy,
+                    "tts_cues": [{"target_range_us": [0, 1_400_000]}],
+                },
+                {"source_audio": [
+                    {"clip_id": "V01", "mode": "on", "target_range_us": [0, 1_400_000]},
+                ]},
+            )
+        self.assertIn("MIXED_A10", str(caught.exception))
+
+        # validate_audio_caption refuses raw SOURCE_CLIP for any policy it does
+        # not recognise as a SOURCE_CLIP policy.
+        self.assertIn(policy, validate_audio_caption.SOURCE_CLIP_A10_POLICIES)
+        # design_lock demands the A9 every TTS policy generates.
+        self.assertIn(policy, validate_design_lock.TTS_POLICIES)
+
+    def test_a_declared_original_order_is_checked_against_the_original_table(self) -> None:
+        """A declaration nothing checks is worth no more than the derivation it
+        replaced: an operator could name beats the original table never had and
+        turn any non-edit into a passing URAKKAI."""
+        self._make_original_audio_caption()
+        grid = self.root / "20_script" / "original-capcut-grid.md"
+        grid.write_text(
+            "### B01 0.000-1.400\n본문\n\n"
+            "### B02 1.400-2.800\n본문\n\n"
+            "### B03 2.800-4.400\n본문\n",
+            encoding="utf-8",
+        )
+        plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+
+        v_plan["original_order"] = ["B01", "B02", "B03", "B99"]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("V_PLAN_ORIGINAL_ORDER_MISMATCH", str(caught.exception))
+
+        v_plan["original_order"] = ["B01", "B01", "B02", "B03"]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("V_PLAN_ORIGINAL_ORDER_DUPLICATE", str(caught.exception))
+
+        # V01 takes B02 and V02 takes B01, so dropping B02 orphans a used beat.
+        v_plan["original_order"] = ["B01", "B03"]
+        _write_json(plan_path, v_plan)
+        with self.assertRaises(ValueError) as caught:
+            self._generate()
+        self.assertIn("V_PLAN_ORIGINAL_ORDER_MISSING_BEAT", str(caught.exception))
+
+        v_plan["original_order"] = ["B01", "B02", "B03"]
+        _write_json(plan_path, v_plan)
+        self.assertEqual(self._generate()["status"], "PASS")
+
     def test_a_caption_only_episode_builds_without_any_audio(self) -> None:
         """Type 1 carries no voice, so both audio axes clear and no TTS cue is emitted."""
         self._make_caption_only()
@@ -171,6 +605,63 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
             self.assertIn(anchor, plan["cleared_anchors"])
         config = json.loads((self.root / "50_capcut_project" / "build_config.json").read_text(encoding="utf-8"))
         self.assertNotIn("tts_cues", config)
+
+    def test_profile_selectors_drive_the_same_shared_lock_generator(self) -> None:
+        self._make_caption_only()
+        profile = Path(self._tmp.name) / "caption-only-profile.json"
+        selector = {
+            "schema_version": "001short-production-profile-v1",
+            "profile_id": "fixture-caption-only",
+            "assembly_type": "1",
+            "template_profile": "shrt_white_base_v3",
+            "production_mode": "URAKKAI",
+            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE",
+        }
+        _write_json(profile, selector)
+
+        self.assertEqual(self._generate(profile)["status"], "PASS")
+        production_plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        build_config = json.loads(
+            (self.root / "50_capcut_project" / "build_config.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(production_plan["assembly_type"], "1")
+        self.assertEqual(production_plan["production_profile"], selector)
+        self.assertEqual(build_config["production_profile"], selector)
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                production_plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_v_plan_and_timeline_assembly_contract_must_match_before_writes(self) -> None:
+        timeline_path = self.root / "20_script" / "approved_timeline.json"
+        original = json.loads(timeline_path.read_text(encoding="utf-8"))
+        mismatches = {
+            "production_mode": "SOURCE_ORDER_UNCHANGED_CLEAN_ONLY",
+            "audio_policy": "CAPTION_ONLY_MUTE_SOURCE",
+            "execution_strategy": "caption_only",
+        }
+        for field, value in mismatches.items():
+            with self.subTest(field=field):
+                timeline = dict(original)
+                timeline[field] = value
+                _write_json(timeline_path, timeline)
+                with self.assertRaisesRegex(
+                    ValueError,
+                    f"V_PLAN_TIMELINE_CONTRACT_MISMATCH:{field}",
+                ):
+                    self._generate()
+                self.assertFalse(
+                    (self.root / "50_capcut_project" / "build_manifest.json").exists()
+                )
+        _write_json(timeline_path, original)
 
     def test_a_state_caption_never_claims_speech_authority(self) -> None:
         """A STATE caption has no matching audio; labelling it SPEECH_AUDIO would lie."""
@@ -195,6 +686,29 @@ class EpisodeLocksGeneratorTest(unittest.TestCase):
         self._generate()
         plan = json.loads((self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8"))
         self.assertEqual(plan["root_profile"], "test_profile")
+        self.assertEqual(
+            validate_executable_protocol.validate_production_plan(
+                plan, validate_executable_protocol.load_protocol()
+            ),
+            [],
+        )
+
+    def test_legacy_type_two_alias_passes_the_generated_protocol_gate(self) -> None:
+        v_plan_path = self.root / "20_script" / "v_plan.json"
+        v_plan = json.loads(v_plan_path.read_text(encoding="utf-8"))
+        v_plan["execution_strategy"] = "tts_only"
+        _write_json(v_plan_path, v_plan)
+        timeline_path = self.root / "20_script" / "approved_timeline.json"
+        timeline = json.loads(timeline_path.read_text(encoding="utf-8"))
+        timeline["execution_strategy"] = "tts_only"
+        _write_json(timeline_path, timeline)
+
+        self._generate()
+        plan = json.loads(
+            (self.root / "20_script" / "production_plan.json").read_text(encoding="utf-8")
+        )
+        self.assertNotIn("production_profile", plan)
+        self.assertEqual(plan["execution_strategy"], "tts_only")
         self.assertEqual(
             validate_executable_protocol.validate_production_plan(
                 plan, validate_executable_protocol.load_protocol()
