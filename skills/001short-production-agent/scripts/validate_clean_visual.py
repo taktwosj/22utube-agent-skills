@@ -46,11 +46,23 @@ def _portrait_aspect_compatible(
     source_height: int,
     candidate_width: int,
     candidate_height: int,
+    visual_transform: str | None = None,
 ) -> bool:
+    """A clean asset is the same footage with its baked captions removed, so it
+    normally carries the aspect of its source.
+
+    Pulling a Short out of a landform longform breaks that: the clean asset is
+    reframed to portrait and its aspect deliberately differs.  Allowing every
+    landscape source to accept any portrait candidate would drop the guard
+    entirely, so the reframe has to be declared in the manifest - an undeclared
+    aspect change is still the mistake this check exists to catch.
+    """
     if min(source_width, source_height, candidate_width, candidate_height) <= 0:
         return False
-    if source_width >= source_height or candidate_width >= candidate_height:
+    if candidate_width >= candidate_height:
         return False
+    if source_width > source_height:
+        return visual_transform == "REFRAME_TO_PORTRAIT"
     source_ratio = source_width / source_height
     candidate_ratio = candidate_width / candidate_height
     return abs(candidate_ratio - source_ratio) / source_ratio <= ASPECT_RATIO_RELATIVE_TOLERANCE
@@ -149,7 +161,8 @@ def validate_clean_visual(
             if (width, height) != (manifest["expected_width"], manifest["expected_height"]):
                 errors.append({"code": "CLEAN_VISUAL_RESOLUTION_MISMATCH"})
             if source_video_valid and not _portrait_aspect_compatible(
-                source_width, source_height, width, height
+                source_width, source_height, width, height,
+                manifest.get("visual_transform"),
             ):
                 errors.append({"code": "CLEAN_VISUAL_ASPECT_RATIO_MISMATCH"})
     if errors:

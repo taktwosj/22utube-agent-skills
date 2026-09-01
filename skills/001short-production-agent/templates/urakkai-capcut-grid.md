@@ -30,7 +30,7 @@ TTT 대응 음성 없는 새 자막(STATE_LASER) 또는 없음
 | A10_TEXT_WHITE | 미확인 | 미확인 |
 | STATE_LASER | 미확인 | 미확인 |
 | STATE_GLITCH | 비움 | 비움 |
-| STATE_FLICKER | 비움 | 비움 |
+| SOURCE_CREDIT | 비움 | 비움 |
 | SCREEN_WHITE | 템플릿 유지 | 템플릿 유지 |
 | SCREEN_EFFECT | W Flash | W Flash |
 | VIDEO | 미확인 | 미확인 |
@@ -41,5 +41,5 @@ TTT 대응 음성 없는 새 자막(STATE_LASER) 또는 없음
 
 셀 표기: 사용 대상이 없으면 `없음`, 최종 조립에서 의도적으로 제외하면 `비움`.
 빈 칸·공백·대시·placeholder는 금지한다. `미확인`은 하드 실패다.
-자막 계열(`A9_TEXT`·`A10_TEXT_*`·`STATE_LASER`)은 **한 줄 15자 이하, 최대 2줄**이다.
+`A9_TEXT`는 **한 줄 10자 이하, 최대 2줄**이다. `A10_TEXT_*`와 `STATE_LASER`는 **한 줄 15자 이하, 최대 2줄**이다.
 제목(`T1`·`T2`)은 **각각 한 줄 12자 이하이고 줄바꿈이 없다** — 두 줄 제목은 T1이 윗줄, T2가 아랫줄이다.

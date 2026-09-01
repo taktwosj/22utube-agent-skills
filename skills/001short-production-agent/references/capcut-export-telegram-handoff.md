@@ -1,19 +1,21 @@
-# CapCut 내보내기와 Telegram 영상 전달
+# 승인 후 CapCut 내보내기와 파일 전달
 
-CapCut 편집 프로젝트를 로컬 MP4로 내보내고 Telegram에 첨부할 때 사용한다. 렌더 완료, 파일 검증, Telegram 전달은 서로 다른 상태로 관리한다.
+CapCut 편집 프로젝트를 로컬 MP4로 내보내고 MCP 또는 Telegram으로 전달할 때 사용한다. 정상 제작 router가 아니라 사용자의 화면 확인과 별도 export 승인이 모두 있는 후속 단계다.
 
 ## 범위
 
 - 로컬 MP4 내보내기만 요청되면 YouTube 게시·예약·공개를 실행하지 않는다.
-- 사용자가 내보내기와 이 채팅 전달을 함께 요청하면, MP4 생성 후 실제 파일을 `MEDIA:`로 첨부할 때까지 완료가 아니다.
+- `2pow 22factory MCP`에서는 `USER_CAPCUT_CHECK_PASS`와 `APPROVE_CAPCUT_EXPORT`가 모두 있어야 시작한다.
+- 사용자가 내보내기와 파일 전달을 함께 요청하면 실제 bytes/file 회수까지 완료가 아니다.
 - CapCut 프로젝트 생성·클라우드 업로드 완료를 MP4 렌더 완료로 해석하지 않는다.
+- 프로젝트 내용 수정·기존 MP4 덮어쓰기·업로드·게시·삭제는 이 승인에 포함되지 않는다.
 
 ## 1. 내보내기 전 확인
 
 1. 최종 프로젝트를 이름만이 아니라 draft/project/timeline ID 또는 build receipt로 확인한다.
 2. active draft의 duration, VIDEO segment 수·순서, T1/T2, A9/A10, live media 경로를 readback한다.
-3. 출력은 외장 2pow 회차 폴더의 `60_export/`처럼 episode-local production 경로를 사용한다.
-4. 같은 파일이 이미 있으면 덮어쓰지 말고 `_v2`, `_v3`처럼 새 경로를 선택하거나 명시적 덮어쓰기 승인을 받는다.
+3. 출력은 외장 2pow 회차 폴더의 정확한 `60_export/` episode-local 경로를 사용한다.
+4. 같은 파일이 이미 있으면 덮어쓰지 않고 timestamp 또는 새 version이 붙은 새 경로를 사용한다.
 5. 목표 출력 경로를 workflow receipt에 기록한다.
 
 ## 2. CapCut UI 내보내기
@@ -69,7 +71,17 @@ CapCut 편집 프로젝트를 로컬 MP4로 내보내고 Telegram에 첨부할 �
 
 검증 결과와 파일 경로를 `90_reports/export_report.json` 또는 동등한 회차 보고서에 기록한다.
 
-## 5. Telegram 전달
+## 5. MCP·Telegram 전달
+
+### MCP
+
+1. `factory_artifact`는 등록 workflow의 해당 `episode_id/60_export` 안에 있는 검증 PASS MP4만 선택한다.
+2. 결과에는 workflow, episode_id, export/validation 상태, 절대경로, 파일명, bytes, duration, resolution, created_at, SHA-256과 MCP `resource_link`를 함께 둔다.
+3. 로컬 `/Volumes/...` 문자열만 반환하면 `MCP_ARTIFACT_AVAILABLE=FAIL`이다.
+4. MCP client가 `resources/read`로 같은 SHA의 MP4 blob을 받아 실제 bytes를 재구성하고 다시 ffprobe하기 전에는 `REMOTE_FILE_RETRIEVAL=PASS`가 아니다.
+5. tunnel은 MCP JSON-RPC 전달 경로일 뿐 일반 파일 URL로 오인하지 않는다. 큰 파일 응답이 client 또는 tunnel 한계를 넘으면 `WAIT_ARTIFACT_TRANSPORT_LIMIT`로 멈춘다.
+
+### Telegram
 
 1. 검증 PASS MP4만 첨부한다.
 2. Telegram 답변에 `MEDIA:/absolute/path/to/video.mp4`를 넣는다.
@@ -83,7 +95,9 @@ WAIT_EXPORT_APPROVAL
 EXPORT_IN_PROGRESS
 EXPORT_COMPLETED
 EXPORT_VALIDATED
+MCP_ARTIFACT_AVAILABLE
+REMOTE_FILE_RETRIEVAL_COMPLETED
 TELEGRAM_HANDOFF_COMPLETED
 ```
 
-`TELEGRAM_HANDOFF_COMPLETED`는 MP4 검증 PASS 후 실제 첨부가 실행됐을 때만 사용한다.
+`REMOTE_FILE_RETRIEVAL_COMPLETED`와 `TELEGRAM_HANDOFF_COMPLETED`는 각각 MP4 검증 PASS 후 해당 client가 실제 bytes/file을 받은 경우에만 사용한다.

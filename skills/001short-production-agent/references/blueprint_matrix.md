@@ -1,4 +1,4 @@
-# shrt_white_base_v2 canonical track matrix
+# shrt_white_base_v3 canonical track matrix
 
 Stage 05가 역할과 시간을 승인하고 Stage 08 builder는 아래 15개 물리 트랙에 기계적으로 배치한다. 트랙을 추가하거나 합치지 않는다.
 
@@ -7,7 +7,7 @@ Stage 05가 역할과 시간을 승인하고 Stage 08 builder는 아래 15개 �
 | 0 | VIDEO | SOURCE_VIDEO_PROVISIONAL의 `source.mp4` 또는 CLEAN_VISUAL_READY의 `clean_video.mp4`; embedded audio mute |
 | 1 | SCREEN_EFFECT | 화면 효과 seed |
 | 2 | SCREEN_WHITE | 전체 길이 흰 화면 seed |
-| 3 | STATE_FLICKER | 예약 비움; 물리 트랙 유지 |
+| 3 | SOURCE_CREDIT | 전 구간 출처 표기; 선언 없으면 비움 |
 | 4 | STATE_GLITCH | 예약 비움; 물리 트랙 유지 |
 | 5 | STATE_LASER | `LASER_CUT` 상황설명 |
 | 6 | A10_TEXT_WHITE | primary speaker 발언 |

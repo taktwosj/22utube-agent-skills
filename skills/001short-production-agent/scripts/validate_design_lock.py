@@ -4,8 +4,17 @@ import argparse
 import json
 from pathlib import Path
 
+from audio_policy_matrix import TTS_POLICIES
 from common import inspect_write_target, meaningful_text_length, read_json, resolved_declared_path, result, sha256_file, write_json
 from schema_runtime import validate_schema
+from track_template_matrix import (
+    FULL_SPAN_ROLES,
+    MAX_LINE_COUNT_BY_ROLE,
+    MAX_LINE_LENGTH_BY_ROLE,
+    OPTIONAL_FULL_SPAN_ROLES,
+    TEMPLATE_PROFILE,
+    track_template_profile,
+)
 
 
 SCHEMA = Path(__file__).resolve().parents[1] / "schemas" / "design_handoff.schema.json"
@@ -15,16 +24,8 @@ EVIDENCE_SCHEMA = SCHEMA.with_name("design_lock_evidence.schema.json")
 
 LEGAL_ROLES = {
     "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "T1", "T2", "A9", "A9_TEXT",
-    "A10", "A10_TEXT", "STATE", "A11", "A12",
+    "A10", "A10_TEXT", "STATE", "A11", "A12", "SOURCE_CREDIT",
 }
-
-# shrt_white_base_v2 seeds are placeholders with no width or wrap settings, and
-# the builder swaps text without touching font size, so CapCut neither shrinks
-# nor wraps.  These are the measured per-line budgets before text leaves frame.
-MAX_LINE_LENGTH_BY_ROLE = {"T1": 12, "T2": 12, "A10_TEXT": 15, "A9_TEXT": 15, "STATE": 15}
-MAX_LINE_COUNT_BY_ROLE = {"A9_TEXT": 2, "STATE": 2}
-FULL_SPAN_ROLES = ("T1", "T2", "SCREEN_WHITE", "SCREEN_EFFECT")
-
 
 def _overlong_line(text: str, limit: int) -> str | None:
     for line in str(text).splitlines():
@@ -33,7 +34,23 @@ def _overlong_line(text: str, limit: int) -> str | None:
     return None
 
 
-def validate_role_contract(timeline: dict, expected_duration: int | None = None) -> list[dict]:
+def validate_role_contract(
+    timeline: dict,
+    expected_duration: int | None = None,
+    *,
+    template_profile: str = TEMPLATE_PROFILE,
+) -> list[dict]:
+    template = track_template_profile(template_profile)
+    full_span_roles = template.full_span_roles
+    optional_full_span_roles = template.optional_full_span_roles
+    max_line_length_by_role = {
+        role: budget.max_chars for role, budget in template.role_line_budgets.items()
+    }
+    max_line_count_by_role = {
+        role: budget.max_lines
+        for role, budget in template.role_line_budgets.items()
+        if budget.max_lines is not None
+    }
     errors: list[dict] = []
     rows = timeline.get("segments", []) if isinstance(timeline, dict) else []
     video_ends = [
@@ -50,7 +67,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
             "code": "FULL_SPAN_ANCHOR_INVALID", "role": "VIDEO",
             "expected_duration": expected_duration, "observed_duration": timeline_total,
         })
-    for role in FULL_SPAN_ROLES:
+    for role in full_span_roles:
         matches = [row for row in rows if row.get("role") == role]
         if (
             timeline_total <= 0 or len(matches) != 1
@@ -62,6 +79,33 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
                 "expected_start": 0, "expected_duration": timeline_total,
                 "observed_count": len(matches),
             })
+        elif (
+            role == "SOURCE_CREDIT"
+            and (
+                not isinstance(matches[0].get("text"), str)
+                or not matches[0]["text"].strip()
+            )
+        ):
+            errors.append({
+                "code": "SOURCE_CREDIT_TEXT_REQUIRED",
+                "role": role,
+            })
+    for role in optional_full_span_roles:
+        matches = [row for row in rows if row.get("role") == role]
+        if not matches:
+            continue
+        if (
+            timeline_total <= 0 or len(matches) != 1
+            or matches[0].get("start") != 0
+            or matches[0].get("duration") != timeline_total
+        ):
+            errors.append({
+                "code": "FULL_SPAN_ANCHOR_INVALID", "role": role,
+                "expected_start": 0, "expected_duration": timeline_total,
+                "observed_count": len(matches),
+            })
+        elif not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():
+            errors.append({"code": "TITLE_TEXT_REQUIRED", "role": role})
     for role in ("T1", "T2"):
         matches = [row for row in rows if row.get("role") == role]
         if len(matches) != 1 or not isinstance(matches[0].get("text"), str) or not matches[0]["text"].strip():
@@ -73,7 +117,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
     for row in rows:
         role, content_type = row.get("role"), row.get("content_type")
         segment_id = row.get("segment_id")
-        limit = MAX_LINE_LENGTH_BY_ROLE.get(role)
+        limit = max_line_length_by_role.get(role)
         if limit is not None and isinstance(row.get("text"), str):
             overlong = _overlong_line(row["text"], limit)
             if overlong is not None:
@@ -81,7 +125,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
                     "code": "CAPTION_LINE_TOO_LONG", "segment_id": segment_id, "role": role,
                     "limit": limit, "line": overlong,
                 })
-        line_limit = MAX_LINE_COUNT_BY_ROLE.get(role)
+        line_limit = max_line_count_by_role.get(role)
         if (
             line_limit is not None
             and isinstance(row.get("text"), str)
@@ -117,7 +161,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
             text = row.get("text")
             if not isinstance(text, str) or not text.strip():
                 errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
-            elif _overlong_line(text, 15) is not None:
+            elif _overlong_line(text, max_line_length_by_role["STATE"]) is not None:
                 errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
             if row.get("state_effect") != "LASER_CUT":
                 errors.append({"code": "STATE_EFFECT_LASER_ONLY", "segment_id": segment_id})
@@ -143,7 +187,7 @@ def validate_role_contract(timeline: dict, expected_duration: int | None = None)
             or sound.get("text") != text.get("text")
         ):
             errors.append({"code": "A9_TEXT_PAIRING_MISMATCH", "cue_id": cue_id})
-    if timeline.get("audio_policy") in {"TTS_ONLY_MUTE_SOURCE", "A9_TTS_PLUS_A10_RETAINED"} and not a9:
+    if timeline.get("audio_policy") in TTS_POLICIES and not a9:
         errors.append({"code": "A9_REQUIRED_FOR_TTS_POLICY"})
     return errors
 
@@ -154,6 +198,7 @@ def validate_handoff(
     timeline_path: Path,
     evidence_path: Path | None = None,
     allow_relock: bool = False,
+    template_profile: str = TEMPLATE_PROFILE,
 ) -> dict:
     handoff_path = Path(handoff_path).resolve()
     source_identity_path = Path(source_identity_path).resolve()
@@ -182,7 +227,9 @@ def validate_handoff(
     if errors:
         return result(errors)
 
-    errors.extend(validate_role_contract(timeline))
+    errors.extend(
+        validate_role_contract(timeline, template_profile=template_profile)
+    )
     if errors:
         return result(errors)
 
@@ -279,9 +326,11 @@ def main() -> int:
     parser.add_argument("--timeline", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--relock", action="store_true", help="overwrite existing design lock evidence")
+    parser.add_argument("--template-profile", default=TEMPLATE_PROFILE)
     args = parser.parse_args()
     payload = validate_handoff(
-        args.handoff, args.source_identity, args.timeline, args.evidence, allow_relock=args.relock
+        args.handoff, args.source_identity, args.timeline, args.evidence,
+        allow_relock=args.relock, template_profile=args.template_profile,
     )
     print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0 if payload["status"] == "PASS" else 1
