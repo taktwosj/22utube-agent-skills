@@ -35,6 +35,10 @@ class ScriptLockIntegrationCase(unittest.TestCase):
 
         script = self.ep / "20_script" / "master_script_final.md"
         script.write_text("# 확정 대본\n\n검증된 본문입니다.\n", encoding="utf-8")
+        # Humanize KR 영수증은 S5H 최종 입력을 가리킨다. S4 승인본을 그대로
+        # final 로 복사한 경로다.
+        humanize_before = self.ep / "20_script" / "script_draft_v1.md"
+        humanize_before.write_bytes(script.read_bytes())
         receipt = self.ep / "90_reports" / "source_srt_review_receipt_v1.json"
         receipt.write_text(json.dumps({
             "schema_version": "source_srt_review_receipt_v1",
@@ -62,6 +66,31 @@ class ScriptLockIntegrationCase(unittest.TestCase):
                 "review_receipt_sha256": digest(receipt),
             },
         }), encoding="utf-8")
+
+        humanize = self.ep / gate110.HUMANIZE_RELPATH
+        humanize.write_text(json.dumps({
+            "schema": gate110.HUMANIZE_SCHEMA,
+            "status": "PASS",
+            "episode_id": self.ep.name,
+            "before": {
+                "path": "20_script/script_draft_v1.md",
+                "sha256": digest(humanize_before),
+            },
+            "after": {
+                "path": "20_script/master_script_final.md",
+                "sha256": digest(script),
+            },
+            "source_packet": {
+                "path": "20_script/source_packet_v1.json",
+                "sha256": digest(packet),
+            },
+            "upstream": gate110.HUMANIZE_UPSTREAM_PIN,
+            "total_violations": 0,
+            "checks": {
+                name: {"count": 0, "violations": []}
+                for name in gate110.HUMANIZE_REQUIRED_CHECKS
+            },
+        }, ensure_ascii=False), encoding="utf-8")
 
         checks = {name: {"violations": [], "count": 0}
                   for name in gate110.REQUIRED_CHECKS}
@@ -98,6 +127,9 @@ class ScriptLockIntegrationCase(unittest.TestCase):
             "verification_report_path":
                 "90_reports/verification_report_v1.json",
             "verification_report_sha256": digest(report),
+            "humanize_korean_gate_path":
+                "90_reports/humanize_korean_gate_v1.json",
+            "humanize_korean_gate_sha256": digest(humanize),
             "user_approval_origin": "user_message",
             "user_approval_event_id": "APP-INTEGRATION-001",
             "claude_review_event_id": "REV-INTEGRATION-001",
