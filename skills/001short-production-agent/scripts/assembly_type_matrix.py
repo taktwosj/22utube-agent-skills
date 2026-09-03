@@ -99,8 +99,8 @@ ASSEMBLY_TYPE_DEFINITIONS: dict[str, AssemblyTypeDefinition] = {
         type_id="2",
         execution_strategy="full_tts",
         required_roles=frozenset({"A9", "A9_TEXT"}),
-        optional_roles=frozenset(),
-        cleared_roles=("A10", "A10_TEXT", "STATE", "STATE_LASER"),
+        optional_roles=frozenset({"STATE"}),
+        cleared_roles=("A10", "A10_TEXT", "STATE_LASER"),
         allowed_mode_policies=frozenset({
             ("URAKKAI", "TTS_ONLY_MUTE_SOURCE"),
         }),

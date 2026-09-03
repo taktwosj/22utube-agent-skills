@@ -36,8 +36,8 @@ EXPECTED_TYPES = {
     "2": {
         "execution_strategy": "full_tts",
         "required_roles": {"A9", "A9_TEXT"},
-        "optional_roles": set(),
-        "cleared_roles": ("A10", "A10_TEXT", "STATE", "STATE_LASER"),
+        "optional_roles": {"STATE"},
+        "cleared_roles": ("A10", "A10_TEXT", "STATE_LASER"),
         "allowed_mode_policies": {
             ("URAKKAI", "TTS_ONLY_MUTE_SOURCE"),
         },
