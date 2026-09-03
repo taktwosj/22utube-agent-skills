@@ -29,7 +29,7 @@ Before skill, runtime, or episode-draft mutation, follow [Source authority and d
 
 Audio type and caption kind are independent axes. TTT (captions without matching audio) never narrows the audio axis: types 3–5 keep A10, and source narration never carries into production. Derive type candidates from the 원본표 (no verified 화자발언 → types 1·2 only); lock `execution_strategy` and audio policy at user approval. Decision tree, per-type tracks and policies, artifact chains: [type-assembly-matrix.md](references/type-assembly-matrix.md).
 
-Presets: [type-assembly-matrix.md](references/type-assembly-matrix.md). Political TTT+black uses [politics-ttt-shorts](presets/politics-ttt-shorts/README.md) as Type 1; never 119/second owner.
+Presets: [matrix](references/type-assembly-matrix.md), [political TTT](presets/politics-ttt-shorts/README.md), [foreign dialogue](presets/foreign-viral-dialogue-v1/README.md). Both stay in 001.
 
 ## User-facing phases
 

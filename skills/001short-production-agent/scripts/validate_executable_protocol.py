@@ -851,12 +851,18 @@ def _normalize_plan(plan: Dict[str, Any]) -> Dict[str, Any]:
                 and row_range is not None
                 and range_within(placement.get("target_range_us"), row_range)
             )
+            state_caption = (
+                anchor == "STATE"
+                and row_range is not None
+                and range_within(placement.get("target_range_us"), row_range)
+            )
             if (
                 row_range is not None
                 and not ranges_match(placement.get("target_range_us"), row_range)
                 and not user_audio_placement
                 and not user_audio_caption
                 and not speaker_caption
+                and not state_caption
             ):
                 errors.append(f"TIMELINE_TARGET_RANGE_MISMATCH:{row_index}:{anchor}")
             tracks.setdefault(anchor, []).append(placement)
@@ -918,6 +924,7 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
     if mode not in modes:
         return ["PRODUCTION_MODE_INVALID"]
 
+    production_profile = None
     profile_payload = plan.get("production_profile")
     if profile_payload is not None:
         try:
@@ -991,7 +998,11 @@ def validate_production_plan(plan: Dict[str, Any], protocol: Dict[str, Any]) -> 
             if (mode, plan.get("audio_policy")) not in assembly_type.allowed_mode_policies:
                 errors.append("ASSEMBLY_TYPE_AUDIO_ROUTE_MISMATCH")
             declared_cleared = set(plan.get("cleared_anchors", []))
-            expected_cleared = set(ALWAYS_CLEARED) | set(assembly_type.cleared_roles)
+            expected_cleared = set(
+                production_profile.cleared_roles
+                if production_profile is not None
+                else ALWAYS_CLEARED + assembly_type.cleared_roles
+            )
             for role in sorted(expected_cleared - declared_cleared):
                 errors.append(f"ASSEMBLY_TYPE_CLEAR_ANCHOR_MISSING:{role}")
             for role in sorted(assembly_type.required_roles):

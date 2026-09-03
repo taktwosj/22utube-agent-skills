@@ -8,7 +8,7 @@ track clearing, text budgets, and pinned portable assets.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Mapping
 
@@ -20,7 +20,11 @@ TRACK_LAYOUT = V3_TRACK_LAYOUT
 V2_TEMPLATE_PROFILE = "shrt_white_base_v2"
 V3_TEMPLATE_PROFILE = "shrt_white_base_v3"
 BLACK_TOP_TEMPLATE_PROFILE = "shrt_black_top_v1"
+FOREIGN_VIRAL_DIALOGUE_TEMPLATE_PROFILE = "shrt_black_headline_dialogue_v1"
 TEMPLATE_PROFILE = V3_TEMPLATE_PROFILE
+
+SPEAKER_BLUE_DIALOGUE_WHITE_TWO_LINE = "speaker_blue_dialogue_white_two_line"
+YELLOW_RED_YELLOW_EMPHASIS = "yellow_red_yellow_emphasis"
 
 CANONICAL_TRACKS = (
     "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "SOURCE_CREDIT", "STATE_GLITCH",
@@ -101,6 +105,11 @@ class TrackTemplateProfile:
     role_line_budgets: Mapping[str, LineBudget]
     grid_line_budgets: Mapping[tuple[str, str], LineBudget]
     pinned_assets: Mapping[str, str]
+    state_track_by_effect: Mapping[str, int] = field(
+        default_factory=lambda: dict(STATE_TRACK_BY_EFFECT)
+    )
+    dialogue_text_style_policy: str | None = None
+    headline_text_style_policy: str | None = None
 
     def __post_init__(self) -> None:
         physical_tracks = tuple(self.physical_tracks)
@@ -135,6 +144,7 @@ class TrackTemplateProfile:
         role_line_budgets = dict(self.role_line_budgets)
         grid_line_budgets = dict(self.grid_line_budgets)
         pinned_assets = dict(self.pinned_assets)
+        state_tracks = dict(self.state_track_by_effect)
         if any(not isinstance(budget, LineBudget) for budget in role_line_budgets.values()):
             raise ValueError("TRACK_TEMPLATE_PROFILE_ROLE_BUDGET_INVALID")
         if any(not isinstance(budget, LineBudget) for budget in grid_line_budgets.values()):
@@ -145,6 +155,22 @@ class TrackTemplateProfile:
             raise ValueError("TRACK_TEMPLATE_PROFILE_ASSET_ROLE_UNKNOWN")
         if any(not isinstance(path, str) or not path for path in pinned_assets.values()):
             raise ValueError("TRACK_TEMPLATE_PROFILE_ASSET_INVALID")
+        if any(
+            not isinstance(effect, str) or not effect
+            or not isinstance(index, int) or isinstance(index, bool)
+            or index < 0 or index >= len(logical_roles)
+            or logical_roles[index] != "STATE"
+            for effect, index in state_tracks.items()
+        ):
+            raise ValueError("TRACK_TEMPLATE_PROFILE_STATE_ROUTE_INVALID")
+        if self.dialogue_text_style_policy not in {
+            None, SPEAKER_BLUE_DIALOGUE_WHITE_TWO_LINE,
+        }:
+            raise ValueError("TRACK_TEMPLATE_PROFILE_DIALOGUE_POLICY_INVALID")
+        if self.headline_text_style_policy not in {
+            None, YELLOW_RED_YELLOW_EMPHASIS,
+        }:
+            raise ValueError("TRACK_TEMPLATE_PROFILE_HEADLINE_POLICY_INVALID")
         object.__setattr__(self, "physical_tracks", physical_tracks)
         object.__setattr__(self, "logical_role_by_track", logical_roles)
         object.__setattr__(self, "required_seed_roles", tuple(self.required_seed_roles))
@@ -154,6 +180,7 @@ class TrackTemplateProfile:
         object.__setattr__(self, "role_line_budgets", MappingProxyType(role_line_budgets))
         object.__setattr__(self, "grid_line_budgets", MappingProxyType(grid_line_budgets))
         object.__setattr__(self, "pinned_assets", MappingProxyType(pinned_assets))
+        object.__setattr__(self, "state_track_by_effect", MappingProxyType(state_tracks))
 
     @property
     def clear_track_indices(self) -> tuple[int, ...]:
@@ -182,6 +209,8 @@ _GRID_LINE_BUDGETS = {
     ("urakkai", "A9_TEXT"): LineBudget(2, 10),
     ("original", "STATE_LASER"): LineBudget(2, 15),
     ("urakkai", "STATE_LASER"): LineBudget(2, 15),
+    ("original", "STATE_GLITCH"): LineBudget(2, 18),
+    ("urakkai", "STATE_GLITCH"): LineBudget(2, 18),
 }
 _SEED_PRESERVED_ROLES = frozenset({
     "VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE", "T2", "T1",
@@ -203,6 +232,9 @@ TRACK_TEMPLATE_PROFILES: dict[str, TrackTemplateProfile] = {
         role_line_budgets=_COMMON_ROLE_LINE_BUDGETS,
         grid_line_budgets=_GRID_LINE_BUDGETS,
         pinned_assets=_PINNED_ASSETS,
+        state_track_by_effect=STATE_TRACK_BY_EFFECT,
+        dialogue_text_style_policy=None,
+        headline_text_style_policy=None,
     ),
     V3_TEMPLATE_PROFILE: TrackTemplateProfile(
         name=V3_TEMPLATE_PROFILE,
@@ -220,6 +252,9 @@ TRACK_TEMPLATE_PROFILES: dict[str, TrackTemplateProfile] = {
         },
         grid_line_budgets=_GRID_LINE_BUDGETS,
         pinned_assets=_PINNED_ASSETS,
+        state_track_by_effect=STATE_TRACK_BY_EFFECT,
+        dialogue_text_style_policy=None,
+        headline_text_style_policy=None,
     ),
     BLACK_TOP_TEMPLATE_PROFILE: TrackTemplateProfile(
         name=BLACK_TOP_TEMPLATE_PROFILE,
@@ -239,6 +274,31 @@ TRACK_TEMPLATE_PROFILES: dict[str, TrackTemplateProfile] = {
         # Compatibility filename inside the black-top archive.  The pixels,
         # archive SHA, and layout binding differ; the builder path does not.
         pinned_assets=_PINNED_ASSETS,
+        state_track_by_effect=STATE_TRACK_BY_EFFECT,
+        dialogue_text_style_policy=None,
+        headline_text_style_policy=None,
+    ),
+    FOREIGN_VIRAL_DIALOGUE_TEMPLATE_PROFILE: TrackTemplateProfile(
+        name=FOREIGN_VIRAL_DIALOGUE_TEMPLATE_PROFILE,
+        track_layout=V3_TRACK_LAYOUT,
+        physical_tracks=CANONICAL_TRACKS,
+        logical_role_by_track=LOGICAL_ROLE_BY_TRACK,
+        visual_track_count=VISUAL_TRACK_COUNT,
+        required_seed_roles=("VIDEO", "A9", "A10", "SOURCE_CREDIT"),
+        seed_preserved_roles=_SEED_PRESERVED_ROLES,
+        full_span_roles=_FULL_SPAN_ROLES + ("SOURCE_CREDIT",),
+        optional_full_span_roles=(),
+        role_line_budgets={
+            **_COMMON_ROLE_LINE_BUDGETS,
+            "A10_TEXT": LineBudget(2, 18),
+            "STATE": LineBudget(2, 18),
+            "SOURCE_CREDIT": LineBudget(1, 16),
+        },
+        grid_line_budgets=_GRID_LINE_BUDGETS,
+        pinned_assets=_PINNED_ASSETS,
+        state_track_by_effect={"GLITCH_SHAKE": TRACK_INDEX["STATE_GLITCH"]},
+        dialogue_text_style_policy=SPEAKER_BLUE_DIALOGUE_WHITE_TWO_LINE,
+        headline_text_style_policy=YELLOW_RED_YELLOW_EMPHASIS,
     ),
 }
 
@@ -262,6 +322,10 @@ def template_profiles_for_layout(layout: str) -> tuple[str, ...]:
 
 def profile_supports_role(profile_name: str, role: str) -> bool:
     return track_template_profile(profile_name).supports_role(role)
+
+
+def state_track_by_effect(profile_name: str) -> Mapping[str, int]:
+    return track_template_profile(profile_name).state_track_by_effect
 
 
 def layout_contract_roles(layout: str) -> tuple[str, ...]:

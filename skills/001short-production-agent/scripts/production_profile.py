@@ -59,6 +59,13 @@ def resolve_production_profile(payload: Mapping[str, object]) -> ResolvedProduct
         raise ValueError("PRODUCTION_PROFILE_AUDIO_ROUTE_INCOMPATIBLE")
     audio_source = audio_source_for_route(*route)
     template = track_template_profile(selector["template_profile"])
+    active_state_tracks = {
+        template.physical_tracks[index]
+        for index in template.state_track_by_effect.values()
+    }
+    profile_always_cleared = tuple(
+        role for role in ALWAYS_CLEARED if role not in active_state_tracks
+    )
     placement_roles = {
         role for role in template.logical_role_by_track if role is not None
     }
@@ -82,5 +89,5 @@ def resolve_production_profile(payload: Mapping[str, object]) -> ResolvedProduct
         track_layout=template.track_layout,
         required_roles=definition.required_roles,
         optional_roles=definition.optional_roles,
-        cleared_roles=ALWAYS_CLEARED + definition.cleared_roles,
+        cleared_roles=profile_always_cleared + definition.cleared_roles,
     )

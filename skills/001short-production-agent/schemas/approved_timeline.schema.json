@@ -29,7 +29,11 @@
           "cue_id": {"type": "string", "minLength": 1},
           "speaker_id": {"type": "string", "minLength": 1},
           "color_role": {"enum": ["WHITE", "YELLOW"]},
-          "state_effect": {"enum": ["LASER_CUT"]}
+          "state_effect": {"enum": ["LASER_CUT", "GLITCH_SHAKE"]},
+          "emphasis_range": {
+            "type": "array", "minItems": 2, "maxItems": 2,
+            "items": {"type": "integer", "minimum": 0}
+          }
         },
         "additionalProperties": true
       }

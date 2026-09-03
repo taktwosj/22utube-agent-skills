@@ -52,6 +52,18 @@ CAPTION_AUTHORITY = {"STATE": "STATE"}
 ALWAYS_CLEARED = list(ASSEMBLY_ALWAYS_CLEARED)
 
 
+def cleared_anchors_for_profile(
+    plan: dict,
+    production_profile: ResolvedProductionProfile | None,
+) -> list[str]:
+    cleared = (
+        list(production_profile.cleared_roles)
+        if production_profile is not None
+        else list(ALWAYS_CLEARED) + list(assembly_type_definition(plan["type"]).cleared_roles)
+    )
+    return cleared + ([] if source_credit_text(plan) is not None else ["SOURCE_CREDIT"])
+
+
 def resolve_v_plan_type(
     plan: dict,
     production_profile: ResolvedProductionProfile | None = None,
@@ -349,7 +361,10 @@ def build_production_plan(
     v_rows = plan["V"]
     cues = [cue for cue in plan.get("cues", []) if cue[1] != "NOFIT"]
     a9_text = {row["cue_id"]: row for row in timeline["segments"] if row["role"] == "A9"}
-    states = {row["segment_id"]: row for row in timeline["segments"] if row["role"] == "STATE"}
+    states = sorted(
+        (row for row in timeline["segments"] if row["role"] == "STATE"),
+        key=lambda row: row["start"],
+    )
     a10_texts = sorted(
         (row for row in timeline["segments"] if row["role"] == "A10_TEXT"),
         key=lambda row: row["start"],
@@ -406,11 +421,14 @@ def build_production_plan(
                 "text": caption["text"].replace("<br>", "\n"),
                 "target_range_us": [caption["start"], caption_end],
             })
-        state = states.get(f"STATE_{segment_id}")
-        if state:
+        for state in states:
+            state_end = state["start"] + state["duration"]
+            if state["start"] < start or state_end > end:
+                continue
             placements.append({
                 "anchor": "STATE", "operation": "replace_text_preserve_style",
-                "text": state["text"], "target_range_us": target,
+                "text": state["text"],
+                "target_range_us": [state["start"], state_end],
             })
         placements.append({"anchor": "SCREEN", "operation": "clone_template_segment", "target_range_us": target})
         rows.append({
@@ -445,11 +463,7 @@ def build_production_plan(
         "order_signature": [row[1] for row in v_rows],
         "final_order": [row[1] for row in v_rows],
         "timeline": rows,
-        "cleared_anchors": (
-            list(ALWAYS_CLEARED)
-            + list(assembly_type_definition(plan["type"]).cleared_roles)
-            + ([] if source_credit_text(plan) is not None else ["SOURCE_CREDIT"])
-        ),
+        "cleared_anchors": cleared_anchors_for_profile(plan, production_profile),
         "audio_bindings": {
             "audio_lock_path": "../30_audio_srt/audio_lock.json",
             "audio_lock_sha256": sha256_file(episode_root / "30_audio_srt" / "audio_lock.json"),

@@ -16,6 +16,49 @@ LAYOUT_SCHEMA_VERSION = "001short-user-provided-media-overlay-layout-v1"
 MANUAL_STATUS = "WAIT_USER_CAPCUT_AUDIO_ADJUSTMENT"
 BASE_TRACK_COUNT = len(CANONICAL_TRACKS)
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+_TRACK_INDEX = {role: index for index, role in enumerate(CANONICAL_TRACKS)}
+_FALLBACK_RENDER_INDEX = {
+    "VIDEO": 0,
+    "SCREEN_EFFECT": 11000,
+    "SCREEN_WHITE": 1,
+    "SOURCE_CREDIT": 14003,
+    "STATE_GLITCH": 14003,
+    "STATE_LASER": 14003,
+    "A10_TEXT_WHITE": 14003,
+    "A10_TEXT_YELLOW": 14003,
+    "A9_TEXT": 14002,
+    "T2": 14001,
+    "T1": 14000,
+}
+
+
+def visual_overlay_render_indices(tracks: list[dict], count: int) -> list[int] | None:
+    """Place visual extensions above screen media/effects and below every text lane."""
+    if count <= 0:
+        return []
+    if len(tracks) < BASE_TRACK_COUNT:
+        return None
+
+    def render_index(role: str) -> int | None:
+        track = tracks[_TRACK_INDEX[role]]
+        segments = track.get("segments") if isinstance(track, dict) else None
+        if isinstance(segments, list) and segments and isinstance(segments[0], dict):
+            value = segments[0].get("render_index")
+            if isinstance(value, int) and not isinstance(value, bool):
+                return value
+        return _FALLBACK_RENDER_INDEX.get(role)
+
+    base = [render_index(role) for role in ("VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE")]
+    text = [
+        render_index(role) for role in CANONICAL_TRACKS[:11]
+        if role not in {"VIDEO", "SCREEN_EFFECT", "SCREEN_WHITE"}
+    ]
+    if any(value is None for value in base + text):
+        return None
+    first = max(base) + 1
+    if first + count - 1 >= min(text):
+        return None
+    return list(range(first, first + count))
 
 
 def build_track_layout_extension(items: list[dict]) -> dict:
@@ -308,6 +351,11 @@ def validate_project_tracks(
         for material in iter_materials(materials)
         if isinstance(material.get("id"), str)
     }
+    visual_items = [item for item in declared_items if item.get("media_kind") != "audio"]
+    visual_render_indices = visual_overlay_render_indices(tracks, len(visual_items))
+    if visual_render_indices is None:
+        return {"status": "FAIL", "errors": [_error("USER_VISUAL_OVERLAY_RENDER_ORDER_INVALID")]}
+    visual_ordinal = 0
     errors: list[dict] = []
     for ordinal, expected in enumerate(declared_items):
         index = BASE_TRACK_COUNT + ordinal
@@ -336,9 +384,17 @@ def validate_project_tracks(
             or timerange.get("start") != expected_range[0]
             or timerange.get("duration") != expected_range[1] - expected_range[0]
             or not source_range_matches
+            or (
+                expected["media_kind"] != "audio"
+                and segment.get("render_index") != visual_render_indices[visual_ordinal]
+            )
         ):
             errors.append(_error("USER_MEDIA_OVERLAY_TRACK_UNBOUND", track_index=index))
+            if expected["media_kind"] != "audio":
+                visual_ordinal += 1
             continue
+        if expected["media_kind"] != "audio":
+            visual_ordinal += 1
         material = material_map.get(segment.get("material_id"))
         if not isinstance(material, dict):
             errors.append(_error("USER_MEDIA_OVERLAY_MATERIAL_UNBOUND", overlay_id=expected["overlay_id"]))

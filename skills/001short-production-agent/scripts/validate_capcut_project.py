@@ -32,10 +32,10 @@ from track_contract import (
     A12_INDEX,
     LOGICAL_ROLE_BY_LAYOUT,
     LOGICAL_ROLE_BY_TRACK,
-    STATE_TRACK_BY_EFFECT,
     TEMPLATE_PROFILE_BY_TRACK_LAYOUT,
     TRACK_INDEX,
     profile_supports_role,
+    state_track_by_effect,
     track_template_profile,
 )
 
@@ -49,6 +49,17 @@ DESIGN_LOCK_EVIDENCE_SCHEMA = SKILL_ROOT / "schemas" / "design_lock_evidence.sch
 
 def _error(code: str, **detail: Any) -> dict:
     return {"code": code, **detail}
+
+
+def _contract_template(contract: dict):
+    default = TEMPLATE_PROFILE_BY_TRACK_LAYOUT.get(contract.get("track_layout_version"))
+    name = contract.get("root_template_profile") or default
+    if not isinstance(name, str):
+        return None
+    try:
+        return track_template_profile(name)
+    except ValueError:
+        return track_template_profile(default) if isinstance(default, str) else None
 
 
 def _segments(model) -> list[dict]:
@@ -128,14 +139,34 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
                 role=segment.get("role"), track_index=index,
             ))
     authority_roles = ["T1", "T2"]
+    approved_role_style = contract.get("approved_role_style", {})
     if source_credit_supported and source_credit_declared:
         authority_roles.append("SOURCE_CREDIT")
     for role in authority_roles:
         index = TRACK_INDEX[role]
         segments = model.tracks[index].get("segments", [])
         material = materials.get(segments[0].get("material_id")) if len(segments) == 1 else None
-        text, valid = _rich_text(material) if isinstance(material, dict) else (None, False)
-        if not valid or text != role_text.get(role):
+        text, valid = (
+            _rich_text(
+                material,
+                allow_partition=(
+                    role == "T2" and template.headline_text_style_policy is not None
+                ),
+            )
+            if isinstance(material, dict) else (None, False)
+        )
+        if (
+            not valid or text != role_text.get(role)
+            or (
+                role == "T2"
+                and template.headline_text_style_policy is not None
+                and not _headline_style_valid(
+                    material,
+                    text,
+                    approved_role_style.get("T2", {}).get("emphasis_range"),
+                )
+            )
+        ):
             errors.append(_error("TITLE_TEXT_AUTHORITY_MISMATCH", role=role))
     declared = contract.get("approved_segment_text", {})
     actual_captions = {
@@ -147,7 +178,16 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
     for segment_id in sorted(set(actual_captions) & set(declared)):
         segment, expected = actual_captions[segment_id], declared[segment_id]
         material = materials.get(segment.get("material_id"))
-        text, valid = _rich_text(material) if isinstance(material, dict) else (None, False)
+        text, valid = (
+            _rich_text(
+                material,
+                allow_partition=(
+                    expected.get("role") == "A10_TEXT"
+                    and template.dialogue_text_style_policy is not None
+                ),
+            )
+            if isinstance(material, dict) else (None, False)
+        )
         timerange = _range(segment)
         if (
             not valid or text != expected.get("text")
@@ -162,7 +202,12 @@ def validate_v2_role_routing(model, contract: dict) -> list[dict]:
             or (
                 expected.get("role") == "STATE"
                 and segment.get("_actual_track_index")
-                != STATE_TRACK_BY_EFFECT.get(expected.get("state_effect"))
+                != state_track_by_effect(template.name).get(expected.get("state_effect"))
+            )
+            or (
+                expected.get("role") == "A10_TEXT"
+                and template.dialogue_text_style_policy is not None
+                and not _dialogue_style_valid(material, text)
             )
         ):
             errors.append(_error("CAPTION_SEGMENT_AUTHORITY_MISMATCH", segment_id=segment_id))
@@ -286,7 +331,11 @@ FORBIDDEN_VISIBLE = re.compile(
 )
 
 
-def _rich_text(material: dict) -> tuple[str | None, bool]:
+def _rich_text(
+    material: dict,
+    *,
+    allow_partition: bool = False,
+) -> tuple[str | None, bool]:
     content = material.get("content")
     if not isinstance(content, str) or not content.strip():
         value = material.get("text")
@@ -297,22 +346,113 @@ def _rich_text(material: dict) -> tuple[str | None, bool]:
         return content.strip(), False
     text = rich.get("text")
     styles = rich.get("styles")
-    valid = (
-        isinstance(text, str)
-        and isinstance(styles, list)
-        and bool(styles)
-        and all(
-            isinstance(style, dict) and style.get("range") == [0, len(text)]
-            for style in styles
-        )
+    ranges = []
+    if isinstance(text, str) and isinstance(styles, list) and styles:
+        for style in styles:
+            row = style.get("range") if isinstance(style, dict) else None
+            if (
+                not isinstance(row, list) or len(row) != 2
+                or not all(isinstance(value, int) and not isinstance(value, bool) for value in row)
+                or row[0] < 0 or row[1] <= row[0] or row[1] > len(text)
+            ):
+                ranges = []
+                break
+            ranges.append(row)
+    full_span = bool(ranges) and all(row == [0, len(text)] for row in ranges)
+    partition = bool(ranges) and ranges[0][0] == 0 and ranges[-1][1] == len(text) and all(
+        previous[1] == current[0] for previous, current in zip(ranges, ranges[1:])
     )
+    valid = isinstance(text, str) and (full_span or (allow_partition and partition))
     return (text.strip() if isinstance(text, str) and text.strip() else None, valid)
 
 
-def _visible_text(model) -> Iterator[tuple[str, str, bool]]:
+def _style_rgb(style: dict) -> list[float] | None:
+    value = style
+    for key in ("fill", "content", "solid", "color"):
+        value = value.get(key) if isinstance(value, dict) else None
+    if (
+        isinstance(value, list) and len(value) == 3
+        and all(isinstance(channel, (int, float)) and not isinstance(channel, bool) for channel in value)
+    ):
+        return [float(channel) for channel in value]
+    return None
+
+
+def _dialogue_style_valid(material: dict, text: str | None) -> bool:
+    if not isinstance(material, dict) or not isinstance(text, str):
+        return False
+    lines = text.split("\n")
+    if len(lines) != 2 or any(not line.strip() for line in lines):
+        return False
+    try:
+        rich = json.loads(material.get("content", ""))
+    except (TypeError, json.JSONDecodeError):
+        return False
+    styles = rich.get("styles")
+    split = len(lines[0])
+    if (
+        not isinstance(styles, list) or len(styles) != 2
+        or not all(isinstance(style, dict) for style in styles)
+        or styles[0].get("range") != [0, split]
+        or styles[1].get("range") != [split, len(text)]
+    ):
+        return False
+    expected = ([22 / 255, 139 / 255, 1.0], [1.0, 1.0, 1.0])
+    observed = (_style_rgb(styles[0]), _style_rgb(styles[1]))
+    return all(
+        actual is not None and all(abs(a - e) <= 0.002 for a, e in zip(actual, wanted))
+        for actual, wanted in zip(observed, expected)
+    )
+
+
+def _headline_style_valid(
+    material: dict,
+    text: str | None,
+    emphasis_range: object,
+) -> bool:
+    if (
+        not isinstance(material, dict) or not isinstance(text, str)
+        or not isinstance(emphasis_range, list) or len(emphasis_range) != 2
+        or not all(isinstance(value, int) and not isinstance(value, bool) for value in emphasis_range)
+        or not 0 < emphasis_range[0] < emphasis_range[1] < len(text)
+    ):
+        return False
+    try:
+        rich = json.loads(material.get("content", ""))
+    except (TypeError, json.JSONDecodeError):
+        return False
+    styles = rich.get("styles")
+    start, end = emphasis_range
+    if (
+        not isinstance(styles, list) or len(styles) != 3
+        or not all(isinstance(style, dict) for style in styles)
+        or [style.get("range") for style in styles]
+        != [[0, start], [start, end], [end, len(text)]]
+    ):
+        return False
+    expected = (
+        [1.0, 230 / 255, 0.0],
+        [1.0, 16 / 255, 16 / 255],
+        [1.0, 230 / 255, 0.0],
+    )
+    observed = tuple(_style_rgb(style) for style in styles)
+    return all(
+        actual is not None and all(abs(a - e) <= 0.002 for a, e in zip(actual, wanted))
+        for actual, wanted in zip(observed, expected)
+    )
+
+
+def _visible_text(
+    model,
+    *,
+    partition_roles: frozenset[str] = frozenset(),
+) -> Iterator[tuple[str, str, bool]]:
     for material in iter_materials(model.materials):
         if material.get("type") == "text":
-            text, rich_valid = _rich_text(material)
+            text, rich_valid = _rich_text(
+                material,
+                allow_partition=material.get("role") in partition_roles,
+            )
             if text:
                 yield f"material:{material.get('id')}:content", text, rich_valid
     for segment in _segments(model):
@@ -324,8 +464,15 @@ def _visible_text(model) -> Iterator[tuple[str, str, bool]]:
 
 def validate_visible_text(model, contract: dict) -> list[dict]:
     approved = set(contract.get("approved_text", []))
+    template = _contract_template(contract)
+    partition_roles = frozenset({
+        *({"A10_TEXT"} if template is not None and template.dialogue_text_style_policy is not None else set()),
+        *({"T2"} if template is not None and template.headline_text_style_policy is not None else set()),
+    })
     errors: list[dict] = []
-    for location, text, rich_valid in _visible_text(model):
+    for location, text, rich_valid in _visible_text(
+        model, partition_roles=partition_roles,
+    ):
         if location.startswith("material:") and not rich_valid:
             errors.append(_error("CAPCUT_RICH_TEXT_INVALID", location=location))
         elif FORBIDDEN_VISIBLE.search(text):
@@ -398,6 +545,7 @@ def validate_subtitle_binding(model, contract: dict) -> list[dict]:
     else:
         subtitle_roles = set(declared_roles)
 
+    template = _contract_template(contract)
     errors: list[dict] = []
     for segment_id in binding_by_segment:
         if segment_id not in segments:
@@ -414,7 +562,14 @@ def validate_subtitle_binding(model, contract: dict) -> list[dict]:
         if not isinstance(material, dict):
             errors.append(_error("SUBTITLE_BINDING_MATERIAL_MISSING", segment_id=segment.get("id")))
             continue
-        text, rich_valid = _rich_text(material)
+        text, rich_valid = _rich_text(
+            material,
+            allow_partition=(
+                role == "A10_TEXT"
+                and template is not None
+                and template.dialogue_text_style_policy is not None
+            ),
+        )
         target_range = _range(segment)
         cue = cues_by_id.get(str(binding["cue_id"]))
         if cue is None:

@@ -226,9 +226,8 @@ class CanonicalProvisionalContractTest(unittest.TestCase):
         self.assertNotIn("STATE_EFFECT_LASER_ONLY", codes)
         for schema_name in ("approved_timeline.schema.json", "build_contract.schema.json"):
             schema_text = (SKILL / "schemas" / schema_name).read_text(encoding="utf-8")
-            self.assertIn('"enum": ["LASER_CUT"]', schema_text)
+            self.assertIn('"enum": ["LASER_CUT", "GLITCH_SHAKE"]', schema_text)
             self.assertNotIn('"FLICKER' + '_RAVE"', schema_text)
-            self.assertNotIn('"GLITCH_SHAKE"', schema_text)
 
     def test_no_state_episode_is_legal(self):
         config = {
