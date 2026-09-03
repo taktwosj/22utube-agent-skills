@@ -44,12 +44,14 @@ from track_contract import (
     A10_TEXT_TRACK_BY_COLOR,
     A12_INDEX,
     CANONICAL_TRACKS,
+    SPEAKER_BLUE_DIALOGUE_WHITE_TWO_LINE,
     TEMPLATE_PROFILE,
-    STATE_TRACK_BY_EFFECT,
     TRACK_INDEX,
     TRACK_LAYOUT,
     V2_TEMPLATE_PROFILE,
+    YELLOW_RED_YELLOW_EMPHASIS,
     profile_supports_role,
+    state_track_by_effect,
     track_template_profile,
 )
 from production_profile import resolve_production_profile
@@ -1225,7 +1227,14 @@ def _register_capcut_project(project: Path, capcut_root: Path, backup_path: Path
     _write_json(root_path, root)
 
 
-def _set_text(material: dict, text: str, role: str) -> None:
+def _set_text(
+    material: dict,
+    text: str,
+    role: str,
+    *,
+    style_policy: str | None = None,
+    emphasis_range: list[int] | None = None,
+) -> None:
     try:
         rich = json.loads(material["content"])
     except (KeyError, TypeError, json.JSONDecodeError):
@@ -1234,10 +1243,38 @@ def _set_text(material: dict, text: str, role: str) -> None:
     if not isinstance(styles, list) or not styles:
         raise RuntimeError(f"CAPCUT_RICH_TEXT_TEMPLATE_INVALID:{role}")
     rich["text"] = text
-    for style in styles:
-        if not isinstance(style, dict):
+    if style_policy == SPEAKER_BLUE_DIALOGUE_WHITE_TWO_LINE:
+        lines = text.split("\n")
+        if len(lines) != 2 or any(not line.strip() for line in lines):
+            raise RuntimeError(f"CAPCUT_DIALOGUE_TWO_LINE_FORMAT_INVALID:{role}")
+        if len(styles) < 2 or any(not isinstance(style, dict) for style in styles[:2]):
             raise RuntimeError(f"CAPCUT_RICH_TEXT_TEMPLATE_INVALID:{role}")
-        style["range"] = [0, len(text)]
+        split = len(lines[0])
+        styles = styles[:2]
+        styles[0]["range"] = [0, split]
+        styles[1]["range"] = [split, len(text)]
+        rich["styles"] = styles
+        material["is_rich_text"] = True
+    elif style_policy == YELLOW_RED_YELLOW_EMPHASIS:
+        if (
+            not isinstance(emphasis_range, list) or len(emphasis_range) != 2
+            or not all(isinstance(value, int) and not isinstance(value, bool) for value in emphasis_range)
+            or not 0 < emphasis_range[0] < emphasis_range[1] < len(text)
+            or len(styles) < 3 or any(not isinstance(style, dict) for style in styles[:3])
+        ):
+            raise RuntimeError(f"CAPCUT_HEADLINE_EMPHASIS_RANGE_INVALID:{role}")
+        start, end = emphasis_range
+        styles = styles[:3]
+        styles[0]["range"] = [0, start]
+        styles[1]["range"] = [start, end]
+        styles[2]["range"] = [end, len(text)]
+        rich["styles"] = styles
+        material["is_rich_text"] = True
+    else:
+        for style in styles:
+            if not isinstance(style, dict):
+                raise RuntimeError(f"CAPCUT_RICH_TEXT_TEMPLATE_INVALID:{role}")
+            style["range"] = [0, len(text)]
     material["type"] = "text"
     material["role"] = role
     material["desc"] = f"001short production {role}"
@@ -1545,11 +1582,17 @@ def _normalize_source(
             row = approved_by_id[segment["id"]]
             if row.get("text") != config[key] or not config[key].strip():
                 raise RuntimeError(f"TITLE_PLAN_AUTHORITY_MISMATCH:{key}")
-            _set_text(material_map[segment["material_id"]], row["text"], key)
+            _set_text(
+                material_map[segment["material_id"]],
+                row["text"],
+                key,
+                style_policy=(template.headline_text_style_policy if key == "T2" else None),
+                emphasis_range=row.get("emphasis_range"),
+            )
             segment["target_timerange"] = {"start": row["start"], "duration": row["duration"]}
 
         state_templates = {}
-        for effect, index in STATE_TRACK_BY_EFFECT.items():
+        for effect, index in state_track_by_effect(template_name).items():
             if index not in seed_segments:
                 raise RuntimeError("STATE_TEMPLATE_SEGMENT_MISSING")
             seed = copy.deepcopy(seed_segments[index])
@@ -1617,7 +1660,12 @@ def _normalize_source(
                     "target_timerange": {"start": row["start"], "duration": row["duration"]},
                 })
                 material["id"] = material_id
-                _set_text(material, row["text"], "A10_TEXT")
+                _set_text(
+                    material,
+                    row["text"],
+                    "A10_TEXT",
+                    style_policy=template.dialogue_text_style_policy,
+                )
                 material["color_role"] = color
                 material["speaker_id"] = row["speaker_id"]
                 parent.append(material)
@@ -1730,6 +1778,18 @@ def _normalize_source(
                 a10_segments.append(a10_segment)
             tracks[TRACK_INDEX["A10"]]["segments"] = a10_segments
 
+        visual_overlay_count = sum(
+            item["media_kind"] != "audio" for item in user_media_overlay
+        )
+        visual_render_indices: list[int] = []
+        if visual_overlay_count:
+            resolved_render_indices = user_provided_media_overlay.visual_overlay_render_indices(
+                tracks, visual_overlay_count,
+            )
+            if resolved_render_indices is None:
+                raise RuntimeError("USER_VISUAL_OVERLAY_RENDER_ORDER_INVALID")
+            visual_render_indices = resolved_render_indices
+        visual_overlay_ordinal = 0
         for item in user_media_overlay:
             is_audio = item["media_kind"] == "audio"
             seed_track_index = TRACK_INDEX["A9"] if is_audio else TRACK_INDEX["VIDEO"]
@@ -1788,6 +1848,9 @@ def _normalize_source(
                 segment.pop("source_timerange", None)
             segment["volume"] = 1.0 if is_audio else 0.0
             segment["last_nonzero_volume"] = segment["volume"]
+            if not is_audio:
+                segment["render_index"] = visual_render_indices[visual_overlay_ordinal]
+                visual_overlay_ordinal += 1
             if is_audio:
                 _remove_extra_material_ref_types(segment, material_map, {"combination"})
             track["segments"].append(segment)
@@ -2198,6 +2261,9 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
                 if isinstance(raw, str) and raw:
                     required_assets.add(Path(raw).as_posix())
     ordered = sorted(timeline_rows, key=lambda row: (row["start"], row["segment_id"]))
+    approved_rows = _approved_rows(config)
+    template = track_template_profile(config["_resolved_root_contract"]["template_profile"])
+    approved_t2 = next(row for row in approved_rows if row.get("role") == "T2")
     contract_path = build_root / "build_contract.json"
     receipt_path = build_root / "build_inputs_receipt.json"
     contract = {
@@ -2244,6 +2310,11 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
             "T1": config["T1"], "T2": config["T2"],
             **({"SOURCE_CREDIT": config["SOURCE_CREDIT"]} if "SOURCE_CREDIT" in config else {}),
         },
+        **({
+            "approved_role_style": {
+                "T2": {"emphasis_range": approved_t2["emphasis_range"]},
+            },
+        } if template.headline_text_style_policy is not None else {}),
         "approved_segment_text": {
             row["segment_id"]: {
                 "role": row["role"], "start": row["start"], "duration": row["duration"],
@@ -2251,7 +2322,7 @@ def _build_episode_once(config: dict, *, prerequisites: dict | None = None) -> d
                 **({"color_role": row["color_role"]} if row["role"] == "A10_TEXT" else {}),
                 **({"state_effect": row["state_effect"]} if row["role"] == "STATE" else {}),
             }
-            for row in _approved_rows(config)
+            for row in approved_rows
             if row.get("role") in {"A9_TEXT", "A10_TEXT", "STATE"}
         },
         "approved_actual_order": [row["segment_id"] for row in ordered], "timeline": ordered,

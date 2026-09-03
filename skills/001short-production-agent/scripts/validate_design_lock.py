@@ -112,6 +112,20 @@ def validate_role_contract(
             errors.append({"code": "TITLE_TEXT_REQUIRED", "role": role})
         elif matches[0].get("content_type") != "TITLE":
             errors.append({"code": "TITLE_CONTENT_TYPE_INVALID", "role": role})
+        elif role == "T2" and template.headline_text_style_policy is not None:
+            text = matches[0]["text"]
+            emphasis = matches[0].get("emphasis_range")
+            if (
+                not isinstance(emphasis, list) or len(emphasis) != 2
+                or not all(
+                    isinstance(value, int) and not isinstance(value, bool)
+                    for value in emphasis
+                )
+                or not 0 < emphasis[0] < emphasis[1] < len(text)
+            ):
+                errors.append({
+                    "code": "HEADLINE_EMPHASIS_RANGE_REQUIRED", "role": role,
+                })
 
     primary = timeline.get("primary_speaker_id")
     for row in rows:
@@ -155,6 +169,14 @@ def validate_role_contract(
                 expected = "WHITE" if speaker == primary else "YELLOW"
                 if row.get("color_role") != expected:
                     errors.append({"code": "SPEAKER_COLOR_ROLE_MISMATCH", "segment_id": segment_id})
+            if template.dialogue_text_style_policy is not None:
+                text = row.get("text")
+                lines = text.split("\n") if isinstance(text, str) else []
+                if len(lines) != 2 or any(not line.strip() for line in lines):
+                    errors.append({
+                        "code": "DIALOGUE_TWO_LINE_FORMAT_REQUIRED",
+                        "segment_id": segment_id,
+                    })
         if role == "STATE":
             if content_type not in {"SITUATION", "STATE"} or row.get("caption_role") != "STATE":
                 errors.append({"code": "STATE_ROLE_MISMATCH", "segment_id": segment_id})
@@ -163,8 +185,13 @@ def validate_role_contract(
                 errors.append({"code": "CAPTION_TEXT_REQUIRED", "segment_id": segment_id})
             elif _overlong_line(text, max_line_length_by_role["STATE"]) is not None:
                 errors.append({"code": "STATE_TEXT_TOO_LONG", "segment_id": segment_id})
-            if row.get("state_effect") != "LASER_CUT":
-                errors.append({"code": "STATE_EFFECT_LASER_ONLY", "segment_id": segment_id})
+            if row.get("state_effect") not in template.state_track_by_effect:
+                code = (
+                    "STATE_EFFECT_LASER_ONLY"
+                    if set(template.state_track_by_effect) == {"LASER_CUT"}
+                    else "STATE_EFFECT_PROFILE_INVALID"
+                )
+                errors.append({"code": code, "segment_id": segment_id})
 
     a9_rows = [row for row in rows if row.get("role") == "A9"]
     a9_text_rows = [row for row in rows if row.get("role") == "A9_TEXT"]

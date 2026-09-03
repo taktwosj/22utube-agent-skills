@@ -407,6 +407,16 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
             self.assertEqual(visual_material["role"], "USER_PROVIDED_VISUAL")
             self.assertEqual(visual_material["type"], "video")
             self.assertNotIn(visual_material["id"], {row["id"] for row in meta_rows})
+            self.assertEqual(visual_segment["render_index"], 11001)
+            self.assertLess(visual_segment["render_index"], 14000)
+
+            wrong_render = json.loads(json.dumps(content))
+            wrong_render["tracks"][18]["segments"][0]["render_index"] = 14004
+            wrong_render_check = overlay.validate_project_tracks(
+                wrong_render["tracks"], wrong_render["materials"], project_root=project,
+                declared_items=config["user_provided_media_overlay"],
+            )
+            self.assertEqual(wrong_render_check["status"], "FAIL")
 
             contract = {
                 "track_layout_version": builder.TRACK_LAYOUT,

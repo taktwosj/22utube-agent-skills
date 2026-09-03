@@ -114,6 +114,23 @@
       },
       "additionalProperties": false
     },
+    "approved_role_style": {
+      "type": "object",
+      "properties": {
+        "T2": {
+          "type": "object",
+          "required": ["emphasis_range"],
+          "properties": {
+            "emphasis_range": {
+              "type": "array", "minItems": 2, "maxItems": 2,
+              "items": {"type": "integer", "minimum": 0}
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "approved_segment_text": {
       "type": "object",
       "additionalProperties": {
@@ -125,7 +142,7 @@
           "duration": {"type": "integer", "minimum": 1},
           "text": {"type": "string", "minLength": 1},
           "color_role": {"enum": ["WHITE", "YELLOW"]},
-          "state_effect": {"enum": ["LASER_CUT"]}
+          "state_effect": {"enum": ["LASER_CUT", "GLITCH_SHAKE"]}
         },
         "additionalProperties": false
       }

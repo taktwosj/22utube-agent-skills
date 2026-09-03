@@ -145,9 +145,11 @@ a rejection gate. This mode is not VMake evidence, is not
 
 The canonical base layout stays at 15 tracks. Only an evidence-bound
 `001short-user-provided-media-overlay-layout-v1` may append declared overlays
-after index 14; every undeclared extra track fails. Only `STATE_LASER` is
-routable for STATE cues (`LASER_CUT`); `STATE_GLITCH` stays physically present
-and empty. `SOURCE_CREDIT` is a full-span title lane like T1/T2: a plan that
+after index 14; every undeclared extra track fails. Default white/black-top
+profiles route only `LASER_CUT` to `STATE_LASER`, so `STATE_GLITCH` stays empty.
+The approved `shrt_black_headline_dialogue_v1` profile instead routes
+`GLITCH_SHAKE` to `STATE_GLITCH`; this exception is profile-bound and does not
+change the default profiles. `SOURCE_CREDIT` is a full-span title lane like T1/T2: a plan that
 declares it places one segment over the whole timeline, and a plan that omits
 it leaves the track empty. File/SHA/duration-bound overlapping user audio keeps
 A10 on at volume 1.0 for manual volume adjustment and is never auto-ducked.

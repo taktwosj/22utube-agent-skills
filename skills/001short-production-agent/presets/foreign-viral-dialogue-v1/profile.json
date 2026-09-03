@@ -1,0 +1,8 @@
+{
+  "schema_version": "001short-production-profile-v1",
+  "profile_id": "foreign-viral-dialogue-v1",
+  "assembly_type": "3",
+  "template_profile": "shrt_black_headline_dialogue_v1",
+  "production_mode": "URAKKAI",
+  "audio_policy": "A10_REASSEMBLED_SYNC"
+}

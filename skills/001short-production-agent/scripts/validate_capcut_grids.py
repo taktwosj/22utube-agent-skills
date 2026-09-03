@@ -795,6 +795,7 @@ def validate_locked_assembly(
                 "A10_TEXT_WHITE": "A10_TEXT",
                 "A10_TEXT_YELLOW": "A10_TEXT",
                 "STATE_LASER": "STATE",
+                "STATE_GLITCH": "STATE",
             }.get(role)
             if actual and caption_layer:
                 layer_cues = [
