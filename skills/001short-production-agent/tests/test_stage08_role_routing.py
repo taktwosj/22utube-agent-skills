@@ -21,7 +21,7 @@ from common import range_within
 from track_contract import TRACK_LAYOUT
 
 
-def approved_timeline():
+def approved_timeline(source_credit=None):
     rows = [
         ("video", "VIDEO", 0, 1_000, {}),
         ("screen-effect", "SCREEN_EFFECT", 0, 1_000, {}),
@@ -41,6 +41,10 @@ def approved_timeline():
             "state_effect": "LASER_CUT",
         }),
     ]
+    if source_credit is not None:
+        rows.append(("source-credit", "SOURCE_CREDIT", 0, 1_000, {
+            "text": source_credit, "content_type": "SOURCE_CREDIT",
+        }))
     return {
         "schema_version": "approved-timeline-v1", "episode_id": "EP",
         "source_fingerprint": "fixture", "primary_speaker_id": "SPK_01",
@@ -141,7 +145,9 @@ class Stage08RoleRoutingTest(unittest.TestCase):
             video = root / "source.mp4"; video.write_bytes(b"video")
             audio = root / "vocals.wav"; audio.write_bytes(b"audio")
             timeline_path = root / "timeline.json"
-            timeline_path.write_text(json.dumps(approved_timeline()), encoding="utf-8")
+            timeline_path.write_text(
+                json.dumps(approved_timeline(source_credit)), encoding="utf-8"
+            )
             document = project / "draft_content.json"
             document.write_text(json.dumps(project_payload()), encoding="utf-8")
             (project / "draft_meta_info.json").write_text(
@@ -187,7 +193,7 @@ class Stage08RoleRoutingTest(unittest.TestCase):
     def test_v3_source_credit_readback_is_layout_range_and_text_bound(self):
         built = self._normalize_source_credit_fixture("출처 : 실제 채널")
         model = SimpleNamespace(tracks=built["tracks"], materials=built["materials"])
-        timeline = approved_timeline()
+        timeline = approved_timeline("출처 : 실제 채널")
         contract = {
             "track_layout_version": "shrt_white_base_v3_15",
             "timeline": [
