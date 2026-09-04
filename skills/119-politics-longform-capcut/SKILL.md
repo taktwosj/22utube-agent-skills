@@ -158,7 +158,7 @@ build 후 active draft 직접 수술
 
 A–D는 다른 작업의 state·산출물·CapCut draft·`episode_cards.json`을 수정하지 않는다. 모두 준비된 뒤 join owner 한 명만 실제 산출물을 `episode_cards.json`으로 합친다. 이 파일이 유일한 조립 Source of Truth다.
 
-현재 조립 기준은 사용자 수동 `V8_MANUAL_OVERLAY_65` 근본이다. [clean-assembly-harness.md](references/clean-assembly-harness.md)를 먼저 읽고 `build_politics_v8_project.py`로 clean build한다. 기존 active v7 builder로 자동 후퇴하지 않는다. 파일명·테스트 미디어 이름이 아니라 12개 고정 트랙의 역할·geometry·문구 슬롯과 경로 경계를 계약으로 사용한다.
+현재 조립 기준은 사용자 수동 `V8_MANUAL_OVERLAY_65` 근본이다. [clean-assembly-harness.md](references/clean-assembly-harness.md)를 먼저 읽고 `build_politics_v8_project.py`로 clean build한다. `capcut_active_root_v1.json`과 기존 v7 builder는 `LEGACY_V7_ROLLBACK_ONLY`이며 새 회차의 근본 선택에 사용하지 않는다. 파일명·테스트 미디어 이름이 아니라 12개 고정 트랙의 역할·geometry·문구 슬롯과 경로 경계를 계약으로 사용한다.
 
 ## 전체 하단 자막 화면 계약
 
@@ -210,7 +210,7 @@ scripts/render_democratic_blue_card.py
 
 - 한 회차에는 active writer 한 명만 둔다.
 - CapCut 또는 백그라운드 프로세스가 열려 있으면 draft를 만들거나 고치지 않는다.
-- active pointer가 선택한 검증 완료 근본만 사용한다.
+- 새 회차는 `V8_MANUAL_OVERLAY_65` 검증 근본만 사용한다. legacy v7 회차를 명시적으로 복구할 때만 `LEGACY_V7_ROLLBACK_ONLY` pointer를 사용한다.
 - 원본 MP4, Media 폴더, CapCut draft, cache, 계정 정보는 소유 계약이 달리 정하지 않는 한 machine-local에 둔다.
 - portable JSON에는 사용자 프로필 절대경로와 cache 경로를 넣지 않는다.
 - ASR cue가 편집 컷을 정하지 않는다. 실제 컷에서 자막을 split 또는 clamp한다.

@@ -72,6 +72,37 @@ resolution_type: TRANSFORM_CANDIDATE | TRANSFORM_APPROVED |
 - 대화 의존성은 `NONE`, `CONTEXTUAL`, `EVIDENTIARY`, `INDIVISIBLE_DIALOGUE_BUNDLE`, `UNVERIFIED` 중 하나다. 질문→답, 주장→증거, 행동→결과, 지시어→대상은 묶음이 깨지면 실패다.
 - 훅만 복사하고 본문을 원본 순서로 재생하거나 훅 beat를 다시 전부 반복하면 `URAKKAI_STRUCTURE_UNCHANGED`로 취급한다.
 
+### 창작 범위와 사실 앵커
+
+원본표는 최종 대본이 아니라 화면·행동·소재·화자 관계를 확인하는 읽기 전용
+사실표다. 우라까이표는 원본 문장, 설명 순서, 감정선, 대화 구조를 그대로 따르지
+않고 독립적인 쇼츠 대본으로 다시 쓴다.
+
+```text
+IDENTITY_ANCHOR_REQUIRED_WHEN_VERIFIED
+PROPER_NOUN_SUBSTITUTION_FORBIDDEN
+CREATIVE_DIALOGUE_ALLOWED
+FOREIGN_DIALOGUE_LITERAL_TRANSLATION_NOT_REQUIRED
+HIGH_RISK_FALSE_CLAIM_FORBIDDEN
+CORE_VISUAL_EVENT_CONTRADICTION_FORBIDDEN
+STRUCTURAL_REWRITE_REQUIRED
+```
+
+- 영상의 정체성을 결정하는 확인된 지역명·국가명·행사명·캐릭터명·브랜드명은
+  정확히 유지한다. 블리즈컨을 일반 코스프레 행사로 흐리거나 인도를 태국으로
+  바꾸지 않는다. T1, T2, 제목, STATE, A9, A10_TEXT 중 한 곳에 정확히 한 번
+  들어가면 충분하며 본문 반복은 요구하지 않는다.
+- 고유명사는 원본 메타데이터, 화면·OCR, 전사 또는 공신력 있는 원출처로 확인된
+  경우에만 쓴다. 확인되지 않은 이름은 추측하지 않고 원본표에 `UNVERIFIED`로
+  남기며 최종 대본에서는 확정 사실처럼 쓰지 않는다.
+- 모든 수치·장소·이름을 보존하는 요약은 금지한다. 영상의 정체성과 핵심 사건을
+  이해하는 데 필요한 사실 앵커만 남기고 훅·브리지·감정·속마음·상황 설명·결말
+  표현과 정보 공개 순서는 새로 쓴다.
+- 외국어 화자발언은 직역하지 않아도 된다. 화면 행동·표정·관계에 맞는 자연스러운
+  한국어 가상 상황대사는 허용하지만 실제 화면과 정반대인 결과를 만들면 안 된다.
+- 원본에 없는 우승·사망·범죄·사기·불륜·큰 부상·가족관계 같은 중대한 사실을
+  새로 만들거나 일반 인물에게 단정하지 않는다.
+
 ## 4. 몰입도·가단야·와우포인트
 
 ### 와우포인트 선정

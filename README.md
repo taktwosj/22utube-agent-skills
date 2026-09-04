@@ -62,7 +62,9 @@ No other production or support skills are managed by this repository.
 
 `manifests/skill-set.json` is the authoritative install list.
 `manifests/capcut-template-set.json` records CapCut template identities and
-verification requirements. Raw local CapCut draft folders stay in the active
+verification requirements. Its `production_roots` field is the current set;
+entries under the older `templates` field are compatibility references only.
+Raw local CapCut draft folders stay in the active
 machine's CapCut project storage; OneDrive keeps only manifests, snapshots, and
 restore notes unless an explicit handoff package is requested.
 

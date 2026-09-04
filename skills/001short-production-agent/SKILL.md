@@ -35,6 +35,8 @@ Presets: [matrix](references/type-assembly-matrix.md), [political TTT](presets/p
 
 Always execute and report `원본표 → 우라까이표 → CapCut 조립`.
 
+[우라까이 창작 계약](references/shorts-structure-taxonomy.md#창작-범위와-사실-앵커) 필수.
+
 1. Build `20_script/original-capcut-grid.md` per [template](templates/original-capcut-grid.md): 원본 5분류 대본 + 15-row table. Exact row order, cell rules, and TTT notation live in the templates and `scripts/validate_capcut_grids.py`.
 2. The task owner sends the validated original table to the user's live 투군 GPT tab, saves the returned advice, and builds `20_script/urakkai-capcut-grid.md` per [template](templates/urakkai-capcut-grid.md). Never delegate the live tab or current form state to a subagent.
 3. Validate both tables (`validate_capcut_grids.py --emit-report`) and paste 원본표 then 우라까이표. Automatic mode skips approval only.
