@@ -358,20 +358,23 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
                 {"segment_id": "T2", "timeline_order": 3, "role": "T2", "start": 0, "duration": 2_000_000, "text": "subtitle"},
                 {"segment_id": "SCREEN_EFFECT", "timeline_order": 4, "role": "SCREEN_EFFECT", "start": 0, "duration": 2_000_000},
                 {"segment_id": "SCREEN_WHITE", "timeline_order": 5, "role": "SCREEN_WHITE", "start": 0, "duration": 2_000_000},
-                {"segment_id": "A10-1", "timeline_order": 6, "role": "A10", "start": 0, "duration": 1_000_000},
-                {"segment_id": "A10-2", "timeline_order": 7, "role": "A10", "start": 1_000_000, "duration": 1_000_000},
+                {"segment_id": "SOURCE_CREDIT_FULL", "timeline_order": 6, "role": "SOURCE_CREDIT", "start": 0, "duration": 2_000_000, "text": "source"},
+                {"segment_id": "A10-1", "timeline_order": 7, "role": "A10", "start": 0, "duration": 1_000_000},
+                {"segment_id": "A10-2", "timeline_order": 8, "role": "A10", "start": 1_000_000, "duration": 1_000_000},
             ]
             timeline = root / "timeline.json"
             write(timeline, {"episode_id": "EP", "segments": rows})
             config = {
                 "episode_id": "EP", "duration_us": 2_000_000,
                 "T1": "title", "T2": "subtitle", "state_cues": [],
+                "SOURCE_CREDIT": "source",
                 "audio_policy": "A10_REASSEMBLED_SYNC",
                 "approved_timeline_path": str(timeline),
                 "_visual_input": {"video_input_path": str(source), "resource_name": "source.mp4"},
             }
 
-            builder._normalize_source(project, config, vocals, manifest)
+            with patch.object(builder, "profile_supports_role", return_value=True):
+                builder._normalize_source(project, config, vocals, manifest)
             builder._prepare_cloud_project(
                 project, project_name="overlay-fixture", capcut_root=root,
                 draft_id="overlay-fixture-id", duration_us=2_000_000,
@@ -387,7 +390,12 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
                 if isinstance(row, dict) and isinstance(row.get("id"), str)
             }
             self.assertEqual(len(content["tracks"]), 19)
+            self.assertEqual(
+                [row["id"] for row in content["tracks"][builder.TRACK_INDEX["SOURCE_CREDIT"]]["segments"]],
+                ["SOURCE_CREDIT"],
+            )
             self.assertTrue(all(row["volume"] == 1.0 for row in content["tracks"][12]["segments"]))
+
             audio_segments = [
                 *content["tracks"][12]["segments"],
                 *(track["segments"][0] for track in content["tracks"][15:18]),
@@ -544,6 +552,23 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
             mirror_codes = {row["code"] for row in mirror_errors}
             self.assertIn("USER_MEDIA_OVERLAY_TRACK_UNBOUND", mirror_codes)
             self.assertIn("AUDIO_MATERIAL_POSTOPEN_REWRITE_INVALID", mirror_codes)
+
+    def test_source_credit_plan_authority_rejects_presence_and_text_mismatches(self):
+        approved = [{
+            "segment_id": "SOURCE_CREDIT_FULL", "role": "SOURCE_CREDIT",
+            "start": 0, "duration": 2_000_000, "text": "source",
+        }]
+
+        builder._validate_source_credit_authority(
+            {"SOURCE_CREDIT": "source"}, approved, 2_000_000,
+        )
+        for config, rows in (
+            ({}, approved),
+            ({"SOURCE_CREDIT": "source"}, []),
+            ({"SOURCE_CREDIT": "different"}, approved),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "SOURCE_CREDIT_PLAN_AUTHORITY_MISMATCH"):
+                builder._validate_source_credit_authority(config, rows, 2_000_000)
 
     def test_unbound_sixteenth_track_is_rejected(self):
         tracks = [{"id": f"base-{index}", "segments": []} for index in range(15)]

@@ -898,6 +898,24 @@ def _approved_rows(config: dict) -> list[dict]:
     return rows
 
 
+def _validate_source_credit_authority(config: dict, approved: list[dict], duration: int) -> None:
+    rows = [row for row in approved if row.get("role") == "SOURCE_CREDIT"]
+    configured = config.get("SOURCE_CREDIT")
+    if configured is None:
+        if rows:
+            raise RuntimeError("SOURCE_CREDIT_PLAN_AUTHORITY_MISMATCH")
+        return
+    if len(rows) != 1:
+        raise RuntimeError("SOURCE_CREDIT_PLAN_AUTHORITY_MISMATCH")
+    row = rows[0]
+    if (
+        row.get("text") != configured
+        or not times_match(row.get("start"), 0)
+        or not times_match(row.get("duration"), duration)
+    ):
+        raise RuntimeError("SOURCE_CREDIT_PLAN_AUTHORITY_MISMATCH")
+
+
 def _approved_id(config: dict, rows: list[dict], role: str, occurrence: int = 0) -> str:
     configured = config.get("segment_ids", {}).get(role)
     if isinstance(configured, str) and occurrence == 0:
@@ -1381,6 +1399,7 @@ def _normalize_source(
     _validate_mixed_audio_modes(config, build_manifest)
     duration = config["duration_us"]
     approved = _approved_rows(config)
+    _validate_source_credit_authority(config, approved, duration)
     approved_by_id = {row["segment_id"]: row for row in approved}
     media = project / "Resources" / "media"
     media.mkdir(parents=True, exist_ok=True)
@@ -1909,6 +1928,7 @@ def _normalize_source(
     expected = sorted([
         {key: row[key] for key in ("segment_id", "role", "start", "duration")}
         for row in approved
+        if row.get("role") != "SOURCE_CREDIT"
     ] + ([{
         "segment_id": "SOURCE_CREDIT", "role": "SOURCE_CREDIT",
         "start": 0, "duration": duration,
