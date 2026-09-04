@@ -3,7 +3,8 @@
 
 V8 keeps source video and inset image cards on different tracks, and keeps
 source-SRT and narration-TTS captions on separate (time-exclusive) tracks.
-It is deliberately a root-path override: it never changes the active v7 root.
+It is deliberately a root-path override. The v7 bundle pointer is
+LEGACY_V7_ROLLBACK_ONLY and is never consulted for current production.
 """
 from __future__ import annotations
 

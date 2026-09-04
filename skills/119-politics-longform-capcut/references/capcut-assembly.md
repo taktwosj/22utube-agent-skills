@@ -4,7 +4,10 @@
 
 ## 준비와 근본
 
-CapCut과 백그라운드 프로세스가 닫혔는지 확인한다. active pointer를 공식 resolver로 읽고 `PASS_ROOT_CONTRACT`를 확인한다.
+CapCut과 백그라운드 프로세스가 닫혔는지 확인한다. 새 회차는
+`V8_MANUAL_OVERLAY_65`의 12개 트랙·geometry·문구 슬롯과 clean archive SHA를
+확인한다. `capcut_active_root_v1.json`은 `LEGACY_V7_ROLLBACK_ONLY`이며 새 회차의
+근본 resolver로 사용하지 않는다.
 
 ## Join과 cards
 
@@ -39,16 +42,17 @@ FAIL이면 build하지 않는다. 정상 PASS 결과를 다시 Codex에게 읽�
 
 ## 빌더 선택
 
-근본에 따라 빌더가 다르다. 섞으면 트랙 구조가 무너지고 출처 위치가 밀린다.
+새 회차는 V8 빌더만 사용한다. v7 빌더는 명시적으로 지정된 기존 회차의 복구에만
+남겨 둔다. 둘을 섞으면 트랙 구조가 무너지고 출처 위치가 밀린다.
 
 ```text
-v7 번들 근본     build_politics_card_project.py   --capcut-root
-V8 수동 근본     build_politics_v8_project.py     --root-project
+CURRENT                    V8_MANUAL_OVERLAY_65   build_politics_v8_project.py     --root-project
+LEGACY_V7_ROLLBACK_ONLY    v7 bundle              build_politics_card_project.py   --capcut-root
 ```
 
-`capcut_active_root_v1.json`이 가리키는 활성 포인터는 v7이다. V8은 승격된 번들이 아니라
-사용자가 직접 만든 프로젝트이며 `--root-project` 경로 override로만 쓴다. 포인터가 v7이라는
-사실만 보고 v7 빌더를 고르지 않는다. 회차가 어느 근본을 쓰는지 먼저 확인한다.
+`capcut_active_root_v1.json`은 과거 v7 번들의 무결성과 복구 가능성을 위해 그대로
+보존한다. 그 파일명이나 값은 현재 생산 권위가 아니다. 새 회차의 현재 생산 권위는
+`V8_MANUAL_OVERLAY_65`와 `clean-assembly-harness.md`이며 `--root-project`로만 선택한다.
 
 카드 타입 지원 범위도 다르다.
 
@@ -67,10 +71,9 @@ V8   SOURCE_VIDEO · CHAPTER_CARD · NARRATION_IMAGE 만 허용. INTRO를 넣으
 
 ```powershell
 $workspaceRoot = (Resolve-Path $env:WORKSPACE_ROOT)
-python scripts/build_politics_card_project.py `
+python scripts/build_politics_v8_project.py `
   --cards <episode_dir>\50_capcut_project\episode_cards.json `
-  --assembly-preflight-report <episode_dir>\90_reports\assembly_preflight_v1.json `
-  --workspace-root $workspaceRoot `
+  --root-project <validated V8_MANUAL_OVERLAY_65 root> `
   --capcut-root "$env:LOCALAPPDATA\CapCut\User Data\Projects\com.lveditor.draft" `
   --media-dir "$env:USERPROFILE\Videos\22utube_capcut_media\<project_name>\Media" `
   --report <episode_dir>\90_reports\capcut_build_v1.json

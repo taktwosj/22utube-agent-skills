@@ -1,8 +1,13 @@
 # 119 Root Bundle Contract
 
+> `LEGACY_V7_ROLLBACK_ONLY`: 이 계약과 `capcut_active_root_v1.json`은 기존 v7
+> 번들의 검증·복구에만 사용한다. 새 119 회차의 현재 생산 근본은
+> `V8_MANUAL_OVERLAY_65`이며 `clean-assembly-harness.md`와
+> `build_politics_v8_project.py --root-project`가 선택한다.
+
 ## Authority discovery
 
-Use only this discovery sequence:
+기존 v7 회차를 명시적으로 복구할 때만 아래 discovery sequence를 사용한다:
 
 ```text
 WORKSPACE_ROOT

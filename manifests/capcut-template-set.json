@@ -1,5 +1,5 @@
 {
-  "version": "2026.06.28",
+  "version": "2026.09.05",
   "source_of_truth": "git_manifest",
   "template_binary_storage": "onedrive_22factory_asset_tools_bundle",
   "asset_tools_root_hint": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools",
@@ -13,6 +13,64 @@
   "shared_referenced_cache_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/User Data/Cache",
   "marahagi_sfx_bundle": "${UTUBE_ROOT}/22factory_20260628/00_asset_tools/first/marahagi_sfx",
   "principle": "CapCut sample project is the template authority; job JSON is replacement values only.",
+  "current_production_root_ids": [
+    "001_white_v3",
+    "001_black_dialogue_v1",
+    "119_v8_manual_overlay_65"
+  ],
+  "production_roots": [
+    {
+      "id": "001_white_v3",
+      "status": "ACTIVE",
+      "owner_skill": "001short-production-agent",
+      "root_profile": "home_windows_v3",
+      "template_profile": "shrt_white_base_v3",
+      "track_layout": "shrt_white_base_v3_15",
+      "track_count": 15,
+      "canvas": {"width": 1080, "height": 1920},
+      "contract_relative_path": "00_asset_tools/templates/capcut/shrt_white_base_v3/shorts_capcut_root_contract_v3.json",
+      "contract_sha256": "52fd76a71f3abf3777ac21ac1caa19d75b12474c2138916948014552d33bbf8c",
+      "archive_relative_path": "00_asset_tools/templates/capcut/shrt_white_base_v3/shrt_white_base_v3_CAPCUT_20260823.zip",
+      "archive_sha256": "de5198818a94f0272a32e89b254f31e65ac4bd7ab1f0334072466df0b67a541b"
+    },
+    {
+      "id": "001_black_dialogue_v1",
+      "status": "ACTIVE",
+      "owner_skill": "001short-production-agent",
+      "production_profile": "foreign-viral-dialogue-v1",
+      "root_profile": "home_windows_black_headline_dialogue_v1",
+      "template_profile": "shrt_black_headline_dialogue_v1",
+      "track_layout": "shrt_white_base_v3_15",
+      "track_count": 15,
+      "canvas": {"width": 1080, "height": 1920},
+      "contract_relative_path": "00_asset_tools/templates/capcut/shrt_black_headline_dialogue_v1/shorts_capcut_root_contract_v1.json",
+      "contract_sha256": "b1031b585f0d4e746544349530880405ac33c8da98b12cf9d9d4e8451c18c84e",
+      "archive_relative_path": "00_asset_tools/templates/capcut/shrt_black_headline_dialogue_v1/shrt_black_headline_dialogue_v1_CAPCUT_20260904_onlyblack_dialoguebg_v2.zip",
+      "archive_sha256": "e5ec9b20357868589e50eb5dc94f3225ea9ad040bbcea50193f89974f21fa3f5"
+    },
+    {
+      "id": "119_v8_manual_overlay_65",
+      "status": "ACTIVE",
+      "owner_skill": "119-politics-longform-capcut",
+      "root_profile": "V8_MANUAL_OVERLAY_65",
+      "selection_mode": "manual_root_project_override",
+      "builder": "build_politics_v8_project.py",
+      "track_count": 12,
+      "canvas": {"width": 1920, "height": 1080},
+      "runtime_contract_relative_path": "skills/119-politics-longform-capcut/references/clean-assembly-harness.md",
+      "archive_relative_path": "00_asset_tools/templates/capcut/jungchilong/manual_roots/P0_ROOT_v8_layout_user_edit_4_CAPCUT_20260905_CLEAN.zip",
+      "archive_root": "P0_ROOT_v8_layout_user_edit(4)/",
+      "archive_sha256": "fd8a2e0accfee095a9346fb808900d0c31b153d44fb18fba777b3b64620157a2"
+    }
+  ],
+  "legacy_compatibility": {
+    "jungchilong_v7_pointer": {
+      "path": "00_asset_tools/templates/capcut/jungchilong/capcut_active_root_v1.json",
+      "status": "LEGACY_V7_ROLLBACK_ONLY",
+      "selected_by_current_production": false,
+      "note": "Preserved only for archived v7 bundle resolution; new 119 work uses V8_MANUAL_OVERLAY_65."
+    }
+  },
   "mandatory_media_settings": {
     "quality_enhance": "HD",
     "audio_loudness_normalize": {
@@ -34,6 +92,7 @@
   "templates": [
     {
       "id": "black_template_v1",
+      "status": "LEGACY_REFERENCE",
       "aliases": [
         "black",
         "\ube14\ub799\uae30\ubcf8",
@@ -81,6 +140,7 @@
     },
     {
       "id": "insta_white_template_v1",
+      "status": "LEGACY_REFERENCE",
       "aliases": [
         "insta white",
         "\uc778\uc2a4\ud0c0\ud15c\ud50c\ub9bf",
