@@ -275,6 +275,33 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
                 {row["code"] for row in result["errors"]},
             )
 
+    def test_click_sfx_overlay_does_not_require_source_audio_underlay(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            click = self._audio(root, "click.wav")
+            item = self._audio_item(click, 0, 100_000)
+            item["source_audio_underlay_required"] = False
+
+            checked = overlay.validate_bundle(
+                self._bundle([item]),
+                episode_id="EP",
+                timeline_duration_us=1_000_000,
+            )
+
+            self.assertEqual(checked["status"], "PASS", checked)
+            self.assertFalse(checked["items"][0]["source_audio_underlay_required"])
+            self.assertEqual(
+                overlay.validate_a10_overlap_policy(
+                    [{
+                        "clip_id": "V1",
+                        "mode": "mute",
+                        "target_range_us": [0, 1_000_000],
+                    }],
+                    checked["items"],
+                ),
+                [],
+            )
+
     def test_builder_adds_direct_audio_tracks_and_registers_every_material(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
