@@ -467,14 +467,8 @@ class Stage08RoleRoutingTest(unittest.TestCase):
         })
 
 
-class SourceCreditContractOnlyRoleTest(unittest.TestCase):
-    """The credit row lives in the contract but never in the approved timeline.
-
-    Its authority is v_plan, so the builder injects it after the timeline was
-    approved.  Both timeline-vs-contract gates have to skip it or the episode is
-    unbuildable either way: declared in the approved timeline it is counted twice
-    against the draft, omitted it reads as contract-only drift.
-    """
+class ContractOnlyRoleTest(unittest.TestCase):
+    """Builder-normalized and extension rows use dedicated authority checks."""
 
     @staticmethod
     def _rows():
@@ -483,11 +477,16 @@ class SourceCreditContractOnlyRoleTest(unittest.TestCase):
             {"segment_id": "T1_FULL", "role": "T1", "start": 0, "duration": 8_000_000},
         ]
 
-    def _contract(self, rows, *, with_credit):
+    def _contract(self, rows, *, with_credit, with_overlay=False):
         timeline = list(rows)
         if with_credit:
             timeline.append({
                 "segment_id": "SOURCE_CREDIT", "role": "SOURCE_CREDIT",
+                "start": 0, "duration": 8_000_000,
+            })
+        if with_overlay:
+            timeline.append({
+                "segment_id": "USER_MEDIA::click", "role": "USER_PROVIDED_AUDIO",
                 "start": 0, "duration": 8_000_000,
             })
         return {
@@ -495,18 +494,26 @@ class SourceCreditContractOnlyRoleTest(unittest.TestCase):
             "approved_actual_order": [row["segment_id"] for row in timeline],
         }
 
-    def test_credit_row_is_excluded_from_the_timeline_authority_comparison(self):
+    def test_normalized_rows_are_excluded_from_timeline_authority_comparison(self):
         rows = self._rows()
-        contract = self._contract(rows, with_credit=True)
+        approved = [*rows, {
+            "segment_id": "SOURCE_CREDIT_FULL", "role": "SOURCE_CREDIT",
+            "start": 0, "duration": 8_000_000, "text": "source",
+        }]
+        contract = self._contract(rows, with_credit=True, with_overlay=True)
         only = {
             row["segment_id"] for row in contract["timeline"]
             if row["role"] in build_inputs.CONTRACT_ONLY_ROLES
         }
-        self.assertEqual(only, {"SOURCE_CREDIT"})
+        self.assertEqual(only, {"SOURCE_CREDIT", "USER_MEDIA::click"})
+        approved_kept = [
+            row for row in approved
+            if row["role"] not in build_inputs.CONTRACT_ONLY_ROLES
+        ]
         kept = [r for r in contract["timeline"] if r["role"] not in build_inputs.CONTRACT_ONLY_ROLES]
         order = [i for i in contract["approved_actual_order"] if i not in only]
-        self.assertEqual({r["segment_id"] for r in kept}, {r["segment_id"] for r in rows})
-        self.assertEqual(order, [r["segment_id"] for r in rows])
+        self.assertEqual({r["segment_id"] for r in kept}, {r["segment_id"] for r in approved_kept})
+        self.assertEqual(order, [r["segment_id"] for r in approved_kept])
 
     def test_both_gates_read_the_same_exclusion_set(self):
         self.assertIs(readback.CONTRACT_ONLY_ROLES, build_inputs.CONTRACT_ONLY_ROLES)

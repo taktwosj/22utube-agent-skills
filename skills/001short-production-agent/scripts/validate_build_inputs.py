@@ -12,12 +12,11 @@ BUILD_SCHEMA = SKILL_ROOT / "schemas" / "build_contract.schema.json"
 TIMELINE_SCHEMA = SKILL_ROOT / "schemas" / "approved_timeline.schema.json"
 DESIGN_LOCK_SCHEMA = SKILL_ROOT / "schemas" / "design_lock_evidence.schema.json"
 
-# SOURCE_CREDIT is declared in v_plan and injected by the builder, so it appears
-# in the contract timeline but never in the approved timeline.  Comparing the two
-# sets without excluding it fails whichever way the credit row is placed: present
-# in the approved timeline it is counted twice against the draft, absent it is
-# reported as contract-only drift.
-CONTRACT_ONLY_ROLES = frozenset({"SOURCE_CREDIT"})
+# These rows are normalized or appended by the builder and have dedicated
+# authority checks.  They must not participate in the direct approved-row versus
+# build-contract identity comparison because their segment ids are canonicalized
+# or generated after approval.
+CONTRACT_ONLY_ROLES = frozenset({"SOURCE_CREDIT", "USER_PROVIDED_AUDIO"})
 
 
 def validate_build_inputs(
@@ -103,7 +102,10 @@ def validate_build_inputs(
         if cue_text not in approved_text:
             errors.append({"code": "BUILD_INPUTS_SUBTITLE_TEXT_NOT_IN_SRT", "text": cue_text})
             break
-    approved_rows = timeline.get("segments", [])
+    approved_rows = [
+        row for row in timeline.get("segments", [])
+        if row.get("role") not in CONTRACT_ONLY_ROLES
+    ]
     contract_only_ids = {
         row.get("segment_id") for row in contract.get("timeline", [])
         if row.get("role") in CONTRACT_ONLY_ROLES
