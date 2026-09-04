@@ -1331,11 +1331,14 @@ def validate_design_lock_authority(contract: dict) -> tuple[list[dict], dict | N
         return [_error("DESIGN_LOCK_EVIDENCE_INVALID", field="episode_id")], None
     approved_timeline = read_json(timeline_path)
     approved_rows = sorted(
-        approved_timeline.get("segments", []), key=lambda row: (row.get("start", 0), row.get("segment_id", ""))
+        (
+            row for row in approved_timeline.get("segments", [])
+            if row.get("role") not in CONTRACT_ONLY_ROLES
+        ),
+        key=lambda row: (row.get("start", 0), row.get("segment_id", "")),
     )
-    # The credit lane is declared in v_plan, so the builder injects it into the
-    # contract and the approved timeline never carries it.  It is excluded here
-    # for the same reason it is excluded in validate_build_inputs.
+    # Builder-normalized SOURCE_CREDIT and generated user-media extension rows
+    # have dedicated authority checks, so exclude them from this identity match.
     contract_only_ids = {
         row.get("segment_id") for row in contract.get("timeline", [])
         if row.get("role") in CONTRACT_ONLY_ROLES
