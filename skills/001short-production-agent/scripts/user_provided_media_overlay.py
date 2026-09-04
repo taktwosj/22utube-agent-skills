@@ -185,6 +185,9 @@ def _normalized_item(item: object, *, ordinal: int, timeline_duration_us: int) -
     track_index = item.get("track_index")
     if track_index != BASE_TRACK_COUNT + ordinal:
         errors.append(_error("USER_MEDIA_OVERLAY_TRACK_INDEX_INVALID", overlay_id=overlay_id))
+    source_audio_underlay_required = item.get("source_audio_underlay_required", True)
+    if not isinstance(source_audio_underlay_required, bool):
+        errors.append(_error("USER_MEDIA_OVERLAY_ITEM_INVALID", index=ordinal))
     raw_path = item.get("source_path")
     if not isinstance(raw_path, str) or not raw_path.strip():
         return None, errors + [_error("USER_MEDIA_OVERLAY_PATH_INVALID", overlay_id=overlay_id)]
@@ -264,6 +267,7 @@ def _normalized_item(item: object, *, ordinal: int, timeline_duration_us: int) -
         "dimensions": {"width": declared_width, "height": declared_height},
         "source_range_us": item.get("source_range_us"),
         "target_range_us": list(target_range),
+        "source_audio_underlay_required": source_audio_underlay_required,
         "role": role,
         "segment_id": f"USER_MEDIA::{overlay_id}",
     }, []
@@ -314,7 +318,11 @@ def validate_a10_overlap_policy(source_audio: object, declared_items: list[dict]
     """Keep source A10 audible beneath explicitly manual user narration."""
     audio_ranges = [
         item["target_range_us"] for item in declared_items
-        if item.get("media_kind") == "audio" and isinstance(item.get("target_range_us"), list)
+        if (
+            item.get("media_kind") == "audio"
+            and item.get("source_audio_underlay_required", True)
+            and isinstance(item.get("target_range_us"), list)
+        )
     ]
     if not audio_ranges or not isinstance(source_audio, list):
         return []

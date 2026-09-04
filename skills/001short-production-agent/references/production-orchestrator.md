@@ -153,6 +153,10 @@ change the default profiles. `SOURCE_CREDIT` is a full-span title lane like T1/T
 declares it places one segment over the whole timeline, and a plan that omits
 it leaves the track empty. File/SHA/duration-bound overlapping user audio keeps
 A10 on at volume 1.0 for manual volume adjustment and is never auto-ducked.
+Non-speech click/SFX overlays used by `CAPTION_ONLY_MUTE_SOURCE` must instead
+declare `source_audio_underlay_required=false`; this keeps A10 muted and does
+not repurpose the canonical A11 lane. Omission defaults to `true`, so existing
+user narration overlays retain the A10-on rule.
 Retained-speaker captions use the two
 `A10_TEXT_WHITE` and `A10_TEXT_YELLOW` lanes while A10 remains one audio stem.
 
