@@ -19,19 +19,16 @@ Active production skills:
 ```text
 001short-production-agent
 top5isu-shorts
-110-politics-longform-script
-111-politics-longform-voice-srt
-112-politics-longform-hyperframes
+119-politics-longform-capcut
 ```
 
-정치롱폼 라우팅. 번호 순서가 곧 실행 순서다.
+현재 제작 라우팅:
 
 ```text
-일반 정치롱폼 요청              -> 110  소스·자막 -> 확정 대본
-확정 대본 있음, 음성·SRT 없음    -> 111  나레이션·오디오 시간축·SRT
-음성·SRT·시간축 있음            -> 112  화면·모션·렌더
-CapCut 을 명시적으로 요청       -> 119  동결된 레거시 lane
-HyperFrames 실패                -> WAIT 또는 FAIL. 119 자동 우회 금지
+일반 쇼츠                      -> 001  원본표 -> 우라까이표 -> CapCut 조립
+TOP5·군림보 쇼츠                -> top5isu-shorts
+정치롱폼 기획·논지·대본         -> 투군 PRE-119
+승인된 정치롱폼 CapCut 조립     -> 119  승인 대본·카드 잠금에 따른 조립
 ```
 
 `119-politics-longform-capcut`은 사용자가 CapCut·캡컷·119를 직접 말했을
@@ -58,7 +55,7 @@ path.
 bundled canonical cards include the visually audited 1-4강 curriculum evidence;
 it does not perform live web searches.
 
-No other production or support skills are managed by this repository.
+Managed support skills include `1caveman` and `idm`.
 
 `manifests/skill-set.json` is the authoritative install list.
 `manifests/capcut-template-set.json` records CapCut template identities and
