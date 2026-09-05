@@ -80,7 +80,7 @@ A `Vxx` column takes exactly one `Bxx` and takes it whole. Three checks enforce 
 Consequences to design around, not to discover at build time:
 
 - Final duration is tuned by **dropping `Bxx` values, never by trimming or retiming them**. A 0.8 s beat stays 0.8 s.
-- Slow motion, speed ramps, and freeze frames cannot be requested here. Treat any advisor suggestion of a playback speed as inapplicable.
+- Slow motion and speed ramps are not supported by the B/V mapping. A user-requested still hold is instead a declared image overlay within an existing Vxx; see [freeze-outline.md](freeze-outline.md). It does not stretch the source range or add timeline time.
 - **The `Bxx` count is the hard ceiling on the `Vxx` count.** A single-`Bxx` original table makes urakkai structurally impossible, because there is nothing to reorder. Split the original table on real change points before promising an urakkai.
 - Reusing a `Bxx` means two `Vxx` columns naming the same whole `Bxx`, not two different slices of it.
 

@@ -309,7 +309,16 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
             archive, _, _ = template_archive(root)
             project = builder._extract_template(archive, root / "project")
             for document_path, payload in builder.iter_primary_draft_documents(project):
+                payload['tracks'][0]['segments'][0]['clip'] = {
+                    'scale': {'x': 1., 'y': 1.}, 'rotation': 0.,
+                    'transform': {'x': 0., 'y': -.05}, 'alpha': 1.}
                 a10_seed = payload["tracks"][builder.TRACK_INDEX["A10"]]["segments"][0]
+                payload["tracks"][0]["segments"][0].setdefault("extra_material_refs", []).append("stale-combination")
+                payload["tracks"][0]["segments"][0]["extra_material_refs"].append("empty-color")
+                payload["materials"].setdefault("material_colors", []).append({
+                    "id": "empty-color", "is_color_clip": False, "is_gradient": False,
+                    "solid_color": "", "gradient_colors": [],
+                })
                 a10_seed.setdefault("extra_material_refs", []).append("stale-combination")
                 a10_seed["effects"] = [{"binding": {"material_id": "stale-combination"}}]
                 payload["materials"].setdefault("audios", []).append({
@@ -324,9 +333,11 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
             image_path = root / "visual.png"
             subprocess.run([
                 "ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i",
-                "color=c=red:s=32x48", "-frames:v", "1", "-y", str(image_path),
+                "color=c=red:s=540x960", "-frames:v", "1", "-y", str(image_path),
             ], check=True)
             items.append(self._image_item(image_path, 3, 1_600_000))
+            items[-1]['match_video_geometry'] = True
+            items[-1]['dimensions'] = {'width': 540, 'height': 960}
             manifest = {
                 "schema_version": "001short-build-manifest-v1",
                 "episode_id": "EP",
@@ -444,6 +455,14 @@ class UserProvidedMediaOverlayTest(unittest.TestCase):
             self.assertNotIn(visual_material["id"], {row["id"] for row in meta_rows})
             self.assertEqual(visual_segment["render_index"], 11001)
             self.assertLess(visual_segment["render_index"], 14000)
+            paired_video = content['tracks'][0]['segments'][1]
+            self.assertEqual(visual_segment['clip'], paired_video['clip'])
+            wrong_geometry = json.loads(json.dumps(content))
+            wrong_geometry['tracks'][18]['segments'][0]['clip']['scale']['x'] = 9
+            failed_geometry = overlay.validate_project_tracks(
+                wrong_geometry['tracks'], wrong_geometry['materials'], project_root=project,
+                declared_items=config['user_provided_media_overlay'])
+            self.assertIn('FREEZE_GEOMETRY_MISMATCH', {e['code'] for e in failed_geometry['errors']})
 
             wrong_render = json.loads(json.dumps(content))
             wrong_render["tracks"][18]["segments"][0]["render_index"] = 14004

@@ -42,6 +42,7 @@
                 ]
               },
               "target_range_us": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}},
+              "match_video_geometry": {"type": "boolean"},
               "dimensions": {
                 "type": "object",
                 "required": ["width", "height"],

@@ -37,11 +37,13 @@ Always execute and report `원본표 → 우라까이표 → CapCut 조립`.
 
 [우라까이 창작 계약](references/shorts-structure-taxonomy.md#창작-범위와-사실-앵커) 필수.
 
-1. Build `20_script/original-capcut-grid.md` per [template](templates/original-capcut-grid.md): 원본 5분류 대본 + 15-row table. Exact row order, cell rules, and TTT notation live in the templates and `scripts/validate_capcut_grids.py`.
+1. Build `20_script/original-capcut-grid.md` per [template](templates/original-capcut-grid.md): 원본 5분류 대본 + 15-row table. Rules: templates and `scripts/validate_capcut_grids.py`.
 2. The task owner sends the validated original table to the user's live 투군 GPT tab, saves the returned advice, and builds `20_script/urakkai-capcut-grid.md` per [template](templates/urakkai-capcut-grid.md). Never delegate the live tab or current form state to a subagent.
 3. Validate both tables (`validate_capcut_grids.py --emit-report`) and paste 원본표 then 우라까이표. Automatic mode skips approval only.
 
 ## Build boundary
+
+정지·노란선 요청: [freeze-outline.md](references/freeze-outline.md)의 image overlay 경로. VIDEO geometry와 타임라인 길이 유지.
 
 For newly requested A9 TTS, read `<factory-root>/00_asset_tools/TYPECAST_TTS_RUNBOOK.md` first; keep user-supplied or approved narration audio unchanged. Audio terms remain `A10_REASSEMBLED_SYNC`, `source_audio[].mode=duck`, `source_audio[].mode=on`, and `MIXED_A10_PARTIAL_OVERLAP_UNSUPPORTED`. `scripts/build_episode_capcut.py` validates both tables before writes, clones `working_project`, injects assets only into the clone, and validates it; never mutate a draft while CapCut is open. After assembly report the CapCut `프로젝트명` first in its own code block, then validator/readback, then `프로젝트 전체 경로` and `미디어 폴더 전체 경로`; missing readback=`NOT RUN`.
 
