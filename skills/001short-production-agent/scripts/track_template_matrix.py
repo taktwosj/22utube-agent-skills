@@ -295,7 +295,7 @@ TRACK_TEMPLATE_PROFILES: dict[str, TrackTemplateProfile] = {
             "SOURCE_CREDIT": LineBudget(1, 16),
         },
         grid_line_budgets=_GRID_LINE_BUDGETS,
-        pinned_assets=_PINNED_ASSETS,
+        pinned_assets={"SCREEN_WHITE": "black_frame_local_1080x1920.png"},
         state_track_by_effect={"GLITCH_SHAKE": TRACK_INDEX["STATE_GLITCH"]},
         dialogue_text_style_policy=SPEAKER_BLUE_DIALOGUE_WHITE_TWO_LINE,
         headline_text_style_policy=YELLOW_RED_YELLOW_EMPHASIS,

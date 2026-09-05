@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
@@ -61,6 +62,63 @@ def visual_overlay_render_indices(tracks: list[dict], count: int) -> list[int] |
     return list(range(first, first + count))
 
 
+def freeze_material_map(materials: object) -> dict:
+    """Include CapCut's type-less color references without broadening the shared model iterator."""
+    result = {row["id"]: row for row in iter_materials(materials) if isinstance(row.get("id"), str)}
+    colors = materials.get("material_colors", []) if isinstance(materials, dict) else []
+    if isinstance(colors, list):
+        for row in colors:
+            if isinstance(row, dict) and isinstance(row.get("id"), str):
+                result.setdefault(row["id"], row)
+    return result
+
+
+def freeze_overlay_geometry(item: dict, tracks: list[dict], material_map: dict) -> dict | None:
+    """A still hold covers one existing VIDEO placement; it never retimes a B/V clip."""
+    if not item.get("match_video_geometry", False):
+        return None
+    if item.get("media_kind") != "image":
+        raise ValueError("FREEZE_IMAGE_REQUIRED")
+    target = _range(item.get("target_range_us"))
+    if target is None or not tracks:
+        raise ValueError("FREEZE_VIDEO_BINDING_INVALID")
+    candidates = []
+    for segment in tracks[_TRACK_INDEX["VIDEO"]].get("segments", []):
+        span = segment.get("target_timerange", {})
+        start, duration = span.get("start", -1), span.get("duration", 0)
+        if start <= target[0] and target[1] <= start + duration:
+            candidates.append(segment)
+    if len(candidates) != 1:
+        raise ValueError("FREEZE_VIDEO_BINDING_INVALID")
+    segment = candidates[0]
+    if segment.get("common_keyframes") or segment.get("keyframe_refs") or segment.get("speed", 1.0) != 1.0:
+        raise ValueError("FREEZE_ANIMATED_VIDEO_UNSUPPORTED")
+    for ref_id in segment.get("extra_material_refs", []):
+        ref = material_map.get(ref_id, {})
+        kind = ref.get("type")
+        inert = (
+            (kind == "speed" and ref.get("speed") == 1.0 and not ref.get("curve_speed"))
+            or (kind == "canvas_color" and not any(ref.get(key) for key in
+                ("color", "blur", "image", "album_image", "image_id")))
+            or (kind == "placeholder_info" and ref.get("meta_type") == "none"
+                and not any(ref.get(key) for key in ("res_path", "res_text", "error_path", "error_text")))
+            or (kind == "vocal_separation" and ref.get("choice") == 0)
+            or (kind == "none" and "audio_channel_mapping" in ref)
+            or (kind is None and "is_color_clip" in ref and not ref.get("is_color_clip")
+                and not ref.get("is_gradient") and not ref.get("solid_color")
+                and not ref.get("gradient_colors"))
+        )
+        if not inert or ref.get("draft"):
+            raise ValueError("FREEZE_ANIMATED_VIDEO_UNSUPPORTED")
+    material = material_map.get(segment.get("material_id"), {})
+    dimensions = item.get("dimensions", {})
+    if (material.get("width"), material.get("height")) != (dimensions.get("width"), dimensions.get("height")):
+        raise ValueError("FREEZE_VIDEO_DIMENSIONS_MISMATCH")
+    if not isinstance(segment.get("clip"), dict):
+        raise ValueError("FREEZE_VIDEO_GEOMETRY_MISSING")
+    return {"clip": copy.deepcopy(segment["clip"]), "crop": copy.deepcopy(material.get("crop"))}
+
+
 def build_track_layout_extension(items: list[dict]) -> dict:
     """Freeze the declared tracks added after the canonical 15-track base."""
     fields = (
@@ -71,7 +129,8 @@ def build_track_layout_extension(items: list[dict]) -> dict:
         "schema_version": LAYOUT_SCHEMA_VERSION,
         "base_track_count": BASE_TRACK_COUNT,
         "items": [
-            {field: item[field] for field in fields}
+            {**{field: item[field] for field in fields},
+             **({"match_video_geometry": True} if item.get("match_video_geometry") else {})}
             for item in items
         ],
     }
@@ -186,6 +245,9 @@ def _normalized_item(item: object, *, ordinal: int, timeline_duration_us: int) -
     if track_index != BASE_TRACK_COUNT + ordinal:
         errors.append(_error("USER_MEDIA_OVERLAY_TRACK_INDEX_INVALID", overlay_id=overlay_id))
     source_audio_underlay_required = item.get("source_audio_underlay_required", True)
+    match_video_geometry = item.get("match_video_geometry", False)
+    if not isinstance(match_video_geometry, bool) or (match_video_geometry and kind != "image"):
+        errors.append(_error("FREEZE_IMAGE_REQUIRED", overlay_id=overlay_id))
     if not isinstance(source_audio_underlay_required, bool):
         errors.append(_error("USER_MEDIA_OVERLAY_ITEM_INVALID", index=ordinal))
     raw_path = item.get("source_path")
@@ -268,6 +330,7 @@ def _normalized_item(item: object, *, ordinal: int, timeline_duration_us: int) -
         "source_range_us": item.get("source_range_us"),
         "target_range_us": list(target_range),
         "source_audio_underlay_required": source_audio_underlay_required,
+        "match_video_geometry": match_video_geometry,
         "role": role,
         "segment_id": f"USER_MEDIA::{overlay_id}",
     }, []
@@ -354,11 +417,7 @@ def validate_project_tracks(
     if len(tracks) != expected_count:
         code = "USER_MEDIA_OVERLAY_TRACK_UNBOUND" if len(tracks) > expected_count else "USER_MEDIA_OVERLAY_TRACK_COUNT_MISMATCH"
         return {"status": "FAIL", "errors": [_error(code, observed=len(tracks), expected=expected_count)]}
-    material_map = {
-        material["id"]: material
-        for material in iter_materials(materials)
-        if isinstance(material.get("id"), str)
-    }
+    material_map = freeze_material_map(materials)
     visual_items = [item for item in declared_items if item.get("media_kind") != "audio"]
     visual_render_indices = visual_overlay_render_indices(tracks, len(visual_items))
     if visual_render_indices is None:
@@ -407,6 +466,16 @@ def validate_project_tracks(
         if not isinstance(material, dict):
             errors.append(_error("USER_MEDIA_OVERLAY_MATERIAL_UNBOUND", overlay_id=expected["overlay_id"]))
             continue
+        if expected.get("match_video_geometry"):
+            try:
+                geometry = freeze_overlay_geometry(expected, tracks, material_map)
+                if (segment.get("clip") != geometry["clip"]
+                    or material.get("crop") != geometry["crop"]
+                    or segment.get("common_keyframes") or segment.get("keyframe_refs")
+                    or segment.get("extra_material_refs")):
+                    errors.append(_error("FREEZE_GEOMETRY_MISMATCH", overlay_id=expected["overlay_id"]))
+            except ValueError as exc:
+                errors.append(_error(str(exc), overlay_id=expected["overlay_id"]))
         expected_types = {"audio", "music", "extract_music"} if expected["media_kind"] == "audio" else {"video"}
         raw_path = material.get("path") or material.get("media_path")
         if not isinstance(raw_path, str) or "Resources/" not in raw_path.replace("\\", "/"):

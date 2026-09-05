@@ -74,6 +74,23 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def _bind_pinned_screen_material(material: dict, media: Path, draft_prefix: str, template) -> None:
+    """Bind the selected local frame without the inherited online cache identity."""
+    resource = template.pinned_assets["SCREEN_WHITE"]
+    if not (media / resource).is_file():
+        raise RuntimeError(f"PINNED_SCREEN_ASSET_MISSING:{resource}")
+    material["name"] = material["material_name"] = resource
+    material["path"] = _portable_resource_path(draft_prefix, f"Resources/media/{resource}")
+    material["media_path"] = ""
+    for field in ("material_id", "material_url", "category_id", "category_name",
+                  "team_id", "local_id", "local_material_id", "origin_material_id", "request_id"):
+        if field in material:
+            material[field] = ""
+    material["source_platform"] = material["source"] = 0
+    material["role"] = "SCREEN_WHITE"
+    material["desc"] = "001short production local screen frame"
+
+
 def validate_grid_harness(config: dict, *, state_payload: dict | None = None) -> dict:
     forbidden_overrides = (
         "original_grid_path",
@@ -269,7 +286,7 @@ def _extract_template(
         raise RuntimeError("PINNED_TEMPLATE_PROFILE_INVALID") from exc
     white = candidates[0] / "Resources/media" / white_resource
     if not white.is_file():
-        raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
+        raise RuntimeError(f"PINNED_SCREEN_ASSET_MISSING:{white_resource}")
     return candidates[0]
 
 
@@ -1560,6 +1577,14 @@ def _normalize_source(
             }
             video_segment["volume"] = 0.0
             video_segment["last_nonzero_volume"] = 0.0
+            if any(
+                item.get("match_video_geometry")
+                and clip["target_range_us"][0] <= item["target_range_us"][0]
+                and item["target_range_us"][1] <= clip["target_range_us"][1]
+                for item in user_media_overlay
+            ):
+                # The new VIDEO uses the declared source, not the template's nested composition.
+                _remove_extra_material_ref_types(video_segment, material_map, {"combination"})
             video_segments.append(video_segment)
         tracks[TRACK_INDEX["VIDEO"]]["segments"] = video_segments
 
@@ -1578,21 +1603,8 @@ def _normalize_source(
         # bind that copy explicitly before generic path scrubbing can blank it.
         white_segments = tracks[TRACK_INDEX["SCREEN_WHITE"]]["segments"]
         if white_segments:
-            try:
-                white_resource = template.pinned_assets["SCREEN_WHITE"]
-            except KeyError as exc:
-                raise RuntimeError("PINNED_WHITE_ASSET_MISSING") from exc
-            white_asset = media / white_resource
-            if not white_asset.is_file():
-                raise RuntimeError("PINNED_WHITE_ASSET_MISSING")
             white_material = material_map[white_segments[0]["material_id"]]
-            white_material["name"] = white_resource
-            white_material["path"] = _portable_resource_path(
-                draft_prefix, f"Resources/media/{white_resource}"
-            )
-            white_material["media_path"] = ""
-            white_material["role"] = "SCREEN_WHITE"
-            white_material["desc"] = "001short production SCREEN_WHITE"
+            _bind_pinned_screen_material(white_material, media, draft_prefix, template)
 
         for key in ("T2", "T1"):
             index = TRACK_INDEX[key]
@@ -1870,6 +1882,18 @@ def _normalize_source(
             if not is_audio:
                 segment["render_index"] = visual_render_indices[visual_overlay_ordinal]
                 visual_overlay_ordinal += 1
+                geometry = user_provided_media_overlay.freeze_overlay_geometry(
+                    item, tracks, user_provided_media_overlay.freeze_material_map(payload.get("materials", {}))
+                )
+                if geometry is not None:
+                    segment["clip"] = geometry["clip"]
+                    if geometry["crop"] is None:
+                        material.pop("crop", None)
+                    else:
+                        material["crop"] = geometry["crop"]
+                    segment["common_keyframes"] = []
+                    segment["keyframe_refs"] = []
+                    segment["extra_material_refs"] = []
             if is_audio:
                 _remove_extra_material_ref_types(segment, material_map, {"combination"})
             track["segments"].append(segment)
