@@ -160,6 +160,31 @@ A–D는 다른 작업의 state·산출물·CapCut draft·`episode_cards.json`�
 
 현재 조립 기준은 사용자 수동 `V8_MANUAL_OVERLAY_65` 근본이다. [clean-assembly-harness.md](references/clean-assembly-harness.md)를 먼저 읽고 `build_politics_v8_project.py`로 clean build한다. `capcut_active_root_v1.json`과 기존 v7 builder는 `LEGACY_V7_ROLLBACK_ONLY`이며 새 회차의 근본 선택에 사용하지 않는다. 파일명·테스트 미디어 이름이 아니라 12개 고정 트랙의 역할·geometry·문구 슬롯과 경로 경계를 계약으로 사용한다.
 
+## 빌드 뒤 마무리
+
+`build_politics_v8_project.py` 가 끝나면 반드시 이어서 돌린다.
+
+```bash
+python scripts/finalize_politics_media_and_loudness.py   --project "<CapCut draft>/<프로젝트명>"   --media-dir "E:/22utube/<episode_id>/capcut_media"   --report "E:/22utube/<episode_id>/work/reports/finalize.json"
+```
+
+두 가지를 한다.
+
+```text
+미디어 경로   C:/__CAPCUT_RELINK_REQUIRED__/... 를 실제 파일로 잇는다
+              draft_content.json · template-2.tmp · Timelines 미러 · draft_meta_info.json
+              네 곳을 다 고친다. 타임라인만 고치면 CapCut 미디어 목록이 여전히 없는
+              파일을 찾아 다니다 창이 멈춘다
+음량          소리 나는 세그먼트의 노멀라이즈를 켜고 목표 -14 LUFS 로 맞춘다.
+              CapCut 이 열면서 재는 값을 ffmpeg 로 미리 재서 적어 둔다
+```
+
+빌더가 붙인 노멀라이즈는 id 재발급 단계를 지나면서 꺼진 채로 남는다. 이 스크립트가
+다시 켠다. 값을 미리 채우지 않으면 카드가 백 장을 넘는 회차에서 CapCut 이 클립을
+하나씩 디코딩하는 동안 창이 응답하지 않는다. ffmpeg 로 병렬 측정하면 일 분이면 끝난다.
+
+이 단계를 거치면 `MEDIA_RELINK` 는 사람이 할 일이 아니라 검증만 남는다.
+
 ## 전체 하단 자막 화면 계약
 
 적용 대상:

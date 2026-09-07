@@ -105,3 +105,40 @@ def test_build_assets_keeps_captions_on_sentence_boundaries():
     assert "SENT_END" in src
     assert "cut.json" in src
     assert "if dst.exists() and have != want:" in src
+
+
+def test_short_body_runs_faster_than_source():
+    """쇼츠 본편은 1.2배로 돌린다. 나레이션은 건드리지 않는다."""
+    common = (SCRIPTS / "_common.py").read_text(encoding="utf-8")
+    assert "SHORT_SPEED = 1.2" in common
+    cut = (SCRIPTS / "cut_shorts.py").read_text(encoding="utf-8")
+    assert "setpts=PTS/{SHORT_SPEED}" in cut
+    assert "atempo={SHORT_SPEED}" in cut
+    # 자막 시간도 같이 당겨야 말과 어긋나지 않는다
+    assert "/ SHORT_SPEED" in cut
+    build = (SCRIPTS / "build_short.py").read_text(encoding="utf-8")
+    assert "a / SHORT_SPEED" in build
+
+
+def test_short_project_carries_no_dead_media_path():
+    """근본에서 물려받은 죽은 미디어 경로를 미디어 목록에서 걷어 낸다."""
+    build = (SCRIPTS / "build_short.py").read_text(encoding="utf-8")
+    assert "def clean_meta" in build
+    assert "draft_meta_info.json" in build
+    assert "./Resources/media/" in build
+
+
+def test_plate_track_found_by_name_not_only_path():
+    """근본을 CapCut 에서 한 번 열면 배경판 경로가 캐시 해시로 바뀐다."""
+    build = (SCRIPTS / "build_short.py").read_text(encoding="utf-8")
+    assert 'material_name' in build
+    assert '"jungch.png" in tag' in build
+
+
+def test_shorts_contract_documents_intro_and_outro():
+    """쇼츠는 롱폼 유입이 목적이라 도입 한 줄과 마무리 두 줄을 뺀다."""
+    doc = SKILL.read_text(encoding="utf-8")
+    assert "SHORT_SPEED" in doc
+    assert "더 자세한 내용은 아래 영상에서 보실 수 있습니다" in doc
+    assert "구독과 좋아요 부탁드립니다" in doc
+    assert "1080×1415" in doc

@@ -10,7 +10,7 @@
 from __future__ import annotations
 import copy, hashlib, json, pathlib, re, shutil, subprocess, uuid
 
-from _common import SHORTS_CAPCUT_ROOT, SHORTS_ROOT, root_parser
+from _common import SHORT_SPEED, SHORTS_CAPCUT_ROOT, SHORTS_ROOT, root_parser
 
 CR = pathlib.Path(r"C:/Users/arajun/AppData/Local/CapCut/User Data/Projects/com.lveditor.draft")
 ROOT = CR / SHORTS_CAPCUT_ROOT
@@ -148,7 +148,11 @@ class Builder:
             if tr["type"] != "video" or not tr["segments"]:
                 continue
             m = self.index[tr["segments"][0]["material_id"]][1]
-            if str(m.get("path", "")).lower().endswith("jungch.png"):
+            # CapCut 에서 근본을 한 번 열면 경로가 캐시 해시로 바뀜다.
+            # 이름은 남으니 둘 중 하나만 맞아도 배경판으로 본다.
+            tag = (str(m.get("material_name") or "") + "|" + str(m.get("name") or "")
+                   + "|" + str(m.get("path") or "")).lower()
+            if "jungch.png" in tag:
                 return tr
         raise KeyError("PLATE_TRACK_NOT_FOUND")
 
@@ -519,6 +523,46 @@ class Builder:
             self.mats[bucket] = keep
         return removed
 
+    def clean_meta(self):
+        """미디어 패널 목록에서 죽은 경로를 걸러 낸다.
+
+        근본은 예전 회차 프로젝트를 얄려 만든 것이라, 그 프로젝트를 가리키는
+        절대경로가 draft_meta_info 에 그대로 남아 있다. 그 파일은 이미 없어서
+        CapCut 이 열 때마다 찾아 달라고 묻는다. 같은 이름이 프로젝트 안에 있으면
+        그쪽으로 돌려 주고, 없으면 목록에서 뺀다. 타임라인은 건드리지 않는다.
+        """
+        meta = self.dst / "draft_meta_info.json"
+        if not meta.is_file():
+            return 0, 0
+        doc = json.loads(meta.read_text(encoding="utf-8"))
+        media = self.dst / "Resources" / "media"
+        fixed = dropped = 0
+        for block in doc.get("draft_materials", []):
+            keep = []
+            for item in block.get("value") or []:
+                raw = str(item.get("file_Path", ""))
+                if not raw:
+                    keep.append(item)
+                    continue
+                probe = raw
+                if raw.startswith("./"):
+                    probe = str(self.dst / raw[2:])
+                elif raw.startswith("##_draftpath_placeholder_") and "_##/" in raw:
+                    probe = str(self.dst / raw.split("_##/", 1)[1])
+                if pathlib.Path(probe).is_file():
+                    keep.append(item)
+                    continue
+                local = media / raw.rsplit("/", 1)[-1]
+                if local.is_file():
+                    item["file_Path"] = "./Resources/media/" + local.name
+                    keep.append(item)
+                    fixed += 1
+                else:
+                    dropped += 1
+            block["value"] = keep
+        meta.write_text(json.dumps(doc, ensure_ascii=False), encoding="utf-8")
+        return fixed, dropped
+
     def finish(self):
         self.doc["duration"] = self.total
         self.doc["name"] = self.name
@@ -529,6 +573,9 @@ class Builder:
         # 키보드 SFX 는 align_sfx 가 상황설명에 맞춰 놓는다
 
         self.cpath.write_text(json.dumps(self.doc, ensure_ascii=False), encoding="utf-8")
+        fixed, dropped = self.clean_meta()
+        if fixed or dropped:
+            print(f"미디어 목록 정리 {fixed} 건 돌려놓고 {dropped} 건 뺀다")
 
         # 근본에서 물려받은 모든 uuid 를 새로 발급한다.
         # 근본 프로젝트가 같은 폴더에 남아 있어 id 가 겹치면 CapCut 이 둘을 헷갈린다.
@@ -754,7 +801,8 @@ def main():
         try:
             build(project_name=row["project_name"], clip=clip, srt8=srt8,
                   t1=row["t1"], t2=row["t2"], credit=row["credit"],
-                  mentions=[(a, b, t, m) for a, b, t, m in row["mentions"]],
+                  # 상황설명은 원본 클립 초로 적어 둔다. 클립을 빨리 돌렸으니 그만큼 당긴다.
+                  mentions=[(a / SHORT_SPEED, b / SHORT_SPEED, t, m) for a, b, t, m in row["mentions"]],
                   image=art, scale=row.get("scale"),
                   head=narration(root, row["head_narration"]),
                   tail=narration(root, row["tail_narration"]),
