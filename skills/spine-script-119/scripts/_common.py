@@ -64,6 +64,8 @@ def load_allowlist() -> dict:
 SHORTS_ROOT = Path(r"E:\22utube\_shorts")
 SHORTS_ART = Path(r"E:\22utube\_images\woodcut")
 SHORTS_CAPCUT_ROOT = "P0_ROOT_shrt_119short_v1"
+# 쇼츠는 본편 클립을 조금 빨리 돌린다. 나레이션은 건드리지 않는다.
+SHORT_SPEED = 1.2
 
 
 def load_cards_def_raw(root: Path):

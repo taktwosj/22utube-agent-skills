@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import subprocess
 
-from _common import SHORTS_ROOT, root_parser
+from _common import SHORT_SPEED, SHORTS_ROOT, root_parser
 
 MAX_CHARS = 8
 MIN_DUR = 0.22
@@ -136,6 +136,7 @@ def main() -> None:
         result = subprocess.run([
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             "-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(src),
+            "-filter:v", f"setpts=PTS/{SHORT_SPEED}", "-filter:a", f"atempo={SHORT_SPEED}",
             "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
             "-movflags", "+faststart", str(mp4),
@@ -152,14 +153,15 @@ def main() -> None:
                 continue
             for wrong, right in fixes:
                 t = t.replace(wrong, right)
-            window.append((max(a, start) - start, min(b, end) - start, t))
+            window.append(((max(a, start) - start) / SHORT_SPEED,
+                           (min(b, end) - start) / SHORT_SPEED, t))
 
         raw_n = write_srt(window, outdir / f"{slug}.srt")
         eight = split8(window)
         eight_n = write_srt(eight, outdir / f"{slug}_8자.srt")
         over = sum(1 for _, _, t in eight if len(t) > MAX_CHARS)
         size = mp4.stat().st_size / 1_000_000
-        print(f"완료 {slug:24s} {end - start:5.1f}초 {size:6.1f}MB  "
+        print(f"완료 {slug:24s} {(end - start) / SHORT_SPEED:5.1f}초 {size:6.1f}MB  "
               f"자막 {raw_n} → {eight_n}개  여덟자초과 {over}")
         done += 1
 
