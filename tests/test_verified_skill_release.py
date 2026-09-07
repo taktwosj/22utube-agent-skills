@@ -24,6 +24,7 @@ EXPECTED_SHARED_SKILLS = [
     "222mara",
     "idm",
     "naver-blog-posting",
+    "spine-script-119",
     "top5isu-shorts",
 ]
 
@@ -140,7 +141,7 @@ def make_tree_writable(root: Path) -> None:
 
 
 class ReleasePreflightTests(unittest.TestCase):
-    def test_main_manifest_preflight_accepts_seven_enabled_shared_skills(self):
+    def test_main_manifest_preflight_accepts_enabled_shared_skills(self):
         skills, targets = skill_release.enabled_skills(ROOT)
         skill_release.semantic_preflight(skills, targets)
         self.assertEqual([item["name"] for item in skills], EXPECTED_SHARED_SKILLS)

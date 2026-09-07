@@ -47,6 +47,16 @@
       "enabled": true
     },
     {
+      "name": "spine-script-119",
+      "category": "22utube",
+      "targets": [
+        "codex",
+        "claude",
+        "hermes"
+      ],
+      "enabled": true
+    },
+    {
       "name": "1caveman",
       "category": "workflow",
       "targets": ["codex", "claude", "hermes"],
