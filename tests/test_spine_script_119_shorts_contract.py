@@ -78,3 +78,30 @@ class SpineScript119ShortsContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_short_builder_normalizes_audio_and_opens_with_sfx():
+    """쇼츠 빌더가 소리 나는 세그먼트마다 음량 노멀라이즈를 켜고,
+    자막 애니메이션을 0.1초로 맞추고, 시작 순간에 효과음을 깐다."""
+    src = (SCRIPTS / "build_short.py").read_text(encoding="utf-8")
+    assert "def attach_loudness" in src
+    assert '"target_loudness": target' in src
+    assert '"enable": True' in src
+    assert "self.attach_loudness(seg, mat, dur)" in src
+    assert "def set_text_anim" in src
+    assert "duration=100_000" in src
+    assert "for a in [0.0] + list(starts):" in src
+
+
+def test_build_assets_keeps_captions_on_sentence_boundaries():
+    """컷 끝에서 말이 문장 중간에 끊겨 보이지 않게 한다.
+
+    창 밖으로 반쯤 걸친 cue 는 버리고, 마지막 조각에 다음 문장의 첫 마디가
+    매달려 있으면 잘라 낸다. 회차 정의의 구간이 바뀌면 예전 컷을 다시 자른다.
+    """
+    src = (SCRIPTS / "build_assets.py").read_text(encoding="utf-8")
+    assert "CUE_EDGE" in src
+    assert "if s < t_in - CUE_EDGE or e > t_out + CUE_EDGE:" in src
+    assert "SENT_END" in src
+    assert "cut.json" in src
+    assert "if dst.exists() and have != want:" in src

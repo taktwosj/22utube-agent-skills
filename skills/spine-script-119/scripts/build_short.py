@@ -167,18 +167,51 @@ class Builder:
         return None
 
     def align_sfx(self, starts):
-        """키보드 소리를 상황설명 시작에 맞춘다."""
+        """키보드 소리를 맨 앞과 상황설명 시작마다 깔다.
+
+        영상이 시작하는 순간에는 항상 한 번 넣는다. 첫 상황설명은 나레이션이
+        끝난 뒤에나 나오는데, 그때까지 소리가 비면 시작이 밋밋하다.
+        """
         tr = self.sfx_track()
         if tr is None:
             return
         proto = tr["segments"][0]
         dur = proto["target_timerange"]["duration"]
         segs = []
-        for a in starts:
+        for a in [0.0] + list(starts):
             s = self.clone_segment(proto)
             s["target_timerange"] = {"start": int(a * US), "duration": dur}
             segs.append(s)
         tr["segments"] = segs
+
+    def set_text_anim(self, name="한 글자씩", duration=100_000):
+        """자막 등장 애니메이션 길이를 고정한다. 근본 값이 무엇이든 여기서 맞춘다."""
+        n = 0
+        for m in self.doc["materials"].get("material_animations", []):
+            for a in m.get("animations", []):
+                if a.get("name") == name and a.get("duration") != duration:
+                    a["duration"] = duration
+                    n += 1
+        return n
+
+    def attach_loudness(self, seg, mat, dur, target=-14.0):
+        """음량 노멀라이즈를 켜 둔다. 소리 나는 세그먼트마다 붙인다.
+
+        유튜브 원본 클립과 타입캐스트 나레이션은 기준 음량이 다르다.
+        근본에 들어 있던 loudness 참조는 버리고 새로 걸어 준다.
+        """
+        old = {str(x["id"]) for x in self.mats.get("loudnesses", [])}
+        seg["extra_material_refs"] = [r for r in seg.get("extra_material_refs", []) if str(r) not in old]
+        lid = nid()
+        self.mats.setdefault("loudnesses", []).append({
+            "id": lid,
+            "enable": True,
+            "time_range": {"start": 0, "duration": int(dur)},
+            "file_id": str(mat.get("local_material_id") or mat["id"]),
+            "target_loudness": target,
+            "loudness_param": None,
+        })
+        seg.setdefault("extra_material_refs", []).append(lid)
 
     def fill_slot(self, items, scale=None):
         """근본 영상 슬롯 한 트랙에 [삽화 → 클립 → 삽화] 를 이어 붙인다.
@@ -206,6 +239,8 @@ class Builder:
                 seg["clip"]["scale"] = {"x": scale, "y": scale}
             seg["volume"] = 1.0 if audible else 0.0
             seg["last_nonzero_volume"] = 1.0
+            if audible:
+                self.attach_loudness(seg, mat, dur)
             segs.append(seg)
         tr["segments"] = segs
         return tr
@@ -320,6 +355,7 @@ class Builder:
             seg["target_timerange"] = {"start": start, "duration": dur}
             seg["volume"] = 1.0
             seg["last_nonzero_volume"] = 1.0
+            self.attach_loudness(seg, mat, dur)
             segs.append(seg)
         tr = {"attribute": 0, "flag": 0, "id": nid(), "is_default_name": True,
               "name": "", "segments": segs, "type": "audio"}
@@ -656,6 +692,7 @@ def build(project_name, clip, srt8, t1, t2, credit, mentions,
         b.add_narration(nar)
 
     b.doc["tracks"] = [tr for tr in b.doc["tracks"] if tr.get("segments")]
+    b.set_text_anim()
     b.restack()
     print("프리셋 잔재 제거", b.strip_presets(), "건")
     b.repoint_root_assets()

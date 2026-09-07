@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -192,6 +193,11 @@ def _anchor_map(parts):
     return at
 
 
+CUE_EDGE = 0.15  # cue 경계 반올림 허용치(초)
+CLOSING = re.compile(r"[.?!]\s*$")
+SENT_END = re.compile(r"[.?!]")
+
+
 def source_cues(srt_dir, vid, t_in, t_out, tl_start):
     cues = json.loads((srt_dir / f"{vid}.cues.json").read_text(encoding="utf-8"))
     window = t_out - t_in
@@ -199,6 +205,10 @@ def source_cues(srt_dir, vid, t_in, t_out, tl_start):
     for c in cues:
         s, e = c["start"], c["end"]
         if e <= t_in or s >= t_out:
+            continue
+        # 창 밖으로 반 잔하는 cue 는 버린다. 반토막이 남으면
+        # 컷 끝에서 말이 문장 중간에 끊긴 것처럼 보인다.
+        if s < t_in - CUE_EDGE or e > t_out + CUE_EDGE:
             continue
         s = max(s, t_in) - t_in; e = min(e, t_out) - t_in
         if e - s < 0.20:
@@ -234,6 +244,17 @@ def source_cues(srt_dir, vid, t_in, t_out, tl_start):
             a = tidy[-1][1]
         if b - a >= 0.12:
             tidy.append((a, b, t))
+    # 마지막 조각이 문장을 닫지 못하고 그 앞이 닫았으면, 다음 문장의
+    # 첫 마디가 매달린 것이다. 보는 사람에게는 말이 끊긴 것으로 보인다.
+    while len(tidy) >= 2 and not CLOSING.search(tidy[-1][2]) and CLOSING.search(tidy[-2][2]):
+        tidy.pop()
+    if tidy:
+        a, b, t = tidy[-1]
+        marks = list(SENT_END.finditer(t))
+        if marks and marks[-1].end() < len(t.rstrip()):
+            head = t[:marks[-1].end()].strip()
+            if head:
+                tidy[-1] = (a, b, head)
     return tidy
 
 
@@ -268,12 +289,20 @@ def main():
         if kind == "SRC":
             vid, t_in, t_out = card[2], card[3], card[4]
             dst = clips / f"{cid}.mp4"
+            # 이미 자른 컷은 다시 자르지 않는다. 단, 회차 정의의 구간이
+            # 바뀜으면 예전 파일을 그대로 쓰면 안 된다. 구간을 옆에 적어 둔다.
+            stamp = clips / f"{cid}.cut.json"
+            want = {"video_id": vid, "in": round(float(t_in), 3), "out": round(float(t_out), 3)}
+            have = json.loads(stamp.read_text(encoding="utf-8")) if stamp.is_file() else None
+            if dst.exists() and have != want:
+                dst.unlink()
             if not dst.exists():
                 # 프레임 정확도를 위해 재인코딩한다. -c copy 는 키프레임에 붙어 수 초 어긋난다.
                 run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-ss", f"{t_in:.3f}",
                      "-i", str(clips / f"{vid}.mp4"), "-t", f"{t_out - t_in:.3f}",
                      "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
                      "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(dst)])
+            stamp.write_text(json.dumps(want, ensure_ascii=False), encoding="utf-8")
             dur = probe(dst); dur_us = int(round(dur * 1_000_000))
             cues = source_cues(srt, vid, t_in, t_in + dur, timeline_us / 1_000_000)
             raw_p, disp_p = srt / f"{cid}.raw.srt", srt / f"{cid}.display.srt"
