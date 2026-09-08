@@ -62,11 +62,17 @@ def main():
             body += [f"### {i+1:02d} `{label}` — `{t0}` ~ `{t1}`", "- 화면: 민주블루 인셋 카드", "- 원음: 없음",
                      f"- 나레이션: {flat}", f"- 상단 챕터 제목: {label}", "- 하단: 나레이션 TTS",
                      "- 논거·의견 1줄: 없음", "- 순차 논거·의견 2문장: 없음", f"- 다음 카드: {nxt}", ""]
-            seed += ["[CARD]", f"order: {i+1}", f"card_id: {cid}", "card_type: NARRATION_IMAGE",
+            # 같은 이름의 하이퍼프레임 영상이 있으면 정지 카드 대신 그것을 쓴다.
+            # 움직이는 설명카드라 인셋 템플릿으로 렌더한 물건이 아니므로 style_profile 을 비운다.
+            moving = (root / "hyperframes" / f"{nm}.mp4").is_file()
+            body[-2] = "- 화면: 하이퍼프레임 영상" if moving else body[-2]
+            seed += ["[CARD]", f"order: {i+1}", f"card_id: {cid}",
+                     f"card_type: {'NARRATION_VIDEO' if moving else 'NARRATION_IMAGE'}",
                      f"chapter_label: {label}", f"chapter_title: {title}", f"chapter_hook: {hook}",
                      "source_id: N/A", "source_range_policy: N/A", "source_in_candidate:", "source_out_candidate:",
                      "visual_asset_ref: WAIT_C", "visual_role: CHAPTER_TRANSITION",
-                     "style_profile: DEMOCRATIC_BLUE_INSET_CARD_V2", "narration_asset_ref: WAIT_B",
+                     f"style_profile: {'N/A' if moving else 'DEMOCRATIC_BLUE_INSET_CARD_V2'}",
+                     "narration_asset_ref: WAIT_B",
                      f"narration_text: {flat}", "source_audio: OFF", "narration_audio: ON", "lower_mode: SRT",
                      "lower_line1:", "lower_line2:", "cta_like_subscribe: OFF", f"why_this_segment: {why}",
                      f"next_card: {nxt}", "[/CARD]", ""]
