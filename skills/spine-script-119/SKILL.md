@@ -152,8 +152,22 @@ herd   한 방향 — 군집            grid   격자 — 기본
 
 ## 하이퍼프레임
 
-MP4로는 못 넣는다. `compile_pre119_episode_cards.py:191` 은 `NARRATION_VIDEO` 를 받지만 `build_politics_v8_project.py:504` 는 `SOURCE_VIDEO / CHAPTER_CARD / NARRATION_IMAGE` 셋만 처리하고 나머지는 `V8_CARD_TYPE_UNSUPPORTED` 로 예외를 던진다. 컴파일은 통과하고 빌드에서 죽는다.
-**1920×1080 PNG 스틸로 뽑으면** `NARRATION_IMAGE` 로 그대로 들어간다.
+움직이는 설명카드다. 정지 카드 자리에 그대로 들어간다.
+
+```
+<root>/hyperframes/NL06.mp4    나레이션 이름과 같게 둔다
+```
+
+`gen_script.py` 가 같은 이름의 영상을 찾으면 그 카드만 `NARRATION_VIDEO` 로 낸다. 없으면 `NARRATION_IMAGE` 로 정지 카드를 쓴다. **섞어도 된다.** 일부만 영상이어도 나머지는 렌더한 PNG로 채워진다.
+
+```
+1920×1080  H.264 mp4  오디오 없음
+길이       카드보다 길어도 된다. 카드 길이만큼만 쓰고 나머지는 버린다
+```
+
+`출처` 자막이 붙지 않고 영상 자체의 소리도 쓰지 않는다. 나레이션 음성은 정지 카드와 같은 방식으로 붙는다. 인용 클립이 아니므로 `SOURCE_VIDEO` 로 넣지 않는다 — 그렇게 하면 화면에 `출처` 가 찍히고 나레이션이 빠진다.
+
+인셋 템플릿으로 렌더한 물건이 아니라서 `style_profile` 은 비운다. 비우지 않으면 preflight 가 `INSET_CARD_IMAGE_REQUIRED` 로 막는다.
 
 ## 업로드 문구
 

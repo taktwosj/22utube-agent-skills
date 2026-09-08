@@ -35,13 +35,21 @@ def main():
                 "display_transform": ["SPLIT", "CLAMP", "DIALOGUE_MARKER_REMOVAL"],
                 "source_srt_file": str(disp), "source_srt_sha256": sha(disp)})
         else:
+            common = {k: r[k] for k in ("card_id", "target_start_us", "target_duration_us", "narration_audio_file",
+                                        "narration_audio_sha256", "audio_duration_us", "narration_srt_file",
+                                        "narration_srt_sha256")}
+            moving = root / "hyperframes" / f"{r['narration_name']}.mp4"
+            if moving.is_file():
+                # 움직이는 설명카드. 영상이 나레이션보다 길어도 카드 길이만큼만 쓴다.
+                cards.append(common | {"video_file": str(moving), "video_sha256": sha(moving),
+                                       "video_start_us": 0, "video_duration_us": r["target_duration_us"],
+                                       "source_audio_mode": "OFF"})
+                continue
             img = root / "cards" / f"{cid}.png"
             if not img.is_file():
                 raise SystemExit(f"CARD_PNG_MISSING {cid}: render_cards.py 먼저")
-            cards.append({k: r[k] for k in ("card_id", "target_start_us", "target_duration_us", "narration_audio_file",
-                                            "narration_audio_sha256", "audio_duration_us", "narration_srt_file",
-                                            "narration_srt_sha256")} | {
-                "image_file": str(img), "image_sha256": sha(img), "motion_profile": "SLOW_ZOOM_IN"})
+            cards.append(common | {"image_file": str(img), "image_sha256": sha(img),
+                                   "motion_profile": "SLOW_ZOOM_IN"})
     out = root / "asset_evidence.json"
     out.write_text(json.dumps({"status": "PASS", "lanes": {"A": "PASS", "B": "PASS", "C": "PASS", "D": "PASS"},
                                "cards": cards}, ensure_ascii=False, indent=1), encoding="utf-8")

@@ -511,9 +511,16 @@ def build_v8_document(document: dict[str, Any], cards: list[dict[str, Any]], tot
             if record is None:
                 raise RuntimeError(f"V8_IMAGE_REQUIRED:{card['card_id']}")
             clone_media(document, image_material, image_seed, None, target_track=image_track, kind="photo", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=0, source_duration=duration, media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
+        elif kind == "NARRATION_VIDEO":
+            # 움직이는 설명카드. 정지 카드와 같은 자리(이미지 트랙)에 들어가고
+            # 나레이션 음성도 같은 방식으로 붙는다. 인용 클립이 아니므로
+            # `출처` 자막을 얹지 않고, 영상 자체의 소리도 쓰지 않는다.
+            if record is None:
+                raise RuntimeError(f"V8_VIDEO_REQUIRED:{card['card_id']}")
+            clone_media(document, image_material, image_seed, None, target_track=image_track, kind="video", offline_path=record["offline_path"], filename=record["filename"], width=int(record["width"]), height=int(record["height"]), source_start=int(record["source_start"]), source_duration=int(record["source_duration"]), media_duration=int(record["duration_us"]), target_start=start, target_duration=duration, has_audio=False)
         else:
             raise RuntimeError(f"V8_CARD_TYPE_UNSUPPORTED:{card['card_id']}:{kind}")
-        if kind == "NARRATION_IMAGE":
+        if kind in {"NARRATION_IMAGE", "NARRATION_VIDEO"}:
             clone_v8_audio(document, audio_track, audio_seed, audio_material, record, start, duration)
         lower = str(card.get("lower_mode", "NONE"))
         if lower in {"SOURCE_TTS", "NARRATION_TTS"}:
