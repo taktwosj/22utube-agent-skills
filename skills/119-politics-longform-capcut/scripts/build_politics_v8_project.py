@@ -240,18 +240,27 @@ def embed_root_cache_assets(stage: Path, final_root: Path) -> None:
             return rewrite(value)
         if _within(normalized, final_root):
             return rewrite(value)
+        if value in copied:
+            return copied[value]
         source = Path(value)
         if not source.is_file():
-            candidates = list((stage / "Resources").rglob(source.name))
+            # 근본 폴더 이름이 바뀌면(CapCut 이 사본 번호를 다시 매기면) 히스토리 패치에
+            # 남은 옛 절대경로는 파일을 못 찾는다. 이름으로 다시 찾되, 이 함수가 앞서
+            # 만들어 둔 복사본은 후보에서 뺀다. 넣어 두면 같은 경로가 두 파일에 나올 때
+            # 후보가 둘이 되어 없다고 잘못 판정한다.
+            candidates = [
+                found
+                for found in (stage / "Resources").rglob(source.name)
+                if destination not in found.parents
+            ]
             if len(candidates) != 1:
                 raise RuntimeError(f"V8_ROOT_CACHE_ASSET_MISSING:{source}")
             source = candidates[0]
-        if value not in copied:
-            destination.mkdir(parents=True, exist_ok=True)
-            target = destination / source.name
-            if not target.exists():
-                shutil.copy2(source, target)
-            copied[value] = (final_root / "Resources" / "v8_root_assets" / source.name).as_posix()
+        destination.mkdir(parents=True, exist_ok=True)
+        target = destination / source.name
+        if not target.exists():
+            shutil.copy2(source, target)
+        copied[value] = (final_root / "Resources" / "v8_root_assets" / source.name).as_posix()
         return copied[value]
 
     for path in stage.rglob("*"):
