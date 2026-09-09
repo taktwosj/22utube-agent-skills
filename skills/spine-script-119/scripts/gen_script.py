@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _common import load_cards_def, package_root, resolve_root, root_parser  # noqa: E402
+from _common import hyperframe_files, load_cards_def, package_root, resolve_root, root_parser  # noqa: E402
 
 
 def hms(us):
@@ -21,6 +21,7 @@ def main():
     root = resolve_root(args)
     cd = load_cards_def(root)
     tl = json.loads((root / "work" / "timeline.json").read_text(encoding="utf-8"))
+    hyperframes = hyperframe_files(root)
     rec = {r["card_id"]: r for r in tl["cards"]}
     ids = [c[0] for c in cd.CARDS]
     narr = root / "narration"
@@ -64,7 +65,7 @@ def main():
                      "- 논거·의견 1줄: 없음", "- 순차 논거·의견 2문장: 없음", f"- 다음 카드: {nxt}", ""]
             # 같은 이름의 하이퍼프레임 영상이 있으면 정지 카드 대신 그것을 쓴다.
             # 움직이는 설명카드라 인셋 템플릿으로 렌더한 물건이 아니므로 style_profile 을 비운다.
-            moving = (root / "hyperframes" / f"{nm}.mp4").is_file()
+            moving = nm in hyperframes
             body[-2] = "- 화면: 하이퍼프레임 영상" if moving else body[-2]
             seed += ["[CARD]", f"order: {i+1}", f"card_id: {cid}",
                      f"card_type: {'NARRATION_VIDEO' if moving else 'NARRATION_IMAGE'}",

@@ -10,6 +10,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -85,3 +86,60 @@ def load_cards_def_raw(root: Path):
     sys.modules["cards_def"] = mod
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
+
+
+HYPERFRAME_SCENE = re.compile(r"^(NL\d+)-(NL\d+)$")
+
+
+def hyperframe_files(root: Path) -> dict[str, Path]:
+    """하이퍼프레임 영상을 나레이션 이름에 건다.
+
+    두 가지 이름을 받는다.
+
+        NL88.mp4        그 한 줄만 덮는 영상
+        NL88-NL90.mp4   NL88 부터 NL90 까지 연속한 여러 줄을 한 장면으로 덮는 영상
+
+    긴 장면 쪽이 본래 쓰임이다. 카드마다 따로 만들면 삼 초짜리가 줄줄이 이어져
+    끊긴 화면이 되고, 나레이션이 이어지는 동안 그래픽도 이어져야 한다.
+    반환은 나레이션 이름 하나당 파일 하나이며, 한 줄이 두 파일에 걸리면 멈춘다.
+    """
+    folder = root / "hyperframes"
+    if not folder.is_dir():
+        return {}
+    claimed: dict[str, Path] = {}
+
+    def claim(name: str, path: Path) -> None:
+        if name in claimed and claimed[name] != path:
+            raise SystemExit(f"HYPERFRAME_DUPLICATE_CLAIM: {name} <- {claimed[name].name}, {path.name}")
+        claimed[name] = path
+
+    for path in sorted(folder.glob("*.mp4")):
+        stem = path.stem
+        scene = HYPERFRAME_SCENE.match(stem)
+        if scene:
+            for name in scene_members(root, scene.group(1), scene.group(2)):
+                claim(name, path)
+        elif re.fullmatch(r"NL\d+", stem):
+            claim(stem, path)
+    return claimed
+
+
+def scene_members(root: Path, first: str, last: str) -> list[str]:
+    """장면이 덮는 나레이션 이름을 타임라인 순서대로 돌려준다."""
+    order = narration_order(root)
+    try:
+        a, b = order.index(first), order.index(last)
+    except ValueError as exc:
+        raise SystemExit(f"HYPERFRAME_SCENE_UNKNOWN_LINE: {first}-{last}") from exc
+    if b < a:
+        raise SystemExit(f"HYPERFRAME_SCENE_REVERSED: {first}-{last}")
+    return order[a:b + 1]
+
+
+def narration_order(root: Path) -> list[str]:
+    """타임라인에 놓인 나레이션 카드를 순서대로."""
+    path = root / "work" / "timeline.json"
+    if not path.is_file():
+        raise SystemExit(f"TIMELINE_MISSING: {path}")
+    timeline = json.loads(path.read_text(encoding="utf-8"))
+    return [c["narration_name"] for c in timeline["cards"] if c["kind"] != "SRC"]

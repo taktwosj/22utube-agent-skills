@@ -54,8 +54,12 @@ class NarrationVideoCardTests(unittest.TestCase):
         self.assertIn("V8_CARD_TYPE_UNSUPPORTED", V8.read_text(encoding="utf-8"))
 
     def test_spine_emits_narration_video_when_hyperframe_exists(self):
+        # 폴더를 읽는 일은 _common.hyperframe_files 로 옮겼다. 장면 파일과
+        # 단독 파일을 같은 규칙으로 풀어야 해서 두 스크립트가 나눠 쓴다.
         text = GEN_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('root / "hyperframes"', text)
+        common = (GEN_SCRIPT.parent / "_common.py").read_text(encoding="utf-8")
+        self.assertIn('root / "hyperframes"', common)
+        self.assertIn("hyperframes = hyperframe_files(root)", text)
         self.assertIn("NARRATION_VIDEO' if moving else 'NARRATION_IMAGE", text)
 
     def test_moving_card_drops_the_inset_style_profile(self):
