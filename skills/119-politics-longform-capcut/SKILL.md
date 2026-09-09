@@ -219,10 +219,12 @@ HARD_MAX_LINE_CHARS   = 15
 
 ```text
 video_file          1920×1080 mp4
-video_start_us      0
-video_duration_us   카드 길이. 영상이 더 길면 앞에서부터 그만큼만 쓴다
+video_start_us      이 카드가 영상의 어디서부터 가져가는지
+video_duration_us   카드 길이
 style_profile       비운다. 인셋 템플릿으로 렌더한 물건이 아니다
 ```
+
+한 영상을 연속한 카드 여럿이 나눠 쓸 수 있다. 그때 `video_start_us` 가 카드마다 이어지는 값으로 들어와 화면이 카드 경계에서 끊기지 않는다. 앞단이 그 값을 계산해 주므로 119 는 받은 대로 쓴다.
 
 인용 클립이 아니므로 `SOURCE_VIDEO`로 넣지 않는다. 그렇게 하면 화면에 `출처`가 찍히고 나레이션이 빠진다.
 
