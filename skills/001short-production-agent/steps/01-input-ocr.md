@@ -4,6 +4,18 @@
 
 분석 도구는 env receipt의 경로만 쓴다(`references/environment-preflight.md`). 에피소드 중 도구 탐색·설치 금지.
 
+원본이 아직 로컬에 없고 locator가 YouTube URL이면 `scripts/acquire_source.py`로 받는다. 이 스킬에서
+네트워크를 여는 유일한 수집 스크립트이며, YouTube 호스트 외에는 `SOURCE_ACQUIRE_HOST_NOT_ALLOWED`로
+거부한다. 에피소드 폴더 밖으로는 쓰지 않고, 끝에 intake 검증기를 스스로 돌려 receipt를 증명한다.
+
+```bash
+python3 -B scripts/acquire_source.py --episode-id <회차명> --url <youtube-url> --out-dir 00_source
+```
+
+산출은 `00_source/<source_id>.mp4`, `source-identity.json`, `source-intake-receipt.json`(v2)이며 `status: PASS`가
+아니면 그 회차는 진행하지 않는다. factory_episode_run으로 돌릴 때는 `source=skill`, `network=true`,
+`background=true`다(전체 다운로드는 2분을 넘긴다).
+
 **키프레임·자막 크롭 판독은 task-owner가 직접 보지 않는다.** 크롭 이미지를 만든 뒤 경로만
 Codex(`codex exec -i <img> ... - < prompt.md`) 또는 판독 전용 서브에이전트에 넘기고 텍스트 결과만
 받는다. 이미지가 컨텍스트 소비의 최대 항목이며, 한 배치에서 콘택트 시트·크롭·스크린샷이 빌드
