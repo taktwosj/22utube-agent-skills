@@ -72,7 +72,9 @@
       "name": "naver-blog-posting",
       "category": "naver-blog",
       "targets": [
-        "codex"
+        "codex",
+        "claude",
+        "hermes"
       ],
       "enabled": true
     }
