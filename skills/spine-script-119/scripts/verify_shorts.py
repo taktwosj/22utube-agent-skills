@@ -52,7 +52,8 @@ def main() -> None:
     total = 0
     seen: dict = {}
     for row in data["shorts"]:
-        project = CAPCUT / row["project_name"]
+        # CapCut 이 열렸다 닫히면 폴더에 "(N)" 접미가 붙을 수 있다. 근본과 같은 규칙으로 찾는다.
+        project = resolve_capcut_root_dir(CAPCUT, row["project_name"])
         if not project.is_dir():
             print(f"{row['project_name']:26s} 없음")
             total += 1

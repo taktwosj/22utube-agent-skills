@@ -92,6 +92,7 @@ For this user's shared catalog, edit the NAS `skills` source configured by ZSkil
 
 ```text
 13 cut_shorts.py           ffmpeg 컷 + SRT + 여덟 자 SRT + 쇼츠 자막 용어 검사
+13b gen_short_hf.py        쇼츠 앞·뒤 세로 하이퍼프레임 삽화 → SHORTS_ART (cards_def.SHORTS hf_head/hf_tail)
 14 build_short.py          쇼츠 CapCut 프로젝트
 15 verify_shorts.py        정본 4벌·id 충돌·유령 참조·깨진 경로
 ```

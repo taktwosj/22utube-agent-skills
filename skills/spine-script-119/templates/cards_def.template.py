@@ -43,7 +43,10 @@ SHORTS = [
     #      mentions=[(0.5, 7.0, "열네 자 이하", "normal"),
     #                (14.0, 21.0, "뒤집는 사실", "anger")],
     #      head_narration=["NL01"], tail_narration=["NL02"],
-    #      art="01_삽화이름.png"),
+    #      art="01_삽화이름_head.mp4",
+    #      # gen_short_hf.py 화면 비트 (없으면 claim/counter 로 자동). (nl 목록, 킥커, 큰 글씨 html, 부제)
+    #      hf_head=[(["NL115"], "9.18 회견", "결국엔<br><span class='g'>유시민이</span> 맞았다", "")],
+    #      hf_tail=[(["NL66"], "1년 전", "이미 <span class='g'>말했다</span>", "")]),
 ]
 
 CENTRAL_QUESTION = "한 문장 질문"
