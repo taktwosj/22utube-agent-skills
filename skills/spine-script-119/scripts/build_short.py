@@ -399,8 +399,10 @@ class Builder:
         media_dir.mkdir(parents=True, exist_ok=True)
         self._media_n = getattr(self, "_media_n", 0) + 1
         local = media_dir / f"m{self._media_n:02d}{src.suffix.lower()}"
-        if not local.exists():
-            shutil.copy2(src, local)
+        # 근본에 m01.mp4 같은 잔재가 있으면 "없을 때만 복사" 가 앞 삽화를 건너뛴다 (2026-09-18 실측). 늘 덮어쓴다.
+        if local.exists():
+            local.unlink()
+        shutil.copy2(src, local)
         proto_seg = self.plate_track()["segments"][0]
         mat = copy.deepcopy(self.index[proto_seg["material_id"]][1])
         mat["id"] = nid()
@@ -408,7 +410,8 @@ class Builder:
         mat["material_name"] = local.name
         mat["width"], mat["height"] = w, h
         mat["duration"] = d if d else 10_800_000_000
-        mat["type"] = "video" if has_audio else "photo"
+        # 무음 mp4(하이퍼프레임 삽화)도 video 다. photo 로 넣으면 CapCut 이 그 구간을 재생하지 못한다 (2026-09-19 실측).
+        mat["type"] = "video" if (has_audio or src.suffix.lower() in (".mp4", ".mov", ".webm")) else "photo"
         mat["has_audio"] = has_audio
         mat["material_id"] = ""
         mat["origin_material_id"] = ""
@@ -453,8 +456,10 @@ class Builder:
         media_dir.mkdir(parents=True, exist_ok=True)
         self._media_n = getattr(self, "_media_n", 0) + 1
         local = media_dir / f"m{self._media_n:02d}{src.suffix.lower()}"
-        if not local.exists():
-            shutil.copy2(src, local)
+        # 근본에 m01.mp4 같은 잔재가 있으면 "없을 때만 복사" 가 앞 삽화를 건너뛴다 (2026-09-18 실측). 늘 덮어쓴다.
+        if local.exists():
+            local.unlink()
+        shutil.copy2(src, local)
 
         proto_seg = self.doc["tracks"][0]["segments"][0]
         mat = copy.deepcopy(self.index[proto_seg["material_id"]][1])
@@ -463,7 +468,8 @@ class Builder:
         mat["material_name"] = local.name
         mat["width"], mat["height"] = w, h
         mat["duration"] = d if d else 10_800_000_000
-        mat["type"] = "video" if has_audio else "photo"
+        # 무음 mp4(하이퍼프레임 삽화)도 video 다. photo 로 넣으면 CapCut 이 그 구간을 재생하지 못한다 (2026-09-19 실측).
+        mat["type"] = "video" if (has_audio or src.suffix.lower() in (".mp4", ".mov", ".webm")) else "photo"
         mat["has_audio"] = has_audio
         # 근본 배경판은 CapCut 클라우드 브랜드 자산이다. 그 신원을 물려받으면
         # CapCut 이 새 미디어를 같은 자산으로 합쳐 버리고 경로가 배경판으로 바뀐다.
@@ -657,7 +663,7 @@ def wav_us(p):
 
 
 def build(project_name, clip, srt8, t1, t2, credit, mentions,
-          image=None, scale=None, head=(), tail=(), pad=1.0):
+          image=None, scale=None, head=(), tail=(), pad=1.0, image_tail=None):
     """head/tail = [(wav 경로, 자막 문구)] — 롱폼 나레이션을 앞뒤에 붙인다.
     나레이션이 흐르는 동안 삽화를 띄우고, 끝나면 pad 초 쉬어 자막을 마무리한다."""
     b = Builder(project_name)
@@ -733,7 +739,7 @@ def build(project_name, clip, srt8, t1, t2, credit, mentions,
         slot.append((image, 0, head_dur, False))
     slot.append((clip, head_dur, clip_dur, True))
     if image and tail_dur:
-        slot.append((image, head_dur + clip_dur, tail_dur, False))
+        slot.append((image_tail or image, head_dur + clip_dur, tail_dur, False))
     b.fill_slot(slot, scale=scale)
 
     # 나레이션 오디오
@@ -808,13 +814,16 @@ def main():
                 raise SystemExit(f"SHORT_CUT_MISSING: {needed} — cut_shorts.py 를 먼저 돌린다")
         art = pathlib.Path(row["art_path"])
         if not art.is_file():
-            raise SystemExit(f"SHORT_ART_MISSING: {art} — gen_short_art.py 로 요청한다")
+            raise SystemExit(f"SHORT_ART_MISSING: {art} — gen_short_hf.py 로 만들거나 gen_short_art.py 로 요청한다")
+        # gen_short_hf.py 가 만든 _tail 짝이 있으면 뒤 나레이션엔 그것을 쓴다
+        art_tail = art.with_name(art.name.replace("_head", "_tail")) if "_head" in art.name else art
+        art_tail = art_tail if art_tail.is_file() else None
         try:
             build(project_name=row["project_name"], clip=clip, srt8=srt8,
                   t1=row["t1"], t2=row["t2"], credit=row["credit"],
                   # 상황설명은 원본 클립 초로 적어 둔다. 클립을 빨리 돌렸으니 그만큼 당긴다.
                   mentions=[(a / SHORT_SPEED, b / SHORT_SPEED, t, m) for a, b, t, m in row["mentions"]],
-                  image=art, scale=row.get("scale"),
+                  image=art, image_tail=art_tail, scale=row.get("scale"),
                   head=narration(root, row["head_narration"]),
                   tail=narration(root, row["tail_narration"]),
                   pad=args.pad)

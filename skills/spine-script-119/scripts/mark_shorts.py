@@ -37,7 +37,7 @@ def fail(code: str, detail: str) -> None:
     raise SystemExit(f"{code}: {detail}")
 
 
-def check(entry: dict, seen: set, sources: dict) -> dict:
+def check(entry: dict, seen: set, sources: dict, max_len: float = MAX_LEN) -> dict:
     for key in REQUIRED:
         if key not in entry:
             fail("SHORT_FIELD_MISSING", f"{entry.get('slug', '?')} / {key}")
@@ -48,8 +48,8 @@ def check(entry: dict, seen: set, sources: dict) -> dict:
     seen.add(slug)
 
     length = float(entry["end"]) - float(entry["start"])
-    if not MIN_LEN <= length <= MAX_LEN:
-        fail("SHORT_RANGE_OUT_OF_BOUNDS", f"{slug} {length:.1f}초 (허용 {MIN_LEN}~{MAX_LEN})")
+    if not MIN_LEN <= length <= max_len:
+        fail("SHORT_RANGE_OUT_OF_BOUNDS", f"{slug} {length:.1f}초 (허용 {MIN_LEN}~{max_len})")
 
     for key in ("claim", "counter"):
         text = entry[key].strip()
@@ -109,7 +109,11 @@ def check(entry: dict, seen: set, sources: dict) -> dict:
 
 
 def main() -> None:
-    args = root_parser("쇼츠 구간을 잠그고 work/shorts.json 을 쓴다").parse_args()
+    parser = root_parser("쇼츠 구간을 잠그고 work/shorts.json 을 쓴다")
+    # 계약은 2~3편·20~90초다. 사용자가 그 회차에서 명시적으로 더 요구할 때만 아래 두 값으로 푼다 (2026-09-19).
+    parser.add_argument("--max-shorts", type=int, default=MAX_SHORTS, help="회차당 편수 상한 (계약 3)")
+    parser.add_argument("--max-len", type=float, default=MAX_LEN, help="구간 길이 상한 초 (계약 90)")
+    args = parser.parse_args()
     root = args.root
     if root is None:
         fail("ROOT_REQUIRED", "--root 또는 SPINE_EPISODE_ROOT")
@@ -118,12 +122,12 @@ def main() -> None:
     shorts = getattr(mod, "SHORTS", None)
     if not shorts:
         fail("SHORTS_MISSING", "cards_def.py 에 SHORTS 를 정의한다")
-    if not MIN_SHORTS <= len(shorts) <= MAX_SHORTS:
-        fail("SHORTS_COUNT_OUT_OF_BOUNDS", f"{len(shorts)}개 (허용 {MIN_SHORTS}~{MAX_SHORTS})")
+    if not MIN_SHORTS <= len(shorts) <= args.max_shorts:
+        fail("SHORTS_COUNT_OUT_OF_BOUNDS", f"{len(shorts)}개 (허용 {MIN_SHORTS}~{args.max_shorts})")
 
     sources = dict(getattr(mod, "SOURCES", {}) or {})
     seen: set = set()
-    rows = [check(dict(entry), seen, sources) for entry in shorts]
+    rows = [check(dict(entry), seen, sources, args.max_len) for entry in shorts]
 
     payload = {
         "episode_id": getattr(mod, "EPISODE_ID", root.name),
