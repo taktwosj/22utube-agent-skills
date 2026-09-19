@@ -22,6 +22,7 @@ EXPECTED_SHARED_SKILLS = [
     "119-politics-longform-capcut",
     "1caveman",
     "222mara",
+    "hyperframes-politics-119",
     "idm",
     "naver-blog-posting",
     "spine-script-119",

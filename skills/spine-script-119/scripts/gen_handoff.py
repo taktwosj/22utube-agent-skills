@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _common import load_cards_def, package_root, resolve_root, root_parser  # noqa: E402
+from _common import (between_image_flag, load_cards_def, package_root, resolve_root,
+                     root_parser)  # noqa: E402
 
 
 def hhmmss(us: int) -> str:
@@ -33,8 +34,9 @@ def main():
     timeline = [{"at": hhmmss(rec[cid]["target_start_us"]), "label": label} for cid, label in pub["timeline_marks"]]
     used = []
     for c in cd.CARDS:
-        if c[1] == "SRC" and cd.SOURCES[c[2]][0] not in used:
-            used.append(cd.SOURCES[c[2]][0])
+        # 화면 출처 표기(튜플 셋째 값)를 쓴다. 채널 정식명에는 프로그램명이 붙어 있을 수 있다
+        if c[1] == "SRC" and cd.SOURCES[c[2]][2] not in used:
+            used.append(cd.SOURCES[c[2]][2])
     sources = [{"label": f"출처 : {ch}", "url": None} for ch in used]
     nar = sum(r["target_duration_us"] for r in tl["cards"] if r["kind"] == "NAR") / 1e6
     src = sum(r["target_duration_us"] for r in tl["cards"] if r["kind"] == "SRC") / 1e6
@@ -45,7 +47,7 @@ def main():
         "episode_id": cd.EPISODE_ID, "project_name": cd.PROJECT_NAME,
         "central_question": cd.CENTRAL_QUESTION, "selected_thesis": cd.SELECTED_THESIS,
         "chapter_order": [c[0] for c in cd.CARDS],
-        "between_image": "YES", "between_narration": "YES", "lower_mode": "MIXED",
+        "between_image": between_image_flag(root, cd), "between_narration": "YES", "lower_mode": "MIXED",
         "execution_mode": "ASSEMBLY_ONLY", "cta_like_subscribe": "OFF",
         "publication_report": {
             "title": pub["title"],

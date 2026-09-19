@@ -4,11 +4,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _common import hyperframe_files, load_cards_def, package_root, resolve_root, root_parser  # noqa: E402
+from _common import (CAPCUT_119, between_image_flag, hyperframe_files, load_cards_def, package_root,
+                     require_hyperframes, resolve_root, root_parser)  # noqa: E402
+
+# 나레이션 금지 표현 정본은 119 스킬 하나다 (2026-09-19). 여기에 목록을 다시 적지 않는다.
+# check_narration.py 는 이 모듈의 narration_style_hits 를 그대로 쓴다.
+_style_src = CAPCUT_119 / "scripts" / "validate_politics_narration_style.py"
+if not _style_src.is_file():
+    raise SystemExit(f"NARRATION_STYLE_SOURCE_MISSING: {_style_src} — 119-politics-longform-capcut 스킬이 같이 배포돼야 한다")
+sys.path.insert(0, str(_style_src.parent))
+from validate_politics_narration_style import narration_style_hits  # noqa: E402,F401
+
+
+def validate_narration_style(text: str, narration_id: str) -> None:
+    for code, found in narration_style_hits(text):
+        raise ValueError(f"NARRATION_STYLE_FORBIDDEN:{narration_id}:{code}:{found}")
 
 
 def hms(us):
@@ -22,15 +37,18 @@ def main():
     cd = load_cards_def(root)
     tl = json.loads((root / "work" / "timeline.json").read_text(encoding="utf-8"))
     hyperframes = hyperframe_files(root)
+    require_hyperframes(root, cd, hyperframes)
     rec = {r["card_id"]: r for r in tl["cards"]}
     ids = [c[0] for c in cd.CARDS]
     narr = root / "narration"
+
+    between_image = between_image_flag(root, cd, hyperframes)
 
     body, seed = [], ["[ASSEMBLY_ONLY_SEED]"]
     for k, v in [("execution_mode", "ASSEMBLY_ONLY"), ("time_policy", "USE_ACTUAL_DURATION"),
                  ("target_runtime_lock", "false"), ("replan_allowed", "false"),
                  ("source_research_allowed", "false"), ("approved_asset_recheck", "false"),
-                 ("lower_slot_exclusive", "true"), ("cta_default", "OFF"), ("between_image", "YES"),
+                 ("lower_slot_exclusive", "true"), ("cta_default", "OFF"), ("between_image", between_image),
                  ("between_narration", "YES"), ("lower_mode", "MIXED"), ("cta_like_subscribe", "OFF")]:
         seed.append(f"{k}: {v}")
     seed.append("")
@@ -60,12 +78,13 @@ def main():
         else:
             nm, label, title, hook, why, _ = card[2:]
             flat = " ".join((narr / f"{nm}.txt").read_text(encoding="utf-8").split())
+            validate_narration_style(flat, nm)
             body += [f"### {i+1:02d} `{label}` — `{t0}` ~ `{t1}`", "- 화면: 민주블루 인셋 카드", "- 원음: 없음",
                      f"- 나레이션: {flat}", f"- 상단 챕터 제목: {label}", "- 하단: 나레이션 TTS",
                      "- 논거·의견 1줄: 없음", "- 순차 논거·의견 2문장: 없음", f"- 다음 카드: {nxt}", ""]
             # 같은 이름의 하이퍼프레임 영상이 있으면 정지 카드 대신 그것을 쓴다.
             # 움직이는 설명카드라 인셋 템플릿으로 렌더한 물건이 아니므로 style_profile 을 비운다.
-            moving = nm in hyperframes
+            moving = cid in hyperframes
             body[-2] = "- 화면: 하이퍼프레임 영상" if moving else body[-2]
             seed += ["[CARD]", f"order: {i+1}", f"card_id: {cid}",
                      f"card_type: {'NARRATION_VIDEO' if moving else 'NARRATION_IMAGE'}",
@@ -90,7 +109,8 @@ def main():
         if card[1] == "SRC":
             head.append(f"| {i+1} | `{card[0]}` | SOURCE_VIDEO | {card[5]} | {cd.SOURCES[card[2]][2]} |")
         else:
-            head.append(f"| {i+1} | `{card[0]}` | NARRATION_IMAGE | {card[3]} | 나레이션 |")
+            kind = "NARRATION_VIDEO" if card[0] in hyperframes else "NARRATION_IMAGE"
+            head.append(f"| {i+1} | `{card[0]}` | {kind} | {card[3]} | 나레이션 |")
     head += ["", "## 세로 시간순 승인 대본", ""]
 
     out = package_root(cd.EPISODE_ID) / "20_script" / "119_final_script.md"

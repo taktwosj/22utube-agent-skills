@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 """회차 정의 — 이 파일 하나만 회차마다 새로 쓴다. 스킬 스크립트는 전부 여기서 읽는다.
 
-복사 위치: E:\\22utube\\<EPISODE_ID>\\work\\cards_def.py
+복사 위치: <LOCAL_PRODUCTION_ROOT>\\119jungchi\\<EPISODE_ID>\\work\\cards_def.py
 """
 
 EPISODE_ID = "PL_YYYYMMDD_주제_부제"
 PROJECT_NAME = "CapCut 프로젝트명 (한글 짧게)"
-SPINE_VIDEO_ID = "척추 영상 video_id"   # 척추 비율 계산에 쓴다
+SPINE_VIDEO_ID = "척추 영상 video_id"   # 대표 척추 영상. 비율은 컷표 S 컷으로 센다
+# 척추가 여러 영상(여러 진행자 평론·증언)일 때 전부 적는다. S/B 표시가 없는 옛 CARDS 만 이 집합으로 센다.
+# SPINE_VIDEO_IDS = ("video_id_1", "video_id_2")
+# 하이퍼프레임 좌상단 브랜드. 비우면 "민주 디코더".
+# HF_BRAND = "민주 디코더"
 
 # video_id: (channel 정식명, 업로드일, 화면 출처 표기)  — 출처 표기는 채널명만
 SOURCES = {
@@ -15,8 +19,17 @@ SOURCES = {
 # 방송 자막이 화면에 박힌 소스. 하단 슬롯을 비운다. ffmpeg 로 프레임 뽑아 눈으로 확인한 것만 넣는다.
 BURNED_CAPTION = set()
 
-# 나레이션 블록 순서. Typecast 붙여넣기 순서와 같아야 한다. 앞뒤 CTA 포함.
-NARRATION_ORDER = ["N_CTA", "N_WHY", "N01", "N02", "N03", "N_CTA"]
+# 소스별 "이 사안을 다루는 구간". 자막을 읽고 앞뒤 시각을 적는다.
+# 컷이 이 밖으로 나가면 check_captions 가 SOURCE_CUT_OFF_TOPIC 으로 실패시킨다.
+# 통짜 길이를 믿지 말고 여기 적은 구간 합으로 척추 15분을 센다.
+# 비워 두면 검사하지 않는다 — 옛 회차 호환용이며 새 회차는 채운다.
+TOPIC_RANGE = {
+    # "SrNJjPTkRCg": (486.0, 1365.0),   # 8:06 ~ 22:45
+}
+
+# 나레이션 블록 순서. tts_lines.py 합성 순서이자 final_cuts.BODY 의 블록 순서다.
+# N_CTA 는 한 번만 둔다. make_cards.py 가 그 줄을 앞뒤 CTA 카드 두 곳에 쓴다.
+NARRATION_ORDER = ["N_CTA", "N_OPEN", "N_Q1A", "N_Q1B", "N_CLOSE"]
 
 # 쇼츠. 나레이션 원고를 쓰기 전에 채운다 — mark_shorts.py 가 여기서 읽는다.
 # claim   상대가 던지는 문장.   counter  상대가 못 받아치는 사실 한 줄 (회차에서 가장 센 것)

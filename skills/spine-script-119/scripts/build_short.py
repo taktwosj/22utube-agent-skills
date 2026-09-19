@@ -10,12 +10,17 @@
 from __future__ import annotations
 import copy, hashlib, json, pathlib, re, shutil, subprocess, uuid
 
-from _common import SHORT_SPEED, SHORTS_CAPCUT_ROOT, SHORTS_ROOT, root_parser
+from _common import (SHORT_SPEED, SHORTS_CAPCUT_ROOT, SHORTS_ROOT, resolve_capcut_root_dir,
+                     root_parser)
+from runtime_paths import capcut_draft_root
 
-CR = pathlib.Path(r"C:/Users/arajun/AppData/Local/CapCut/User Data/Projects/com.lveditor.draft")
-ROOT = CR / SHORTS_CAPCUT_ROOT
+CR = capcut_draft_root()
+ROOT = resolve_capcut_root_dir(CR, SHORTS_CAPCUT_ROOT)
 US = 1_000_000
 ANGER_BG = "#c81414"
+TITLE_FONT_SIZE = 20  # T1·T2 글씨 크기. 근본은 16 (사용자 지정 2026-09-15)
+# T1·T2 세로 위치. CapCut 화면의 위치 Y 값(px) / 캔버스 높이 1920. 근본은 T1 0.621 · T2 0.511
+TITLE_Y = {"T1": 1200 / 1920, "T2": 970 / 1920}
 UUID_RE = re.compile(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}")
 
 
@@ -97,20 +102,26 @@ class Builder:
         ]
         return new
 
-    def set_text(self, mat, text):
+    def set_text(self, mat, text, size=None):
         c = json.loads(mat["content"])
         c["text"] = text
         for st in c.get("styles", []):
             st["range"] = [0, len(text)]
+            if size is not None:
+                st["size"] = size
+        if size is not None:
+            mat["font_size"] = float(size)
         mat["content"] = json.dumps(c, ensure_ascii=False)
         mat["base_content"] = text
         return mat
 
     # ---- 텍스트 트랙 ------------------------------------------------------
-    def fill_full(self, needle, text):
+    def fill_full(self, needle, text, size=None, y=None):
         tr = self.text_track(needle)
         s = self.clone_segment(tr["segments"][0])
-        self.set_text(self.index[s["material_id"]][1], text)
+        self.set_text(self.index[s["material_id"]][1], text, size)
+        if y is not None:
+            s["clip"]["transform"]["y"] = y
         s["target_timerange"] = {"start": 0, "duration": self.total}
         tr["segments"] = [s]
 
@@ -661,8 +672,8 @@ def build(project_name, clip, srt8, t1, t2, credit, mentions,
     b.total = head_dur + clip_dur + tail_dur
 
     b.fill_full("출처", credit)
-    b.fill_full("T1", t1)
-    b.fill_full("T2", t2)
+    b.fill_full("T1", t1, TITLE_FONT_SIZE, TITLE_Y["T1"])
+    b.fill_full("T2", t2, TITLE_FONT_SIZE, TITLE_Y["T2"])
 
     off = head_dur / US
     b.fill_mentions([(a + off, c + off, t, m) for a, c, t, m in mentions])

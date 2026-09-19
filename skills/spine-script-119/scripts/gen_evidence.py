@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from _common import hyperframe_files, resolve_root, root_parser  # noqa: E402
+from _common import (hyperframe_files, load_cards_def, require_hyperframes,
+                     resolve_root, root_parser)  # noqa: E402
 
 
 def sha(p: Path) -> str:
@@ -23,29 +24,32 @@ def sha(p: Path) -> str:
 def video_offsets(timeline: dict, moving: dict) -> dict[str, int]:
     """카드가 장면 영상의 어디서부터 가져갈지 정한다.
 
-    한 장면을 나눠 쓰는 카드들은 타임라인에서 붙어 있어야 한다. 사이에 다른
-    카드가 끼면 장면이 갈라져 화면이 튄다. 그때는 만들기 전에 멈춘다.
+    한 장면을 나눠 쓰는 카드는 타임라인에서 붙어 있어야 한다. 붙어 있는 동안은
+    구간이 이어지고, 끊기면 다시 0부터 시작한다. 같은 영상이 회차의 떨어진 두
+    자리에 쓰이는 경우가 있다 — CTA 한 줄은 오프닝과 마지막에 두 번 놓인다.
+    그때 두 번째 자리는 영상을 처음부터 다시 쓴다.
     """
     offsets: dict[str, int] = {}
-    running: dict[str, int] = {}
-    previous: dict[str, tuple[str, int]] = {}
+    need: dict[str, int] = {}
+    prev_clip: str | None = None
+    prev_end: int | None = None
+    held = 0
     for card in timeline["cards"]:
         if card["kind"] == "SRC":
             continue
-        clip = moving.get(card["narration_name"])
+        clip = moving.get(card["card_id"])
         if clip is None:
+            prev_clip, prev_end = None, None
             continue
         key = str(clip)
-        if key in previous:
-            last_id, expected_start = previous[key]
-            if card["target_start_us"] != expected_start:
-                raise SystemExit(
-                    f"HYPERFRAME_SCENE_NOT_CONTIGUOUS: {Path(key).name} "
-                    f"{last_id} 다음이 {card['card_id']} 가 아니다")
-        offsets[card["card_id"]] = running.get(key, 0)
-        running[key] = running.get(key, 0) + card["target_duration_us"]
-        previous[key] = (card["card_id"], card["target_start_us"] + card["target_duration_us"])
-    check_scene_lengths(moving, running)
+        joined = (key == prev_clip and prev_end == card["target_start_us"])
+        if not joined:
+            held = 0
+        offsets[card["card_id"]] = held
+        held += card["target_duration_us"]
+        need[key] = max(need.get(key, 0), held)
+        prev_clip, prev_end = key, card["target_start_us"] + card["target_duration_us"]
+    check_scene_lengths(moving, need)
     return offsets
 
 
@@ -70,6 +74,7 @@ def main():
     root = resolve_root(args)
     tl = json.loads((root / "work" / "timeline.json").read_text(encoding="utf-8"))
     moving = hyperframe_files(root)
+    require_hyperframes(root, load_cards_def(root), moving)
     offsets = video_offsets(tl, moving)
     cards = []
     for r in tl["cards"]:
@@ -86,7 +91,7 @@ def main():
             common = {k: r[k] for k in ("card_id", "target_start_us", "target_duration_us", "narration_audio_file",
                                         "narration_audio_sha256", "audio_duration_us", "narration_srt_file",
                                         "narration_srt_sha256")}
-            clip = moving.get(r["narration_name"])
+            clip = moving.get(r["card_id"])
             if clip is not None:
                 # 움직이는 설명카드. 한 장면이 여러 줄을 덮으면 카드마다 그 장면의
                 # 다른 구간을 가져간다. 그래야 카드 경계에서 화면이 끊기지 않는다.

@@ -9,21 +9,23 @@
 ```text
 아래 회차의 척추대본 보고서를 써줘.
 
-회차 루트   E:\22utube\<EPISODE_ID>
-패킷        C:\Users\arajun\OneDrive\22utube\22factory_20260628\0000jungchi\<EPISODE_ID>\00_pre119_package
+회차 루트   <LOCAL_PRODUCTION_ROOT>\119jungchi\<EPISODE_ID>        (ZSkillSync paths.json 의 LOCAL_PRODUCTION_ROOT)
+패킷        <회차 루트>\00_pre119_package
 
 읽을 것 — 전부 실측값이다. 여기 없는 숫자는 쓰지 마라.
   work\timeline.json                     카드별 시각·길이
   work\cards_def.py                      SPINE_VIDEO_ID, SOURCES, BURNED_CAPTION, PUBLICATION
-  work\preflight.json                    caption_layout / srt_text_fidelity / overlay_contract / findings
-  work\build_report.json                 project_path / media_path / title / thumbnail
-  work\readback.json                     각 게이트 PASS·FAIL
+  work\119\assembly_preflight.json       caption_layout / srt_text_fidelity / overlay_contract / findings
+  work\reports\build_v8.json             project_path / media_path / title / thumbnail
+  work\reports\finalize.json             relinked / normalized / target_lufs
+  work\reports\relink_readback.json      각 게이트 PASS·FAIL
+  work\render_scenes.json                하이퍼프레임 장면별 check/render exit
   asset_evidence.json                    카드 수, lane 상태
   90_reports\pre119_handoff_validation.json   status, script_lock sha 일치
   20_script\pre119_handoff.json          publication_report (제목·설명·타임라인·출처·썸네일)
 
 검사도 같이 돌려서 그 출력을 근거로 써라.
-  python <skill>\scripts\check_captions.py --root E:\22utube\<EPISODE_ID>
+  python <skill>\scripts\check_captions.py --root <회차 루트>
 
 보고 형식은 references\report-format.md 를 그대로 따른다. 산출물 먼저, 검증 뒤.
 
@@ -60,7 +62,7 @@
 ## 회차 중간 점검용 (짧은 버전)
 
 ```text
-E:\22utube\<EPISODE_ID> 상태만 짧게 확인해줘.
+<회차 루트> 상태만 짧게 확인해줘.
 timeline.json 기준으로 총 길이 / 척추 분·퍼센트(훅 제외) / 나레이션 퍼센트 / 카드 수,
 그리고 check_captions.py 출력의 [1] [2] 요약 한 줄씩. 계약 미달이면 무엇이 모자란지.
 파일에 없는 숫자는 쓰지 마라.

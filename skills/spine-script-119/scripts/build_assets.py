@@ -213,7 +213,10 @@ def source_cues(srt_dir, vid, t_in, t_out, tl_start):
         s = max(s, t_in) - t_in; e = min(e, t_out) - t_in
         if e - s < 0.20:
             continue
-        inside.append({"start": s, "end": e, "text": " ".join(vtt_clean.correct(c["text"]).split())})
+        text = " ".join(vtt_clean.correct(c["text"]).split())
+        if not text:  # 교정으로 비운 cue([음악] 등)는 버린다. 남기면 병합 앵커가 깨져 균등 분할로 떨어진다
+            continue
+        inside.append({"start": s, "end": e, "text": text})
     out = []
     for m in merge_cues(inside):
         parts = m["parts"]
@@ -310,6 +313,8 @@ def main():
             ch, date, disp = cd.SOURCES[vid]
             records.append({
                 "card_id": cid, "kind": "SRC", "video_id": vid,
+                # make_cards 가 적는 컷 구분. "증언" = 컷표 S(척추), "원본" = B(살). 옛 CARDS 는 없다.
+                "cut_kind": card[8] if len(card) > 8 and card[8] in ("증언", "원본") else None,
                 "target_start_us": timeline_us, "target_duration_us": dur_us,
                 "source_file": str(dst), "source_sha256": sha256(dst), "source_duration_us": dur_us,
                 "source_channel": ch, "source_date": date, "source_display_label": disp,
@@ -341,10 +346,18 @@ def main():
     src = sum(r["target_duration_us"] for r in records if r["kind"] == "SRC") / 1e6
     nar = sum(r["target_duration_us"] for r in records if r["kind"] == "NAR") / 1e6
     hook = sum(r["target_duration_us"] for r in records if r["card_id"].startswith("C00_HOOK")) / 1e6
-    spine_vid = getattr(cd, "SPINE_VIDEO_ID", None)
-    spine = sum(r["target_duration_us"] for r in records
-                if r["kind"] == "SRC" and r.get("video_id") == spine_vid
-                and not r["card_id"].startswith("C00_HOOK")) / 1e6 if spine_vid else 0.0
+    # 척추는 채널이 아니라 구간이다. 한 라이브 안에서도 평론은 S, 뉴스 원본 재생은 B 로 갈린다.
+    # 그래서 컷표 S 컷으로 센다. S/B 표시가 없는 옛 CARDS 만 video_id 집합으로 센다.
+    body_src = [r for r in records if r["kind"] == "SRC" and not r["card_id"].startswith("C00_HOOK")]
+    if any(r.get("cut_kind") for r in body_src):
+        spine_vid = True
+        spine = sum(r["target_duration_us"] for r in body_src if r.get("cut_kind") == "증언") / 1e6
+    else:
+        spine_ids = set(getattr(cd, "SPINE_VIDEO_IDS", ()) or ())
+        if not spine_ids and getattr(cd, "SPINE_VIDEO_ID", None):
+            spine_ids = {cd.SPINE_VIDEO_ID}
+        spine_vid = bool(spine_ids)
+        spine = sum(r["target_duration_us"] for r in body_src if r.get("video_id") in spine_ids) / 1e6
     print(f"cards={len(records)} total={total:.2f}s ({total/60:.2f}min)")
     print(f"source={src:.2f}s narration={nar:.2f}s ({nar/total*100:.1f}%) hook={hook:.2f}s")
     if spine_vid:

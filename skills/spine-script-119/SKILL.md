@@ -3,6 +3,10 @@ name: spine-script-119
 description: "Use when building a Korean political longform episode around a spine video — 척추대본, 척추영상, 정치롱폼 척추, 1인 주장 채널 대본, or when the user asks to turn an approved solo-argument YouTube video plus supporting clips into a 119-ready PRE-119 packet. Produces 119_final_script.md, pre119_handoff.json, asset_evidence.json, narration cards, and SRT so 119 can assemble immediately without re-planning."
 ---
 
+## Shared catalog location
+
+For this user's shared catalog, edit the NAS `skills` source configured by ZSkillSync. Local application skill folders are generated copies. Routine skill updates use automatic synchronization and verification; historical Git release instructions apply only to a separately requested Git maintenance task. Resolve machine paths from current environment and local ZSkillSync settings. Production approval, evidence, and application safety gates still apply.
+
 # 척추대본 119
 
 119 CapCut 조립 **바로 앞단**이다. 1인 주장 채널 영상 하나를 논지의 척추로 삼아, 살 클립과 나레이션을 붙이고, 119가 재기획 없이 조립할 수 있는 패킷까지 만든다.
@@ -25,50 +29,58 @@ description: "Use when building a Korean political longform episode around a spi
 나레이션      20~30%. 척추를 분석해 잇는 말이지 요약이 아니다
 ```
 
-구성은 **시간순이 아니라 질문순**이다. 척추에서 사건의 요지와 핵심 발언을 먼저 뽑아 제시하고, 그 과정을 확인하는 방식으로 이어간다. 살은 다른 채널에서 붙이고 나레이션이 잇는다. 영상 초반에 이 회차를 만든 취지를 세운다.
+**척추는 채널이 아니라 구간이다** (사용자 확정, 2026-09-17). 허용 목록 어느 채널이든 진행자·고정 논객이 화면에 나와 이어서 정치평론을 하는 구간이면 척추다. 1인 주장 채널 본편, 매불쇼 뉴스 코너, 뉴스공장·박정호 핫스팟의 논객 대담, 새날·이동형TV 평론이 모두 된다. 기자 리포트, 청문회·본회의 중계, 현장 원음, 당사자 회견, 비정치 코너(경제·문화·음악)는 척추가 아니라 살이다. 살은 척추와 같은 채널의 다른 영상이나 허용 목록 다른 채널의 영상에서 붙인다. 척추 비율은 컷표의 `S` 컷으로 센다. 세 시간짜리 라이브 한 편에서 평론 구간은 `S`, 같은 방송 안의 뉴스 원본 재생은 `B` 로 가른다.
 
-## 소스 규칙
+**증언 척추.** 인물 생애처럼 한 사람의 주장 영상으로 논지가 서지 않는 소재는 곁에서 본 여러 사람의 증언 영상을 합쳐 척추로 쓴다 (2026-09-14 노무현 회차, 사용자 승인 B안). `cards_def.SPINE_VIDEO_IDS` 에 증언 영상을 전부 적는다. 15분·50% 계약은 그대로다. 척추 컷은 컷표에서 `S`, 당시 현장 원본은 `B` 다. `build_assets.py` 는 `S` 컷으로 비율을 세고, `S`/`B` 표시가 없는 옛 회차에만 `SPINE_VIDEO_IDS` 로 센다.
 
-`togun-politics-pre119-writer/references/approved-channel-allowlist.json` 의 채널만 쓴다.
+구성은 **시간순이 아니라 질문순**이다. 척추에서 사건의 요지와 핵심 발언을 먼저 뽑아 제시하고, 그 과정을 확인하는 방식으로 이어간다. 살은 같은 채널의 다른 영상이나 허용 목록 다른 채널에서 붙이고 나레이션이 잇는다. 영상 초반에 이 회차를 만든 취지를 세운다.
 
-```text
-척추      group=개인주장 / format=SOLO_ARGUMENT
-살        메인스트림·공식/공적·화이트리스트·코멘터리·시사믹스
-판정      제목이 아니라 yt-dlp --print "%(channel_id)s" 로 실측
-지역계열사  본사와 channel_id가 다르다. 개별 등재된 것만
-영구차단   hTcRBTJ2xAc (미디어 파손)
-출처 표기  `출처 : <채널명>` 만. 플랫폼명·영문병기·영상 제목 금지
-```
+## 상세 문서
 
-소재를 먼저 정하고 척추를 찾지 않는다. **척추 채널이 다루는 것 중에서 소재를 고른다.** 통짜 길이를 믿지 말고 해당 사안 구간만 센다.
-
-## 회차 준비
-
-```powershell
-$ep = "PL_20260902_주제_부제"
-$root = "E:\22utube\$ep"
-mkdir $root\clips, $root\srt, $root\narration, $root\cards, $root\work
-copy <skill>\templates\cards_def.template.py   $root\work\cards_def.py
-copy <skill>\templates\corrections.template.json $root\work\corrections.json
-$env:SPINE_EPISODE_ROOT = $root
-```
-
-`cards_def.py` 하나만 회차마다 쓴다. 스크립트는 전부 여기서 읽는다. 모든 스크립트는 `--root` 또는 `SPINE_EPISODE_ROOT` 를 받는다.
+| 주제 | 파일 | 언제 읽나 |
+|:--|:--|:--|
+| 소스 규칙·회차 준비·수집 | [references/source-and-prep.md](references/source-and-prep.md) | 회차를 시작하거나 소스를 고를 때 |
+| 컷표·나레이션 줄 끼워 넣기 | [references/cut-table.md](references/cut-table.md) | 컷표를 짜거나 나레이션 줄을 넣을 때 |
+| 자막 | [references/captions.md](references/captions.md) | 자막을 만들거나 검사할 때 |
+| 나레이션·CTA·훅 | [references/narration.md](references/narration.md) | 나레이션 원고·CTA·훅을 쓸 때 |
+| 작가모드 순환·간격·인물 서사 | [references/writer-mode-structure.md](references/writer-mode-structure.md) | 챕터 구조를 잡을 때 |
+| 작가모드 원본·보상·동행·금지 | [references/writer-mode-sentences.md](references/writer-mode-sentences.md) | 나레이션 문장을 쓸 때 |
+| 카드·업로드 문구 | [references/cards-and-upload.md](references/cards-and-upload.md) | 카드와 업로드 문구를 만들 때 |
+| 하이퍼프레임·장면 제작 | [references/hyperframes.md](references/hyperframes.md) | 나레이션 영상을 만들 때 |
+| 쇼츠 | [references/shorts.md](references/shorts.md) | 쇼츠를 만들 때. 계약은 이 문서 `### 계약` |
 
 ## 실행 순서
 
 ```text
-1  scan_spine.py           척추 후보 스캔 (RSS, 영상 안 받음)
-2  (수집)                  전체 다운로드 → 자막 ko-orig 만
+0  (선택) 투군 사전 패킷      togun-politics-pre119-writer/templates/run-prompt.md 로 투군에 요청
+                           소스맵·구성안·보상 포인트·SRT 매니페스트 → <root>/00_pre119_package/togun_pack/
+                           나레이션 문체는 받지 않는다. 원고는 4 에서 작가모드로 쓴다
+1  scan_spine.py           척추 후보 스캔 (허용 목록 전 채널 videos·streams 탭, yt-dlp 목록만. 영상 안 받음)
+2  (수집)                  idm 스킬. 전체 다운로드 → <root>/clips/<video_id>.mp4, 자막 ko-orig → <root>/srt/
 3  vtt_clean.py --all      롤링 겹침 제거 + 용어 교정 → cues.json
 3b mark_shorts.py          쇼츠 구간 잠금 → work/shorts.json
-4  (나레이션 원고)          → Typecast 붙여넣기 → tts_raw.mp3 + tts_raw.srt
-5  split_tts_lines.py      줄 단위 wav (NL01..) — 카드 단위가 된다
-6  make_card_css.py        도형 CSS 10종
-6b gen_short_art.py        쇼츠 삽화 프롬프트 → work/short_art_prompts.md
-7  render_cards.py         NAR 카드 PNG (119 렌더러 + --css)
-8  build_assets.py         컷 실측 → timeline.json + SRT + 비율 검사
-9  check_captions.py       자막 QA — 길이·타이밍·용어
+4  (나레이션 원고)          narration/<block>.txt — 한 줄 한 문장. 원고가 곧 대본이다
+                           보상앵커 작가모드로 쓴다 (아래 `작가모드` 절)
+4b check_narration.py     TTS 전 원고 검사 — 금지 표현·숫자·인명 근사 변형·길이 추정
+                           챕터별 동행 문장 수를 찍는다. 0 인 챕터는 WRITER_COVIEW_MISSING 경고
+4c (투군 오류 찾기)        직책·소속·날짜·숫자 오류만 → work/togun_error_check.md → 대조 후 반영 → 4b 재실행
+4d tts_lines.py           통과한 원고를 줄 단위 Typecast API 합성 → NLxx.wav + work/narration_lines.json
+   (API 크레딧 없을 때)    웹 에디터 붙여넣기 → tts_raw.mp3 + tts_raw.srt → 5 split_tts_lines.py
+4e renumber_narration.py  합성 뒤 줄을 끼워 넣거나 뺐을 때만. 만든 wav·장면을 살리고 번호만 다시 매긴다
+5  split_tts_lines.py      (웹 에디터 경로) 줄 단위 wav (NL01..) — 카드 단위가 된다
+6  gen_short_art.py        쇼츠 삽화 프롬프트 → work/short_art_prompts.md
+6a asr_window.py          컷 후보 구간 whisper 받아쓰기 → work/asr/*.json (말이 시작·끝나는 시각)
+                           컷 목록을 work/asr_jobs.tsv 에 모아 `--batch work/asr_jobs.tsv --edges 8` 로 한 번에.
+                           모델 1회 로드, 경계 앞뒤 8초만. 영상 ID 가 `-` 로 시작하면 `--video=-abc`
+6b final_cuts.py          컷표 확정 (아래 `컷표` 절) → make_cards.py 로 cards_def.CARDS 새로 쓰기
+7  build_assets.py         컷 실측 → timeline.json + SRT + 비율 검사
+8  check_captions.py       자막 QA — 길이·타이밍·용어·컷 화제 이탈
+9  plan_hyperframes.py     만들 장면표 → work/scenes.py 작성 → render_scenes.py (필수)
+                           화면은 `hyperframes-politics-119` 의 장면 모드를 따른다. 민주 블루
+                           인셋 카드 같은 정지 이미지 카드로 대체하지 않는다
+                           먼저 `render_scenes.py --check-only` 를 전체 목록으로 돌려 생성·check 오류를
+                           한 번에 잡고, 통과하면 `render_scenes.py --jobs 4` 로 렌더한다. 챕터당 모션 1회
+                           규칙은 한 프로세스 안에서만 세므로 이름을 나눠 따로 돌리면 검사가 빠진다
 10 gen_script.py           119_final_script.md + sha
 11 gen_handoff.py          pre119_handoff.json + upload_package.md
 12 gen_evidence.py         asset_evidence.json
@@ -79,155 +91,34 @@ $env:SPINE_EPISODE_ROOT = $root
 롱폼 조립이 끝나면 쇼츠를 만든다.
 
 ```text
-13 cut_shorts.py           ffmpeg 컷 + SRT + 여덟 자 SRT
+13 cut_shorts.py           ffmpeg 컷 + SRT + 여덟 자 SRT + 쇼츠 자막 용어 검사
 14 build_short.py          쇼츠 CapCut 프로젝트
 15 verify_shorts.py        정본 4벌·id 충돌·유령 참조·깨진 경로
 ```
 
+`cut_shorts.py` 는 잘라낸 자막을 용어집과 대조해 오인식 의심을 찍고 `WAIT_SHORT_CAPTION_TERMS`
+로 멈춘다. 롱폼의 `check_captions.py` 는 `work/timeline.json` 과 `C*.display.srt` 만 보므로
+쇼츠 자막을 검사하지 않는다. 그 구멍을 13이 메운다. 걸린 항목은 `work/corrections.json` 에
+넣고 `vtt_clean.py` 부터 다시 돌린다. 전부 오탐임을 눈으로 확인한 경우에만 `--allow-suspect`
+를 쓴다. 쇼츠 자막은 화면에 그대로 박히므로 통과시키고 넘어가지 않는다.
+
 `PYTHONDONTWRITEBYTECODE=1` 을 준다. 런타임 릴리스에 .pyc 가 생기면 activate 가 막힌다.
 
-## 수집
+## 컷표
+→ 본문: [references/cut-table.md](references/cut-table.md)
 
-전부 `E:\22utube\<episode_id>\` 에 받는다. C 드라이브와 OneDrive에 미디어를 두지 않는다.
-`--download-sections` 을 쓰지 않는다. 전체 받고 `build_assets.py` 가 프레임 정확하게 자른다(재인코딩. `-c copy` 는 키프레임에 붙어 수 초 어긋난다).
-자막은 `--sub-langs ko-orig` 만 받는다. 영문 자막을 같이 받으면 429로 영상 다운로드가 끊긴다.
-받은 직후 `ffprobe` 로 video·audio 길이를 둘 다 확인한다. 한쪽이 0에 가까우면 버린다.
-세로 영상(쇼츠)은 16:9 인셋에 안 맞는다. 가로 원본을 찾는다.
-
-## 자막
-
-```text
-표시 한도    공백 제외 15자 이하 한 줄
-cue 시각     타임라인 절대값, 카드 구간 안으로 clamp (시작 올림, 끝 내림)
-타이밍       병합해도 원본 cue 경계를 앵커로 재분할한다
-             균등 분할만 하면 병합 창 안에서 최대 4초 밀린다 (2026-09-02 실측)
-교정 범위    raw / display 양쪽에 똑같이. 한쪽만 고치면 SOURCE_TRANSCRIPT_TEXT_CHANGED
-교정 순서    겹침 제거 → 교정. 바꾸면 교정된 단어가 겹침 판정을 깬다
-번인 자막    방송 자막이 박힌 소스는 BURNED_CAPTION 에 넣어 하단 슬롯을 끈다
-             ffmpeg 로 프레임을 뽑아 눈으로 확인한 것만 넣는다
-```
-
-119의 `validate_srt_text_fidelity` 는 raw/display 가 같으면 통과한다. 양쪽에 같은 오인식이 있으면 못 잡는다. `check_captions.py` 가 그 구멍을 메운다.
-
-## 나레이션
-
-원고에는 아라비아 숫자를 쓰지 않는다. 화면 문구와 자막에는 쓴다(`DISPLAY_NUMERALS` 가 되돌린다).
-종결어미가 `~습니다` 로만 반복되지 않게 흔든다. 방어문·결론 전환어·기계적 병렬·번역투를 쓰지 않는다.
-`humanize-korean` 의 `metrics_v2.py --genre news` 로 계측한다. `risk_band` 가 `low` 가 아니면 `humanize-korean` 을 실제로 실행하고 재계측한다. 윤문했으면 FACT·QUOTE·NUMBER·NAME 을 원문과 대조한다.
-
-Typecast 는 집 사운드 고정값을 쓴다. `00_asset_tools/tools/make_typecast_tts.py` 를 그대로 호출한다. 템포 1.2로 잠겨 있어 원고가 예상보다 짧게 읽힌다(약 10.3자/초).
-API 크레딧이 없으면 원고를 통째로 사용자에게 주고 Typecast 웹 에디터에서 합성받는다. MP3와 SRT를 둘 다 받아야 한다. **SRT cue 하나가 원고 한 줄**이므로 `split_tts_lines.py` 가 줄 단위로 자른다.
-
-## CTA
-
-`이 영상이 보다 많은 분들에게 알려지도록 구독과 좋아요 부탁드립니다.`
-오프닝 몽타주 직후 본편 진입 전, 그리고 회차 마지막. 두 곳 모두 같은 문장이다.
-
-## 훅
-
-첫 45초는 몽타주다. 본편에서 쓸 6~10초 구간 5~7개를 세기 순으로 배치하고 마지막에 CTA 카드를 붙인다. 나레이션·해설·상단 요약을 얹지 않는다. **아군 내부의 이탈·경고·자기비판 발화가 적대 진영 비판보다 세다.** 그런 발화를 앞에 둔다.
-
-## 카드
-
-`DEMOCRATIC_BLUE_INSET_CARD_V2`, `info_blocks` 정확히 1개, 1920×1080.
-
-```text
-글자수 한도   top_label 32 / headline 각 28 / footer 52
-             block label 16 / main 24 / sub 42
-```
-
-**긴 나레이션을 정지 텍스트 한 장으로 덮지 않는다.** 40~55초짜리 카드는 화면이 죽는다. TTS SRT cue = 원고 한 줄이므로 줄 단위로 카드를 쪼개 평균 10초마다 화면이 바뀌게 한다.
-
-카드에는 도형 그래픽을 넣는다. 자극적이지 않게, **실사 사진은 쓰지 않는다.**
-
-```text
-scale  저울 — 비대칭·판정        ratio  비율 바 — 수치 대비
-time   타임라인 — 시간 간격       num    숫자 블록 — 사람 수·건수
-flow   흐름 — 인과·구조          quote  인용 — 원본 발화
-warn   경고 — 사선 해칭          split  갈라짐 — 분열·역전
-herd   한 방향 — 군집            grid   격자 — 기본
-```
-
-설치본 템플릿은 건드리지 않는다. `render_democratic_blue_card.py --css` 로만 갈아끼운다. 지오메트리 검증은 119 렌더러가 그대로 한다.
+## 작가모드 — 보상앵커
+→ 본문: [references/writer-mode-structure.md](references/writer-mode-structure.md)
+→ 본문: [references/writer-mode-sentences.md](references/writer-mode-sentences.md)
 
 ## 하이퍼프레임
+→ 본문: [references/hyperframes.md](references/hyperframes.md)
 
-움직이는 설명카드다. 정지 카드 자리에 그대로 들어간다.
-
-```
-<root>/hyperframes/NL88-NL90.mp4    NL88 부터 NL90 까지 한 장면으로 덮는다
-<root>/hyperframes/NL06.mp4         그 한 줄만 덮는다
-```
-
-**장면 쪽이 본래 쓰임이다.** 카드는 평균 삼사 초라 한 장에 한 편씩 만들면 짧은 클립이 줄줄이 이어져 화면이 계속 끊긴다. 나레이션이 이어지는 동안 그래픽도 이어져야 한다. 연속한 카드 서넛을 묶어 **십 초 안팎 한 장면**으로 만들고, 카드마다 그 장면의 다른 구간을 가져가게 한다.
-
-```
-NL88   video_start_us 0          dur 4458345
-NL89   video_start_us 4458345    dur 4125011
-NL90   video_start_us 8583356    dur 3083356
-```
-
-`gen_evidence.py` 가 타임라인 순서대로 구간을 잘라 넣는다. 카드 경계에서 끊기지 않는다.
-
-`gen_script.py` 가 영상이 걸린 카드만 `NARRATION_VIDEO` 로 낸다. 없으면 `NARRATION_IMAGE` 로 정지 카드를 쓴다. **섞어도 된다.** 일부만 영상이어도 나머지는 렌더한 PNG로 채워진다.
-
-```
-1920×1080  H.264 mp4  오디오 없음
-길이       장면을 나눠 쓰는 카드 길이의 합 이상. 남으면 버린다
-배치       한 장면을 쓰는 카드들은 타임라인에서 붙어 있어야 한다
-```
-
-멈추는 조건 셋이다. 만들기 전에 걸린다.
-
-```
-HYPERFRAME_SCENE_NOT_CONTIGUOUS   사이에 다른 카드가 끼었다. 장면이 갈라진다
-HYPERFRAME_TOO_SHORT              영상이 카드 합계보다 짧다. 뒤가 검게 빈다
-HYPERFRAME_DUPLICATE_CLAIM        한 줄을 단독 파일과 장면 파일이 같이 물었다
-```
-
-`출처` 자막이 붙지 않고 영상 자체의 소리도 쓰지 않는다. 나레이션 음성은 정지 카드와 같은 방식으로 붙는다. 인용 클립이 아니므로 `SOURCE_VIDEO` 로 넣지 않는다 — 그렇게 하면 화면에 `출처` 가 찍히고 나레이션이 빠진다.
-
-인셋 템플릿으로 렌더한 물건이 아니라서 `style_profile` 은 비운다. 비우지 않으면 preflight 가 `INSET_CARD_IMAGE_REQUIRED` 로 막는다.
-
-## 업로드 문구
-
-제목은 결말을 다 말하지 않는다. 썸네일은 `~했다` 요약형을 쓰지 않는다.
-
-```text
-단어 3개    각 5자 이하, 공백 없음. 충격 소재 → 타이밍 → 결과 텐션
-문장 3줄    연속 의문. 궁금증으로 클릭을 만든다
-```
+### 장면 제작
+→ 본문: [references/hyperframes.md](references/hyperframes.md)
 
 ## 쇼츠
-
-쇼츠는 롱폼을 다 만든 뒤에 잘라내는 물건이 아니다. 나레이션과 삽화가 이미 만들어진 뒤에
-구간을 고르면 쇼츠에 쓸 문장이 없다. 붙어 있는 나레이션을 끌어다 쓰게 되고, 그러면
-앞뒤 문맥 없이는 말이 되지 않는다. 그래서 척추 자막을 확보한 직후 `mark_shorts.py` 로
-구간을 잠그고, 그 결과를 나레이션 원고가 받는다.
-
-목적은 쇼츠 자체가 아니라 롱폼 유입이다.
-
-### 구조
-
-기승전결이 아니라 논쟁 카드다. 시청자가 그대로 들고 나가 쓸 문장을 쥐여 준다.
-
-```text
-앞 삽화 + 나레이션   상대가 던지는 문장을 먼저 세운다        claim
-본편 발화            그 주장의 근거처럼 보이는 사실
-본편 발화 + 멘트      뒤집는 사실 — 누가, 무엇을, 왜 문제인가
-뒤 삽화 + 나레이션    반박 카드 + 롱폼으로 넘기는 질문        counter
-```
-
-`counter` 는 회차에서 가장 센 사실 한 줄이다. 상대가 받아치지 못하는 것으로 고른다.
-
-```text
-"공소 취소를 가장 먼저 주장한 사람이 조국이다"
-"노무현은 미국이 지정한 키르쿠크를 거절했다"
-"문자를 받은 식약처장과 공무원은 전원 무혐의다"
-```
-
-숫자 나열은 반박 카드가 아니다. 지지율이 얼마에서 얼마로 떨어졌다는 사실만으로는
-무엇을 주장하는지 전달되지 않는다.
+→ 본문: [references/shorts.md](references/shorts.md)
 
 ### 계약
 
@@ -243,50 +134,19 @@ HYPERFRAME_DUPLICATE_CLAIM        한 줄을 단독 파일과 장면 파일이 �
                 "더 자세한 내용은 아래 영상에서 보실 수 있습니다"
                 "구독과 좋아요 부탁드립니다"
               쇼츠 하단에 롱폼 링크를 건다. 유입이 목적이라 이 두 줄을 빼지 않는다
+              이 줄들은 `narration/N_SHORTS.txt` 에 두고 `NARRATION_ORDER` 맨 끝에 `N_SHORTS` 를 넣는다.
+              롱폼 줄과 한 번에 합성하되 롱폼에는 넣지 않는다 — `make_cards` 가 이 블록을 건너뛰고,
+              컷표(`BODY`)에 들어 있으면 `SHORTS_BLOCK_IN_BODY` 로 막는다
 자막          여덟 자 안팎으로 쪼갠다. 나레이션 자막도 같다
               나레이션이 끝난 뒤 일 초 남겨 문장을 마무리한다
 멘트          1~3개, 각 14자 이하. mood=anger 면 배경이 빨강
 T1 · T2       각 12자 이하
 출처          `출처 : <채널명>` 만. SOURCES 표기를 그대로 가져온다
 근본          P0_ROOT_shrt_119short_v1  1080×1920
+              CapCut 은 이름이 겹치면 폴더명 뒤에 `(N)` 을 붙여 바꾼다. 감시가 도는
+              동안에는 정확한 이름으로 복사해 둬도 되돌아간다. `resolve_capcut_root_dir`
+              가 접미만 다른 사본 중 원본을 찾으므로 폴더명을 손으로 맞추지 않는다.
 ```
-
-### 삽화
-
-롱폼 CSS 카드는 전부 같은 결이라 쇼츠에서 화면이 죽는다. 삽화를 따로 만들어 나레이션
-구간에 깐다. 신문 삽화·목판화 톤이고, **실존 인물의 얼굴을 그리지 않는다.** 화면 안에
-글자·숫자·로고·정당 상징도 넣지 않는다. 개념 그래픽만 쓴다.
-
-`gen_short_art.py` 가 프롬프트를 뽑는다. 롱폼 카드를 렌더할 때 같이 돌려서 한 번에 요청한다.
-투군에 요청하고, 받은 파일은 `E:\22utube\_images\woodcut\` 에 `art` 이름 그대로 넣는다.
-**재고를 돌려쓰지 않는다.** 회차마다 그 대본의 장면으로 새로 받는다.
-
-크기는 배경판의 투명 창에 맞춘다. `P0_ROOT_shrt_119short_v1` 의 창은 **1080×1415** 세로형이다.
-가로형을 넣으면 창 윗부분만 채우고 위아래가 빈다. 2:3 으로 받아 가운데를 잘라 맞춘다.
-
-```bash
-ffmpeg -i <받은파일> -vf "scale=1080:-1,crop=1080:1415:(iw-1080)/2:(ih-1415)/2" <art 이름>
-```
-
-### CapCut 정본
-
-CapCut 은 타임라인을 네 곳에 나눠 들고 있다. 한 곳이라도 어긋나면 열었을 때 근본 상태로
-되돌아가거나, 구간을 옮기는 순간 영상이 사라진다.
-
-```text
-draft_content.json
-template-2.tmp
-Timelines/<타임라인 id>/draft_content.json
-Timelines/<타임라인 id>/template-2.tmp
-```
-
-가져온 미디어는 클라우드 신원을 지운다. `material_id=""`, `category_name="local"`,
-`source_platform=0`, `is_copyright=False`. 안 지우면 세 재질이 같은 id 로 묶여 하나로 합쳐진다.
-나레이션 오디오는 `type="extract_music"` 에 `effect_id=""` 를 준다. 효과음 신원을 물려받으면
-소리가 나지 않는다.
-
-`verify_shorts.py` 가 이 넷과 id 충돌·유령 참조·깨진 경로를 본다. 사용자가 CapCut 에서
-컷을 더 나눴을 수 있으므로 슬롯은 세 컷 **이상**이면 통과다.
 
 ## 조립 경계
 
@@ -312,7 +172,7 @@ WAIT_USER_CAPCUT_CHECK     빌드 완료, 릴링크 대기
 ## 하지 않는 것
 
 - 110·111·112 파이프라인을 건드리지 않는다.
-- 허용 목록 밖 채널을 쓰지 않는다. 사용자가 준 URL이 아니면 예외도 없다.
+- 허용 목록 밖 채널을 쓰지 않는다. 사용자가 준 URL이 아니면 예외도 없다. 척추도 이 목록 안에서 고른다.
 - 나레이션을 늘려 길이를 채우지 않는다. 12분을 못 채우면 소스를 더 찾는다.
 - 실측하지 않은 길이·channel_id를 보고에 쓰지 않는다.
 - 승인된 콘텐츠를 생산 단계에서 재작성하지 않는다.
