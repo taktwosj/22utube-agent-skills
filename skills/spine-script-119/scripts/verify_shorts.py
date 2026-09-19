@@ -20,10 +20,10 @@ import os
 import pathlib
 import re
 
-from _common import SHORTS_CAPCUT_ROOT, root_parser
+from _common import SHORTS_CAPCUT_ROOT, resolve_capcut_root_dir, root_parser
+from runtime_paths import capcut_draft_root
 
-CAPCUT = pathlib.Path(
-    r"C:/Users/arajun/AppData/Local/CapCut/User Data/Projects/com.lveditor.draft")
+CAPCUT = capcut_draft_root()
 UUID = re.compile(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}")
 PLACEHOLDER = re.compile(r"##_draftpath_placeholder_[^\"]*")
 
@@ -44,7 +44,7 @@ def main() -> None:
         raise SystemExit(f"SHORTS_JSON_MISSING: {path}")
     data = json.loads(path.read_text(encoding="utf-8"))
 
-    capcut_root = CAPCUT / SHORTS_CAPCUT_ROOT
+    capcut_root = resolve_capcut_root_dir(CAPCUT, SHORTS_CAPCUT_ROOT)
     if not capcut_root.is_dir():
         raise SystemExit(f"SHORT_CAPCUT_ROOT_MISSING: {capcut_root}")
     root_ids = real_ids((capcut_root / "draft_content.json").read_text(encoding="utf-8"))

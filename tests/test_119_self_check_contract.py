@@ -74,6 +74,9 @@ def test_self_check_catches_missing_finalize_script(tmp_path: Path) -> None:
 def test_self_check_writes_no_bytecode(tmp_path: Path, name: str) -> None:
     copy = tmp_path / name
     shutil.copytree(REPO / "skills" / name, copy)
+    if name == "spine-script-119":
+        # spine 의 hf_lib 는 이웃 스킬 hyperframes-politics-119/scripts/hf119 를 읽는다. 함께 배포된다.
+        shutil.copytree(REPO / "skills" / "hyperframes-politics-119", tmp_path / "hyperframes-politics-119")
     assert run_self_check(copy).returncode == 0
     assert not list(copy.rglob("__pycache__")), "릴리스에 .pyc 가 생기면 activate 가 막힌다"
     assert not list(copy.rglob("*.pyc"))

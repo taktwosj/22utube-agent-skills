@@ -14,12 +14,65 @@ r"""잠근 쇼츠 구간을 실제 mp4 와 SRT 로 잘라낸다. 롱폼 조립�
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
-from _common import SHORT_SPEED, SHORTS_ROOT, root_parser
+from _common import SHORT_SPEED, SHORTS_ROOT, load_cards_def_raw, root_parser
+from check_captions import ALLOW_SUFFIX, lev1, load_base_glossary
+import vtt_clean
 
 MAX_CHARS = 8
 MIN_DUR = 0.22
+
+
+ENTITY_RE = re.compile(r"&(?:gt|lt|amp|quot|apos|nbsp|#\d+);")
+SPEAKER_RE = re.compile(r">>+")
+
+
+def hard_defects(text: str, fixes) -> list[str]:
+    """확실한 결함만 본다. 오탐이 없어야 게이트가 산다.
+
+    (1) html 엔티티 — 직접 파서를 쓰면 남는다. vtt_clean 을 건너뛴 증거다
+    (2) 화자 전환 표시 `>>` — 자막에 그대로 박힌다
+    (3) 교정표에 적어 둔 오인식이 출력에 그대로 남아 있는 경우 — 교정이 안 걸렸다
+    """
+    out = []
+    for m in dict.fromkeys(ENTITY_RE.findall(text)):
+        out.append(f"html 엔티티 {m}")
+    if SPEAKER_RE.search(text):
+        out.append("화자 전환 표시 >>")
+    for wrong, right in fixes:
+        # 좌우가 같은 쌍은 교정이 아니다. 영원히 걸리므로 무시한다
+        # `=` 로 시작하는 줄 전체 일치 규칙은 vtt_clean 이 이미 적용했다
+        if wrong.startswith("="):
+            if text.strip() == wrong[1:] and wrong[1:] != right:
+                out.append(f"교정 미적용 {wrong} -> {right}")
+            continue
+        if wrong and wrong != right and wrong in text:
+            out.append(f"교정 미적용 {wrong} -> {right}")
+    return out
+
+
+def suspect_terms(text: str, glossary) -> list[tuple[str, str, str]]:
+    """오인식 의심 — 용어집과 편집거리 1인 조각. 오탐이 많아 사람이 훑는 참고용이다.
+
+    쇼츠 SRT 는 롱폼 check_captions 의 검사 대상이 아니라 여기서 같이 찍는다.
+    실제 오인식이면 <root>/work/corrections.json 에 넣고 vtt_clean 부터 다시 돌린다.
+    """
+    known = set(glossary) | {right for _, right in vtt_clean.table()}
+    hits, seen = [], set()
+    for term in glossary:
+        n = len(term)
+        for i in range(len(text) - n + 1):
+            w = text[i:i + n]
+            if w == term or w in known or not re.search(r"[가-힣]", w) or (term, w) in seen:
+                continue
+            if any(w == term[:-1] + sfx or w == term + sfx for sfx in ALLOW_SUFFIX):
+                continue
+            if lev1(w, term):
+                seen.add((term, w))
+                hits.append((term, w, text[max(0, i - 12):i + n + 12]))
+    return hits
 
 
 def ts(sec: float) -> str:
@@ -121,7 +174,11 @@ def main() -> None:
         pairs = raw if isinstance(raw, list) else list(raw.get("replace", raw).items())
         fixes = [(a, b) for a, b in pairs if a and b]
 
-    done = failed = 0
+    vtt_clean.set_root(root)
+    cards = load_cards_def_raw(root)
+    glossary = list(dict.fromkeys(load_base_glossary() + list(getattr(cards, "GLOSSARY", []))))
+
+    done = failed = suspect = defects = 0
     for row in data["shorts"]:
         if args.only and row["slug"] != args.only:
             continue
@@ -151,8 +208,7 @@ def main() -> None:
         for a, b, t in cues:
             if b <= start or a >= end:
                 continue
-            for wrong, right in fixes:
-                t = t.replace(wrong, right)
+            t = vtt_clean.correct(t)
             window.append(((max(a, start) - start) / SHORT_SPEED,
                            (min(b, end) - start) / SHORT_SPEED, t))
 
@@ -163,9 +219,32 @@ def main() -> None:
         size = mp4.stat().st_size / 1_000_000
         print(f"완료 {slug:24s} {(end - start) / SHORT_SPEED:5.1f}초 {size:6.1f}MB  "
               f"자막 {raw_n} → {eight_n}개  여덟자초과 {over}")
+
+        text = " ".join(t for _, _, t in window)
+        # 교정은 cue 하나 안에서만 걸린다. 이어붙인 문장으로 검사하면 cue 경계에
+        # 걸친 다중 어절 교정쌍이 영원히 "교정 미적용" 으로 뜨고 고칠 방법이 없다.
+        # 화면에는 cue 단위로 나가므로 검사도 cue 단위가 맞다.
+        found = []
+        for _, _, cue_text in window:
+            for d in hard_defects(cue_text, fixes):
+                if d not in found:
+                    found.append(d)
+        for d in found:
+            print(f"     자막 결함  {d}")
+            defects += 1
+        for term, w, ctx in suspect_terms(text, glossary):
+            print(f"     용어 의심  {term} <- {w}   …{ctx}…")
+            suspect += 1
         done += 1
 
     print(f"\n완료 {done} / 실패 {failed} → {SHORTS_ROOT / episode}")
+    if suspect:
+        print(f"용어 의심 {suspect}건 — 참고용이다. 실제 오인식이면 "
+              f"{root / 'work' / 'corrections.json'} 에 넣고 vtt_clean 부터 다시 돌린다.")
+    if defects:
+        print(f"FAIL_SHORT_CAPTION_DEFECT: 자막 결함 {defects}건. "
+              f"vtt_clean.py 로 다시 만들고 corrections.json 을 채운 뒤 다시 자른다.")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""자막 QA — (1) 길이·조각 (2) 타이밍 드리프트 (3) 정치 인명·용어 근사 변형.
+"""자막 QA — (1) 길이·조각 (2) 타이밍 드리프트 (3) 인명·용어 근사 변형 (4) 컷 화제 이탈.
 
 119 의 validate_srt_text_fidelity 는 raw/display 가 같으면 통과한다. 양쪽에 같은 오인식이
 있으면 못 잡는다. 이 검사가 그 구멍을 메운다. 화면에 뜨는 자막(lower SRT)만 본다.
@@ -154,6 +154,30 @@ def main():
     print(f"[3] 용어 근사 변형 {len(hits)}건 (편집거리 1, 조사 변형 제외) — 사람이 훑어 오탐 걸러낸다")
     for cid, term, w, ctx in hits[:40]:
         print(f"      {cid:14s} {term} <- {w}   …{ctx}…")
+
+    # (4) 컷 화제 이탈 — cards_def.TOPIC_RANGE 밖을 쓴 컷
+    ranges = getattr(cd, "TOPIC_RANGE", {}) or {}
+    if not ranges:
+        print("[4] 화제 이탈 — TOPIC_RANGE 비어 있음, 검사 안 함")
+    else:
+        off = []
+        for card in cd.CARDS:
+            if card[1] != "SRC":
+                continue
+            cid, vid, t_in, t_out = card[0], card[2], card[3], card[4]
+            rng = ranges.get(vid)
+            if not rng:
+                continue
+            lo, hi = rng
+            if t_in < lo - 0.5 or t_out > hi + 0.5:
+                over = max(0.0, t_out - hi) + max(0.0, lo - t_in)
+                off.append((over, cid, vid, t_in, t_out, lo, hi))
+        covered = sum(1 for c in cd.CARDS if c[1] == "SRC" and c[2] in ranges)
+        print(f"[4] 화제 이탈 — TOPIC_RANGE 적용 컷 {covered}개 | 구간 밖 {len(off)}건")
+        for over, cid, vid, a, b, lo, hi in sorted(off, reverse=True):
+            print(f"      SOURCE_CUT_OFF_TOPIC {cid} {cd.SOURCES[vid][0]} "
+                  f"컷 {a:.1f}~{b:.1f} / 사안 {lo:.1f}~{hi:.1f} (밖 {over:.1f}s)")
+        fail += bool(off)
 
     print("\nRESULT:", "FAIL" if fail else "PASS", f"(하드 실패 {fail}건; [3]은 판단 항목)")
     sys.exit(1 if fail else 0)

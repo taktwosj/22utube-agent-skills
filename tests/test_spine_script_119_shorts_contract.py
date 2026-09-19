@@ -47,6 +47,7 @@ class SpineScript119ShortsContractTests(unittest.TestCase):
 
     def test_shorts_contract_is_documented(self):
         section = self.text.split("## 쇼츠", 1)[1].split("\n## ", 1)[0]
+        section += (SKILL_DIR / "references" / "shorts.md").read_text(encoding="utf-8")
         for required in (
             "claim",
             "counter",
@@ -141,4 +142,5 @@ def test_shorts_contract_documents_intro_and_outro():
     assert "SHORT_SPEED" in doc
     assert "더 자세한 내용은 아래 영상에서 보실 수 있습니다" in doc
     assert "구독과 좋아요 부탁드립니다" in doc
-    assert "1080×1415" in doc
+    art = (SKILL_DIR / "scripts" / "make_fire_art.py").read_text(encoding="utf-8")
+    assert "1080x1415" in art

@@ -57,6 +57,28 @@ if top_assign("build_assets.py", "CUE_EDGE") is None:
 for func in ("attach_loudness", "clean_meta"):
     if not has_def("build_short.py", func):
         fail.append(f"build_short.{func} 가 없다")
+# 회차 폴더에 복사해 쓰던 제작 코드가 스킬에 있나 (2026-09-15 스킬화)
+for name, func in (("make_cards.py", "main"), ("render_scenes.py", "main"),
+                   ("renumber_narration.py", "main"), ("tts_lines.py", "main"), ("asr_window.py", "main"),
+                   ("check_narration.py", "writer_report")):
+    if not has_def(name, func):
+        fail.append(f"{name} 의 {func} 가 없다")
+for tpl in ("cards_def.template.py", "final_cuts.template.py", "scenes.template.py"):
+    if not (skill / "templates" / tpl).is_file():
+        fail.append(f"templates/{tpl} 가 없다")
+
+# Compatibility imports must resolve to the sibling renderer, not a copied implementation.
+sys.path.insert(0, str(skill / "scripts"))
+try:
+    import hf_lib
+    for symbol in ("init", "build", "T", "P", "Q"):
+        if not callable(getattr(hf_lib, symbol, None)):
+            fail.append(f"hf_lib.{symbol} 연결이 없다")
+    from hf119 import core
+    if core.CAPCUT_119 is None:
+        fail.append("hf119 119 경로 설정이 없다")
+except Exception as exc:
+    fail.append(f"hf119 연결 오류: {exc}")
 
 # 3) 계약 문서가 같이 왔나
 skill_md = skill / "SKILL.md"
@@ -64,7 +86,7 @@ if not skill_md.is_file():
     fail.append("SKILL.md 가 없다")
 else:
     text = skill_md.read_text(encoding="utf-8")
-    for phrase in ("1.2배", "오프닝"):
+    for phrase in ("1.2배", "오프닝", "보상앵커", "## 컷표", "### 장면 제작"):
         if phrase not in text:
             fail.append(f"SKILL.md 에 '{phrase}' 계약 문구가 없다")
 

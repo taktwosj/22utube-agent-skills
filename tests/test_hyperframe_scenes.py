@@ -45,27 +45,30 @@ class SceneNamingTests(unittest.TestCase):
         self.assertIsNone(common.HYPERFRAME_SCENE.match("NL88"))
 
     def test_scene_members_span_the_whole_range(self):
-        root = self.make_root([("NL01", 0, 100), ("NL02", 100, 100), ("NL03", 200, 100)])
-        self.assertEqual(common.scene_members(root, "NL01", "NL03"), ["NL01", "NL02", "NL03"])
+        root = self.make_root([("NL01", 0, 100), ("NL02", 100, 100), ("NL03", 200, 100)], ["NL01-NL03"])
+        self.assertEqual(sorted(common.hyperframe_files(root)), ["C_NL01", "C_NL02", "C_NL03"])
 
     def test_reversed_range_is_refused(self):
-        root = self.make_root([("NL01", 0, 100), ("NL02", 100, 100)])
+        root = self.make_root([("NL01", 0, 100), ("NL02", 100, 100)], ["NL02-NL01"])
         with self.assertRaises(SystemExit) as caught:
-            common.scene_members(root, "NL02", "NL01")
+            common.hyperframe_files(root)
         self.assertIn("HYPERFRAME_SCENE_REVERSED", str(caught.exception))
 
     def test_unknown_line_is_refused(self):
-        root = self.make_root([("NL01", 0, 100)])
+        root = self.make_root([("NL01", 0, 100)], ["NL01-NL99"])
         with self.assertRaises(SystemExit) as caught:
-            common.scene_members(root, "NL01", "NL99")
+            common.hyperframe_files(root)
         self.assertIn("HYPERFRAME_SCENE_UNKNOWN_LINE", str(caught.exception))
 
-    def make_root(self, rows) -> Path:
+    def make_root(self, rows, scenes=()) -> Path:
         import tempfile
         root = Path(tempfile.mkdtemp())
         (root / "work").mkdir()
+        (root / "hyperframes").mkdir()
         (root / "work" / "timeline.json").write_text(
             json.dumps(timeline(rows), ensure_ascii=False), encoding="utf-8")
+        for name in scenes:
+            (root / "hyperframes" / f"{name}.mp4").write_bytes(b"")
         return root
 
 
@@ -73,7 +76,7 @@ class SceneOffsetTests(unittest.TestCase):
     def test_each_card_takes_the_next_slice(self):
         clip = Path("SCENE.mp4")
         tl = timeline([("NL01", 0, 400), ("NL02", 400, 300), ("NL03", 700, 200)])
-        moving = {"NL01": clip, "NL02": clip, "NL03": clip}
+        moving = {"C_NL01": clip, "C_NL02": clip, "C_NL03": clip}
         evidence.check_scene_lengths = lambda *a, **k: None
         offsets = evidence.video_offsets(tl, moving)
         self.assertEqual(offsets, {"C_NL01": 0, "C_NL02": 400, "C_NL03": 700})
@@ -81,19 +84,18 @@ class SceneOffsetTests(unittest.TestCase):
     def test_two_scenes_count_separately(self):
         a, b = Path("A.mp4"), Path("B.mp4")
         tl = timeline([("NL01", 0, 400), ("NL02", 400, 300), ("NL03", 700, 200)])
-        moving = {"NL01": a, "NL02": a, "NL03": b}
+        moving = {"C_NL01": a, "C_NL02": a, "C_NL03": b}
         evidence.check_scene_lengths = lambda *a, **k: None
         offsets = evidence.video_offsets(tl, moving)
         self.assertEqual(offsets["C_NL03"], 0)
 
-    def test_a_gap_inside_a_scene_is_refused(self):
-        """사이에 다른 카드가 끼면 장면이 갈라져 화면이 튄다."""
+    def test_a_gap_inside_a_scene_restarts_it(self):
+        """붙어 있지 않으면 같은 영상이라도 다시 0부터 쓴다 (CTA 가 앞뒤 두 번 놓이는 경우)."""
         clip = Path("SCENE.mp4")
         tl = timeline([("NL01", 0, 400), ("NL02", 900, 300)])
         evidence.check_scene_lengths = lambda *a, **k: None
-        with self.assertRaises(SystemExit) as caught:
-            evidence.video_offsets(tl, {"NL01": clip, "NL02": clip})
-        self.assertIn("HYPERFRAME_SCENE_NOT_CONTIGUOUS", str(caught.exception))
+        offsets = evidence.video_offsets(tl, {"C_NL01": clip, "C_NL02": clip})
+        self.assertEqual(offsets, {"C_NL01": 0, "C_NL02": 0})
 
     def test_a_short_scene_is_refused(self):
         """영상이 카드 합계보다 짧으면 뒤가 검게 빈다."""
@@ -112,7 +114,7 @@ class ContractTests(unittest.TestCase):
     def test_script_uses_the_shared_map(self):
         text = (SCRIPTS / "gen_script.py").read_text(encoding="utf-8")
         self.assertIn("hyperframes = hyperframe_files(root)", text)
-        self.assertIn("moving = nm in hyperframes", text)
+        self.assertIn("moving = cid in hyperframes", text)
 
     def test_a_line_claimed_twice_is_refused(self):
         import tempfile
